@@ -265,6 +265,41 @@ void PushFCompute(const FCompute& fn,
     0, PROFILER_MESSAGE(op->name.c_str()));
 }
 
+void PushFComputeNDArray(const FComputeNDArray& fn,
+                  const nnvm::Op* op,
+                  const nnvm::NodeAttrs& attrs,
+                  const Context& ctx,
+                  const std::vector<engine::VarHandle>& read_vars,
+                  const std::vector<engine::VarHandle>& write_vars,
+                  const std::vector<Resource>& requested,
+                  const std::vector<NDArray>& ndinputs,
+                  const std::vector<NDArray>& ndoutputs) {
+  Engine::Get()->PushAsync(
+    [ctx, attrs, fn, ndinputs, ndoutputs, requested](
+        RunContext rctx,
+        engine::CallbackOnComplete on_complete) {
+      std::vector<TBlob> input_blobs, output_blobs;
+      for (auto& i : ndinputs) {
+        //input_blobs.push_back(i.data());
+      }
+      for (auto& i : ndoutputs) {
+        i.CheckAndAlloc();
+        //output_blobs.push_back(i.data());
+      }
+      OpContext opctx{false, rctx,
+                      engine::CallbackOnComplete(),
+                      requested};
+      std::vector<OpReqType> req(ndoutputs.size(), kWriteTo);
+      //std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
+      fn(attrs, opctx, ndinputs, req, ndoutputs);
+      if (ctx.dev_mask() == gpu::kDevMask) {
+        rctx.get_stream<gpu>()->Wait();
+      }
+      on_complete();
+    }, ctx, read_vars, write_vars, FnProperty::kNormal,
+    0, PROFILER_MESSAGE(op->name.c_str()));
+}
+
 void PushOperator(std::shared_ptr<Operator> opr,
                   const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
@@ -330,6 +365,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        const char **param_keys,
                        const char **param_vals) {
   static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
+  static auto& fcpu_ndarray = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
   static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
   static auto& createop = nnvm::Op::GetAttr<FCreateLayerOp>("FCreateLayerOp");
@@ -366,17 +402,27 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
         op, attrs, ctx, ndinputs, ndoutputs);
 
     FCompute fn;
-    if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
+    FComputeNDArray fn_ndarray;
+    if (ctx.dev_mask() == cpu::kDevMask && fcpu_ndarray.count(op)) {
+      fn_ndarray = fcpu_ndarray[op];
+    } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
       fn = fcpu[op];
     } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
       fn = fgpu[op];
     }
+<<<<<<< HEAD
 
     if (fn) {
       if (AutogradRuntime::Get()->IsTraining()) {
         AutogradRuntime::Get()->RecordImperativeFCompute(fn, op,
             attrs, &ndinputs, &ndoutputs);
       }
+=======
+    if (fn_ndarray) {
+      PushFComputeNDArray(fn_ndarray, op, attrs, ctx, read_vars, write_vars,
+          requested, ndinputs, ndoutputs);
+    } else if (fn) {
+>>>>>>> Register w/ new FCompute
       PushFCompute(fn, op, attrs, ctx, read_vars, write_vars,
           requested, ndinputs, ndoutputs);
     } else if (createop.count(op)) {
