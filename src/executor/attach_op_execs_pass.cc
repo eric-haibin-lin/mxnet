@@ -157,6 +157,45 @@ class FComputeExecutor : public OpExecutor {
   std::vector<TBlob> in_data_, out_data_;
 };
 
+// fcompute ndarrayr executor
+class FComputeNDArrayExecutor : public OpExecutor {
+ public:
+  void Run(RunContext rctx) override {
+    op_ctx.run_ctx = rctx;
+    fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
+  }
+  void Setup() override {
+    in_data_ = in_array;
+    out_data_ = out_array;
+  }
+  Operator::ExecType exec_type() const override {
+    return Operator::kSync;
+  }
+  explicit FComputeNDArrayExecutor(FComputeNDArray fcompute, const NodeAttrs& attrs)
+      : fcompute_(fcompute), attrs_(attrs) {
+  }
+
+  static FComputeNDArray GetFComputeNDArray(const Op* op, Context ctx) {
+    static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
+    // TODO check gpu
+    static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<gpu>");
+    if (ctx.dev_mask() == cpu::kDevMask) {
+      return fcompute_cpu.get(op, nullptr);
+    } else if (ctx.dev_mask() == gpu::kDevMask) {
+      return fcompute_gpu.get(op, nullptr);
+    } else {
+      LOG(FATAL) << "Unknown device mask";
+      return nullptr;
+    }
+  }
+
+ private:
+  FComputeNDArray fcompute_;
+  NodeAttrs attrs_;
+  //std::vector<TBlob> in_data_, out_data_;
+  std::vector<NDArray> in_data_, out_data_;
+};
+
 // pass to attach operator executors
 Graph AttachOpExecs(Graph g) {
   using nnvm::DTypeVector;
@@ -184,6 +223,7 @@ Graph AttachOpExecs(Graph g) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
     FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
+    FComputeNDArray fcompute_ndarray = FComputeNDArrayExecutor::GetFComputeNDArray(inode.source->op(), vctx[i]);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;
@@ -203,6 +243,8 @@ Graph AttachOpExecs(Graph g) {
           dynamic_cast<ForwardOpExecutor*>(ret[fwd_id].get())->op_,
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
+    } else if (fcompute_ndarray != nullptr) {
+      ret[i] = std::make_shared<FComputeNDArrayExecutor>(fcompute_ndarray, inode.source->attrs);
     } else if (fcompute != nullptr) {
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);
     } else {

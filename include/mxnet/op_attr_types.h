@@ -61,6 +61,16 @@ using FCompute = std::function<void (const nnvm::NodeAttrs& attrs,
                                      const std::vector<TBlob>& inputs,
                                      const std::vector<OpReqType>& req,
                                      const std::vector<TBlob>& outputs)>;
+/*!
+ * \brief Resiger an NDArray compute function for simple stateless forward only operator
+ *
+ * \note Register under "FCompute<cpu>" and "FCompute<gpu>" //TODO
+ */
+using FComputeNDArray = std::function<void (const nnvm::NodeAttrs& attrs,
+                                     const OpContext& ctx,
+                                     const std::vector<NDArray>& inputs,
+                                     const std::vector<OpReqType>& req,
+                                     const std::vector<NDArray>& outputs)>;
 }  // namespace mxnet
 
 #endif  // MXNET_OP_ATTR_TYPES_H_
