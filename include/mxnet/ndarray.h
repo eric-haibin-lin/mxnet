@@ -30,7 +30,16 @@ namespace mxnet {
 /*!
  * \brief ndarray interface
  */
+
+ // TODO Doc
+ enum NDArrayChunkType {
+   DefaultChunk, //dense
+   COOChunk,
+   RowSparseChunk,
+   MKLChunk
+ };
 class NDArray {
+
  public:
   /*! \brief default cosntructor */
   NDArray() {
@@ -52,6 +61,19 @@ class NDArray {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
+  }
+  // Constructor for NDArray with chunk type
+  NDArray(NDArrayChunkType chunk_type, const TShape &shape, Context ctx,
+          // No kInt64 in mshadow?
+          bool delay_alloc = true, int dtype = mshadow::default_type_flag, int aux_type = mshadow::kFloat64)
+      : ptr_(std::make_shared<Chunk>(ctx, delay_alloc, dtype, aux_type, chunk_type)),
+        shape_(shape), offset_(0), dtype_(dtype) {
+#if MKL_EXPERIMENTAL == 1
+      Mkl_mem_ = std::make_shared<MKLMemHolder>();
+#endif
+      if (chunk_type == RowSparseChunk) {
+        CHECK(shape.ndim() <= 2);
+      }
   }
   /*!
    * \brief constructing a static NDArray that shares data with TBlob
@@ -114,6 +136,9 @@ class NDArray {
    */
   inline int dtype() const {
     return dtype_;
+  }
+  inline NDArrayChunkType chunk_type() const {
+    return ptr_->chunk_type;
   }
   /*! \return whether this ndarray is not initialized */
   inline bool is_none() const {
@@ -322,8 +347,19 @@ class NDArray {
    * This is an internal function used by system that normal user should not use
    */
   inline void CheckAndAlloc() const {
+    //TODO reuse the existing CheckAndAlloc(dsize, aux_size = 0);
     ptr_->CheckAndAlloc();
   }
+
+  inline void CheckAndAlloc(uint64_t size) {
+    // For row sparse chunk, size is the number of rows to allocate
+    if (chunk_type() == RowSparseChunk) {
+      uint64_t dsize = size * shape_[1];
+      uint64_t aux_size = size;
+      ptr_->CheckAndAlloc(dsize, aux_size);
+    }
+  }
+
   /*!
    * \brief Save list of narray into the Stream.x
    * \param fo The stream of output.
@@ -348,6 +384,8 @@ class NDArray {
   struct Chunk {
     /*! \brief storage handlefrom storage engine */
     Storage::Handle shandle;
+    //TODO index
+    Storage::Handle aux_handle;
     /*! \brief variable from engine */
     Engine::VarHandle var;
     /*!
@@ -357,11 +395,27 @@ class NDArray {
     bool static_data;
     /*! \brief whether allocation is delayed */
     bool delay_alloc;
-    /*! \brief default cosntructor */
-    Chunk() : static_data(true), delay_alloc(false) {
-      var  = Engine::Get()->NewVariable();
-    }
     /*! \brief construct from static data */
+    NDArrayChunkType chunk_type = DefaultChunk;
+    // data type
+    int dtype = -1;
+    // type of aux
+    int aux_type = -1;
+    // TODO make a copy of ctx
+    Context ctx;
+    // counter for aux data. This could be the number of non-empty rows for RowSparse
+    // or number of non-zeros for COO
+    uint64_t aux_count = 0;
+
+    /*! \brief construct a new chunk */  //TODO also make a copy of the dtype
+    Chunk(uint64_t size, Context ctx_, bool delay_alloc_, int dtype)
+        : static_data(false), delay_alloc(true) {
+      var = Engine::Get()->NewVariable();
+      shandle.size = size * mshadow::mshadow_sizeof(dtype);
+      shandle.ctx = ctx_;
+      ctx = ctx_;
+      if (!delay_alloc_) this->CheckAndAlloc();
+    }
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
           delay_alloc(false) {
@@ -375,18 +429,31 @@ class NDArray {
       shandle.dptr = data.dptr_;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
     }
-    /*! \brief construct a new chunk */
-    Chunk(uint64_t size, Context ctx, bool delay_alloc_, int dtype)
-        : static_data(false), delay_alloc(true) {
-      var = Engine::Get()->NewVariable();
-      shandle.size = size * mshadow::mshadow_sizeof(dtype);
-      shandle.ctx = ctx;
-      if (!delay_alloc_) this->CheckAndAlloc();
+    Chunk(Context ctx, bool delay_alloc_, int dtype_, int aux_type_, NDArrayChunkType chunk_type_)
+        : static_data(false), delay_alloc(delay_alloc_), chunk_type(chunk_type_), 
+          dtype(dtype_), aux_type(aux_type_) {
+       var = Engine::Get()->NewVariable();
+       // Attention, init shandle later.
+       if (!delay_alloc_) {
+         this->CheckAndAlloc();
+       }
+       std::cout << "Construct Sparse Chunk" << std::endl;
     }
     /*! \brief check if delay alloc is on, do alloc if not yet done */
     inline void CheckAndAlloc(void) {
-      if (delay_alloc) {
+      if (delay_alloc && chunk_type == DefaultChunk) {
         shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
+        delay_alloc = false;
+      }
+    }
+    inline void CheckAndAlloc(uint64_t dsize, uint64_t aux_size) {
+      // TODO CHECK shape_;
+      // calculate size, perform allocation
+      if (delay_alloc && chunk_type == RowSparseChunk) {
+        auto dbytes = dsize * mshadow::mshadow_sizeof(dtype);
+        auto aux_bytes = aux_size * mshadow::mshadow_sizeof(aux_type);
+        shandle = Storage::Get()->Alloc(dbytes, ctx);
+        aux_handle = Storage::Get()->Alloc(aux_bytes, ctx);
         delay_alloc = false;
       }
     }

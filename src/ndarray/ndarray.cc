@@ -156,9 +156,19 @@ void SetValueOp(const real_t &rhs, NDArray *out) {
   switch (ret.ctx().dev_mask()) {
     case cpu::kDevMask: {
       Engine::Get()->PushSync([rhs, ret](RunContext ctx) {
-          ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Eval<cpu>(rhs, &tmp, ctx);
+          auto chunk_type = ret.chunk_type();
+          if (chunk_type == DefaultChunk) {
+            ret.CheckAndAlloc();
+            TBlob tmp = ret.data();
+            ndarray::Eval<cpu>(rhs, &tmp, ctx);
+          } else {
+            // TODO Support other types;
+            CHECK(chunk_type == RowSparseChunk);
+            // assume already allocated??
+            TBlob tmp = ret.data();
+            ndarray::Eval<cpu>(rhs, &tmp, ctx);
+            // Add to index?
+          }
         }, ret.ctx(), {}, {ret.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
       break;
