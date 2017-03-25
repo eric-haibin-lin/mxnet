@@ -5,7 +5,7 @@
 
 extern bool unitTestsWithCuda;
 
-TEST(Storage, Basic_CPU) {
+/*TEST(Storage, Basic_CPU) {
   constexpr size_t kSize = 1024;
   auto&& storage = mxnet::Storage::Get();
   mxnet::Context context_cpu{};
@@ -17,7 +17,7 @@ TEST(Storage, Basic_CPU) {
   EXPECT_EQ(handle.ctx, context_cpu);
   EXPECT_EQ(handle.size, kSize);
   storage->Free(handle);
-}
+}*/
 
 #if MXNET_USE_CUDA
 
@@ -37,7 +37,7 @@ static bool checkForWorkingCuda()
   std::fprintf(stderr, "Warning: Could not find working CUDA driver\n");
   return false;
 }
-
+/*
 TEST(Storage, Basic_GPU) {
   if(unitTestsWithCuda || checkForWorkingCuda()) {
     constexpr size_t kSize = 1024;
@@ -53,6 +53,6 @@ TEST(Storage, Basic_GPU) {
     EXPECT_EQ(handle.size, kSize);
     EXPECT_EQ(handle.dptr, ptr);
   }
-}
+}*/
 #endif  // MXNET_USE_CUDA
 
