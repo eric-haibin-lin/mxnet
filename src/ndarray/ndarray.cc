@@ -9,6 +9,8 @@
 #include <mxnet/base.h>
 #include <mxnet/ndarray.h>
 #include <mxnet/resource.h>
+//Necessary?
+#include <mxnet/operator.h>
 #include <mshadow/tensor.h>
 #include "./ndarray_function.h"
 
@@ -482,6 +484,38 @@ inline NDArray &ScalarOpApply(NDArray *dst,
                              const real_t &src) {
   ScalarOp<OP, false>(*dst, src, dst);
   return *dst;
+}
+// Attributes
+// GETDATA, etc
+
+// Convertion
+// Take a stream as input?
+// TODO make it private?
+NDArray NDArray::ToDense(mshadow::Stream<cpu> *s) const {
+  //TODO CHECK TYPE
+  if (chunk_type() == DefaultChunk) {
+    return *this;
+  }
+  CHECK(chunk_type() == RowSparseChunk);
+  // Constructor for NDArray with chunk type
+  NDArray result(shape_, ptr_->ctx, false, dtype());
+  // TODO be care of the context
+  //mshadow::Stream<cpu> *s = ptr_->ctx.get_stream<cpu>();
+  //mshadow::Stream<cpu> *s = nullptr;
+  auto in_data = data().FlatTo2D<cpu, real_t>(s);
+  auto out_data = result.data().FlatTo2D<cpu, real_t>(s);
+  size_t num_rows = aux_shape()[0];
+  auto in_idx = aux_data().FlatTo1D<cpu, real_t>(s);
+  // Assign zero values
+  // Fill in zeros
+  //out_data = 0;
+
+  size_t i_in = 0;
+  while (i_in < num_rows) {
+    mshadow::Copy(out_data[in_idx[i_in]], in_data[i_in], s);
+    i_in++;
+  }
+  return result;
 }
 
 // Binary

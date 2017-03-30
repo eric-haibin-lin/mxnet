@@ -56,7 +56,7 @@ class NDArray {
    */
   NDArray(const TShape &shape, Context ctx,
           bool delay_alloc = false, int dtype = mshadow::default_type_flag)
-      : ptr_(std::make_shared<Chunk>(shape.Size(), ctx, delay_alloc, dtype)),
+      : ptr_(std::make_shared<Chunk>(shape, ctx, delay_alloc, dtype)),
         shape_(shape), offset_(0), dtype_(dtype) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
@@ -89,25 +89,55 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
+  // For testing purpose
+  NDArray(const TBlob &data, const TBlob &aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
+      : ptr_(std::make_shared<Chunk>(data, aux_data, dev_id, chunk_type)), shape_(shape), offset_(0),
+        dtype_(data.type_flag_) {
+#if MKL_EXPERIMENTAL == 1
+      Mkl_mem_ = std::make_shared<MKLMemHolder>();
+#endif
+  }
+  NDArray ToDense(mshadow::Stream<cpu> *) const;
   /*!
    * \return the shape of current NDArray
    */
   inline const TShape &shape() const {
     return shape_;
   }
+  inline const TShape &chunk_shape() const {
+    //TODO CHECK CHUNK TYPE
+    return ptr_->shape;
+  }
+  inline const TShape &aux_shape() const {
+    //TODO CHECK CHUNK TYPE
+    return ptr_->aux_shape;
+  }
   /*!
    * \return the data TBlob
    */
+   //TODO move to cpp
   inline TBlob data() const {
+    if (chunk_type() != DefaultChunk) { CHECK(offset_ == 0); }
     TBlob res;
     MSHADOW_TYPE_SWITCH(dtype_, DType, {
       res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
-        + offset_, shape_, ptr_->shandle.ctx.dev_mask());
+        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask());
     });
 #if MKL_EXPERIMENTAL == 1
     res.Mkl_mem_ = Mkl_mem_;
 #endif
     return res;
+  }
+  inline TBlob aux_data() const {
+   CHECK(chunk_type() != DefaultChunk);
+   TBlob res;
+   MSHADOW_TYPE_SWITCH(aux_type(), DType, {
+     res = TBlob(static_cast<DType*>(ptr_->aux_handle.dptr), ptr_->aux_shape, ptr_->aux_handle.ctx.dev_mask());
+   });
+#if MKL_EXPERIMENTAL == 1
+   res.Mkl_mem_ = Mkl_mem_;
+#endif
+   return res;
   }
   /*!
    * \return a chunk of raw data in TBlob
@@ -136,6 +166,10 @@ class NDArray {
    */
   inline int dtype() const {
     return dtype_;
+  }
+  inline int aux_type() const {
+    CHECK(ptr_ != nullptr);
+    return ptr_->aux_type;
   }
   inline NDArrayChunkType chunk_type() const {
     return ptr_->chunk_type;
@@ -350,14 +384,10 @@ class NDArray {
     //TODO reuse the existing CheckAndAlloc(dsize, aux_size = 0);
     ptr_->CheckAndAlloc();
   }
-
-  inline void CheckAndAlloc(uint64_t size) {
-    // For row sparse chunk, size is the number of rows to allocate
-    if (chunk_type() == RowSparseChunk) {
-      uint64_t dsize = size * shape_[1];
-      uint64_t aux_size = size;
-      ptr_->CheckAndAlloc(dsize, aux_size);
-    }
+  // Alloc number of dense rows for RowSparseChunk
+  // aux_shape is only known at run time
+  inline void CheckAndAlloc(TShape aux_shape) const {
+    ptr_->CheckAndAlloc(shape_, aux_shape);
   }
 
   /*!
@@ -382,7 +412,7 @@ class NDArray {
  private:
   /*! \brief the real data chunk that backs NDArray */
   struct Chunk {
-    /*! \brief storage handlefrom storage engine */
+    /*! \brief storage handle from storage engine */
     Storage::Handle shandle;
     //TODO index
     Storage::Handle aux_handle;
@@ -403,18 +433,42 @@ class NDArray {
     int aux_type = -1;
     // TODO make a copy of ctx
     Context ctx;
-    // counter for aux data. This could be the number of non-empty rows for RowSparse
-    // or number of non-zeros for COO
-    uint64_t aux_count = 0;
+    // The shape of aux data
+    TShape aux_shape;
+    // The shape of the chunk data. This might not be the same shape as the NDArray, since the chunk may be sparse.
+    TShape shape;
 
     /*! \brief construct a new chunk */  //TODO also make a copy of the dtype
-    Chunk(uint64_t size, Context ctx_, bool delay_alloc_, int dtype)
+    //Chunk(uint64_t size, Context ctx_, bool delay_alloc_, int dtype)
+    // TODO instead, let NDArray hold chunk shape, aux shape
+    Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
         : static_data(false), delay_alloc(true) {
+      auto size = shape.Size();
+ this->shape = shape;
       var = Engine::Get()->NewVariable();
       shandle.size = size * mshadow::mshadow_sizeof(dtype);
       shandle.ctx = ctx_;
       ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
+    }
+    Chunk(const TBlob &data, const TBlob &aux_data, int dev_id, NDArrayChunkType chunk_type_)
+        : static_data(true), delay_alloc(false), chunk_type(chunk_type_),
+          dtype(data.type_flag_), aux_type(aux_data.type_flag_) {
+      var = Engine::Get()->NewVariable();
+      if (data.dev_mask_ == cpu::kDevMask) {
+        shandle.ctx = Context::CPU();
+        aux_handle.ctx = Context::CPU();
+      } else {
+        CHECK_EQ(data.dev_mask_, gpu::kDevMask);
+        shandle.ctx = Context::GPU(dev_id);
+        aux_handle.ctx = Context::GPU(dev_id);
+      }
+      shandle.dptr = data.dptr_;
+      aux_handle.dptr = aux_data.dptr_;
+      shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(dtype);
+      aux_handle.size = aux_data.shape_.Size() * mshadow::mshadow_sizeof(aux_type);
+      aux_shape = aux_data.shape_;
+      shape = data.shape_;
     }
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
@@ -446,15 +500,22 @@ class NDArray {
         delay_alloc = false;
       }
     }
-    inline void CheckAndAlloc(uint64_t dsize, uint64_t aux_size) {
+    inline void CheckAndAlloc(TShape shape, TShape aux_shape) {
       // TODO CHECK shape_;
+      // For row sparse chunk, size is the number of rows to allocate
       // calculate size, perform allocation
       if (delay_alloc && chunk_type == RowSparseChunk) {
-        auto dbytes = dsize * mshadow::mshadow_sizeof(dtype);
-        auto aux_bytes = aux_size * mshadow::mshadow_sizeof(aux_type);
+        CHECK(aux_shape.ndim() == 1);
+        uint64_t num_rows = aux_shape[0];
+        auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
+        auto aux_bytes = num_rows * mshadow::mshadow_sizeof(aux_type);
         shandle = Storage::Get()->Alloc(dbytes, ctx);
         aux_handle = Storage::Get()->Alloc(aux_bytes, ctx);
         delay_alloc = false;
+        // Initialize aux_shape and shape
+        this->aux_shape = aux_shape;
+        this->shape = shape;
+        this->shape[0] = num_rows;
       }
     }
     /*! \brief destructor */
@@ -479,6 +540,7 @@ class NDArray {
   TShape shape_;
   /*! \brief offset in chunk */
   size_t offset_;
+  // THIS SHOULD GO TO CHUNK?
   /*! \brief type of data */
   int dtype_ = -1;
 };
