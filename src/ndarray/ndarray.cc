@@ -9,8 +9,6 @@
 #include <mxnet/base.h>
 #include <mxnet/ndarray.h>
 #include <mxnet/resource.h>
-//Necessary?
-#include <mxnet/operator.h>
 #include <mshadow/tensor.h>
 #include "./ndarray_function.h"
 
@@ -538,7 +536,7 @@ NDArray NDArray::ToDense(mshadow::Stream<cpu> *s) const {
   auto in_idx = aux_data().FlatTo1D<cpu, real_t>(s);
   // Assign zero values
   // Fill in zeros
-  //out_data = 0;
+  out_data = 0;
 
   size_t i_in = 0;
   while (i_in < num_rows) {

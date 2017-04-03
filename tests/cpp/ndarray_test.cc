@@ -168,7 +168,7 @@ TEST(NDArray, conversion) {
   TShape data_shape({1, 2});
   NDArray raw_data0(data_shape, ctx);
   raw_data0.CheckAndAlloc();
-  raw_data0 = 0;
+  raw_data0 = 1;
   
   // Index index_shape(1,)
   TShape index_shape({1});
@@ -184,14 +184,14 @@ TEST(NDArray, conversion) {
   NDArray dense_nd(shape, ctx);
   dense_nd.CheckAndAlloc();
   dense_nd = 0;
-
+  dense_nd.data().FlatTo2D<cpu, real_t>()[0] = 1;
   Engine::Get()->WaitForAll(); 
 
   std::vector<Engine::VarHandle> const_vars;
       Engine::Get()->PushSync([nd, dense_nd](RunContext ctx) {
           mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-          //NDArray nd_copy = nd.ToDense(s);
-          //CheckDataRegion(nd_copy, dense_nd);
+          NDArray nd_copy = nd.ToDense(s);
+          CheckDataRegion(nd_copy, dense_nd);
         }, nd.ctx(), const_vars, {},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   }
