@@ -131,6 +131,32 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
+int MXNDArrayCreateSparse(NDArrayHandle data,
+                    NDArrayHandle aux_data,
+                    const mx_uint *shape,
+                    mx_uint ndim,
+                    int sparse_type,
+                    int dev_type,
+                    int dev_id,
+                    int delay_alloc,
+                    int dtype,
+                    NDArrayHandle *out) {
+  API_BEGIN();
+  // Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id)
+  NDArray* nd_data = reinterpret_cast<NDArray*>(data);
+  NDArray* nd_aux_data = reinterpret_cast<NDArray*>(aux_data);
+  // TODO fix dev_id
+  *out = new NDArray(nd_data, nd_aux_data, 0, RowSparseChunk, TShape(shape, shape + ndim));
+  //TODO redesign this api
+  /*
+  *out = new NDArray(
+      TShape(shape, shape + ndim),
+      Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
+      delay_alloc != 0,
+      dtype);*/
+  API_END();
+}
+
 int MXNDArrayCreateEx(const mx_uint *shape,
                     mx_uint ndim,
                     int dev_type,

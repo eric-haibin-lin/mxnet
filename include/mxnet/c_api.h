@@ -217,6 +217,17 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               int delay_alloc,
                               NDArrayHandle *out);
 
+
+MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
+                    NDArrayHandle aux_data,
+                    const mx_uint *shape,
+                    mx_uint ndim,
+                    int sparse_type,
+                    int dev_type,
+                    int dev_id,
+                    int delay_alloc,
+                    int dtype,
+                    NDArrayHandle *out);
 /*!
  * \brief create a NDArray with specified shape and data type
  * \param shape the pointer to the shape

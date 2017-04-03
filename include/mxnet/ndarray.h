@@ -89,6 +89,14 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
+  // For testing purpose. Need to make a copy of the data
+  NDArray(NDArray *data, NDArray *aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
+      : ptr_(std::make_shared<Chunk>(data->data(), aux_data->data(), dev_id, chunk_type)), shape_(shape), offset_(0),
+        dtype_(data->data().type_flag_) {
+#if MKL_EXPERIMENTAL == 1
+      Mkl_mem_ = std::make_shared<MKLMemHolder>();
+#endif
+  }
   // For testing purpose
   NDArray(const TBlob &data, const TBlob &aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
       : ptr_(std::make_shared<Chunk>(data, aux_data, dev_id, chunk_type)), shape_(shape), offset_(0),
