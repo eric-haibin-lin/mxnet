@@ -872,7 +872,6 @@ fixed-size items.
             return self
         return self.copyto(context)
 
-_init_ndarray_module(NDArray, "mxnet")
 
 def onehot_encode(indices, out):
     """One-hot encoding indices into matrix out.

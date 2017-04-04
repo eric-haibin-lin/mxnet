@@ -3,14 +3,10 @@
 #include <dmlc/logging.h>
 #include <cstdio>
 #include <gtest/gtest.h>
-//#include <thread>
-//#include <chrono>
 #include <vector>
 
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
-//#include "../src/engine/engine_impl.h"
-//#include <dmlc/timer.h>
 using namespace mxnet;
 
 void CheckDataRegion(const NDArray &src, const NDArray &dst) {
@@ -39,35 +35,34 @@ void BasicTest() {
 
   VeryBasicTest();
 
-  // index_shape(1,)
-  TShape index_shape({1});
+  TShape index_shape({2});
   NDArray index0(index_shape, ctx);
   index0.CheckAndAlloc();
-  index0 = 0; // idx = [0]
+  index0.data().FlatTo1D<cpu, real_t>()[0] = 0;
+  index0.data().FlatTo1D<cpu, real_t>()[1] = 1;
 
   NDArray index1(index_shape, ctx);
   index1.CheckAndAlloc();
-  index1 = 1; // idx = [1]
+  index1.data().FlatTo1D<cpu, real_t>()[0] = 0;
+  index1.data().FlatTo1D<cpu, real_t>()[1] = 2;
 
   int dev_id = 0;
-  // data_shape(1,2)
-  TShape data_shape({1, 2});
+  TShape data_shape({2, 2});
   NDArray raw_data0(data_shape, ctx);
   raw_data0.CheckAndAlloc();
   raw_data0 = 10;
   
   NDArray raw_data1(data_shape, ctx);
   raw_data1.CheckAndAlloc();
-  raw_data1 = 10;
+  raw_data1 = 5;
   Engine::Get()->WaitForAll();
 
-  // TODO data shape fix & index information
   NDArray input_nd0(raw_data0.data(), index0.data(), dev_id, RowSparseChunk, data_shape);
   NDArray input_nd1(raw_data1.data(), index1.data(), dev_id, RowSparseChunk, data_shape);
   CheckDataRegion(input_nd0, raw_data0);
   CheckDataRegion(input_nd1, raw_data1);
 
-  TShape output_shape({2, 2});
+  TShape output_shape({3, 2});
   NDArray output(RowSparseChunk, output_shape, ctx);
   std::vector<Engine::VarHandle> const_vars;
   if (input_nd0.var() != output.var()) const_vars.push_back(input_nd0.var());
@@ -87,9 +82,6 @@ void BasicTest() {
           TShape idx_shape0 = input_nd0.aux_shape();
           TShape idx_shape1 = input_nd1.aux_shape();
 
-          // THIS should only contain 1 element, indicating the row information
-          EXPECT_EQ(in_idx_0[0], 0);
-          EXPECT_EQ(in_idx_1[0], 1);
           auto in_data0 = input_nd0.data().FlatTo2D<cpu, real_t>(s);
           auto in_data1 = input_nd1.data().FlatTo2D<cpu, real_t>(s);
           auto out_data = output.data().FlatTo2D<cpu, real_t>(s);
@@ -104,10 +96,9 @@ void BasicTest() {
             size_t row_idx_left = in_idx_0[i_left];
             size_t row_idx_right = in_idx_1[i_right];
             if (row_idx_left == row_idx_right) {
-              //TODO Implement normal Add
-              CHECK(false);
-            }
-            if (row_idx_left < row_idx_right) {
+              mshadow::Copy(out_data[i_out], in_data0[i_left++], s);
+              out_data[i_out] += in_data1[i_right++];
+            } else if (row_idx_left < row_idx_right) {
               mshadow::Copy(out_data[i_out], in_data0[i_left], s);
               i_left++;
             } else {
@@ -132,10 +123,14 @@ void BasicTest() {
   //TODO Compare with dense matrix
   NDArray out_data(output_shape, ctx);
   out_data.CheckAndAlloc();
-  out_data = 10;
+  out_data.data().FlatTo2D<cpu, real_t>()[0][0] = 15;
+  out_data.data().FlatTo2D<cpu, real_t>()[0][1] = 15;
+  out_data.data().FlatTo2D<cpu, real_t>()[1][0] = 10;
+  out_data.data().FlatTo2D<cpu, real_t>()[1][1] = 10;
+  out_data.data().FlatTo2D<cpu, real_t>()[2][0] = 5;
+  out_data.data().FlatTo2D<cpu, real_t>()[2][1] = 5;
   Engine::Get()->WaitForAll();
   CheckDataRegion(out_data, output);
-  //CheckDataRegion(out_data, out_data);
 }
 
 TEST(NDArray, basics) {
@@ -165,18 +160,15 @@ TEST(NDArray, conversion) {
   {
   size_t dev_id = 0;
   // Raw Data
-  TShape data_shape({1, 2});
-  NDArray raw_data0(data_shape, ctx);
+  NDArray raw_data0(TShape({1, 2}), ctx);
   raw_data0.CheckAndAlloc();
-  raw_data0 = 1;
+  raw_data0 = 0;
   
   // Index index_shape(1,)
-  TShape index_shape({1});
-  NDArray index0(index_shape, ctx);
+  NDArray index0(TShape({1}), ctx);
   index0.CheckAndAlloc();
   index0 = 0; // idx = [0]
 
-  Engine::Get()->WaitForAll();
   TShape shape({2, 2});
   NDArray nd(raw_data0.data(), index0.data(), dev_id, RowSparseChunk, shape);
 
@@ -184,10 +176,15 @@ TEST(NDArray, conversion) {
   NDArray dense_nd(shape, ctx);
   dense_nd.CheckAndAlloc();
   dense_nd = 0;
-  dense_nd.data().FlatTo2D<cpu, real_t>()[0] = 1;
+  dense_nd.data().FlatTo2D<cpu, real_t>()[0][0] = 1;
+  dense_nd.data().FlatTo2D<cpu, real_t>()[0][1] = 1;
   Engine::Get()->WaitForAll(); 
 
   std::vector<Engine::VarHandle> const_vars;
+  const_vars.push_back(nd.var());
+  const_vars.push_back(raw_data0.var());
+  const_vars.push_back(index0.var());
+  const_vars.push_back(dense_nd.var());
       Engine::Get()->PushSync([nd, dense_nd](RunContext ctx) {
           mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
           NDArray nd_copy = nd.ToDense(s);

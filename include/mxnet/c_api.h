@@ -222,7 +222,6 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               int delay_alloc,
                               NDArrayHandle *out);
 
-
 MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
                     NDArrayHandle aux_data,
                     const mx_uint *shape,
@@ -374,6 +373,10 @@ MXNET_DLL int MXNDArraySlice(NDArrayHandle handle,
 MXNET_DLL int MXNDArrayAt(NDArrayHandle handle,
                           mx_uint idx,
                           NDArrayHandle *out);
+
+MXNET_DLL int MXNDArrayGetChunkType(NDArrayHandle handle,
+                     int *out_chunk_type);
+
 /*!
  * \brief Reshape the NDArray.
  * \param handle the handle to the narray

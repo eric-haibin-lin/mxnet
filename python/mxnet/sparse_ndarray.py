@@ -23,6 +23,7 @@ from .base import mx_uint, NDArrayHandle, check_call
 from .base import ctypes2buffer
 from .context import Context
 from . import _ndarray_internal as _internal
+from . import ndarray
 # TODO refactor common ones with ndarray.py
 # Use different verison of SymbolBase
 # When possible, use cython to speedup part of computation.
@@ -65,27 +66,27 @@ fixed-size items.
     # pylint: disable= no-member, undefined-variable
     def __repr__(self):
         """Return a string representation of the array"""
-        shape_info = 'x'.join(['%d' % x for x in self.shape])
-        return '<%s %s @%s>' % (self.__class__.__name__,
-                                shape_info, self.context)
+        #shape_info = 'x'.join(['%d' % x for x in self.shape])
+        return '<%s>' % (self.__class__.__name__)
 
 # pylint: enable= no-member
 def row_sparse(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
     hdl = NDArrayHandle()
     assert(isinstance(values, NDArrayBase))
     assert(isinstance(indices, NDArrayBase))
-    print(shape)
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, indices.handle,
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
+        #TODO sparse type
+        ctypes.c_int(0),
         ctypes.c_int(ctx.device_typeid),
         ctypes.c_int(ctx.device_id),
         #delay alloc is not required
         ctypes.c_int(int(False)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
         ctypes.byref(hdl)))
-    return hdl
+    return SparseNDArray(hdl)
 
 def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
     """Create a new array from any object exposing the array interface
@@ -132,3 +133,7 @@ def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
     arr = row_sparse(values, indices, sparse_type, shape=shape, ctx=ctx, dtype=dtype)
     return arr
 
+ndarray_map = {}
+ndarray_map['1'] = ndarray.NDArray
+ndarray_map['2'] = SparseNDArray
+_init_ndarray_module(ndarray_map, "mxnet")

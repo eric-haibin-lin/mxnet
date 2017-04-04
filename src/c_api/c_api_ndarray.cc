@@ -119,7 +119,7 @@ void SetContext(Context* p_ctx,
     ctx = Context::CPU();
   }
 }
-
+// Also set the chunk type
 void SetShapeType(const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
                   const Context& ctx,
@@ -128,7 +128,8 @@ void SetShapeType(const nnvm::Op* op,
                   std::vector<NDArray>* p_ndoutputs) {
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
-  static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
+ static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
+  static auto& inferchunktype = nnvm::Op::GetAttr<nnvm::FInferChunkType>("FInferChunkType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;
@@ -164,9 +165,37 @@ void SetShapeType(const nnvm::Op* op,
   CHECK(infertype[op](attrs, &in_types, &out_types));
   CHECK_EQ(out_types.size(), static_cast<size_t>(infered_num_outputs));
 
+  // infer chunk type
+  auto& in_chunk_types = ret->arg_chunk_types;
+  auto& out_chunk_types = ret->out_chunk_types;
+  in_chunk_types.clear();
+  out_chunk_types.clear();
+
+  for (auto& i : ndinputs) {
+    in_chunk_types.push_back(i.chunk_type());
+    std::cout << "in chunk:" << i.chunk_type() << std::endl;
+  }
+  for (auto& i : ndoutputs) {
+    auto chunk_type = i.chunk_type();
+    out_chunk_types.push_back(i.chunk_type());
+  }
+  // TODO make it optional
+  CHECK(inferchunktype.count(op))
+    << "Operator " << op->name << " is missing FInferType attribute";
+  CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
+  CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
+
   for (int i = 0; i < infered_num_outputs; ++i) {
+
+    std::cout << "out chunk:" << out_chunk_types[i] << std::endl;
     if (ndoutputs[i].is_none()) {
-      ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
+      // Dense
+      if (out_chunk_types[i] == 1) {
+        ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
+      } else {
+        //TODO this may be sparse, too
+        ndoutputs[i] = NDArray((NDArrayChunkType)out_chunk_types[i], out_shapes[i], ctx, true, out_types[i]);
+      }
     } else {
       CHECK_EQ(ndoutputs[i].shape(), out_shapes[i])
         << i << "th output has invalid shape. "
