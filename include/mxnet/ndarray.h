@@ -33,10 +33,12 @@ namespace mxnet {
 
  // TODO Doc
  enum NDArrayChunkType {
+   UndefinedChunk, //undefined
    DefaultChunk, //dense
-   COOChunk,
    RowSparseChunk,
-   MKLChunk
+   //COOChunk,
+   //CSRChunk,
+   //MKLChunk
  };
 class NDArray {
 
@@ -180,6 +182,7 @@ class NDArray {
     return ptr_->aux_type;
   }
   inline NDArrayChunkType chunk_type() const {
+    if (ptr_ == nullptr) { return UndefinedChunk; }
     return ptr_->chunk_type;
   }
   /*! \return whether this ndarray is not initialized */
@@ -513,6 +516,8 @@ class NDArray {
       // For row sparse chunk, size is the number of rows to allocate
       // calculate size, perform allocation
       if (delay_alloc && chunk_type == RowSparseChunk) {
+      // TODO hack delay_alloc for now.. We need to check it
+      //if (chunk_type == RowSparseChunk) {
         CHECK(aux_shape.ndim() == 1);
         uint64_t num_rows = aux_shape[0];
         auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
@@ -528,12 +533,12 @@ class NDArray {
     }
     /*! \brief destructor */
     ~Chunk() {
-      if (static_data || delay_alloc) {
+      if (static_data || delay_alloc || chunk_type == RowSparseChunk) {
         Engine::Get()->DeleteVariable([](RunContext s) {}, shandle.ctx, var);
       } else {
         Storage::Handle h = this->shandle;
         Engine::Get()->DeleteVariable([h](RunContext s) {
-            Storage::Get()->Free(h);
+          //  Storage::Get()->Free(h);
           }, shandle.ctx, var);
       }
     }

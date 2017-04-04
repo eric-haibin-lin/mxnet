@@ -14,6 +14,9 @@ from ..base import check_call
 from ..ndarray_doc import _build_doc
 
 _ndarray_cls = None
+_ndarray_cls_map = {}
+
+#TODO create a mapping between int and chunk_types
 
 class NDArrayBase(object):
     """Base data structure for ndarray"""
@@ -38,6 +41,24 @@ class NDArrayBase(object):
     def __reduce__(self):
         return (_ndarray_cls, (None,), self.__getstate__())
 
+    @property
+    def shape(self):
+        """Tuple of array dimensions.
+
+        Examples
+        --------
+        >>> x = mx.nd.array([1, 2, 3, 4])
+        >>> x.shape
+        (4,)
+        >>> y = mx.nd.zeros((2, 3, 4))
+        >>> y.shape
+        (2, 3, 4)
+        """
+        ndim = mx_uint()
+        pdata = ctypes.POINTER(mx_uint)()
+        check_call(_LIB.MXNDArrayGetShape(
+            self.handle, ctypes.byref(ndim), ctypes.byref(pdata)))
+        return tuple(pdata[:ndim.value])
 
 # pylint: disable=too-many-locals, invalid-name
 def _make_ndarray_function(handle, name):
@@ -134,7 +155,16 @@ def _make_ndarray_function(handle, name):
         if original_output is not None:
             return original_output
         if num_output.value == 1:
-            return _ndarray_cls(ctypes.cast(output_vars[0], NDArrayHandle))
+            chunk_type = ctypes.c_int(0)
+            check_call(_LIB.MXNDArrayGetChunkType(ctypes.cast(output_vars[0], NDArrayHandle), ctypes.byref(chunk_type)))
+            if chunk_type.value == 2:
+              print("returning sparse ndarray")
+              result = _ndarray_cls_map['2'](ctypes.cast(output_vars[0], NDArrayHandle))
+            else:
+              result = _ndarray_cls(ctypes.cast(output_vars[0], NDArrayHandle))
+
+            print(chunk_type, result.shape)
+            return result
         else:
             return [_ndarray_cls(ctypes.cast(output_vars[i], NDArrayHandle))
                     for i in range(num_output.value)]
@@ -148,7 +178,9 @@ def _make_ndarray_function(handle, name):
 def _set_ndarray_class(cls):
     """Set the symbolic class to be cls"""
     global _ndarray_cls
-    _ndarray_cls = cls
+    global _ndarray_cls_map 
+    _ndarray_cls = cls['1']
+    _ndarray_cls_map = cls
 
 
 # pylint: enable=too-many-locals, invalid-name

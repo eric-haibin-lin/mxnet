@@ -148,12 +148,6 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   // TODO fix dev_id
   *out = new NDArray(nd_data, nd_aux_data, 0, RowSparseChunk, TShape(shape, shape + ndim));
   //TODO redesign this api
-  /*
-  *out = new NDArray(
-      TShape(shape, shape + ndim),
-      Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
-      delay_alloc != 0,
-      dtype);*/
   API_END();
 }
 
@@ -326,6 +320,19 @@ MXNET_DLL int MXNDArrayReshape(NDArrayHandle handle,
   *ptr = static_cast<NDArray*>(handle)->Reshape(new_shape);
   *out = ptr;
   API_END_HANDLE_ERROR(delete ptr);
+}
+
+int MXNDArrayGetChunkType(NDArrayHandle handle,
+                     int *out_chunk_type) {
+  API_BEGIN();
+  NDArray *arr = static_cast<NDArray*>(handle);
+  // Check is_none?
+  if (!arr->is_none()) {
+    *out_chunk_type = arr->chunk_type();
+  } else {
+    *out_chunk_type = -1;
+  }
+  API_END();
 }
 
 int MXNDArrayGetShape(NDArrayHandle handle,
