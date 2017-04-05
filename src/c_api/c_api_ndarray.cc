@@ -304,12 +304,10 @@ void PushFComputeNDArray(const FComputeNDArray& fn,
         RunContext rctx,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
-      for (auto& i : ndinputs) {
-        //input_blobs.push_back(i.data());
-      }
       for (auto& i : ndoutputs) {
-        i.CheckAndAlloc();
-        //output_blobs.push_back(i.data());
+        if (i.chunk_type() == DefaultChunk) {
+          i.CheckAndAlloc();
+        }
       }
       OpContext opctx{false, rctx,
                       engine::CallbackOnComplete(),

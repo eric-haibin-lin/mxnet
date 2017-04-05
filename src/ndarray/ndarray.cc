@@ -483,37 +483,55 @@ inline NDArray &ScalarOpApply(NDArray *dst,
   ScalarOp<OP, false>(*dst, src, dst);
   return *dst;
 }
+
 // Attributes
-// GETDATA, etc
+TBlob NDArray::data(bool force_dense) const {
+  if (chunk_type() != DefaultChunk) CHECK(offset_ == 0);
+  TBlob res;
+  if (force_dense == false) {
+    MSHADOW_TYPE_SWITCH(dtype_, DType, {
+      res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
+        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask());
+    });
+  } else {
+    // Convert to dense first
+    res = ToDense(nullptr);
+  }
+#if MKL_EXPERIMENTAL == 1
+  res.Mkl_mem_ = Mkl_mem_;
+#endif
+  return res;
+}
 
 // Convertion
 // Take a stream as input?
 // TODO make it private?
-NDArray NDArray::ToDense(mshadow::Stream<cpu> *s) const {
+TBlob NDArray::ToDense(mshadow::Stream<cpu> *s) const {
   //TODO CHECK TYPE
   if (chunk_type() == DefaultChunk) {
-    return *this;
+    return data();
   }
   CHECK(chunk_type() == RowSparseChunk);
   // Constructor for NDArray with chunk type
+  // FIXME Construct a TBlob directly. No need to construct an NDArray
   NDArray result(shape_, ptr_->ctx, false, dtype());
   // TODO be care of the context
+  // Get the stream according to TBlob.dev_mask_
   //mshadow::Stream<cpu> *s = ptr_->ctx.get_stream<cpu>();
-  //mshadow::Stream<cpu> *s = nullptr;
   auto in_data = data().FlatTo2D<cpu, real_t>(s);
   auto out_data = result.data().FlatTo2D<cpu, real_t>(s);
   size_t num_rows = aux_shape()[0];
   auto in_idx = aux_data().FlatTo1D<cpu, real_t>(s);
   // Assign zero values
   // Fill in zeros
-  out_data = 0;
+  result.data().FlatTo1D<cpu, real_t>(s) = 0;
 
   size_t i_in = 0;
   while (i_in < num_rows) {
     mshadow::Copy(out_data[in_idx[i_in]], in_data[i_in], s);
     i_in++;
   }
-  return result;
+  return result.data();
 }
 
 // Binary
