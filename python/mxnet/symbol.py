@@ -1114,6 +1114,96 @@ class Symbol(SymbolBase):
             raise TypeError('Only accept list of NDArrays or dict of str to NDArray')
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
+    def simple_bind2(self, ctx, grad_req='write', type_dict=None, group2ctx=None, **kwargs):
+        """Bind current symbol to get an executor, allocate all the ndarrays needed.
+        Allows specifying data types.
+
+        This function will ask user to pass in ndarray of position
+        they like to bind to, and it will automatically allocate the ndarray
+        for arguments and auxiliary states that user did not specify explicitly.
+
+        Parameters
+        ----------
+        ctx : Context
+            The device context the generated executor to run on.
+
+        grad_req: string
+            {'write', 'add', 'null'}, or list of str or dict of str to str, optional
+            Specifies how we should update the gradient to the args_grad.
+            - 'write' means everytime gradient is write to specified args_grad NDArray.
+            - 'add' means everytime gradient is add to the specified NDArray.
+            - 'null' means no action is taken, the gradient may not be calculated.
+
+        type_dict  : dict of str->numpy.dtype
+            Input type dictionary, name->dtype
+
+        group2ctx : dict of string to mx.Context
+            The dict mapping the ``ctx_group`` attribute to the context assignment.
+
+        kwargs : dict of str->shape
+            Input shape dictionary, name->shape
+
+        Returns
+        -------
+        executor : mxnet.Executor
+            The generated Executor
+        """
+        # pylint: disable=too-many-locals
+        if len(kwargs) == 0:
+            raise ValueError("Argument shapes must be provided in kwargs way for simple_bind2")
+
+        sdata = []  # shape data
+        indptr = [0]  # argument shape index in sdata
+        keys = []
+        for k, v in kwargs.items():
+            if isinstance(v, tuple):
+                keys.append(c_str(k))
+                sdata.extend(v)
+                indptr.append(len(sdata))
+
+        listed_arguments = self.list_arguments()
+        req_map = {'null': 0, 'write': 1, 'add': 3}
+        if isinstance(grad_req, string_types):
+            if grad_req not in req_map:
+                raise ValueError('grad_req=%s is not in %s' % grad_req, str(req_map))
+            reqs_array = c_array(mx_uint, [mx_uint(req_map[grad_req])] * len(listed_arguments))
+        elif isinstance(grad_req, list):
+            reqs_array = c_array(mx_uint, [mx_uint(req_map[item]) for item in grad_req])
+        elif isinstance(grad_req, dict):
+            req_array = []
+            for name in listed_arguments:
+                if name in grad_req:
+                    req_array.append(mx_uint(req_map[grad_req[name]]))
+                else:
+                    req_array.append(mx_uint(0))
+            reqs_array = c_array(mx_uint, req_array)
+
+        ctx_map_keys = []
+        ctx_map_dev_types = []
+        ctx_map_dev_ids = []
+        if group2ctx is not None:
+            for key, val in group2ctx.items():
+                ctx_map_keys.append(c_str(key))
+                ctx_map_dev_types.append(ctypes.c_int(val.device_typeid))
+                ctx_map_dev_ids.append(ctypes.c_int(val.device_id))
+
+        handle = ExecutorHandle
+        check_call(_LIB.MXExecutorSimpleBind(self.handle,
+                                             mx_uint(len(indptr) - 1),
+                                             c_array(ctypes.c_char_p, keys),
+                                             c_array(mx_uint, indptr),
+                                             c_array(mx_uint, sdata),
+                                             ctypes.c_int(ctx.device_typeid),
+                                             ctypes.c_int(ctx.device_id),
+                                             mx_uint(len(ctx_map_keys)),
+                                             c_array(ctypes.c_char_p, ctx_map_keys),
+                                             c_array(ctypes.c_int, ctx_map_dev_types),
+                                             c_array(ctypes.c_int, ctx_map_dev_ids),
+                                             reqs_array,
+                                             ctypes.byref(handle)))
+
+        executor = Executor(handle, self, ctx, grad_req, group2ctx)
+
     def simple_bind(self, ctx,
                     grad_req='write',
                     type_dict=None,
