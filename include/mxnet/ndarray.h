@@ -61,9 +61,7 @@ class AutogradRuntime;
    UndefinedChunk, //undefined
    DefaultChunk, //dense
    RowSparseChunk,
-   //COOChunk,
-   //CSRChunk,
-   //MKLChunk
+   CSRChunk,
  };
 class NDArray {
 
@@ -133,7 +131,7 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  NDArray ToDense(mshadow::Stream<cpu> *) const;
+  TBlob ToDense(mshadow::Stream<cpu> *) const;
   /*!
    * \return the shape of current NDArray
    */
@@ -151,19 +149,8 @@ class NDArray {
   /*!
    * \return the data TBlob
    */
-   //TODO move to cpp
-  inline TBlob data() const {
-    if (chunk_type() != DefaultChunk) { CHECK(offset_ == 0); }
-    TBlob res;
-    MSHADOW_TYPE_SWITCH(dtype_, DType, {
-      res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
-        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask());
-    });
-#if MKL_EXPERIMENTAL == 1
-    res.Mkl_mem_ = Mkl_mem_;
-#endif
-    return res;
-  }
+  TBlob data(bool force_dense = false) const;
+
   inline TBlob aux_data() const {
    CHECK(chunk_type() != DefaultChunk);
    TBlob res;
