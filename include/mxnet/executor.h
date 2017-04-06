@@ -91,6 +91,23 @@ class Executor {
                         const std::vector<OpReqType> &grad_req_type,
                         const std::vector<NDArray> &aux_states,
                         Executor* shared_exec = NULL);
+
+  static Executor* SimpleBind(nnvm::Symbol symbol,
+                              const Context& default_ctx,
+                              const std::map<std::string, Context>& group2ctx,
+                              const std::vector<Context>& in_arg_ctxes,
+                              const std::vector<Context>& arg_grad_ctxes,
+                              const std::vector<Context>& aux_state_ctxes,
+                              const std::vector<TShape>& in_arg_shapes,
+                              const std::vector<TShape>& aux_state_shapes,
+                              const std::vector<int>& in_arg_dtypes,
+                              const std::vector<int>& aux_state_dtypes,
+                              const std::vector<OpReqType>& grad_req_types,
+                              std::vector<NDArray*>* in_args,
+                              std::vector<NDArray*>* arg_grads,
+                              std::vector<NDArray*>* aux_states,
+                              Executor* shared_exec);
+
   /*!
    * \brief the prototype of user-defined monitor callback
    */
