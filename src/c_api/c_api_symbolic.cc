@@ -497,6 +497,57 @@ int MXSymbolInferShapePartial(SymbolHandle sym,
                             &succ);
 }
 
+
+int MXSymbolInferChunkType(SymbolHandle sym,
+                      mx_uint num_args,
+                      const char** keys,
+                      const int *arg_chunk_type_data,
+                      mx_uint *in_chunk_type_size,
+                      const int **in_chunk_type_data,
+                      mx_uint *out_chunk_type_size,
+                      const int **out_chunk_type_data,
+                      mx_uint *aux_chunk_type_size,
+                      const int **aux_chunk_type_data,
+                      int *complete) {
+  nnvm::Symbol *s = static_cast<nnvm::Symbol*>(sym);
+  MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
+  API_BEGIN();
+  nnvm::Graph g = Symbol2Graph(*s);
+  nnvm::ChunkTypeVector arg_chunk_types(g.indexed_graph().input_nodes().size(), -1);
+  if (keys == nullptr && num_args != 0) {
+    std::vector<uint32_t> read_only_args = mxnet::ReadOnlyArgIndices(g.indexed_graph());
+    CHECK_LE(num_args, read_only_args.size());
+    for (mx_uint i = 0; i < num_args; ++i) {
+      arg_chunk_types[read_only_args[i]] = arg_chunk_type_data[i];
+    }
+  } else {
+    std::unordered_map<std::string, int> kwargs;
+    for (mx_uint i = 0; i < num_args; ++i) {
+      kwargs[keys[i]] = arg_chunk_type_data[i];
+    }
+    mxnet::MatchArguments(g.indexed_graph(), kwargs, &arg_chunk_types, "InferChunkType");
+  }
+
+  g = nnvm::pass::InferChunkType(std::move(g), arg_chunk_types, "__chunk_type__");
+  // copy back
+  CopyAttr(g.indexed_graph(), g.GetAttr<nnvm::ChunkTypeVector>("chunk_type"),
+           &(ret->arg_chunk_types), &(ret->out_chunk_types), &(ret->aux_chunk_types));
+
+  *in_chunk_type_size = static_cast<mx_uint>(ret->arg_chunk_types.size());
+  *in_chunk_type_data = dmlc::BeginPtr(ret->arg_chunk_types);
+  *out_chunk_type_size = static_cast<mx_uint>(ret->out_chunk_types.size());
+  *out_chunk_type_data = dmlc::BeginPtr(ret->out_chunk_types);
+  *in_chunk_type_size = static_cast<mx_uint>(ret->arg_chunk_types.size());
+  *in_chunk_type_data = dmlc::BeginPtr(ret->arg_chunk_types);
+  *out_chunk_type_size = static_cast<mx_uint>(ret->out_chunk_types.size());
+  *out_chunk_type_data = dmlc::BeginPtr(ret->out_chunk_types);
+  *aux_chunk_type_size = static_cast<mx_uint>(ret->aux_chunk_types.size());
+  *aux_chunk_type_data = dmlc::BeginPtr(ret->aux_chunk_types);
+  *complete = (g.GetAttr<size_t>("chunk_type_num_unknown_nodes") == 0);
+  API_END();
+}
+
+
 int MXSymbolInferType(SymbolHandle sym,
                       mx_uint num_args,
                       const char** keys,

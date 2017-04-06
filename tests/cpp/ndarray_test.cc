@@ -189,8 +189,8 @@ TEST(NDArray, conversion) {
   const_vars.push_back(dense_nd.var());
       Engine::Get()->PushSync([nd, dense_nd](RunContext ctx) {
           mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-          NDArray nd_copy = nd.ToDense(s);
-          CheckDataRegion(nd_copy, dense_nd);
+          auto nd_copy = nd.ToDense(s);
+          CheckDataRegion(nd_copy, dense_nd.data());
         }, nd.ctx(), const_vars, {},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   }

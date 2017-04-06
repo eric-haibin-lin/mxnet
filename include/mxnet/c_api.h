@@ -946,6 +946,23 @@ MXNET_DLL int MXSymbolInferType(SymbolHandle sym,
                                 mx_uint *aux_type_size,
                                 const int **aux_type_data,
                                 int *complete);
+
+
+
+
+MXNET_DLL int MXSymbolInferChunkType(SymbolHandle sym,
+                      mx_uint num_args,
+                      const char** keys,
+                      const int *arg_chunk_type_data,
+                      mx_uint *in_chunk_type_size,
+                      const int **in_chunk_type_data,
+                      mx_uint *out_chunk_type_size,
+                      const int **out_chunk_type_data,
+                      mx_uint *aux_chunk_type_size,
+                      const int **aux_chunk_type_data,
+                      int *complete);
+
+
 //--------------------------------------------
 // Part 4: Executor interface
 //--------------------------------------------

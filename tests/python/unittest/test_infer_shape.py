@@ -112,12 +112,48 @@ def test_incomplete_infer_concat():
     assert arg_shapes['b'] == (2, 5)
     assert arg_shapes['d'] == (2, 15)
 
+def test_fc_infer_type():
+    mx_real_t = mx.base.mx_real_t
+    # Build MLP
+    data = mx.symbol.Variable('data')
+    out = mx.symbol.FullyConnected(data=data, name='fc1', num_hidden=1000)
+
+    # infer type
+    data_type = mx_real_t
+    arg_types, out_types, aux_types = out.infer_type(data=data_type)
+    arg_type_dict = dict(zip(out.list_arguments(), arg_types))
+    assert len(out_types) == 1
+    assert out_types[0] == mx_real_t
+    true_types = {
+                   'fc1_bias' : mx_real_t,
+                   'fc1_weight' : mx_real_t }
+    for k, v in true_types.items():
+        assert arg_type_dict[k] == v
+
+def test_fc_infer_chunk_type():
+    # FIXME need some mapping between number and chunk types
+    default_chunk_type = 'default'
+    # Build MLP
+    data = mx.symbol.Variable('data')
+    #out = mx.symbol.FullyConnected(data=data, name='fc1', num_hidden=1000)
+    out = mx.symbol.COOPlusScalar(data=data, name='out', scalar=1)
+    # infer type
+    data_chunk_type = 'row_sparse'
+    arg_chunk_types, out_chunk_types, aux_chunk_types = out.infer_chunk_type(data=data_chunk_type)
+    arg_chunk_type_dict = dict(zip(out.list_arguments(), arg_chunk_types))
+    assert len(out_chunk_types) == 1
+    print arg_chunk_type_dict
+    print out_chunk_types
+    assert out_chunk_types[0] == data_chunk_type
+
 if __name__ == "__main__":
-    test_mlp2_infer_shape()
+    '''test_mlp2_infer_shape()
     test_mlp2_infer_error()
     test_backward_infer()
     test_incomplete_infer_elewise()
     test_incomplete_infer_mlp()
     test_incomplete_infer_slicechannel()
     test_incomplete_infer_convolution()
-    test_incomplete_infer_concat()
+    test_incomplete_infer_concat()'''
+    #test_fc_infer_type()
+    test_fc_infer_chunk_type()

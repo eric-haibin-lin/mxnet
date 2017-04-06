@@ -56,7 +56,20 @@ _DTYPE_MX_TO_NP = {
     4 : np.int32
 }
 # pylint: enable= no-member
+#FIXME move to base
+_CHUNK_TYPE_ID_TO_STR = {
+    0 : 'undefined',
+    1 : 'default',
+    2 : 'row_sparse',
+    3 : 'csr',
+}
 
+_CHUNK_TYPE_STR_TO_ID = {
+    'undefined' : 0,
+    'default' : 1,
+    'row_sparse' : 2,
+    'csr' : 3,
+}
 def _new_empty_handle():
     """Returns a new empty handle.
 
