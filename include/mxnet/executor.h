@@ -106,7 +106,7 @@ class Executor {
                               std::vector<NDArray*>* in_args,
                               std::vector<NDArray*>* arg_grads,
                               std::vector<NDArray*>* aux_states,
-                              Executor* shared_exec);
+                              Executor* shared_exec = nullptr);
 
   /*!
    * \brief the prototype of user-defined monitor callback

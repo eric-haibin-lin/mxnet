@@ -753,19 +753,19 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
     const TShape& inferred_shape = inferred_shapes[eid];
     const int inferred_dtype = inferred_dtypes[eid];
     if (mutable_nodes.count(nid)) {  // aux_states
-      aux_states->push_back(new NDArray(inferred_shape, aux_state_ctxes[aux_top],
-                                        false, aux_state_dtypes[aux_top]));
-      data_entry_[eid] = *(aux_states->back());
+      aux_states->at(aux_top) = new NDArray(inferred_shape, aux_state_ctxes[aux_top],
+                                             false, aux_state_dtypes[aux_top]);
+      data_entry_[eid] = *(aux_states->at(aux_top));
       ++aux_top;
     } else {  // in_args
-      in_args->push_back(new NDArray(inferred_shape, in_arg_ctxes[arg_top],
-                                     false, in_arg_dtypes[arg_top]));
-      data_entry_[eid] = *(in_args->back());
+      in_args->at(arg_top) = new NDArray(inferred_shape, in_arg_ctxes[arg_top],
+                                         false, in_arg_dtypes[arg_top]);
+      data_entry_[eid] = *(in_args->at(arg_top));
       if (kNullOp == grad_req_types[arg_top]) {
-        arg_grads->push_back(nullptr);
+        arg_grads->at(arg_top) = nullptr;
       } else {
-        arg_grads->push_back(new NDArray(inferred_shape, arg_grad_ctxes[arg_top],
-                                         false, in_arg_dtypes[arg_top]));
+        arg_grads->at(arg_top) = new NDArray(inferred_shape, arg_grad_ctxes[arg_top],
+                                             false, in_arg_dtypes[arg_top]);
         grad_store_.emplace_back(grad_req_types[arg_top], *(arg_grads->back()));
       }
       ++arg_top;
@@ -1272,7 +1272,7 @@ Executor *Executor::SimpleBind(nnvm::Symbol symbol,
   auto exec = new exec::GraphExecutor();
   exec->Init2(symbol, default_ctx, group2ctx, in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
               in_arg_shapes, aux_state_shapes, in_arg_dtypes, aux_state_dtypes, grad_req_types,
-              in_args, arg_grads, aux_states, reinterpret_cast<Executor*>(shared_exec));
+              in_args, arg_grads, aux_states, shared_exec);
   return exec;
 }
 
