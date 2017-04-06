@@ -17,7 +17,7 @@ from .base import c_array, c_str, mx_uint, py_str, string_types, mx_real_t
 from .base import NDArrayHandle, ExecutorHandle, SymbolHandle
 from .base import check_call, MXNetError
 from .context import Context, cpu
-from .ndarray import NDArray, zeros as _nd_zeros, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
+from .ndarray import NDArray, zeros as _nd_zeros, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP, _CHUNK_TYPE_ID_TO_STR, _CHUNK_TYPE_STR_TO_ID
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope
@@ -475,6 +475,89 @@ class Symbol(SymbolBase):
             self.handle, ctypes.byref(size), ctypes.byref(sarr)))
         return [py_str(sarr[i]) for i in range(size.value)]
 
+    def infer_chunk_type(self, *args, **kwargs):
+        #TODO refactor with dtype 
+        #FIXME update doc
+        """Infer the chunk type of outputs and arguments of given known types of arguments.
+
+        User can either pass in the known types in positional way or keyword argument way.
+        Tuple of Nones is returned if there is not enough information passed in.
+        An error will be raised if there is inconsistency found in the known types passed in.
+
+        Parameters
+        ----------
+        *args :
+            Provide type of arguments in a positional way.
+            Unknown type can be marked as None
+
+        **kwargs :
+            Provide keyword arguments of known types.
+
+        Returns
+        -------
+        arg_chunk_types : list of numpy.dtype or None
+            List of types of arguments.
+            The order is in the same order as list_arguments()
+        out_chunk_types : list of numpy.dtype or None
+            List of types of outputs.
+            The order is in the same order as list_outputs()
+        aux_chunk_types : list of numpy.dtype or None
+            List of types of outputs.
+            The order is in the same order as list_auxiliary_states()
+        """
+        # pylint: disable=too-many-locals
+        if len(args) != 0 and len(kwargs) != 0:
+            raise ValueError('Can only specify known argument \
+                    types either by positional or kwargs way.')
+        sdata = []
+        if len(args) != 0:
+            keys = None
+            for s in args:
+                if s is not None:
+                    if s not in _CHUNK_TYPE_STR_TO_ID or not isinstance(s, basestring):
+                        raise TypeError('Argument need to be one of '+str(_CHUNK_TYPE_STR_TO_ID))
+                    sdata.append(_CHUNK_TYPE_STR_TO_ID[s])
+                else:
+                    #FIXME -1 or 0 for unknown / error chunk type?
+                    sdata.append(-1)
+        else:
+            keys = []
+            for k, v in kwargs.items():
+                if v in _CHUNK_TYPE_STR_TO_ID:
+                    keys.append(c_str(k))
+                    sdata.append(_CHUNK_TYPE_STR_TO_ID[v])
+        arg_chunk_type_size = mx_uint()
+        arg_chunk_type_data = ctypes.POINTER(ctypes.c_int)()
+        out_chunk_type_size = mx_uint()
+        out_chunk_type_data = ctypes.POINTER(ctypes.c_int)()
+        aux_chunk_type_size = mx_uint()
+        aux_chunk_type_data = ctypes.POINTER(ctypes.c_int)()
+        complete = ctypes.c_int()
+        check_call(_LIB.MXSymbolInferChunkType(
+            self.handle,
+            mx_uint(len(sdata)),
+            c_array(ctypes.c_char_p, keys),
+            c_array(ctypes.c_int, sdata),
+            ctypes.byref(arg_chunk_type_size),
+            ctypes.byref(arg_chunk_type_data),
+            ctypes.byref(out_chunk_type_size),
+            ctypes.byref(out_chunk_type_data),
+            ctypes.byref(aux_chunk_type_size),
+            ctypes.byref(aux_chunk_type_data),
+            ctypes.byref(complete)))
+        if complete.value != 0:
+            arg_chunk_types = [
+                _CHUNK_TYPE_ID_TO_STR[arg_chunk_type_data[i]] for i in range(arg_chunk_type_size.value)]
+            out_chunk_types = [
+                _CHUNK_TYPE_ID_TO_STR[out_chunk_type_data[i]] for i in range(out_chunk_type_size.value)]
+            aux_chunk_types = [
+                _CHUNK_TYPE_ID_TO_STR[aux_chunk_type_data[i]] for i in range(aux_chunk_type_size.value)]
+            return (arg_chunk_types, out_chunk_types, aux_chunk_types)
+        else:
+            return (None, None, None)
+        # pylint: enable=too-many-locals
+
+
     def infer_type(self, *args, **kwargs):
         """Infer the type of outputs and arguments of given known types of arguments.
 
@@ -789,6 +872,7 @@ class Symbol(SymbolBase):
                     grad_req='write',
                     type_dict=None,
                     group2ctx=None,
+                    sparse_type_dict=None,
                     **kwargs):
         """Bind current symbol to get an executor, allocate all the ndarrays needed.
         Allows specifying data types.
@@ -848,6 +932,7 @@ class Symbol(SymbolBase):
 
         # alloc space
         arg_ndarrays = [
+            # TODO We should avoid allocating space for sparse inputs.
             _nd_zeros(shape, dev, dtype=dtype)
             for dtype, dev, shape in zip(arg_types, arg_ctx, arg_shapes)]
         if grad_req != 'null':
@@ -1059,7 +1144,7 @@ class Symbol(SymbolBase):
 
 
 
-def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None):
+def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, sparse_type=None):
     """Create a symbolic variable with specified name.
 
     Parameters

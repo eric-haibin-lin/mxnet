@@ -59,7 +59,7 @@ struct MXAPIThreadLocalEntry {
   /*! \brief result holder for returning type flags */
   std::vector<int> arg_types, out_types, aux_types;
   /*! \brief result holder for returning chunk types */
-  std::vector<int> arg_chunk_types, out_chunk_types;
+  std::vector<int> arg_chunk_types, out_chunk_types, aux_chunk_types;
   /*! \brief result holder for returning shape dimensions */
   std::vector<mx_uint> arg_shape_ndim, out_shape_ndim, aux_shape_ndim;
   /*! \brief result holder for returning shape pointer */

@@ -125,7 +125,7 @@ void SetShapeType(const nnvm::Op* op,
                   std::vector<NDArray>* p_ndoutputs) {
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
- static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
+  static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
   static auto& inferchunktype = nnvm::Op::GetAttr<nnvm::FInferChunkType>("FInferChunkType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
@@ -176,18 +176,17 @@ void SetShapeType(const nnvm::Op* op,
     auto chunk_type = i.chunk_type();
     out_chunk_types.push_back(i.chunk_type());
   }
-  // TODO make it optional
-  CHECK(inferchunktype.count(op))
-    << "Operator " << op->name << " is missing FInferType attribute";
-  CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
-  CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
+  if (inferchunktype.count(op)) {
+    CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
+    CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
+  }
 
   for (int i = 0; i < infered_num_outputs; ++i) {
 
     std::cout << "out chunk:" << out_chunk_types[i] << std::endl;
     if (ndoutputs[i].is_none()) {
-      // Dense
-      if (out_chunk_types[i] == 1) {
+      // If the chunk type cannot be inferred, assume it's a dense one
+      if (out_chunk_types[i] == DefaultChunk || out_chunk_types[i] == UndefinedChunk) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
         //TODO this may be sparse, too
@@ -270,8 +269,9 @@ void PushFCompute(const FCompute& fn,
         RunContext rctx,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
+      // By default FCompute assumes DefaultChunk
       for (auto& i : ndinputs) {
-        input_blobs.push_back(i.data());
+        input_blobs.push_back(i.data(true));
       }
       for (auto& i : ndoutputs) {
         i.CheckAndAlloc();
