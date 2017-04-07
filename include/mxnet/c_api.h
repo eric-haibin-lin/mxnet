@@ -251,6 +251,11 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               int delay_alloc,
                               int dtype,
                               NDArrayHandle *out);
+
+MXNET_DLL int MXNDArrayConvert(NDArrayHandle in,
+                               int chunk_type,
+                               NDArrayHandle *out);
+
 /*!
  * \brief create a NDArray handle that is loaded from raw bytes.
  * \param buf the head of the raw bytes

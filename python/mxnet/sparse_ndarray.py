@@ -24,7 +24,6 @@ from .base import ctypes2buffer
 from .context import Context
 from . import _ndarray_internal as _internal
 from . import ndarray
-# TODO refactor common ones with ndarray.py
 # Use different verison of SymbolBase
 # When possible, use cython to speedup part of computation.
 try:
@@ -39,23 +38,10 @@ except ImportError:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
     from ._ctypes.ndarray import NDArrayBase, _init_ndarray_module
 
-
-# pylint: disable= no-member
-_DTYPE_NP_TO_MX = {
-    np.float32 : 0,
-    np.float64 : 1,
-    np.float16 : 2,
-    np.uint8   : 3,
-    np.int32   : 4
-}
-
-_DTYPE_MX_TO_NP = {
-    0 : np.float32,
-    1 : np.float64,
-    2 : np.float16,
-    3 : np.uint8,
-    4 : np.int32
-}
+_DTYPE_NP_TO_MX = ndarray._DTYPE_NP_TO_MX
+_DTYPE_MX_TO_NP = ndarray._DTYPE_MX_TO_NP
+_CHUNK_TYPE_STR_TO_ID = ndarray._CHUNK_TYPE_STR_TO_ID
+_CHUNK_TYPE_ID_TO_STR = ndarray._CHUNK_TYPE_ID_TO_STR
 
 class SparseNDArray(NDArrayBase):
     """An array object represents a multidimensional, homogeneous array of
@@ -68,6 +54,9 @@ fixed-size items.
         """Return a string representation of the array"""
         #shape_info = 'x'.join(['%d' % x for x in self.shape])
         return '<%s>' % (self.__class__.__name__)
+
+    def to_dense(self):
+        return to_dense(self)
 
 # pylint: enable= no-member
 def row_sparse(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
@@ -132,6 +121,14 @@ def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
         ctx = Context.default_ctx
     arr = row_sparse(values, indices, sparse_type, shape=shape, ctx=ctx, dtype=dtype)
     return arr
+
+
+def to_dense(source):
+    hdl = NDArrayHandle()
+    check_call(_LIB.MXNDArrayConvert(
+        source.handle, ndarray._CHUNK_TYPE_STR_TO_ID['default'],
+        ctypes.byref(hdl)))
+    return ndarray.NDArray(handle=hdl, writable=True)
 
 ndarray_map = {}
 ndarray_map['1'] = ndarray.NDArray

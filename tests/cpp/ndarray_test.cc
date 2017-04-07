@@ -145,20 +145,20 @@ TEST(NDArray, basics) {
 TEST(NDArray, conversion) {
   Context ctx;
   const real_t val = 0;
-  {// dense to dense
-  TShape shape({2, 2});
-  NDArray nd(shape, ctx);
-  // alloc one row
-  nd.CheckAndAlloc();
-  EXPECT_NE(nd.data().dptr_, nullptr);
-  nd = val;
-  Engine::Get()->WaitForAll();
-  //nd.data()
-  auto nd_copy = nd.ToDense(nullptr);
-  CheckDataRegion(nd_copy, nd.data());
+  // dense to dense conversion
+  {
+    TShape shape({2, 2});
+    NDArray nd(shape, ctx);
+    // alloc one row
+    nd.CheckAndAlloc();
+    EXPECT_NE(nd.data().dptr_, nullptr);
+    nd = val;
+    Engine::Get()->WaitForAll();
+    auto nd_copy = nd.ConvertTo(DefaultChunk);
+    CheckDataRegion(nd_copy.data(), nd.data());
   }
 
-  // sparse to dense 
+  // sparse to dense conversion
   {
   size_t dev_id = 0;
   // Raw Data
@@ -187,12 +187,15 @@ TEST(NDArray, conversion) {
   const_vars.push_back(raw_data0.var());
   const_vars.push_back(index0.var());
   const_vars.push_back(dense_nd.var());
-      Engine::Get()->PushSync([nd, dense_nd](RunContext ctx) {
-          mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-          auto nd_copy = nd.ToDense(s);
-          CheckDataRegion(nd_copy, dense_nd.data());
-        }, nd.ctx(), const_vars, {},
-        FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+  Engine::Get()->PushSync([nd, dense_nd](RunContext ctx) {
+      mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
+      auto nd_copy = nd.ConvertTo(DefaultChunk);
+      CheckDataRegion(nd_copy.data(), dense_nd.data());
+    }, nd.ctx(), const_vars, {},
+    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+  auto converted_nd = nd.ConvertTo(DefaultChunk);
+  auto converted_data = converted_nd.data();
+  CheckDataRegion(converted_data, dense_nd.data());
   }
 
   //Wait for all operations to finish
