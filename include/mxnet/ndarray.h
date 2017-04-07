@@ -105,7 +105,7 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  TBlob ToDense(mshadow::Stream<cpu> *) const;
+  NDArray ConvertTo(NDArrayChunkType chunk_type) const;
   /*!
    * \return the shape of current NDArray
    */
@@ -408,6 +408,9 @@ class NDArray {
                    std::vector<std::string>* keys);
 
  private:
+  // Make a copy of the ndarray in dense format
+  NDArray ToDense(mshadow::Stream<cpu> *) const;
+
   /*! \brief the real data chunk that backs NDArray */
   struct Chunk {
     /*! \brief storage handle from storage engine */
@@ -442,7 +445,7 @@ class NDArray {
     Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
         : static_data(false), delay_alloc(true) {
       auto size = shape.Size();
- this->shape = shape;
+      this->shape = shape;
       var = Engine::Get()->NewVariable();
       shandle.size = size * mshadow::mshadow_sizeof(dtype);
       shandle.ctx = ctx_;

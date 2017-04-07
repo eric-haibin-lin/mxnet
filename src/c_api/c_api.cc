@@ -151,6 +151,17 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   API_END();
 }
 
+// Probably move to ndarray_api?
+int MXNDArrayConvert(NDArrayHandle in,
+                     int chunk_type,
+                     NDArrayHandle *out) {
+  API_BEGIN();
+  NDArray* nd = reinterpret_cast<NDArray*>(in);
+  *out = new NDArray(nd->ConvertTo(static_cast<NDArrayChunkType>(chunk_type)));
+  //**out = nd->ConvertTo(static_cast<NDArrayChunkType>(chunk_type));
+  API_END();
+}
+
 int MXNDArrayCreateEx(const mx_uint *shape,
                     mx_uint ndim,
                     int dev_type,
