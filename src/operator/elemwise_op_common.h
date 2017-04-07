@@ -20,6 +20,7 @@
 
 namespace mxnet {
 namespace op {
+//TODO refactor
 template<typename AttrType, bool (*is_none)(const AttrType&),
          bool (*assign)(AttrType*, const AttrType&), bool reverse_infer,
          std::string (*attr_string)(const AttrType&)>
@@ -53,6 +54,43 @@ inline bool ElemwiseAttr(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+// Only inferring output chunk types from input chunk types now
+// It never returns false
+// Implemented for add & sub now
+template<typename AttrType, bool (*is_none)(const AttrType&),
+         bool (*assign)(AttrType*, const AttrType&), bool reverse_infer>
+inline bool ElemwiseChunkAttr(const nnvm::NodeAttrs& attrs,
+                         std::vector<AttrType> *in_attrs,
+                         std::vector<AttrType> *out_attrs,
+                         const AttrType& none) {
+  auto deduce = [&](std::vector<AttrType> *vec, const char *name, AttrType& result, bool &fallback) {
+      for (size_t i = 0; i < vec->size(); ++i) {
+        if (assign(&result, (*vec)[i]) == false) {
+          fallback = true;
+          result = DefaultChunk;
+          return;
+        }
+      }
+    };
+  bool fallback = false;
+  AttrType dattr = none;
+  deduce(in_attrs, "input", dattr, fallback);
+  if (reverse_infer) {
+    //TODO also do reverse pass
+  }
+  auto write = [&](std::vector<AttrType> *vec, const char *name) {
+      for (size_t i = 0; i < vec->size(); ++i) {
+        CHECK(assign(&(*vec)[i], dattr))
+          << "Incompatible attr in node " << attrs.name << " at " << i << "-th "
+          << name << ": " << "expected " << dattr << ", got " << (*vec)[i];
+      }
+    };
+  //write(in_attrs, "input");
+  write(out_attrs, "output");
+  if (is_none(dattr)) return false;
+  return true;
+}
+
 template<int n_in, int n_out>
 inline bool ElemwiseShape(const nnvm::NodeAttrs& attrs,
                           std::vector<TShape> *in_attrs,
@@ -70,6 +108,33 @@ inline bool ElemwiseType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   return ElemwiseAttr<int, type_is_none, type_assign, true, type_string>(
+    attrs, in_attrs, out_attrs, -1);
+}
+
+template<int n_in, int n_out>
+inline bool ElemwiseChunkType(const nnvm::NodeAttrs& attrs,
+                         std::vector<int> *in_attrs,
+                         std::vector<int> *out_attrs) {
+  /*CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
+  auto num_in = in_attrs->size();
+  auto num_out = out_attrs->size();
+  CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
+  // We can reuse the templated Elem Attr. But we need to fallback to a default type when needed.
+  // We should also not force it to CHECK.
+
+  //TODO implement me
+  //return ElemwiseAttr<int, type_is_none, type_assign, true>(
+  //  attrs, in_attrs, out_attrs, -1);
+  CHECK_EQ(n_in, 1);
+  CHECK_EQ(n_out, 1);
+  (*out_attrs)[0] = (*in_attrs)[0];
+  // For elemwise ops, ChunkType doesn't change
+  return true;*/
+  CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
+  return ElemwiseChunkAttr<int, type_is_none, type_assign, true>(
     attrs, in_attrs, out_attrs, -1);
 }
 
