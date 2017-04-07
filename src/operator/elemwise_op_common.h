@@ -115,23 +115,6 @@ template<int n_in, int n_out>
 inline bool ElemwiseChunkType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *in_attrs,
                          std::vector<int> *out_attrs) {
-  /*CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
-  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  auto num_in = in_attrs->size();
-  auto num_out = out_attrs->size();
-  CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
-  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  // We can reuse the templated Elem Attr. But we need to fallback to a default type when needed.
-  // We should also not force it to CHECK.
-
-  //TODO implement me
-  //return ElemwiseAttr<int, type_is_none, type_assign, true>(
-  //  attrs, in_attrs, out_attrs, -1);
-  CHECK_EQ(n_in, 1);
-  CHECK_EQ(n_out, 1);
-  (*out_attrs)[0] = (*in_attrs)[0];
-  // For elemwise ops, ChunkType doesn't change
-  return true;*/
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   return ElemwiseChunkAttr<int, type_is_none, type_assign, true>(

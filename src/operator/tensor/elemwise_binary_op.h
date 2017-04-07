@@ -32,6 +32,44 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
+
+template<typename xpu, typename OP>
+void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
+                         const OpContext& ctx,
+                         const std::vector<NDArray>& inputs,
+                         const std::vector<OpReqType>& req,
+                         const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  std::cout << "Compute sparse \n" << std::endl;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  /*
+  double alpha = nnvm::get<double>(attrs.parsed);
+  // The shape inferred for the output ndarray is okay, but the mem alloc is not necessary
+  if (inputs[0].chunk_type() == DefaultChunk) {
+    MSHADOW_TYPE_SWITCH(outputs[0].data().type_flag_, DType, {
+      Tensor<xpu, 1, DType> out = outputs[0].data().FlatTo1D<xpu, DType>(s);
+      Tensor<xpu, 1, DType> lhs = inputs[0].data().FlatTo1D<xpu, DType>(s);
+      ASSIGN_DISPATCH(out, req[0], F<OP>(lhs, scalar<DType>(DType(alpha))));
+    });
+  } else {
+    
+    // TODO add more chunk types
+    CHECK(inputs[0].chunk_type() == RowSparseChunk);
+    //outputs[0] = NDArray(RowSparseChunk, outputs[0].shape(), Context::Create(static_cast<Context::DeviceType>(0), 0));
+    // context = cpu(0);
+    auto output_ptr = const_cast<NDArray*>(&(outputs[0]));
+    *output_ptr = NDArray(outputs[0].shape(), Context::Create(static_cast<Context::DeviceType>(1), 0));
+    auto &output = *output_ptr;
+    {
+        TShape aux_shape({1});
+        output.CheckAndAlloc(aux_shape);
+        mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
+        mshadow::Copy(output.data().FlatTo2D<cpu, real_t>(s)[0], inputs[0].data().FlatTo2D<cpu, real_t>(s)[0], s);
+     }
+  }*/
+}
+
 template<typename xpu, typename LOP, typename ROP>
 void BinaryBackwardUseNone(const nnvm::NodeAttrs& attrs,
                            const OpContext& ctx,
@@ -89,6 +127,7 @@ void BinaryBackwardUseIn(const nnvm::NodeAttrs& attrs,
   });
 }
 
+
 #define MXNET_OPERATOR_REGISTER_BINARY(name)                        \
   NNVM_REGISTER_OP(name)                                            \
   .set_num_inputs(2)                                                \
@@ -99,6 +138,7 @@ void BinaryBackwardUseIn(const nnvm::NodeAttrs& attrs,
     })                                                              \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)     \
+<<<<<<< HEAD
   .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
     [](const NodeAttrs& attrs){                                     \
       return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \

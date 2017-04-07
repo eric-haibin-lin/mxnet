@@ -154,4 +154,3 @@ if __name__ == "__main__":
     test_incomplete_infer_concat()'''
     #test_fc_infer_type()
     test_broadcast_add_infer_chunk_type()
-    #test_fc_infer_chunk_type()
