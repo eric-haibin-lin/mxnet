@@ -35,16 +35,16 @@ def check_with_uniform(uf, arg_shapes, dim=None, npuf=None, rmin=-10, type_list=
 
 def test_ndarray_elementwise():
     x = mx.nd.array([1, 2, 3])
-    y = mx.nd.COOPlusScalar(x, 1)
-
+    #y = mx.nd.broadcast_add(x, x)
+    
     a = mx.nd.array([100]); 
     b = mx.nd.array([0]); 
     c = mx.sparse_nd.array(a, b, 'row_sparse', shape=(1,1)); 
     d = mx.sparse_nd.array(a, b, 'row_sparse', shape=(10,1))
 
-    res = mx.nd.COOPlusScalar(a, 1); 
-    res_sparse = mx.nd.COOPlusScalar(d, 1)
-    print(y.asnumpy())
+    #res = mx.nd.broadcast_add(a, a); 
+    res_sparse = mx.nd.elemwise_add(d, d)
+    print(res_sparse)
 
 if __name__ == '__main__':
-    test_ndarray_elementwise() #TODO remove other functions
+    test_ndarray_elementwise()

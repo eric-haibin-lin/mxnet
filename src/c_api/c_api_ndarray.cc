@@ -173,16 +173,19 @@ void SetShapeType(const nnvm::Op* op,
     std::cout << "in chunk:" << i.chunk_type() << std::endl;
   }
   for (auto& i : ndoutputs) {
-    auto chunk_type = i.chunk_type();
-    out_chunk_types.push_back(i.chunk_type());
+    int chunk_type = i.chunk_type();
+    if (chunk_type == UndefinedChunk) {
+      chunk_type = -1;
+    }
+    out_chunk_types.push_back(chunk_type);
   }
   if (inferchunktype.count(op)) {
+    std::cout << "Imperative::InferChunk" << std::endl;
     CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
     CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
   }
 
   for (int i = 0; i < infered_num_outputs; ++i) {
-
     std::cout << "out chunk:" << out_chunk_types[i] << std::endl;
     if (ndoutputs[i].is_none()) {
       // If the chunk type cannot be inferred, assume it's a dense one
@@ -313,7 +316,6 @@ void PushFComputeNDArray(const FComputeNDArray& fn,
                       engine::CallbackOnComplete(),
                       requested};
       std::vector<OpReqType> req(ndoutputs.size(), kWriteTo);
-      //std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
       fn(attrs, opctx, ndinputs, req, ndoutputs);
       if (ctx.dev_mask() == gpu::kDevMask) {
         rctx.get_stream<gpu>()->Wait();
@@ -391,7 +393,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        const char **param_keys,
                        const char **param_vals) {
   static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
-  static auto& fcpu_ndarray = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
+  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
   static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
   static auto& createop = nnvm::Op::GetAttr<FCreateLayerOp>("FCreateLayerOp");
@@ -428,16 +430,17 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
         op, attrs, ctx, ndinputs, ndoutputs);
 
     FCompute fn;
-    FComputeNDArray fn_ndarray;
-    if (ctx.dev_mask() == cpu::kDevMask && fcpu_ndarray.count(op)) {
-      fn_ndarray = fcpu_ndarray[op];
+    FComputeNDArray fn_nd;
+    // dispatch based on ctx and chunk_type
+    if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op)) {
+      fn_nd = fnd_cpu_row_sparse[op];
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
       fn = fcpu[op];
     } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
       fn = fgpu[op];
     }
-    if (fn_ndarray) {
-      PushFComputeNDArray(fn_ndarray, op, attrs, ctx, read_vars, write_vars,
+    if (fn_nd) {
+      PushFComputeNDArray(fn_nd, op, attrs, ctx, read_vars, write_vars,
           requested, ndinputs, ndoutputs);
     } else if (fn) {
       PushFCompute(fn, op, attrs, ctx, read_vars, write_vars,
