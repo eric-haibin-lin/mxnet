@@ -16,7 +16,7 @@ namespace mxnet {
 namespace op {
 
 template<int n_in, int n_out>
-inline bool ElemwiseChunkType(const nnvm::NodeAttrs& attrs,
+inline bool ElemwiseChunkType2(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *in_attrs,
                          std::vector<int> *out_attrs) {
   auto num_in = in_attrs->size();
@@ -116,7 +116,7 @@ void COOBinaryScalarBackward(const nnvm::NodeAttrs& attrs,
     })                                                              \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)     \
-  .set_attr<nnvm::FInferChunkType>("FInferChunkType", ElemwiseChunkType<1, 1>) \
+  .set_attr<nnvm::FInferChunkType>("FInferChunkType", ElemwiseChunkType2<1, 1>) \
   .add_argument("data", "ndarray-or-symbol", "source input")                   \
   .add_argument("scalar", "float", "scalar input")
 
