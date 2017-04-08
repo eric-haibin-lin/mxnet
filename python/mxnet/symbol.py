@@ -1151,16 +1151,23 @@ class Symbol(SymbolBase):
         if len(kwargs) == 0:
             raise ValueError("Argument shapes must be provided in kwargs way for simple_bind2")
 
-        provided_arg_type_names = []  # provided type argument names
-        provided_arg_type_data = []  # provided types
-        for k, v in type_dict:
-            v = _numpy.dtype(v).type
-            if v in _DTYPE_NP_TO_MX:
-                provided_arg_type_names.append(c_str(k))
-                provided_arg_type_data.append(_DTYPE_NP_TO_MX[v])
-
         listed_arguments = self.list_arguments()  # read-only args
         listed_aux_states = self.list_auxiliary_states()  # aux states
+
+        attr_dict = None
+        if type_dict is None:
+            attr_dict = self.attr_dict()
+            type_dict = {k: mx_real_t for k in listed_arguments
+                         if k not in attr_dict or '__dtype__' not in attr_dict[k]}
+
+        provided_arg_type_names = []  # provided type argument names
+        provided_arg_type_data = []  # provided types
+        for k, v in type_dict.items():
+            v = _numpy.dtype(v).type
+            if v in _DTYPE_NP_TO_MX:
+                provided_arg_type_names.append(k)
+                provided_arg_type_data.append(_DTYPE_NP_TO_MX[v])
+
         provided_arg_shape_data = []  # shape data
         # argument shape index in sdata, e.g. [sdata[indptr[0]], sdata[indptr[1]]) is the shape of the first arg
         provided_arg_shape_idx = [0]
@@ -1189,7 +1196,8 @@ class Symbol(SymbolBase):
                     grad_req_types.append(mx_uint(0))
 
         if group2ctx is not None:
-            attr_dict = self.attr_dict()
+            if attr_dict is None:
+                attr_dict = self.attr_dict()
             arg_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx)
                        if name in attr_dict and '__ctx_group__' in attr_dict[name]
                        else ctx for name in listed_arguments]
@@ -1235,6 +1243,7 @@ class Symbol(SymbolBase):
                                              c_array(mx_uint, provided_arg_shape_data),
                                              c_array(mx_uint, provided_arg_shape_idx),
                                              len(provided_arg_type_names),
+                                             c_array(ctypes.c_char_p, provided_arg_type_names),
                                              c_array(ctypes.c_int, provided_arg_type_data),
                                              ctypes.byref(in_arg_handles),
                                              ctypes.byref(arg_grad_handles),
@@ -1243,7 +1252,10 @@ class Symbol(SymbolBase):
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
         executor.arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
-        executor.grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i])) for i in range(len(listed_arguments))]
+        executor.grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
+                                if arg_grad_handles[i] is not None
+                                else None
+                                for i in range(len(listed_arguments))]
         executor.aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(len(listed_aux_states))]
         return executor
 
