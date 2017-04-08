@@ -1151,43 +1151,43 @@ class Symbol(SymbolBase):
         if len(kwargs) == 0:
             raise ValueError("Argument shapes must be provided in kwargs way for simple_bind2")
 
-        type_keys = []  # provided type argument names
-        type_data = []  # provided types
+        provided_arg_type_names = []  # provided type argument names
+        provided_arg_type_data = []  # provided types
         for k, v in type_dict:
             v = _numpy.dtype(v).type
             if v in _DTYPE_NP_TO_MX:
-                type_keys.append(c_str(k))
-                type_data.append(_DTYPE_NP_TO_MX[v])
-
-
-        shape_data = []  # shape data
-        # argument shape index in sdata, e.g. [sdata[indptr[0]], sdata[indptr[1]]) is the shape of the first arg
-        indptr = [0]
-        shape_keys = []  # provided argument names
-        for k, v in kwargs.items():
-            if isinstance(v, tuple):
-                shape_keys.append(c_str(k))
-                shape_data.extend(v)
-                indptr.append(len(shape_data))
+                provided_arg_type_names.append(c_str(k))
+                provided_arg_type_data.append(_DTYPE_NP_TO_MX[v])
 
         listed_arguments = self.list_arguments()  # read-only args
+        listed_aux_states = self.list_auxiliary_states()  # aux states
+        provided_arg_shape_data = []  # shape data
+        # argument shape index in sdata, e.g. [sdata[indptr[0]], sdata[indptr[1]]) is the shape of the first arg
+        provided_arg_shape_idx = [0]
+        provided_arg_shape_names = []  # provided argument names
+        for k, v in kwargs.items():
+            if k not in listed_arguments and k not in listed_aux_states:
+                raise ValueError('arg name %s is not valid', k)
+            if isinstance(v, tuple):
+                provided_arg_shape_names.append(c_str(k))
+                provided_arg_shape_data.extend(v)
+                provided_arg_shape_idx.append(len(provided_arg_shape_data))
+
         req_map = {'null': 0, 'write': 1, 'add': 3}
         if isinstance(grad_req, string_types):
             if grad_req not in req_map:
                 raise ValueError('grad_req=%s is not in %s' % grad_req, str(req_map))
-            req_array = c_array(mx_uint, [mx_uint(req_map[grad_req])] * len(listed_arguments))
+            grad_req_types = [mx_uint(req_map[grad_req])] * len(listed_arguments)
         elif isinstance(grad_req, list):
-            req_array = c_array(mx_uint, [mx_uint(req_map[item]) for item in grad_req])
+            grad_req_types = [mx_uint(req_map[item]) for item in grad_req]
         elif isinstance(grad_req, dict):
-            reqs = []
+            grad_req_types = []
             for name in listed_arguments:
                 if name in grad_req:
-                    reqs.append(mx_uint(req_map[grad_req[name]]))
+                    grad_req_types.append(mx_uint(req_map[grad_req[name]]))
                 else:
-                    reqs.append(mx_uint(0))
-            req_array = c_array(mx_uint, reqs)
+                    grad_req_types.append(mx_uint(0))
 
-        listed_aux_states = self.list_auxiliary_states()  # aux states
         if group2ctx is not None:
             attr_dict = self.attr_dict()
             arg_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx)
@@ -1210,21 +1210,42 @@ class Symbol(SymbolBase):
                 ctx_map_dev_ids.append(ctypes.c_int(val.device_id))
 
         exe_handle = ExecutorHandle()
+        in_arg_handles = ctypes.POINTER(NDArrayHandle)()
+        arg_grad_handles = ctypes.POINTER(NDArrayHandle)()
+        aux_state_handles = ctypes.POINTER(NDArrayHandle)()
         check_call(_LIB.MXExecutorSimpleBind(self.handle,
-                                             mx_uint(len(shape_keys)),  # number of provided shapes
-                                             c_array(ctypes.c_char_p, shape_keys),  # argument names of provided shapes
-                                             c_array(mx_uint, indptr),  # shape data indices
-                                             c_array(mx_uint, shape_data),  # shape data
-                                             req_array,  # grad request types
                                              ctypes.c_int(ctx.device_typeid),
                                              ctypes.c_int(ctx.device_id),
                                              mx_uint(len(ctx_map_keys)),
                                              c_array(ctypes.c_char_p, ctx_map_keys),
                                              c_array(ctypes.c_int, ctx_map_dev_types),
                                              c_array(ctypes.c_int, ctx_map_dev_ids),
+                                             mx_uint(len(listed_arguments)),
+                                             c_array(ctypes.c_int,
+                                                     [in_arg_ctx.device_typeid for in_arg_ctx in arg_ctx]),
+                                             c_array(ctypes.c_int, [in_arg_ctx.device_id for in_arg_ctx in arg_ctx]),
+                                             c_array(mx_uint, grad_req_types),
+                                             mx_uint(len(listed_aux_states)),
+                                             c_array(ctypes.c_int,
+                                                     [aux_state_ctx.device_typeid for aux_state_ctx in aux_ctx]),
+                                             c_array(ctypes.c_int,
+                                                     [aux_state_ctx.device_id for aux_state_ctx in aux_ctx]),
+                                             mx_uint(len(provided_arg_shape_names)),
+                                             c_array(ctypes.c_char_p, provided_arg_shape_names),
+                                             c_array(mx_uint, provided_arg_shape_data),
+                                             c_array(mx_uint, provided_arg_shape_idx),
+                                             len(provided_arg_type_names),
+                                             c_array(ctypes.c_int, provided_arg_type_data),
+                                             ctypes.byref(in_arg_handles),
+                                             ctypes.byref(arg_grad_handles),
+                                             ctypes.byref(aux_state_handles),
                                              ctypes.byref(exe_handle)))
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
+        executor.arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
+        executor.grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i])) for i in range(len(listed_arguments))]
+        executor.aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(len(listed_aux_states))]
+        return executor
 
     def simple_bind(self, ctx,
                     grad_req='write',
