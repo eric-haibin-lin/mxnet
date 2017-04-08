@@ -1170,7 +1170,7 @@ class Symbol(SymbolBase):
                 shape_data.extend(v)
                 indptr.append(len(shape_data))
 
-        listed_arguments = self.list_arguments()
+        listed_arguments = self.list_arguments()  # read-only args
         req_map = {'null': 0, 'write': 1, 'add': 3}
         if isinstance(grad_req, string_types):
             if grad_req not in req_map:
@@ -1186,6 +1186,19 @@ class Symbol(SymbolBase):
                 else:
                     reqs.append(mx_uint(0))
             req_array = c_array(mx_uint, reqs)
+
+        listed_aux_states = self.list_auxiliary_states()  # aux states
+        if group2ctx is not None:
+            attr_dict = self.attr_dict()
+            arg_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx)
+                       if name in attr_dict and '__ctx_group__' in attr_dict[name]
+                       else ctx for name in listed_arguments]
+            aux_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx)
+                       if name in attr_dict and '__ctx_group__' in attr_dict[name]
+                       else ctx for name in listed_aux_states]
+        else:
+            arg_ctx = [ctx] * len(listed_arguments)
+            aux_ctx = [ctx] * len(listed_aux_states)
 
         ctx_map_keys = []
         ctx_map_dev_types = []

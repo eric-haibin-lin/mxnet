@@ -551,18 +551,16 @@ void GraphExecutor::Init2(nnvm::Symbol symbol,
                           const std::vector<Context>& in_arg_ctxes,
                           const std::vector<Context>& arg_grad_ctxes,
                           const std::vector<Context>& aux_state_ctxes,
-                          const std::vector<TShape>& in_arg_shapes,
-                          const std::vector<TShape>& aux_state_shapes,
-                          const std::vector<int>& in_arg_dtypes,
-                          const std::vector<int>& aux_state_dtypes,
+                          std::vector<TShape>* arg_shapes,
+                          std::vector<int>* arg_dtypes,
                           const std::vector<OpReqType>& grad_req_types,
-                          std::vector<NDArray*>* in_args,
-                          std::vector<NDArray*>* arg_grads,
-                          std::vector<NDArray*>* aux_states,
+                          std::vector<NDArray*>* in_arg_ptrs,
+                          std::vector<NDArray*>* arg_grad_ptrs,
+                          std::vector<NDArray*>* aux_state_ptrs,
                           Executor* shared_exec) {
   nnvm::Graph g = InitGraph2(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
-                             aux_state_ctxes, in_arg_shapes, aux_state_shapes, in_arg_dtypes,
-                             aux_state_dtypes, grad_req_types, in_args, arg_grads, aux_states);
+                             aux_state_ctxes, arg_shapes, arg_dtypes, grad_req_types,
+                             in_arg_ptrs, arg_grad_ptrs, aux_state_ptrs);
   g = AttachOpExecs(g);
   g = AttachOpResources(g);
   graph_ = std::move(g);
@@ -677,14 +675,12 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
                                 const std::vector<Context>& in_arg_ctxes,
                                 const std::vector<Context>& arg_grad_ctxes,
                                 const std::vector<Context>& aux_state_ctxes,
-                                const std::vector<TShape>& in_arg_shapes,
-                                const std::vector<TShape>& aux_state_shapes,
-                                const std::vector<int>& in_arg_dtypes,
-                                const std::vector<int>& aux_state_dtypes,
+                                std::vector<TShape>* arg_shapes,
+                                std::vector<int>* arg_dtypes,
                                 const std::vector<OpReqType>& grad_req_types,
-                                std::vector<NDArray*>* in_args,
-                                std::vector<NDArray*>* arg_grads,
-                                std::vector<NDArray*>* aux_states) {
+                                std::vector<NDArray*>* in_arg_ptrs,
+                                std::vector<NDArray*>* arg_grad_ptrs,
+                                std::vector<NDArray*>* aux_state_ptrs) {
   // setup gradient
   //nnvm::Graph g = InitFullGraph2(symbol, grad_req_type, arg_grad_store);
   nnvm::Graph g = InitFullGraph2(symbol, grad_req_types);
@@ -705,6 +701,7 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
   }
   // Setup data entry, shape and type.
   //data_entry_.resize(idx.num_node_entries());
+#if 0
   auto mutable_nodes = idx.mutable_input_nodes();
   nnvm::ShapeVector arg_shapes;
   nnvm::DTypeVector arg_types;
@@ -730,43 +727,45 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
       ++arg_top;
     }
   }
+#endif
   // delay this to after populating data_entry_
   //for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
     //data_entry_[idx.entry_id(idx.outputs()[j])] = grad_store_[j - num_forward_outputs_].second;
   //}
   // expand arg_shapes and arg_types to include num_backward_inputs
-  arg_shapes.resize(idx.input_nodes().size(), TShape());
-  arg_types.resize(idx.input_nodes().size(), -1);
+  arg_shapes->resize(idx.input_nodes().size(), TShape());
+  arg_dtypes->resize(idx.input_nodes().size(), -1);
   // other initializations
-  g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
-  g = nnvm::pass::InferType(g, arg_types, "__dtype__");
+  g = nnvm::pass::InferShape(g, *arg_shapes, "__shape__");
+  g = nnvm::pass::InferType(g, *arg_dtypes, "__dtype__");
 
   // initialize in_args, arg_grads, and aux_states
   // populate grad_store_
   data_entry_.resize(idx.num_node_entries());
-  arg_top = 0, aux_top = 0;
+  size_t arg_top = 0, aux_top = 0;
   const nnvm::ShapeVector& inferred_shapes = g.GetAttr<nnvm::ShapeVector>("shape");
   const nnvm::DTypeVector& inferred_dtypes = g.GetAttr<nnvm::DTypeVector>("dtype");
+  auto mutable_nodes = idx.mutable_input_nodes();
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
     const uint32_t eid = idx.entry_id(nid, 0);
     const TShape& inferred_shape = inferred_shapes[eid];
     const int inferred_dtype = inferred_dtypes[eid];
     if (mutable_nodes.count(nid)) {  // aux_states
-      aux_states->at(aux_top) = new NDArray(inferred_shape, aux_state_ctxes[aux_top],
-                                             false, aux_state_dtypes[aux_top]);
-      data_entry_[eid] = *(aux_states->at(aux_top));
+      aux_state_ptrs->push_back(new NDArray(inferred_shape, aux_state_ctxes[aux_top],
+                                            false, inferred_dtype));
+      data_entry_[eid] = *(aux_state_ptrs->back());
       ++aux_top;
     } else {  // in_args
-      in_args->at(arg_top) = new NDArray(inferred_shape, in_arg_ctxes[arg_top],
-                                         false, in_arg_dtypes[arg_top]);
-      data_entry_[eid] = *(in_args->at(arg_top));
+      in_arg_ptrs->push_back(new NDArray(inferred_shape, in_arg_ctxes[arg_top],
+                                         false, inferred_dtype));
+      data_entry_[eid] = *(in_arg_ptrs->back());
       if (kNullOp == grad_req_types[arg_top]) {
-        arg_grads->at(arg_top) = nullptr;
+        arg_grad_ptrs->push_back(nullptr);
       } else {
-        arg_grads->at(arg_top) = new NDArray(inferred_shape, arg_grad_ctxes[arg_top],
-                                             false, in_arg_dtypes[arg_top]);
-        grad_store_.emplace_back(grad_req_types[arg_top], *(arg_grads->back()));
+        arg_grad_ptrs->push_back(new NDArray(inferred_shape, arg_grad_ctxes[arg_top],
+                                             false, inferred_dtype));
+        grad_store_.emplace_back(grad_req_types[arg_top], *(arg_grad_ptrs->back()));
       }
       ++arg_top;
     }
@@ -1260,19 +1259,17 @@ Executor *Executor::SimpleBind(nnvm::Symbol symbol,
                                const std::vector<Context>& in_arg_ctxes,
                                const std::vector<Context>& arg_grad_ctxes,
                                const std::vector<Context>& aux_state_ctxes,
-                               const std::vector<TShape>& in_arg_shapes,
-                               const std::vector<TShape>& aux_state_shapes,
-                               const std::vector<int>& in_arg_dtypes,
-                               const std::vector<int>& aux_state_dtypes,
+                               std::vector<TShape>* arg_shapes,
+                               std::vector<int>* arg_dtypes,
                                const std::vector<OpReqType>& grad_req_types,
                                std::vector<NDArray*>* in_args,
                                std::vector<NDArray*>* arg_grads,
-                               std::vector<NDArray*>* aux_states,
-                               Executor* shared_exec) {
+                               std::vector<NDArray*>* aux_states) {
   auto exec = new exec::GraphExecutor();
-  exec->Init2(symbol, default_ctx, group2ctx, in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
-              in_arg_shapes, aux_state_shapes, in_arg_dtypes, aux_state_dtypes, grad_req_types,
-              in_args, arg_grads, aux_states, shared_exec);
+  exec->Init2(symbol, default_ctx, group2ctx,
+              in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
+              arg_shapes, arg_dtypes, grad_req_types,
+              in_args, arg_grads, aux_states, nullptr);
   return exec;
 }
 

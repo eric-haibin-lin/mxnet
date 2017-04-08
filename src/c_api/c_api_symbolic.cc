@@ -28,14 +28,6 @@ const char *kNamespaceSeparator = "$";
 
 DMLC_JSON_ENABLE_ANY(int, int);
 
-// convert nnvm symbol to a nnvm graph.
-nnvm::Graph Symbol2Graph(const nnvm::Symbol &s) {
-  nnvm::Graph g;
-  g.outputs = s.outputs;
-  g.attrs["mxnet_version"] = std::make_shared<nnvm::any>(static_cast<int>(MXNET_VERSION));
-  return g;
-}
-
 std::vector<uint32_t> ReadOnlyArgIndices(const nnvm::IndexedGraph& idx) {
   std::vector<uint32_t> ret;
   auto& arg_nodes = idx.input_nodes();
@@ -363,9 +355,8 @@ int MXSymbolSaveToJSON(SymbolHandle symbol, const char **out_json) {
   API_END();
 }
 
-
+#if 0
 namespace mxnet {
-
 template<typename AttrType>
 void MatchArguments(
     const nnvm::IndexedGraph& idx,
@@ -402,8 +393,8 @@ void MatchArguments(
     }
   }
 }
-
 }  // namespace mxnet
+#endif
 
 int MXSymbolInferShape(SymbolHandle sym,
                        mx_uint num_args,
