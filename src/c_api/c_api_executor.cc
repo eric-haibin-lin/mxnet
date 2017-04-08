@@ -254,13 +254,16 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
 
   // TODO(junwu): copy ndarray ptrs to ret->handles
   ret->ret_handles.reserve(in_arg_ptrs.size()+arg_grad_ptrs.size()+aux_state_ptrs.size());
-  for (const auto& nd_ptr : in_arg_ptrs) {
+  for (auto nd_ptr : in_arg_ptrs) {
+    *nd_ptr = 0;
     ret->ret_handles.push_back(nd_ptr);
   }
-  for (const auto& nd_ptr : arg_grad_ptrs) {
+  for (auto nd_ptr : arg_grad_ptrs) {
+    *nd_ptr = 0;
     ret->ret_handles.push_back(nd_ptr);
   }
-  for (const auto& nd_ptr : aux_state_ptrs) {
+  for (auto nd_ptr : aux_state_ptrs) {
+    *nd_ptr = 0;
     ret->ret_handles.push_back(nd_ptr);
   }
   *in_args = &(ret->ret_handles[0]);
