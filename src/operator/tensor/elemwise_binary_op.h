@@ -32,6 +32,76 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
+// TODO make use of templated OP
+template<typename xpu, typename OP>
+void BinaryComputeNDSpSp(const nnvm::NodeAttrs& attrs,
+                         const OpContext& ctx,
+                         const std::vector<NDArray>& inputs,
+                         const std::vector<OpReqType>& req,
+                         const std::vector<NDArray>& outputs) {
+  (void) attrs;
+  (void) req; 
+  CHECK(inputs.size() == 2);
+  CHECK(outputs.size() == 1);
+  auto &nd_l = inputs[0];
+  auto &nd_r = inputs[1];
+  auto &output = outputs[0];
+
+  // Memory Estimation
+  auto num_rows_l = nd_l.aux_shape()[0];
+  auto num_rows_r = nd_r.aux_shape()[0];
+  // This is (roughly) the number of result rows
+  output.CheckAndAlloc(TShape({num_rows_l + num_rows_r}));
+
+  // Indices
+  mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
+  // Hardcode data type for indices
+  // FIXME type for index?
+  auto indices_l = nd_l.aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+  auto indices_r = nd_r.aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+  auto indices_out = output.aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+
+  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+    // Data
+    // TODO type switch for data, too
+    auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
+    auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
+    auto out = output.data().FlatTo2D<xpu, DType>(s);
+  
+    // TODO A more appropriate way: Copy to output, then apply ops
+    size_t iter_l = 0;
+    size_t iter_r = 0;
+    size_t iter_out = 0;
+    while (iter_l < num_rows_l && iter_r < num_rows_r) {
+      size_t idx_l = indices_l[iter_l];
+      size_t idx_r = indices_r[iter_r];
+      if (idx_l == idx_r) {
+        // Same row
+        indices_out[iter_out] = idx_l;
+        mshadow::Copy(out[iter_out], data_l[iter_l++], s);
+        out[iter_out] += data_r[iter_r++];
+      } else if (idx_l < idx_r) {
+        // Left only
+        indices_out[iter_out] = idx_l;
+        mshadow::Copy(out[iter_out], data_l[iter_l++], s);
+      } else {
+        // Right only
+        indices_out[iter_out] = idx_r;
+        mshadow::Copy(out[iter_out], data_r[iter_r++], s);
+      }
+      iter_out++;
+    }
+    // Copying over the rest of the rows
+    while (iter_l < num_rows_l) {
+      indices_out[iter_out] = indices_l[iter_l];
+      mshadow::Copy(out[iter_out++], data_l[iter_l++], s);
+    }
+    while (iter_r < num_rows_r) {
+      indices_out[iter_out] = indices_r[iter_r];
+      mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
+    }
+  });
+}
 
 template<typename xpu, typename OP>
 void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
@@ -41,33 +111,30 @@ void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
                          const std::vector<NDArray>& outputs) {
   using namespace mshadow;
   using namespace mshadow::expr;
-  std::cout << "Compute sparse \n" << std::endl;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  /*
-  double alpha = nnvm::get<double>(attrs.parsed);
-  // The shape inferred for the output ndarray is okay, but the mem alloc is not necessary
-  if (inputs[0].chunk_type() == DefaultChunk) {
-    MSHADOW_TYPE_SWITCH(outputs[0].data().type_flag_, DType, {
-      Tensor<xpu, 1, DType> out = outputs[0].data().FlatTo1D<xpu, DType>(s);
-      Tensor<xpu, 1, DType> lhs = inputs[0].data().FlatTo1D<xpu, DType>(s);
-      ASSIGN_DISPATCH(out, req[0], F<OP>(lhs, scalar<DType>(DType(alpha))));
-    });
-  } else {
-    
-    // TODO add more chunk types
-    CHECK(inputs[0].chunk_type() == RowSparseChunk);
-    //outputs[0] = NDArray(RowSparseChunk, outputs[0].shape(), Context::Create(static_cast<Context::DeviceType>(0), 0));
-    // context = cpu(0);
-    auto output_ptr = const_cast<NDArray*>(&(outputs[0]));
-    *output_ptr = NDArray(outputs[0].shape(), Context::Create(static_cast<Context::DeviceType>(1), 0));
-    auto &output = *output_ptr;
-    {
-        TShape aux_shape({1});
-        output.CheckAndAlloc(aux_shape);
-        mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-        mshadow::Copy(output.data().FlatTo2D<cpu, real_t>(s)[0], inputs[0].data().FlatTo2D<cpu, real_t>(s)[0], s);
-     }
-  }*/
+  // Check if any input is dense
+  bool fallback = false;
+  for (auto &nd : inputs) {
+    if (nd.chunk_type() == DefaultChunk) {
+      fallback = true;
+    }
+  }
+
+  if (fallback) {
+    std::vector<TBlob> input_tblobs, output_tblobs;
+    for (auto &i : inputs) {
+      input_tblobs.push_back(i.data(true));
+    }
+    for (auto &i : outputs) {
+      output_tblobs.push_back(i.data());
+    }
+    BinaryCompute<xpu, OP>(attrs, ctx, input_tblobs, req, output_tblobs);
+    return;
+  }
+  // TODO Add more chunk types
+  // Call SpSp function
+  CHECK(inputs[0].chunk_type() == RowSparseChunk);
+  BinaryComputeNDSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 
 template<typename xpu, typename LOP, typename ROP>

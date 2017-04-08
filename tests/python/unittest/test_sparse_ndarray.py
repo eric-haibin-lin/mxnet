@@ -34,17 +34,24 @@ def check_with_uniform(uf, arg_shapes, dim=None, npuf=None, rmin=-10, type_list=
             assert_almost_equal(out1, out2)
 
 def test_ndarray_elementwise():
-    x = mx.nd.array([1, 2, 3])
-    #y = mx.nd.broadcast_add(x, x)
-    
-    a = mx.nd.array([100]); 
-    b = mx.nd.array([0]); 
-    c = mx.sparse_nd.array(a, b, 'row_sparse', shape=(1,1)); 
-    d = mx.sparse_nd.array(a, b, 'row_sparse', shape=(10,1))
+    dense_np = np.array([[1,2],[3,4],[5,6]])
+    sparse_np1 = np.array([[5,10],[0,0],[0,0]])
+    dense_nd = mx.nd.array(dense_np)
 
-    #res = mx.nd.broadcast_add(a, a); 
-    res_sparse = mx.nd.elemwise_add(d, d)
-    print(res_sparse)
+    val = mx.nd.array([5, 10]); 
+    idx = mx.nd.array([0], dtype=np.int32); 
+    sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2)) 
+    #TODO register under mx.sparse_nd namespace
+    # dense - dense addition
+    dense_plus_dense = mx.nd.elemwise_add(dense_nd, dense_nd);
+    assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)
+    # dense - sparse addition
+    dense_plus_sparse = mx.nd.elemwise_add(dense_nd, sparse_nd1)
+    assert_almost_equal(dense_plus_sparse.asnumpy(), dense_np + sparse_np1)
+    # sparse - sparse addition
+    sparse_plus_sparse = mx.nd.elemwise_add(sparse_nd1, sparse_nd1)
+    sparse_plus_sparse_dense_nd = sparse_plus_sparse.to_dense()
+    assert_almost_equal(sparse_plus_sparse_dense_nd.asnumpy(), sparse_np1 + sparse_np1)
 
 def test_ndarray_conversion():
     val = np.array([5, 10])
@@ -58,4 +65,4 @@ def test_ndarray_conversion():
 
 if __name__ == '__main__':
     test_ndarray_elementwise()
-    test_ndarray_conversion()
+    #test_ndarray_conversion()

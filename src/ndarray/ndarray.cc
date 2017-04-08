@@ -488,14 +488,16 @@ inline NDArray &ScalarOpApply(NDArray *dst,
 TBlob NDArray::data(bool force_dense) const {
   if (chunk_type() != DefaultChunk) CHECK(offset_ == 0);
   TBlob res;
-  if (force_dense == false) {
-    MSHADOW_TYPE_SWITCH(dtype_, DType, {
+  if (force_dense == false || chunk_type() == DefaultChunk) {
+    MSHADOW_TYPE_SWITCH(dtype(), DType, {
       res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
-        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask());
+        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask(), dtype());
     });
   } else {
     // Convert to dense first
-    res = ToDense(nullptr).data();
+    // FIXME no need to convert if it's dense already!
+    // xpu?
+    res = ToDense<cpu>(nullptr).data();
   }
 #if MKL_EXPERIMENTAL == 1
   res.Mkl_mem_ = Mkl_mem_;
@@ -505,38 +507,48 @@ TBlob NDArray::data(bool force_dense) const {
 
 // NDArray Convertion
 // Necessary to take a stream as input?
-NDArray NDArray::ToDense(mshadow::Stream<cpu> *s) const {
+// Make a copy of data, and convert to dense format
+// CopyToDense
+template<typename xpu>
+NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
   //TODO CHECK TYPE
   NDArray result(shape_, ptr_->ctx, false, dtype());
   if (chunk_type() == DefaultChunk) {
-    mshadow::Copy(result.data().FlatTo1D<cpu, real_t>(), data().FlatTo1D<cpu, real_t>());
+    MSHADOW_TYPE_SWITCH(dtype(), DType, {
+      mshadow::Copy(result.data().FlatTo1D<xpu, DType>(), data().FlatTo1D<xpu, DType>());
+    });
     return result;
   }
-  // TODO FIXME
   CHECK(chunk_type() == RowSparseChunk);
   // TODO be care of the context
   // Get the stream according to TBlob.dev_mask_
-  //mshadow::Stream<cpu> *s = ptr_->ctx.get_stream<cpu>();
-  auto in_data = data().FlatTo2D<cpu, real_t>(s);
-  auto out_data = result.data().FlatTo2D<cpu, real_t>(s);
-  size_t num_rows = aux_shape()[0];
-  auto in_idx = aux_data().FlatTo1D<cpu, real_t>(s);
-  // Fill in zeros
-  result.data().FlatTo1D<cpu, real_t>(s) = 0;
-
-  size_t i_in = 0;
-  while (i_in < num_rows) {
-    mshadow::Copy(out_data[in_idx[i_in]], in_data[i_in], s);
-    i_in++;
-  }
-  result.data().shape_ = shape_; 
+  //mshadow::Stream<xpu> *s = ptr_->ctx.get_stream<xpu>();
+  MSHADOW_TYPE_SWITCH(dtype(), DType, {
+    auto in_data = data().FlatTo2D<xpu, DType>(s);
+    auto out_data = result.data().FlatTo2D<xpu, DType>(s);
+    auto num_rows = aux_shape()[0];
+    auto in_idx = aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+    // Fill in zeros
+    result.data().FlatTo1D<xpu, DType>(s) = 0;
+    for (size_t i = 0; i < num_rows; i += 1) {
+      mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
+    }
+    result.data().shape_ = shape_;
+  });
   return result;
 }
 
+// Explicit template instantiation
+template NDArray NDArray::ToDense<mshadow::cpu>(mshadow::Stream<mshadow::cpu> *s) const;
+//template NDArray NDArray::ToDense<mshadow::gpu>(mshadow::Stream<mshadow::gpu> *s) const;
+template NDArray NDArray::ConvertTo<mshadow::cpu>(NDArrayChunkType chunk_type) const;
+//template NDArray NDArray::ConvertTo<mshadow::gpu>(NDArrayChunkType chunk_type) const;
+
+template<typename xpu>
 NDArray NDArray::ConvertTo(NDArrayChunkType chunk_type) const {
   //TODO implement convertion to other chunk types
   CHECK(chunk_type == DefaultChunk);
-  return ToDense(nullptr);
+  return ToDense<xpu>(nullptr);
 }
 
 // Binary

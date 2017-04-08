@@ -59,7 +59,7 @@ fixed-size items.
         return to_dense(self)
 
 # pylint: enable= no-member
-def row_sparse(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
+def row_sparse(values, indices, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     hdl = NDArrayHandle()
     assert(isinstance(values, NDArrayBase))
     assert(isinstance(indices, NDArrayBase))
@@ -75,8 +75,10 @@ def row_sparse(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real
         ctypes.c_int(int(False)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
         ctypes.byref(hdl)))
+    # TODO specify writable?
     return SparseNDArray(hdl)
 
+# Should accept a list of aux values instead of just one index
 def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
     """Create a new array from any object exposing the array interface
 
@@ -119,7 +121,7 @@ def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
         shape = (shape, )
     if ctx is None:
         ctx = Context.default_ctx
-    arr = row_sparse(values, indices, sparse_type, shape=shape, ctx=ctx, dtype=dtype)
+    arr = row_sparse(values, indices, shape, ctx=ctx, dtype=dtype)
     return arr
 
 
