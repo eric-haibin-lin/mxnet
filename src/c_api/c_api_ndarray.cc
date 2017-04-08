@@ -125,7 +125,9 @@ void SetShapeType(const nnvm::Op* op,
                   const Context& ctx,
                   const std::vector<NDArray>& ndinputs,
                   const int& infered_num_outputs,
-                  std::vector<NDArray>* p_ndoutputs) {
+                  std::vector<NDArray>* p_ndoutputs,
+                  NDArrayChunkType& contains_chunk_type) {
+  contains_chunk_type = DefaultChunk;
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
@@ -183,20 +185,30 @@ void SetShapeType(const nnvm::Op* op,
     out_chunk_types.push_back(chunk_type);
   }
   if (inferchunktype.count(op)) {
-    std::cout << "Imperative::InferChunk" << std::endl;
+    std::cout << "InferChunk invoked" << std::endl;
     CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
     CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
+  } else {
+    std::cout << "FInferChunkType not present." << std::endl;
+  }
+
+  for (auto &i : in_chunk_types) {
+    CHECK(i != -1);
+    if (i != DefaultChunk) {
+      contains_chunk_type = static_cast<NDArrayChunkType>(i);
+      break;
+    }
   }
 
   for (int i = 0; i < infered_num_outputs; ++i) {
-    std::cout << "out chunk:" << out_chunk_types[i] << std::endl;
+    NDArrayChunkType chunk_type = static_cast<NDArrayChunkType>(out_chunk_types[i]);
+    std::cout << "out chunk type: " << chunk_type << std::endl;
     if (ndoutputs[i].is_none()) {
-      // If the chunk type cannot be inferred, assume it's a dense one
-      if (out_chunk_types[i] == DefaultChunk || out_chunk_types[i] == UndefinedChunk) {
+      // Assuming chunk_type is always valid..
+      if (chunk_type == DefaultChunk) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
-        //TODO this may be sparse, too
-        ndoutputs[i] = NDArray((NDArrayChunkType)out_chunk_types[i], out_shapes[i], ctx, true, out_types[i]);
+        ndoutputs[i] = NDArray(chunk_type, out_shapes[i], ctx, true, out_types[i]);
       }
     } else {
       CHECK_EQ(ndoutputs[i].shape(), out_shapes[i])
@@ -394,6 +406,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        const char **param_keys,
                        const char **param_vals) {
   static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
+  // TODO retrieve row sparse fnd compute
   static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
   static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
@@ -421,8 +434,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
   } else {
     // TODO(piiswrong): infer ctx
     Context ctx;
+    NDArrayChunkType chunk_type;
     SetContext(&ctx, attrs, num_inputs, ndinputs, infered_num_outputs, ndoutputs);
-    SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs);
+    SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs, chunk_type);
 
     std::vector<engine::VarHandle> read_vars, write_vars;
     std::vector<Resource> requested;
@@ -433,9 +447,13 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     FCompute fn;
     FComputeNDArray fn_nd;
     // dispatch based on ctx and chunk_type
-    if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op)) {
+    std::cout << "Dispatching for chunk_type: " << chunk_type << std::endl;
+    if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
+        chunk_type == RowSparseChunk) {
       fn_nd = fnd_cpu_row_sparse[op];
+      std::cout << "fnd_cpu_row_sparse dispatched." << std::endl;
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
+      std::cout << "fcpu dispatched." << std::endl;
       fn = fcpu[op];
     } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
       fn = fgpu[op];

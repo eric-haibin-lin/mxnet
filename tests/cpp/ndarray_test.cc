@@ -7,6 +7,10 @@
 
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
+#include "../src/executor/graph_executor.h"
+#include "../src/operator/tensor/elemwise_binary_op.h"
+#include "../src/ndarray/ndarray.cc"
+
 using namespace mxnet;
 
 void CheckDataRegion(const TBlob &src, const TBlob &dst) {
@@ -15,45 +19,35 @@ void CheckDataRegion(const TBlob &src, const TBlob &dst) {
   EXPECT_EQ(equals, 0);
 }
 
-void VeryBasicTest() {
+void BasicTest() {
   Context ctx;
-  const real_t val = 0;
-  TShape shape2({1, 2});
-  NDArray nd2(shape2, ctx);
-  // alloc one row
-  nd2.CheckAndAlloc();
-  EXPECT_NE(nd2.data().dptr_, nullptr);
-  nd2 = val;
+  TShape shape({1, 2});
+  NDArray nd(shape, ctx, false);
+  EXPECT_NE(nd.data().dptr_, nullptr);
   Engine::Get()->WaitForAll();
 }
 
-void BasicTest() {
+void BinarySparseTest() {
   Context ctx;
   const real_t val = 0;
   const real_t val1 = 1;
   const real_t val2 = 2;
 
-  VeryBasicTest();
-
   TShape index_shape({2});
-  NDArray index0(index_shape, ctx);
-  index0.CheckAndAlloc();
-  index0.data().FlatTo1D<cpu, real_t>()[0] = 0;
-  index0.data().FlatTo1D<cpu, real_t>()[1] = 1;
+  NDArray index0(index_shape, ctx, false, DEFAULT_AUX_TYPE);
+  index0.data().FlatTo1D<cpu, ROW_SPARSE_TYPE>()[0] = 0;
+  index0.data().FlatTo1D<cpu, ROW_SPARSE_TYPE>()[1] = 1;
 
-  NDArray index1(index_shape, ctx);
-  index1.CheckAndAlloc();
-  index1.data().FlatTo1D<cpu, real_t>()[0] = 0;
-  index1.data().FlatTo1D<cpu, real_t>()[1] = 2;
+  NDArray index1(index_shape, ctx, false, DEFAULT_AUX_TYPE);
+  index1.data().FlatTo1D<cpu, ROW_SPARSE_TYPE>()[0] = 0;
+  index1.data().FlatTo1D<cpu, ROW_SPARSE_TYPE>()[1] = 2;
 
   int dev_id = 0;
   TShape data_shape({2, 2});
-  NDArray raw_data0(data_shape, ctx);
-  raw_data0.CheckAndAlloc();
+  NDArray raw_data0(data_shape, ctx, false);
   raw_data0 = 10;
   
-  NDArray raw_data1(data_shape, ctx);
-  raw_data1.CheckAndAlloc();
+  NDArray raw_data1(data_shape, ctx, false);
   raw_data1 = 5;
   Engine::Get()->WaitForAll();
 
@@ -74,55 +68,20 @@ void BasicTest() {
   switch (input_nd0.ctx().dev_mask()) {
     case cpu::kDevMask: {
       Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
-          TShape aux_shape({3});
-          output.CheckAndAlloc(aux_shape);
-          mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-          // Indices
-          // NO AUX_SHAPE AVAILABLE
-          auto in_idx_0 = input_nd0.aux_data().FlatTo1D<cpu, real_t>(s);
-          auto in_idx_1 = input_nd1.aux_data().FlatTo1D<cpu, real_t>(s);
-          TShape idx_shape0 = input_nd0.aux_shape();
-          TShape idx_shape1 = input_nd1.aux_shape();
-
-          auto in_data0 = input_nd0.data().FlatTo2D<cpu, real_t>(s);
-          auto in_data1 = input_nd1.data().FlatTo2D<cpu, real_t>(s);
-          auto out_data = output.data().FlatTo2D<cpu, real_t>(s);
-          auto in_shape0 = input_nd0.chunk_shape();
-          auto in_shape1 = input_nd1.chunk_shape();
-          size_t num_rows_left = idx_shape0[0];
-          size_t num_rows_right = idx_shape1[0];
-          size_t i_left = 0;
-          size_t i_right = 0;
-          size_t i_out = 0;
-          while (i_left < num_rows_left && i_right < num_rows_right) {
-            size_t row_idx_left = in_idx_0[i_left];
-            size_t row_idx_right = in_idx_1[i_right];
-            if (row_idx_left == row_idx_right) {
-              mshadow::Copy(out_data[i_out], in_data0[i_left++], s);
-              out_data[i_out] += in_data1[i_right++];
-            } else if (row_idx_left < row_idx_right) {
-              mshadow::Copy(out_data[i_out], in_data0[i_left], s);
-              i_left++;
-            } else {
-              mshadow::Copy(out_data[i_out], in_data1[i_right], s);
-              i_right++;
-            }
-            i_out++;
-          }
-
-          while (i_left < num_rows_left) {
-            mshadow::Copy(out_data[i_out++], in_data0[i_left++], s);
-          }
-          while (i_right < num_rows_right) {
-            mshadow::Copy(out_data[i_out++], in_data1[i_right++], s);
-          }
+          nnvm::NodeAttrs attrs;
+          OpContext op_ctx;
+          std::vector<NDArray> inputs, outputs;
+          std::vector<OpReqType> req;
+          inputs.push_back(input_nd0);
+          inputs.push_back(input_nd1);
+          outputs.push_back(output);
+          op::BinaryComputeNDSpSp<cpu, cpu>(attrs, op_ctx, inputs, req, outputs);
         }, input_nd0.ctx(), const_vars, {output.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
       break;
     }
     default: LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
   }
-  //TODO Compare with dense matrix
   NDArray out_data(output_shape, ctx);
   out_data.CheckAndAlloc();
   out_data.data().FlatTo2D<cpu, real_t>()[0][0] = 15;
@@ -138,6 +97,7 @@ void BasicTest() {
 
 TEST(NDArray, basics) {
   BasicTest();
+  BinarySparseTest();
   //Wait for all operations to finish
   Engine::Get()->WaitForAll();
 }
@@ -148,13 +108,11 @@ TEST(NDArray, conversion) {
   // dense to dense conversion
   {
     TShape shape({2, 2});
-    NDArray nd(shape, ctx);
-    // alloc one row
-    nd.CheckAndAlloc();
+    NDArray nd(shape, ctx, false);
     EXPECT_NE(nd.data().dptr_, nullptr);
     nd = val;
     Engine::Get()->WaitForAll();
-    auto nd_copy = nd.ConvertTo(DefaultChunk);
+    auto nd_copy = nd.ConvertTo<cpu>(DefaultChunk);
     CheckDataRegion(nd_copy.data(), nd.data());
   }
 
@@ -162,38 +120,24 @@ TEST(NDArray, conversion) {
   {
   size_t dev_id = 0;
   // Raw Data
-  NDArray raw_data0(TShape({1, 2}), ctx);
-  raw_data0.CheckAndAlloc();
+  NDArray raw_data0(TShape({1, 2}), ctx, false);
   raw_data0 = 0;
   
-  // Index index_shape(1,)
-  NDArray index0(TShape({1}), ctx);
-  index0.CheckAndAlloc();
-  index0 = 0; // idx = [0]
+  // Index
+  NDArray index0(TShape({1}), ctx, false, DEFAULT_AUX_TYPE);
+  index0 = 0;
 
   TShape shape({2, 2});
   NDArray nd(raw_data0.data(), index0.data(), dev_id, RowSparseChunk, shape);
 
   // Dense ndarray
-  NDArray dense_nd(shape, ctx);
-  dense_nd.CheckAndAlloc();
+  NDArray dense_nd(shape, ctx, false);
   dense_nd = 0;
   dense_nd.data().FlatTo2D<cpu, real_t>()[0][0] = 1;
   dense_nd.data().FlatTo2D<cpu, real_t>()[0][1] = 1;
   Engine::Get()->WaitForAll(); 
 
-  std::vector<Engine::VarHandle> const_vars;
-  const_vars.push_back(nd.var());
-  const_vars.push_back(raw_data0.var());
-  const_vars.push_back(index0.var());
-  const_vars.push_back(dense_nd.var());
-  Engine::Get()->PushSync([nd, dense_nd](RunContext ctx) {
-      mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-      auto nd_copy = nd.ConvertTo(DefaultChunk);
-      CheckDataRegion(nd_copy.data(), dense_nd.data());
-    }, nd.ctx(), const_vars, {},
-    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
-  auto converted_nd = nd.ConvertTo(DefaultChunk);
+  auto converted_nd = nd.ConvertTo<cpu>(DefaultChunk);
   auto converted_data = converted_nd.data();
   CheckDataRegion(converted_data, dense_nd.data());
   }

@@ -146,19 +146,20 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   NDArray* nd_data = reinterpret_cast<NDArray*>(data);
   NDArray* nd_aux_data = reinterpret_cast<NDArray*>(aux_data);
   // TODO fix dev_id
-  *out = new NDArray(nd_data, nd_aux_data, 0, RowSparseChunk, TShape(shape, shape + ndim));
+  int dev_id = 0;
+  *out = new NDArray(nd_data, nd_aux_data, dev_id, RowSparseChunk, TShape(shape, shape + ndim));
   //TODO redesign this api
   API_END();
 }
 
 // Probably move to ndarray_api?
+// TODO context?
 int MXNDArrayConvert(NDArrayHandle in,
                      int chunk_type,
                      NDArrayHandle *out) {
   API_BEGIN();
   NDArray* nd = reinterpret_cast<NDArray*>(in);
-  *out = new NDArray(nd->ConvertTo(static_cast<NDArrayChunkType>(chunk_type)));
-  //**out = nd->ConvertTo(static_cast<NDArrayChunkType>(chunk_type));
+  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayChunkType>(chunk_type)));
   API_END();
 }
 
