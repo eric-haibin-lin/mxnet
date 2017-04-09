@@ -193,6 +193,9 @@ class NDArray {
   inline void WaitToRead() const {
     if (is_none()) return;
     Engine::Get()->WaitForVar(ptr_->var);
+    if (chunk_type() != DefaultChunk) {
+      Engine::Get()->WaitForVar(ptr_->aux_var);
+    }
   }
   /*!
    * \brief Block until all the pending read/write operations with respect
@@ -210,6 +213,10 @@ class NDArray {
   /*! \return the associated variable of the ndarray.*/
   inline Engine::VarHandle var() const {
     return ptr_->var;
+  }
+  inline Engine::VarHandle aux_var() const {
+    CHECK(chunk_type() != DefaultChunk);
+    return ptr_->aux_var;
   }
   /*!
    * \brief save the content into binary stream
@@ -430,6 +437,7 @@ class NDArray {
     Storage::Handle aux_handle;
     /*! \brief variable from engine */
     Engine::VarHandle var;
+    Engine::VarHandle aux_var;
     /*!
      * \brief if this is true, this means the data do not come
      * from Storage, and do not need to be freed
@@ -465,6 +473,7 @@ class NDArray {
         : static_data(true), delay_alloc(false), chunk_type(chunk_type_),
           aux_type(aux_data.type_flag_) {
       var = Engine::Get()->NewVariable();
+      aux_var = Engine::Get()->NewVariable();
       if (data.dev_mask_ == cpu::kDevMask) {
         shandle.ctx = Context::CPU();
         aux_handle.ctx = Context::CPU();
@@ -479,12 +488,14 @@ class NDArray {
       aux_handle.size = aux_data.shape_.Size() * mshadow::mshadow_sizeof(aux_type);
       aux_shape = aux_data.shape_;
       chunk_shape = data.shape_;
+      CHECK(chunk_shape.ndim() > 0);
       std::cout << "aux_type" << aux_type << std::endl;
     }
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
           delay_alloc(false) {
       var = Engine::Get()->NewVariable();
+      aux_var = Engine::Get()->NewVariable();
       if (data.dev_mask_ == cpu::kDevMask) {
         shandle.ctx = Context::CPU();
       } else {
@@ -494,17 +505,19 @@ class NDArray {
       shandle.dptr = data.dptr_;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
       chunk_shape = data.shape_;
+      CHECK(chunk_shape.ndim() > 0);
     }
     Chunk(Context ctx, bool delay_alloc_, int aux_type_, NDArrayChunkType chunk_type_)
         : static_data(false), delay_alloc(delay_alloc_), chunk_type(chunk_type_), 
           aux_type(aux_type_) {
-       var = Engine::Get()->NewVariable();
-       // Assume alloc is always delayed for non-default chunks
-       CHECK(delay_alloc_);
-       // Attention, init shandle later.
-       if (!delay_alloc_) {
-         this->CheckAndAlloc();
-       }
+      var = Engine::Get()->NewVariable();
+      aux_var = Engine::Get()->NewVariable();
+      // Assume alloc is always delayed for non-default chunks
+      CHECK(delay_alloc_);
+      // Attention, init shandle later.
+      if (!delay_alloc_) {
+        this->CheckAndAlloc();
+      }
     }
     /*! \brief check if delay alloc is on, do alloc if not yet done */
     inline void CheckAndAlloc(void) {
@@ -535,6 +548,7 @@ class NDArray {
     }
     /*! \brief destructor */
     ~Chunk() {
+      // TODO Also cleanup aux_var
       if (static_data || delay_alloc || chunk_type == RowSparseChunk) {
         Engine::Get()->DeleteVariable([](RunContext s) {}, shandle.ctx, var);
       } else {

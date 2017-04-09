@@ -256,9 +256,15 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
 
   for (auto& i : ndinputs) {
     read_vars.push_back(i.var());
+    if (i.chunk_type() != DefaultChunk) {
+      read_vars.push_back(i.aux_var());
+    }
   }
   for (auto& i : ndoutputs) {
     write_vars.push_back(i.var());
+    if (i.chunk_type() != DefaultChunk) {
+      write_vars.push_back(i.aux_var());
+    }
   }
   if (mutate.count(op)) {
     auxidx = mutate[op](attrs);

@@ -512,6 +512,7 @@ TBlob NDArray::data(bool force_dense) const {
 template<typename xpu>
 NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
   //TODO CHECK TYPE
+  WaitToRead();
   NDArray result(shape_, ptr_->ctx, false, dtype());
   if (chunk_type() == DefaultChunk) {
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
@@ -805,6 +806,7 @@ void NDArray::SyncCopyToCPU(void *data, size_t size) const {
                             Context::CPU(), Context::CPU(), rctx);
   } else {
 #if MXNET_USE_CUDA
+    //TODO read_vars include this->aux_var()
     Engine::Get()->PushSync([&](RunContext rctx) {
         ndarray::Copy<gpu, cpu>(this->data(), &dst,
                                 this->ctx(), Context::CPU(), rctx);
