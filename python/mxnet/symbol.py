@@ -1108,12 +1108,24 @@ class Symbol(SymbolBase):
             The generated Executor
         """
         # pylint: disable=too-many-locals
+        print (self.list_arguments())
         if type_dict is None:
             attrs = self.attr_dict()
             type_dict = {k: mx_real_t for k in self.list_arguments()
                          if k not in attrs or '__dtype__' not in attrs[k]}
+        if sparse_type_dict is None:
+            attrs = self.attr_dict()
+            print(attrs)
+            sparse_type_dict = {k: 'default' \
+                if k not in attrs or '__sparse_type__' not in attrs[k] \
+                else attrs[k]['__sparse_type__'] for k in self.list_arguments()}
         arg_shapes, _, aux_shapes = self.infer_shape(**kwargs)
         arg_types, _, aux_types = self.infer_type(**type_dict)
+        print(sparse_type_dict)
+        arg_chunk_types, out_chunk_types, aux_chunk_types = \
+            self.infer_chunk_type(**sparse_type_dict)
+        print(arg_chunk_types)
+        print(out_chunk_types)
 
         if arg_shapes is None or arg_types is None:
             raise ValueError("Input node is not complete")

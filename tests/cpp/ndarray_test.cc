@@ -94,12 +94,26 @@ void BinarySparseTest() {
   CheckDataRegion(out_data.data(), output.data());
   // TODO also check with zeros..
 }
+void InferElemwiseChunkTest() {
+  nnvm::NodeAttrs attrs;
+  attrs.name = "Test op";
+  std::vector<int> in_attrs({RowSparseChunk, DefaultChunk});
+  std::vector<int> out_attrs({-1});
+
+  op::ElemwiseChunkType<2, 1>(attrs, &in_attrs, &out_attrs);
+  EXPECT_EQ(out_attrs[0], DefaultChunk);
+  in_attrs = {DefaultChunk, RowSparseChunk};
+  out_attrs = {-1};
+  op::ElemwiseChunkType<2, 1>(attrs, &in_attrs, &out_attrs);
+  EXPECT_EQ(out_attrs[0], DefaultChunk);
+}
 
 TEST(NDArray, basics) {
   BasicTest();
   BinarySparseTest();
   //Wait for all operations to finish
   Engine::Get()->WaitForAll();
+  InferElemwiseChunkTest();
 }
 
 TEST(NDArray, conversion) {

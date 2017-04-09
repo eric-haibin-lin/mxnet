@@ -119,7 +119,6 @@ void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
       fallback = true;
     }
   }
-
   if (fallback) {
     std::vector<TBlob> input_tblobs, output_tblobs;
     for (auto &i : inputs) {
@@ -131,7 +130,7 @@ void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
     BinaryCompute<xpu, OP>(attrs, ctx, input_tblobs, req, output_tblobs);
     return;
   }
-  // TODO Add more chunk types
+  // TODO Support more chunk types
   // Call SpSp function
   CHECK(inputs[0].chunk_type() == RowSparseChunk);
   BinaryComputeNDSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);

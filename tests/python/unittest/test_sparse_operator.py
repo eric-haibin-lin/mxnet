@@ -9,7 +9,7 @@ def test_broadcast_add_sparse():
     data = mx.symbol.Variable('data')
     shape = (1, 1)
     data_tmp = np.ones(shape)
-    test = mx.symbol.broadcast_add(data, data)
+    test = mx.symbol.elemwise_add(data, data)
     #check_numeric_gradient(test, [data_tmp])
     check_symbolic_forward(test, [data_tmp], [data_tmp + 1])
     #check_symbolic_backward(test, [data_tmp], [np.ones(shape)], [2 * data_tmp])

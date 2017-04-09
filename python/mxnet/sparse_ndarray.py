@@ -59,57 +59,25 @@ fixed-size items.
         return to_dense(self)
 
 # pylint: enable= no-member
-def row_sparse(values, indices, shape, ctx=Context.default_ctx, dtype=mx_real_t):
+def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     hdl = NDArrayHandle()
     assert(isinstance(values, NDArrayBase))
-    assert(isinstance(indices, NDArrayBase))
+    assert(isinstance(index, NDArrayBase))
     check_call(_LIB.MXNDArrayCreateSparse(
-        values.handle, indices.handle,
+        values.handle, index.handle,
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
         #TODO sparse type
         ctypes.c_int(0),
         ctypes.c_int(ctx.device_typeid),
         ctypes.c_int(ctx.device_id),
-        #delay alloc is not required
-        ctypes.c_int(int(False)),
+        ctypes.c_int(int(False)), #delay alloc
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
         ctypes.byref(hdl)))
-    # TODO specify writable?
     return SparseNDArray(hdl)
 
-# Should accept a list of aux values instead of just one index
-def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
-    """Create a new array from any object exposing the array interface
-
-    Parameters
-    ----------
-    source_array : array_like
-        Any object exposing the array interface, an object whose ``__array__``
-        method returns an array, or any (nested) sequence.
-    ctx : Context, optional
-        An optional device context (default is the current default context)
-    dtype : str or numpy.dtype, optional
-        An optional value type (default is `float32`)
-    #TODO doc for shape, etc
-
-    Returns
-    -------
-    NDArray
-        A created array
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> mx.nd.array([1, 2, 3])
-    <NDArray 3 @cpu(0)>
-    >>> mx.nd.array([[1, 2], [3, 4]])
-    <NDArray 2x2 @cpu(0)>
-    >>> mx.nd.array(np.zeros((3,2)))
-    <NDArray 3x2 @cpu(0)>
-    >>> mx.nd.array(np.zeros((3,2)), mx.gpu(0))
-    <NDArray 3x2 @gpu(0)>
-    """
+def array(values, index_list, sparse_type, shape, ctx=None, dtype=mx_real_t):
+    # input array types?
     #if not isinstance(source_array, np.ndarray):
     #    try:
     #        source_array = np.array(source_array, dtype=dtype)
@@ -121,9 +89,8 @@ def array(values, indices, sparse_type, shape=None, ctx=None, dtype=mx_real_t):
         shape = (shape, )
     if ctx is None:
         ctx = Context.default_ctx
-    arr = row_sparse(values, indices, shape, ctx=ctx, dtype=dtype)
+    arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype)
     return arr
-
 
 def to_dense(source):
     hdl = NDArrayHandle()

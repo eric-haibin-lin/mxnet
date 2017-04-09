@@ -33,11 +33,12 @@ def test_ctx_group():
             assert arr.context == group2ctx['stage2']
 
 def test_ctx_group_sparse():
-    data1 = mx.symbol.Variable('data1')
+    data1 = mx.symbol.Variable('data1', sparse_type='row_sparse')
     data2 = mx.symbol.Variable('data2')
     mlp  = mx.symbol.broadcast_add(data1, data2, name='plus')
     texec = mlp.simple_bind(mx.cpu(0), data1=(1,200), data2=(1,200))
-
+    output = texec.forward()
+    print(output[0])
     for arr, name in zip(texec.arg_arrays, mlp.list_arguments()):
          pass
 
