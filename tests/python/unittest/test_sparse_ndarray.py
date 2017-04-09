@@ -57,9 +57,9 @@ def test_ndarray_conversion():
     val = np.array([5, 10])
     idx = np.array([1])
     sparse_val = np.array([[0, 0], [5, 10], [0, 0], [0, 0], [0, 0]])
-    a = mx.nd.array(val);
-    b = mx.nd.array(idx, dtype=np.int32);
-    d = mx.sparse_nd.array(a, b, 'row_sparse', shape=(5,2))
+    a = mx.nd.array(val)
+    b = mx.nd.array(idx, dtype=np.int32)
+    d = mx.sparse_nd.array(a, [b], 'row_sparse', (5,2))
     f = mx.sparse_nd.to_dense(d)
     assert_almost_equal(f.asnumpy(), sparse_val)
 

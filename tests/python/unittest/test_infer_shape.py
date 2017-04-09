@@ -131,7 +131,7 @@ def test_fc_infer_type():
         assert arg_type_dict[k] == v
 
 def broadcast_add_helper(d1, d2, d1_chunk, d2_chunk, out_chunk):
-    out = mx.symbol.broadcast_add(d1, d2)
+    out = mx.symbol.elemwise_add(d1, d2)
     arg_chunk_types, out_chunk_types, aux_chunk_types = out.infer_chunk_type(d1=d1_chunk, d2=d2_chunk)
     assert len(out_chunk_types) == 1
     assert out_chunk_types[0] == out_chunk
@@ -141,10 +141,12 @@ def test_broadcast_add_infer_chunk_type():
     d2 = mx.symbol.Variable('d2')
     broadcast_add_helper(d1, d2, 'default', 'default', 'default')
     broadcast_add_helper(d1, d2, 'default', 'row_sparse', 'default')
+    broadcast_add_helper(d1, d2, 'row_sparse', 'default', 'default')
     broadcast_add_helper(d1, d2, 'row_sparse', 'row_sparse', 'row_sparse')
 
 if __name__ == "__main__":
-    '''test_mlp2_infer_shape()
+    #test_mlp2_infer_shape()
+    '''
     test_mlp2_infer_error()
     test_backward_infer()
     test_incomplete_infer_elewise()
@@ -152,5 +154,4 @@ if __name__ == "__main__":
     test_incomplete_infer_slicechannel()
     test_incomplete_infer_convolution()
     test_incomplete_infer_concat()'''
-    #test_fc_infer_type()
     test_broadcast_add_infer_chunk_type()
