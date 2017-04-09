@@ -201,8 +201,8 @@ void SetShapeType(const nnvm::Op* op,
     NDArrayChunkType chunk_type = static_cast<NDArrayChunkType>(out_chunk_types[i]);
     std::cout << "out chunk type: " << chunk_type << std::endl;
     if (ndoutputs[i].is_none()) {
-      // Assuming chunk_type is always valid..
-      if (chunk_type == DefaultChunk) {
+      // If FInferChunkType is not present, assume the output chunk is dense
+      if (chunk_type == DefaultChunk || out_chunk_types[i] == -1) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
         ndoutputs[i] = NDArray(chunk_type, out_shapes[i], ctx, true, out_types[i]);

@@ -134,17 +134,18 @@ class NDArray {
 
   //TODO we could have a list of aux_data instead
   inline TBlob aux_data() const {
-   CHECK(chunk_type() != DefaultChunk);
-   CHECK(aux_type() == DEFAULT_AUX_TYPE);
-   TBlob res;
-   MSHADOW_TYPE_SWITCH(aux_type(), DType, {
-     res = TBlob(static_cast<DType*>(ptr_->aux_handle.dptr), ptr_->aux_shape, 
+    CHECK(chunk_type() != DefaultChunk);
+    CHECK(aux_type() == DEFAULT_AUX_TYPE);
+    //this->WaitToRead();
+    TBlob res;
+    MSHADOW_TYPE_SWITCH(aux_type(), DType, {
+      res = TBlob(static_cast<DType*>(ptr_->aux_handle.dptr), ptr_->aux_shape, 
                  ptr_->aux_handle.ctx.dev_mask(), ptr_->aux_type);
-   });
+    });
 #if MKL_EXPERIMENTAL == 1
-   res.Mkl_mem_ = Mkl_mem_;
+    res.Mkl_mem_ = Mkl_mem_;
 #endif
-   return res;
+    return res;
   }
   /*!
    * \return a chunk of raw data in TBlob
