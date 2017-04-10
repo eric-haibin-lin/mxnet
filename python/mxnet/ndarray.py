@@ -105,6 +105,30 @@ def _new_alloc_handle(shape, ctx, delay_alloc, dtype=mx_real_t):
         ctypes.byref(hdl)))
     return hdl
 
+#TODO change default type for aux_type
+def _new_alloc_handle_sparse(sparse_type, shape, ctx, delay_alloc=True, dtype=mx_real_t, aux_type=mx_real_t):
+    """Return a new handle with specified shape and context.
+
+    Empty handle is only used to hold results
+
+    Returns
+    -------
+    handle
+        A new empty ndarray handle
+    """
+    hdl = NDArrayHandle()
+    check_call(_LIB.MXNDArrayCreateSparseEx(
+        ctypes.c_int(int(_CHUNK_TYPE_STR_TO_ID[sparse_type])),
+        c_array(mx_uint, shape),
+        mx_uint(len(shape)),
+        ctypes.c_int(ctx.device_typeid),
+        ctypes.c_int(ctx.device_id),
+        ctypes.c_int(int(delay_alloc)),
+        ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
+        ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(aux_type).type])),
+        ctypes.byref(hdl)))
+    return hdl
+
 def waitall():
     """Wait for all async operations to finish in MXNet.
 
@@ -957,7 +981,10 @@ def zeros(shape, ctx=None, dtype=mx_real_t):
     """
     if ctx is None:
         ctx = Context.default_ctx
-    # pylint: disable= no-member, protected-access
+    if sparse_type != 'default':
+      # pylint: disable= no-member, protected-access
+      out = _new_alloc_handle_sparse(sparse_type, shape, ctx)
+      return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=[out])
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access
 

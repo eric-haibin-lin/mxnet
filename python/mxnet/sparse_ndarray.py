@@ -68,7 +68,7 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
         #TODO sparse type
-        ctypes.c_int(0),
+        ctypes.c_int(_CHUNK_TYPE_STR_TO_ID['row_sparse']),
         ctypes.c_int(ctx.device_typeid),
         ctypes.c_int(ctx.device_id),
         ctypes.c_int(int(False)), #delay alloc
@@ -95,9 +95,19 @@ def array(values, index_list, sparse_type, shape, ctx=None, dtype=mx_real_t):
 def to_dense(source):
     hdl = NDArrayHandle()
     check_call(_LIB.MXNDArrayConvert(
-        source.handle, ndarray._CHUNK_TYPE_STR_TO_ID['default'],
+        source.handle, _CHUNK_TYPE_STR_TO_ID['default'],
         ctypes.byref(hdl)))
     return ndarray.NDArray(handle=hdl, writable=True)
+
+def zeros(shape, ctx=None, dtype=mx_real_t, sparse_type='default'):
+    if ctx is None:
+        ctx = Context.default_ctx
+    if sparse_type != 'default':
+      # pylint: disable= no-member, protected-access
+      out = SparseNDArray(ndarray._new_alloc_handle_sparse(sparse_type, shape, ctx))
+      return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
+    return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
+    # pylint: enable= no-member, protected-access
 
 ndarray_map = {}
 ndarray_map['1'] = ndarray.NDArray

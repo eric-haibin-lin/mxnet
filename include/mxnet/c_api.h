@@ -252,6 +252,17 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               int dtype,
                               NDArrayHandle *out);
 
+
+MXNET_DLL int MXNDArrayCreateSparseEx(int chunk_type,
+                    const mx_uint *shape,
+                    mx_uint ndim,
+                    int dev_type,
+                    int dev_id,
+                    int delay_alloc,
+                    int dtype,
+                    int aux_type,
+                    NDArrayHandle *out);
+
 MXNET_DLL int MXNDArrayConvert(NDArrayHandle in,
                                int chunk_type,
                                NDArrayHandle *out);
