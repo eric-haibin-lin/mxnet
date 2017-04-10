@@ -101,9 +101,9 @@ class Executor {
                               std::vector<TShape>* arg_shapes,
                               std::vector<int>* arg_dtypes,
                               const std::vector<OpReqType>& grad_req_types,
-                              std::vector<NDArray*>* in_args,
-                              std::vector<NDArray*>* arg_grads,
-                              std::vector<NDArray*>* aux_states);
+                              std::vector<NDArray>* in_args,
+                              std::vector<NDArray>* arg_grads,
+                              std::vector<NDArray>* aux_states);
   /*!
    * \brief the prototype of user-defined monitor callback
    */

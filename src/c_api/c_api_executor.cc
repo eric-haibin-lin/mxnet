@@ -244,31 +244,51 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   nnvm::DTypeVector arg_dtypes(num_input_nodes, -1);
   mxnet::MatchArguments(g.indexed_graph(), arg_dtype_map, &arg_dtypes, "SimpleBind");
 
-  std::vector<NDArray*> in_arg_ptrs;
-  std::vector<NDArray*> arg_grad_ptrs;
-  std::vector<NDArray*> aux_state_ptrs;
+  std::vector<NDArray> in_arg_vec;
+  std::vector<NDArray> arg_grad_vec;
+  std::vector<NDArray> aux_state_vec;
 
   *out = Executor::SimpleBind(*sym, ctx, ctx_map, in_arg_ctx_vec, arg_grad_ctx_vec,
                               aux_state_ctx_vec, &arg_shapes, &arg_dtypes, grad_req_type_vec,
-                              &in_arg_ptrs, &arg_grad_ptrs, &aux_state_ptrs);
+                              &in_arg_vec, &arg_grad_vec, &aux_state_vec);
 
   // TODO(junwu): copy ndarray ptrs to ret->handles
-  ret->ret_handles.reserve(in_arg_ptrs.size()+arg_grad_ptrs.size()+aux_state_ptrs.size());
-  for (auto nd_ptr : in_arg_ptrs) {
-    *nd_ptr = 0;
-    ret->ret_handles.push_back(nd_ptr);
+  ret->ret_handles.clear();
+  ret->ret_handles.reserve(in_arg_vec.size()+arg_grad_vec.size()+aux_state_vec.size());
+  for (auto& nd : in_arg_vec) {
+    if (nd.is_none()) {
+      ret->ret_handles.push_back(nullptr);
+    } else {
+      nd = 0;
+      ret->ret_handles.push_back(new NDArray(nd));
+    }
   }
-  for (auto nd_ptr : arg_grad_ptrs) {
-    *nd_ptr = 0;
-    ret->ret_handles.push_back(nd_ptr);
+  for (auto& nd : arg_grad_vec) {
+    if (nd.is_none()) {
+      ret->ret_handles.push_back(nullptr);
+    } else {
+      nd = 0;
+      ret->ret_handles.push_back(new NDArray(nd));
+    }
   }
-  for (auto nd_ptr : aux_state_ptrs) {
-    *nd_ptr = 0;
-    ret->ret_handles.push_back(nd_ptr);
+  for (auto& nd : aux_state_vec) {
+    if (nd.is_none()) {
+      ret->ret_handles.push_back(nullptr);
+    } else {
+      nd = 0;
+      ret->ret_handles.push_back(new NDArray(nd));
+    }
   }
-  *in_args = &(ret->ret_handles[0]);
-  *arg_grads = &(ret->ret_handles[in_arg_ptrs.size()]);
-  *aux_states = &(ret->ret_handles[in_arg_ptrs.size()+arg_grad_ptrs.size()]);
+
+  if (in_arg_vec.size() > 0) {
+    *in_args = &(ret->ret_handles[0]);
+  }
+  if (arg_grad_vec.size() > 0) {
+    *arg_grads = &(ret->ret_handles[in_arg_vec.size()]);
+  }
+  if (aux_state_vec.size() > 0) {
+    *aux_states = &(ret->ret_handles[in_arg_vec.size()+arg_grad_vec.size()]);
+  }
 
   API_END();
 }

@@ -554,13 +554,13 @@ void GraphExecutor::Init2(nnvm::Symbol symbol,
                           std::vector<TShape>* arg_shapes,
                           std::vector<int>* arg_dtypes,
                           const std::vector<OpReqType>& grad_req_types,
-                          std::vector<NDArray*>* in_arg_ptrs,
-                          std::vector<NDArray*>* arg_grad_ptrs,
-                          std::vector<NDArray*>* aux_state_ptrs,
+                          std::vector<NDArray>* in_arg_vec,
+                          std::vector<NDArray>* arg_grad_vec,
+                          std::vector<NDArray>* aux_state_vec,
                           Executor* shared_exec) {
   nnvm::Graph g = InitGraph2(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
                              aux_state_ctxes, arg_shapes, arg_dtypes, grad_req_types,
-                             in_arg_ptrs, arg_grad_ptrs, aux_state_ptrs);
+                             in_arg_vec, arg_grad_vec, aux_state_vec);
   g = AttachOpExecs(g);
   g = AttachOpResources(g);
   graph_ = std::move(g);
@@ -678,9 +678,9 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
                                 std::vector<TShape>* arg_shapes,
                                 std::vector<int>* arg_dtypes,
                                 const std::vector<OpReqType>& grad_req_types,
-                                std::vector<NDArray*>* in_arg_ptrs,
-                                std::vector<NDArray*>* arg_grad_ptrs,
-                                std::vector<NDArray*>* aux_state_ptrs) {
+                                std::vector<NDArray>* in_arg_vec,
+                                std::vector<NDArray>* arg_grad_vec,
+                                std::vector<NDArray>* aux_state_vec) {
   // setup gradient
   //nnvm::Graph g = InitFullGraph2(symbol, grad_req_type, arg_grad_store);
   nnvm::Graph g = InitFullGraph2(symbol, grad_req_types);
@@ -752,20 +752,17 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
     const TShape& inferred_shape = inferred_shapes[eid];
     const int inferred_dtype = inferred_dtypes[eid];
     if (mutable_nodes.count(nid)) {  // aux_states
-      aux_state_ptrs->push_back(new NDArray(inferred_shape, aux_state_ctxes[aux_top],
-                                            false, inferred_dtype));
-      data_entry_[eid] = *(aux_state_ptrs->back());
+      aux_state_vec->emplace_back(inferred_shape, aux_state_ctxes[aux_top], false, inferred_dtype);
+      data_entry_[eid] = aux_state_vec->back();
       ++aux_top;
     } else {  // in_args
-      in_arg_ptrs->push_back(new NDArray(inferred_shape, in_arg_ctxes[arg_top],
-                                         false, inferred_dtype));
-      data_entry_[eid] = *(in_arg_ptrs->back());
+      in_arg_vec->emplace_back(inferred_shape, in_arg_ctxes[arg_top], false, inferred_dtype);
+      data_entry_[eid] = in_arg_vec->back();
       if (kNullOp == grad_req_types[arg_top]) {
-        arg_grad_ptrs->push_back(nullptr);
+        arg_grad_vec->emplace_back();
       } else {
-        arg_grad_ptrs->push_back(new NDArray(inferred_shape, arg_grad_ctxes[arg_top],
-                                             false, inferred_dtype));
-        grad_store_.emplace_back(grad_req_types[arg_top], *(arg_grad_ptrs->back()));
+        arg_grad_vec->emplace_back(inferred_shape, arg_grad_ctxes[arg_top], false, inferred_dtype);
+        grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
       }
       ++arg_top;
     }
@@ -1262,9 +1259,9 @@ Executor *Executor::SimpleBind(nnvm::Symbol symbol,
                                std::vector<TShape>* arg_shapes,
                                std::vector<int>* arg_dtypes,
                                const std::vector<OpReqType>& grad_req_types,
-                               std::vector<NDArray*>* in_args,
-                               std::vector<NDArray*>* arg_grads,
-                               std::vector<NDArray*>* aux_states) {
+                               std::vector<NDArray>* in_args,
+                               std::vector<NDArray>* arg_grads,
+                               std::vector<NDArray>* aux_states) {
   auto exec = new exec::GraphExecutor();
   exec->Init2(symbol, default_ctx, group2ctx,
               in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,

@@ -72,9 +72,9 @@ class GraphExecutor : public Executor {
              std::vector<TShape>* arg_shapes,
              std::vector<int>* arg_dtypes,
              const std::vector<OpReqType>& grad_req_types,
-             std::vector<NDArray*>* in_arg_ptrs,
-             std::vector<NDArray*>* arg_grad_ptrs,
-             std::vector<NDArray*>* aux_state_ptrs,
+             std::vector<NDArray>* in_arg_vec,
+             std::vector<NDArray>* arg_grad_vec,
+             std::vector<NDArray>* aux_state_vec,
              Executor* shared_exec = nullptr);
 
  protected:
@@ -129,9 +129,9 @@ class GraphExecutor : public Executor {
                    std::vector<TShape>* arg_shapes,
                    std::vector<int>* arg_dtypes,
                    const std::vector<OpReqType>& grad_req_types,
-                   std::vector<NDArray*>* in_arg_ptrs,
-                   std::vector<NDArray*>* arg_grad_ptrs,
-                   std::vector<NDArray*>* aux_state_ptrs);
+                   std::vector<NDArray>* in_arg_vec,
+                   std::vector<NDArray>* arg_grad_vec,
+                   std::vector<NDArray>* aux_state_vec);
   // initialize the full graph, including gradient.
   Graph InitFullGraph(nnvm::Symbol symbol,
                       const std::vector<OpReqType>& grad_req_type,
