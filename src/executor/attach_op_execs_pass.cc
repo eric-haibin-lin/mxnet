@@ -192,7 +192,6 @@ class FComputeNDArrayExecutor : public OpExecutor {
  private:
   FComputeNDArray fcompute_;
   NodeAttrs attrs_;
-  //std::vector<TBlob> in_data_, out_data_;
   std::vector<NDArray> in_data_, out_data_;
 };
 

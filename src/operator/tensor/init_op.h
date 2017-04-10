@@ -113,6 +113,25 @@ inline bool InitType(const nnvm::NodeAttrs& attrs,
 
 
 template<typename xpu, int value>
+void FillComputeNDArray(const nnvm::NodeAttrs& attrs,
+                 const OpContext& ctx,
+                 const std::vector<NDArray>& inputs,
+                 const std::vector<OpReqType>& req,
+                 const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  if (value == 0 && outputs[0].chunk_type() != DefaultChunk) {
+    return;
+  }
+  /*
+  MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+    Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);
+    ASSIGN_DISPATCH(out, req[0], scalar<DType>(value));
+  });*/
+}
+
+template<typename xpu, int value>
 void FillCompute(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
                  const std::vector<TBlob>& inputs,

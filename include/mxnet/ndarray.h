@@ -66,7 +66,7 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  // Constructor for NDArray with chunk type
+  // Constructor for NDArray with chunk type. Could probably replace the one above?
   NDArray(NDArrayChunkType chunk_type, const TShape &shape, Context ctx,
           // No kInt64 in mshadow?
           bool delay_alloc = true, int dtype = mshadow::default_type_flag, int aux_type = DEFAULT_AUX_TYPE)
@@ -76,6 +76,7 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
       if (chunk_type == RowSparseChunk) {
+        // TODO support high dim row sparse
         CHECK(shape.ndim() <= 2);
       }
   }
@@ -120,7 +121,6 @@ class NDArray {
   inline const TShape &chunk_shape() const {
     //TODO CHECK CHUNK TYPE
     CHECK(ptr_ != nullptr);
-    CHECK(ptr_->chunk_shape.ndim() > 0);
     return ptr_->chunk_shape;
   }
   inline const TShape &aux_shape() const {

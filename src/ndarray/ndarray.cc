@@ -525,16 +525,20 @@ NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
   // Get the stream according to TBlob.dev_mask_
   //mshadow::Stream<xpu> *s = ptr_->ctx.get_stream<xpu>();
   MSHADOW_TYPE_SWITCH(dtype(), DType, {
-    auto in_data = data().FlatTo2D<xpu, DType>(s);
-    auto out_data = result.data().FlatTo2D<xpu, DType>(s);
-    auto num_rows = aux_shape()[0];
-    auto in_idx = aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
     // Fill in zeros
     result.data().FlatTo1D<xpu, DType>(s) = 0;
-    for (size_t i = 0; i < num_rows; i += 1) {
-      mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
-    }
     result.data().shape_ = shape_;
+    // data() is not empty
+    if (chunk_shape().ndim() != 0) {
+      // Copy over
+      auto in_data = data().FlatTo2D<xpu, DType>(s);
+      auto out_data = result.data().FlatTo2D<xpu, DType>(s);
+      auto num_rows = aux_shape()[0];
+      auto in_idx = aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+      for (size_t i = 0; i < num_rows; i += 1) {
+        mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
+      }
+    }
   });
   return result;
 }

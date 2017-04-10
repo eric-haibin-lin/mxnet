@@ -131,6 +131,7 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
+//TODO redesign this api
 int MXNDArrayCreateSparse(NDArrayHandle data,
                     NDArrayHandle aux_data,
                     const mx_uint *shape,
@@ -148,7 +149,6 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   // TODO fix dev_id
   int dev_id = 0;
   *out = new NDArray(nd_data, nd_aux_data, dev_id, RowSparseChunk, TShape(shape, shape + ndim));
-  //TODO redesign this api
   API_END();
 }
 
@@ -178,6 +178,26 @@ int MXNDArrayCreateEx(const mx_uint *shape,
       dtype);
   API_END();
 }
+
+int MXNDArrayCreateSparseEx(int chunk_type,
+                    const mx_uint *shape,
+                    mx_uint ndim,
+                    int dev_type,
+                    int dev_id,
+                    int delay_alloc,
+                    int dtype,
+                    int aux_type,
+                    NDArrayHandle *out) {
+  API_BEGIN();
+  *out = new NDArray(
+      NDArrayChunkType(chunk_type),
+      TShape(shape, shape + ndim),
+      Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
+      delay_alloc != 0,
+      dtype, aux_type);
+  API_END();
+}
+
 
 int MXNDArrayLoadFromRawBytes(const void *buf,
                               size_t size,

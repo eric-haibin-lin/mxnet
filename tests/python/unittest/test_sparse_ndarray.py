@@ -33,7 +33,7 @@ def check_with_uniform(uf, arg_shapes, dim=None, npuf=None, rmin=-10, type_list=
         else:
             assert_almost_equal(out1, out2)
 
-def test_ndarray_elementwise():
+def test_ndarray_elementwise_add():
     dense_np = np.array([[1,2],[3,4],[5,6]])
     sparse_np1 = np.array([[5,10],[0,0],[0,0]])
     dense_nd = mx.nd.array(dense_np)
@@ -53,6 +53,25 @@ def test_ndarray_elementwise():
     sparse_plus_sparse_dense_nd = sparse_plus_sparse.to_dense()
     assert_almost_equal(sparse_plus_sparse_dense_nd.asnumpy(), sparse_np1 + sparse_np1)
 
+def test_ndarray_elementwise_fallback():
+    dense_np = np.array([[1,2],[3,4],[5,6]])
+    sparse_np1 = np.array([[5,10],[0,0],[0,0]])
+    dense_nd = mx.nd.array(dense_np)
+
+    val = mx.nd.array([5, 10]);
+    idx = mx.nd.array([0], dtype=np.int32);
+    sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2))
+    # dense - dense addition
+    dense_plus_dense = mx.nd.add_n(dense_nd, dense_nd);
+    assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)
+    # dense - sparse addition
+    dense_plus_sparse = mx.nd.add_n(dense_nd, sparse_nd1)
+    assert_almost_equal(dense_plus_sparse.asnumpy(), dense_np + sparse_np1)
+    # sparse - sparse addition
+    sparse_plus_sparse = mx.nd.add_n(sparse_nd1, sparse_nd1)
+    #sparse_plus_sparse_dense_nd = sparse_plus_sparse.to_dense()
+    assert_almost_equal(sparse_plus_sparse.asnumpy(), sparse_np1 + sparse_np1)
+
 def test_ndarray_conversion():
     val = np.array([5, 10])
     idx = np.array([1])
@@ -63,6 +82,20 @@ def test_ndarray_conversion():
     f = mx.sparse_nd.to_dense(d)
     assert_almost_equal(f.asnumpy(), sparse_val)
 
+def test_ndarray_zeros():
+    zero = mx.nd.zeros((2,2))
+    sparse_zero = mx.sparse_nd.zeros((2,2), sparse_type='row_sparse')
+    assert_almost_equal(sparse_zero.to_dense().asnumpy(), zero.asnumpy())
+
+def test_ndarray_copyto():
+    zero = mx.nd.zeros((2,2))
+    e = mx.nd.ones((2,2))
+    zero.copyto(e)
+    print(e.asnumpy())
+
 if __name__ == '__main__':
-    test_ndarray_elementwise()
+    test_ndarray_elementwise_add()
     test_ndarray_conversion()
+    test_ndarray_zeros()
+    test_ndarray_copyto()
+    test_ndarray_elementwise_fallback()

@@ -196,6 +196,12 @@ void SetShapeType(const nnvm::Op* op,
       break;
     }
   }
+  for (auto &i : out_chunk_types) {
+    if (i != DefaultChunk && i != -1) {
+      contains_chunk_type = static_cast<NDArrayChunkType>(i);
+      break;
+    }
+  }
 
   for (int i = 0; i < infered_num_outputs; ++i) {
     NDArrayChunkType chunk_type = static_cast<NDArrayChunkType>(out_chunk_types[i]);
