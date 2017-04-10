@@ -417,8 +417,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        const char **param_keys,
                        const char **param_vals) {
   static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
-  // TODO retrieve row sparse fnd compute
-  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu>");
+  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu, row_sparse>");
   static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
   static auto& createop = nnvm::Op::GetAttr<FCreateLayerOp>("FCreateLayerOp");

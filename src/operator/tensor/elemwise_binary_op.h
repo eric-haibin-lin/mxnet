@@ -104,7 +104,7 @@ void BinaryComputeNDSpSp(const nnvm::NodeAttrs& attrs,
 }
 
 template<typename xpu, typename OP>
-void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
+void BinaryComputeND(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,

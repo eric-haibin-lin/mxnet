@@ -113,7 +113,7 @@ inline bool InitType(const nnvm::NodeAttrs& attrs,
 
 
 template<typename xpu, int value>
-void FillComputeNDArray(const nnvm::NodeAttrs& attrs,
+void FillComputeND(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
                  const std::vector<NDArray>& inputs,
                  const std::vector<OpReqType>& req,
