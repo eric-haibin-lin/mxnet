@@ -115,7 +115,7 @@ void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
   // Check if any input is dense
   bool fallback = false;
   for (auto &nd : inputs) {
-    if (nd.chunk_type() == DefaultChunk) {
+    if (nd.chunk_type() == kDefaultChunk) {
       fallback = true;
     }
   }
@@ -132,7 +132,7 @@ void BinaryComputeNDArray(const nnvm::NodeAttrs& attrs,
   }
   // TODO Support more chunk types
   // Call SpSp function
-  CHECK(inputs[0].chunk_type() == RowSparseChunk);
+  CHECK(inputs[0].chunk_type() == kRowSparseChunk);
   BinaryComputeNDSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 

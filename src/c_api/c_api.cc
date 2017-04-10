@@ -148,7 +148,7 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   NDArray* nd_aux_data = reinterpret_cast<NDArray*>(aux_data);
   // TODO fix dev_id
   int dev_id = 0;
-  *out = new NDArray(nd_data, nd_aux_data, dev_id, RowSparseChunk, TShape(shape, shape + ndim));
+  *out = new NDArray(nd_data, nd_aux_data, dev_id, kRowSparseChunk, TShape(shape, shape + ndim));
   API_END();
 }
 

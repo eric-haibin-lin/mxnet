@@ -158,7 +158,7 @@ class FComputeExecutor : public OpExecutor {
 };
 
 // fcompute ndarrayr executor
-class FComputeNDArrayExecutor : public OpExecutor {
+class FComputeNDExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {
     op_ctx.run_ctx = rctx;
@@ -171,14 +171,15 @@ class FComputeNDArrayExecutor : public OpExecutor {
   Operator::ExecType exec_type() const override {
     return Operator::kSync;
   }
-  explicit FComputeNDArrayExecutor(FComputeNDArray fcompute, const NodeAttrs& attrs)
+  explicit FComputeNDExecutor(FComputeND fcompute, const NodeAttrs& attrs)
       : fcompute_(fcompute), attrs_(attrs) {
   }
 
-  static FComputeNDArray GetFComputeNDArray(const Op* op, Context ctx) {
-    static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
+  static FComputeND GetFComputeND(const Op* op, Context ctx) {
+    // TODO Add types
+    static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu>");
     // TODO check gpu
-    static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<gpu>");
+    static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<gpu>");
     if (ctx.dev_mask() == cpu::kDevMask) {
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
@@ -190,7 +191,7 @@ class FComputeNDArrayExecutor : public OpExecutor {
   }
 
  private:
-  FComputeNDArray fcompute_;
+  FComputeND fcompute_;
   NodeAttrs attrs_;
   std::vector<NDArray> in_data_, out_data_;
 };
@@ -222,7 +223,7 @@ Graph AttachOpExecs(Graph g) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
     FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
-    FComputeNDArray fcompute_ndarray = FComputeNDArrayExecutor::GetFComputeNDArray(inode.source->op(), vctx[i]);
+    FComputeND fcompute_ndarray = FComputeNDExecutor::GetFComputeND(inode.source->op(), vctx[i]);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;
@@ -243,8 +244,10 @@ Graph AttachOpExecs(Graph g) {
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
     } else if (fcompute_ndarray != nullptr) {
-      ret[i] = std::make_shared<FComputeNDArrayExecutor>(fcompute_ndarray, inode.source->attrs);
+      std::cout << "dispatching fcompute_ndarray" << std::endl;
+      ret[i] = std::make_shared<FComputeNDExecutor>(fcompute_ndarray, inode.source->attrs);
     } else if (fcompute != nullptr) {
+      std::cout << "dispatching fcompute" << std::endl;
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);
     } else {
       LOG(INFO) << "FCompute not registered " << inode.source->op()->name;

@@ -51,13 +51,13 @@ void BinarySparseTest() {
   raw_data1 = 5;
   Engine::Get()->WaitForAll();
 
-  NDArray input_nd0(raw_data0.data(), index0.data(), dev_id, RowSparseChunk, data_shape);
-  NDArray input_nd1(raw_data1.data(), index1.data(), dev_id, RowSparseChunk, data_shape);
+  NDArray input_nd0(raw_data0.data(), index0.data(), dev_id, kRowSparseChunk, data_shape);
+  NDArray input_nd1(raw_data1.data(), index1.data(), dev_id, kRowSparseChunk, data_shape);
   CheckDataRegion(input_nd0.data(), raw_data0.data());
   CheckDataRegion(input_nd1.data(), raw_data1.data());
 
   TShape output_shape({3, 2});
-  NDArray output(RowSparseChunk, output_shape, ctx);
+  NDArray output(kRowSparseChunk, output_shape, ctx);
   std::vector<Engine::VarHandle> const_vars;
   const_vars.push_back(raw_data0.var());
   const_vars.push_back(raw_data1.var());
@@ -97,15 +97,15 @@ void BinarySparseTest() {
 void InferElemwiseChunkTest() {
   nnvm::NodeAttrs attrs;
   attrs.name = "Test op";
-  std::vector<int> in_attrs({RowSparseChunk, DefaultChunk});
+  std::vector<int> in_attrs({kRowSparseChunk, kDefaultChunk});
   std::vector<int> out_attrs({-1});
 
   op::ElemwiseChunkType<2, 1>(attrs, &in_attrs, &out_attrs);
-  EXPECT_EQ(out_attrs[0], DefaultChunk);
-  in_attrs = {DefaultChunk, RowSparseChunk};
+  EXPECT_EQ(out_attrs[0], kDefaultChunk);
+  in_attrs = {kDefaultChunk, kRowSparseChunk};
   out_attrs = {-1};
   op::ElemwiseChunkType<2, 1>(attrs, &in_attrs, &out_attrs);
-  EXPECT_EQ(out_attrs[0], DefaultChunk);
+  EXPECT_EQ(out_attrs[0], kDefaultChunk);
 }
 
 TEST(NDArray, basics) {
@@ -126,7 +126,7 @@ TEST(NDArray, conversion) {
     EXPECT_NE(nd.data().dptr_, nullptr);
     nd = val;
     Engine::Get()->WaitForAll();
-    auto nd_copy = nd.ConvertTo<cpu>(DefaultChunk);
+    auto nd_copy = nd.ConvertTo<cpu>(kDefaultChunk);
     CheckDataRegion(nd_copy.data(), nd.data());
   }
 
@@ -142,7 +142,7 @@ TEST(NDArray, conversion) {
   index0 = 0;
 
   TShape shape({2, 2});
-  NDArray nd(raw_data0.data(), index0.data(), dev_id, RowSparseChunk, shape);
+  NDArray nd(raw_data0.data(), index0.data(), dev_id, kRowSparseChunk, shape);
 
   // Dense ndarray
   NDArray dense_nd(shape, ctx, false);
@@ -151,7 +151,7 @@ TEST(NDArray, conversion) {
   dense_nd.data().FlatTo2D<cpu, real_t>()[0][1] = 1;
   Engine::Get()->WaitForAll(); 
 
-  auto converted_nd = nd.ConvertTo<cpu>(DefaultChunk);
+  auto converted_nd = nd.ConvertTo<cpu>(kDefaultChunk);
   auto converted_data = converted_nd.data();
   CheckDataRegion(converted_data, dense_nd.data());
   }

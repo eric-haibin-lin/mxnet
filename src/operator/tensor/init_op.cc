@@ -21,7 +21,7 @@ NNVM_REGISTER_OP(_zeros)
 .set_attr<nnvm::FInferType>("FInferType", InitType<InitOpParam>)
 .set_attr<FCompute>("FCompute<cpu>", FillCompute<cpu, 0>)
 //TODO row sparse attr
-.set_attr<FComputeNDArray>("FComputeNDArray<cpu>", FillComputeNDArray<cpu, 0>)
+.set_attr<FComputeND>("FComputeND<cpu>", FillComputeNDArray<cpu, 0>)
 .add_arguments(InitOpParam::__FIELDS__());
 
 NNVM_REGISTER_OP(_ones)

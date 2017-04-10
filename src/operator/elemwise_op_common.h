@@ -63,7 +63,7 @@ inline bool ElemwiseChunkAttr(const nnvm::NodeAttrs& attrs,
       for (size_t i = 0; i < vec->size(); ++i) {
         if (assign(&result, (*vec)[i]) == false) {
           fallback = true;
-          result = DefaultChunk;
+          result = kDefaultChunk;
           return;
         }
       }
