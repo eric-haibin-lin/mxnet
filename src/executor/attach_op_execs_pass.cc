@@ -197,10 +197,8 @@ class FComputeNDExecutor : public OpExecutor {
   }
 
   static FComputeND GetFComputeND(const Op* op, Context ctx) {
-    // TODO Add types
-    static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu>");
-    // TODO check gpu
-    static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<gpu>");
+    static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu, row_sparse>");
+    static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<gpu, row_sparse>");
     if (ctx.dev_mask() == cpu::kDevMask) {
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
