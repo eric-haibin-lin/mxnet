@@ -157,13 +157,13 @@ void SetValueOp(const real_t &rhs, NDArray *out) {
     case cpu::kDevMask: {
       Engine::Get()->PushSync([rhs, ret](RunContext ctx) {
           auto chunk_type = ret.chunk_type();
-          if (chunk_type == DefaultChunk) {
+          if (chunk_type == kDefaultChunk) {
             ret.CheckAndAlloc();
             TBlob tmp = ret.data();
             ndarray::Eval<cpu>(rhs, &tmp, ctx);
           } else {
             // TODO Support other types;
-            CHECK(chunk_type == RowSparseChunk);
+            CHECK(chunk_type == kRowSparseChunk);
             // assume already allocated??
             TBlob tmp = ret.data();
             ndarray::Eval<cpu>(rhs, &tmp, ctx);
@@ -516,9 +516,10 @@ inline NDArray &ScalarOpApply(NDArray *dst,
 
 // Attributes
 TBlob NDArray::data(bool force_dense) const {
-  if (chunk_type() != DefaultChunk) CHECK(offset_ == 0);
+  CHECK(ptr_ != nullptr);
+  if (chunk_type() != kDefaultChunk) CHECK(offset_ == 0);
   TBlob res;
-  if (force_dense == false || chunk_type() == DefaultChunk) {
+  if (force_dense == false || chunk_type() == kDefaultChunk) {
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
       res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
         + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask(), dtype());
@@ -544,13 +545,13 @@ NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
   //TODO CHECK TYPE
   WaitToRead();
   NDArray result(shape_, ptr_->ctx, false, dtype());
-  if (chunk_type() == DefaultChunk) {
+  if (chunk_type() == kDefaultChunk) {
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
       mshadow::Copy(result.data().FlatTo1D<xpu, DType>(), data().FlatTo1D<xpu, DType>());
     });
     return result;
   }
-  CHECK(chunk_type() == RowSparseChunk);
+  CHECK(chunk_type() == kRowSparseChunk);
   // TODO be care of the context
   // Get the stream according to TBlob.dev_mask_
   //mshadow::Stream<xpu> *s = ptr_->ctx.get_stream<xpu>();
@@ -582,7 +583,7 @@ template NDArray NDArray::ConvertTo<mshadow::cpu>(NDArrayChunkType chunk_type) c
 template<typename xpu>
 NDArray NDArray::ConvertTo(NDArrayChunkType chunk_type) const {
   //TODO implement convertion to other chunk types
-  CHECK(chunk_type == DefaultChunk);
+  CHECK(chunk_type == kDefaultChunk);
   return ToDense<xpu>(nullptr);
 }
 

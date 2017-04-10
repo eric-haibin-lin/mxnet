@@ -66,7 +66,7 @@ using FCompute = std::function<void (const nnvm::NodeAttrs& attrs,
  *
  * \note Register under "FCompute<cpu>" and "FCompute<gpu>" //TODO
  */
-using FComputeNDArray = std::function<void (const nnvm::NodeAttrs& attrs,
+using FComputeND = std::function<void (const nnvm::NodeAttrs& attrs,
                                      const OpContext& ctx,
                                      const std::vector<NDArray>& inputs,
                                      const std::vector<OpReqType>& req,

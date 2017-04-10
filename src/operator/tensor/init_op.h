@@ -121,7 +121,7 @@ void FillComputeNDArray(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (value == 0 && outputs[0].chunk_type() != DefaultChunk) {
+  if (value == 0 && outputs[0].chunk_type() != kDefaultChunk) {
     return;
   }
   /*

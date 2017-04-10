@@ -127,7 +127,7 @@ void SetShapeType(const nnvm::Op* op,
                   const int& infered_num_outputs,
                   std::vector<NDArray>* p_ndoutputs,
                   NDArrayChunkType& contains_chunk_type) {
-  contains_chunk_type = DefaultChunk;
+  contains_chunk_type = kDefaultChunk;
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
@@ -179,7 +179,7 @@ void SetShapeType(const nnvm::Op* op,
   }
   for (auto& i : ndoutputs) {
     int chunk_type = i.chunk_type();
-    if (chunk_type == UndefinedChunk) {
+    if (chunk_type == kUndefinedChunk) {
       chunk_type = -1;
     }
     out_chunk_types.push_back(chunk_type);
@@ -194,13 +194,13 @@ void SetShapeType(const nnvm::Op* op,
 
   for (auto &i : in_chunk_types) {
     CHECK(i != -1);
-    if (i != DefaultChunk) {
+    if (i != kDefaultChunk) {
       contains_chunk_type = static_cast<NDArrayChunkType>(i);
       break;
     }
   }
   for (auto &i : out_chunk_types) {
-    if (i != DefaultChunk && i != -1) {
+    if (i != kDefaultChunk && i != -1) {
       contains_chunk_type = static_cast<NDArrayChunkType>(i);
       break;
     }
@@ -211,7 +211,7 @@ void SetShapeType(const nnvm::Op* op,
     std::cout << "out chunk type: " << chunk_type << std::endl;
     if (ndoutputs[i].is_none()) {
       // If FInferChunkType is not present, assume the output chunk is dense
-      if (chunk_type == DefaultChunk || out_chunk_types[i] == -1) {
+      if (chunk_type == kDefaultChunk || out_chunk_types[i] == -1) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
         ndoutputs[i] = NDArray(chunk_type, out_shapes[i], ctx, true, out_types[i]);
@@ -265,13 +265,13 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
 
   for (auto& i : ndinputs) {
     read_vars.push_back(i.var());
-    if (i.chunk_type() != DefaultChunk) {
+    if (i.chunk_type() != kDefaultChunk) {
       read_vars.push_back(i.aux_var());
     }
   }
   for (auto& i : ndoutputs) {
     write_vars.push_back(i.var());
-    if (i.chunk_type() != DefaultChunk) {
+    if (i.chunk_type() != kDefaultChunk) {
       write_vars.push_back(i.aux_var());
     }
   }
@@ -300,7 +300,7 @@ void PushFCompute(const FCompute& fn,
         RunContext rctx,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
-      // By default FCompute assumes DefaultChunk
+      // By default FCompute assumes kDefaultChunk
       for (auto& i : ndinputs) {
         input_blobs.push_back(i.data(true));
       }
@@ -321,7 +321,7 @@ void PushFCompute(const FCompute& fn,
     0, PROFILER_MESSAGE(op->name.c_str()));
 }
 
-void PushFComputeNDArray(const FComputeNDArray& fn,
+void PushFComputeND(const FComputeND& fn,
                   const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
                   const Context& ctx,
@@ -336,7 +336,7 @@ void PushFComputeNDArray(const FComputeNDArray& fn,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
       for (auto& i : ndoutputs) {
-        if (i.chunk_type() == DefaultChunk) {
+        if (i.chunk_type() == kDefaultChunk) {
           i.CheckAndAlloc();
         }
       }
@@ -419,7 +419,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        const char **param_vals) {
   static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
   // TODO retrieve row sparse fnd compute
-  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeNDArray>("FComputeNDArray<cpu>");
+  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu>");
   static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
   static auto& createop = nnvm::Op::GetAttr<FCreateLayerOp>("FCreateLayerOp");
@@ -457,11 +457,11 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
         op, attrs, ctx, ndinputs, ndoutputs);
 
     FCompute fn;
-    FComputeNDArray fn_nd;
+    FComputeND fn_nd;
     // dispatch based on ctx and chunk_type
     std::cout << "Dispatching for chunk_type: " << chunk_type << std::endl;
     if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
-        chunk_type == RowSparseChunk) {
+        chunk_type == kRowSparseChunk) {
       fn_nd = fnd_cpu_row_sparse[op];
       std::cout << "fnd_cpu_row_sparse dispatched." << std::endl;
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {

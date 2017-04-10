@@ -58,10 +58,10 @@ class AutogradRuntime;
 
 // TODO Doc
 enum NDArrayChunkType {
-  UndefinedChunk, // undefined chunk
-  DefaultChunk,   // dense
-  RowSparseChunk, // row sparse
-  CSRChunk,       // csr
+  kUndefinedChunk, // undefined chunk
+  kDefaultChunk,   // dense
+  kRowSparseChunk, // row sparse
+  kCSRChunk,       // csr
 };
 
 /*!
@@ -101,7 +101,7 @@ class NDArray {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
-      if (chunk_type == RowSparseChunk) {
+      if (chunk_type == kRowSparseChunk) {
         // TODO support high dim row sparse
         CHECK(shape.ndim() <= 2);
       }
@@ -160,7 +160,7 @@ class NDArray {
 
   //TODO we could have a list of aux_data instead
   inline TBlob aux_data() const {
-    CHECK(chunk_type() != DefaultChunk);
+    CHECK(chunk_type() != kDefaultChunk);
     CHECK(aux_type() == DEFAULT_AUX_TYPE);
     //this->WaitToRead();
     TBlob res;
@@ -206,7 +206,7 @@ class NDArray {
     return ptr_->aux_type;
   }
   inline NDArrayChunkType chunk_type() const {
-    if (ptr_ == nullptr) { return UndefinedChunk; }
+    if (ptr_ == nullptr) { return kUndefinedChunk; }
     return ptr_->chunk_type;
   }
   /*! \return whether this ndarray is not initialized */
@@ -220,7 +220,7 @@ class NDArray {
   inline void WaitToRead() const {
     if (is_none()) return;
     Engine::Get()->WaitForVar(ptr_->var);
-    if (chunk_type() != DefaultChunk) {
+    if (chunk_type() != kDefaultChunk) {
       Engine::Get()->WaitForVar(ptr_->aux_var);
     }
   }
@@ -242,7 +242,7 @@ class NDArray {
     return ptr_->var;
   }
   inline Engine::VarHandle aux_var() const {
-    CHECK(chunk_type() != DefaultChunk);
+    CHECK(chunk_type() != kDefaultChunk);
     return ptr_->aux_var;
   }
   /*!
@@ -426,7 +426,7 @@ class NDArray {
     //TODO reuse the existing CheckAndAlloc(dsize, aux_size = 0);
     ptr_->CheckAndAlloc();
   }
-  // Alloc number of dense rows for RowSparseChunk
+  // Alloc number of dense rows for kRowSparseChunk
   // aux_shape is only known at run time
   inline void CheckAndAlloc(TShape aux_shape) const {
     ptr_->CheckAndAlloc(shape_, aux_shape, dtype_);
@@ -474,7 +474,7 @@ class NDArray {
     /*! \brief whether allocation is delayed */
     bool delay_alloc;
     /*! \brief construct from static data */
-    NDArrayChunkType chunk_type = DefaultChunk;
+    NDArrayChunkType chunk_type = kDefaultChunk;
     // type of aux
     int aux_type = -1;
     // TODO make a copy of ctx
@@ -491,6 +491,7 @@ class NDArray {
         : static_data(false), delay_alloc(true) {
       auto size = shape.Size();
       chunk_shape = shape;
+      CHECK(chunk_shape.ndim() > 0);
       var = Engine::Get()->NewVariable();
       shandle.size = size * mshadow::mshadow_sizeof(dtype);
       shandle.ctx = ctx_;
@@ -549,7 +550,7 @@ class NDArray {
     }
     /*! \brief check if delay alloc is on, do alloc if not yet done */
     inline void CheckAndAlloc(void) {
-      if (delay_alloc && chunk_type == DefaultChunk) {
+      if (delay_alloc && chunk_type == kDefaultChunk) {
         shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
         delay_alloc = false;
       }
@@ -558,9 +559,9 @@ class NDArray {
       // TODO CHECK shape_;
       // For row sparse chunk, size is the number of rows to allocate
       // calculate size, perform allocation
-      if (delay_alloc && chunk_type == RowSparseChunk) {
+      if (delay_alloc && chunk_type == kRowSparseChunk) {
       // TODO hack delay_alloc for now.. We need to check it
-      //if (chunk_type == RowSparseChunk) {
+      //if (chunk_type == kRowSparseChunk) {
         CHECK(aux_shape.ndim() == 1);
         uint64_t num_rows = aux_shape[0];
         auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
@@ -577,7 +578,7 @@ class NDArray {
     /*! \brief destructor */
     ~Chunk() {
       // TODO Also cleanup aux_var
-      if (static_data || delay_alloc || chunk_type == RowSparseChunk) {
+      if (static_data || delay_alloc || chunk_type == kRowSparseChunk) {
         Engine::Get()->DeleteVariable([](RunContext s) {}, shandle.ctx, var);
       } else {
         Storage::Handle h = this->shandle;
