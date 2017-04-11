@@ -84,7 +84,7 @@ def test_ndarray_conversion():
 
 def test_ndarray_zeros():
     zero = mx.nd.zeros((2,2))
-    sparse_zero = mx.sparse_nd.zeros((2,2), sparse_type='row_sparse')
+    sparse_zero = mx.sparse_nd.zeros((2,2), 'row_sparse')
     assert_almost_equal(sparse_zero.to_dense().asnumpy(), zero.asnumpy())
 
 def test_ndarray_copyto():
