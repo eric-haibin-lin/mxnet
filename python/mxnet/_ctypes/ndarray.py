@@ -13,7 +13,6 @@ from ..base import NDArrayHandle, OpHandle
 from ..base import check_call
 from ..ndarray_doc import _build_doc
 
-_ndarray_cls = None
 _ndarray_cls_map = {}
 
 class NDArrayBase(object):
@@ -37,7 +36,7 @@ class NDArrayBase(object):
         check_call(_LIB.MXNDArrayFree(self.handle))
 
     def __reduce__(self):
-        return (_ndarray_cls, (None,), self.__getstate__())
+        return (_ndarray_cls[1], (None,), self.__getstate__())
 
     @property
     def shape(self):
@@ -152,39 +151,33 @@ def _make_ndarray_function(handle, name):
             c_array(ctypes.c_char_p, [c_str(str(i)) for i in kwargs.values()])))
         if original_output is not None:
             return original_output
-        if num_output.value == 1:
+        ret_list = []
+        for i in xrange(num_output.value):
             chunk_type = ctypes.c_int(0)
-            check_call(_LIB.MXNDArrayGetChunkType(ctypes.cast(output_vars[0], NDArrayHandle), ctypes.byref(chunk_type)))
-            if chunk_type.value == 2:
-              print("returning sparse ndarray")
-              result = _ndarray_cls_map['2'](ctypes.cast(output_vars[0], NDArrayHandle))
-            else:
-              result = _ndarray_cls(ctypes.cast(output_vars[0], NDArrayHandle))
+            check_call(_LIB.MXNDArrayGetChunkType(ctypes.cast(output_vars[i], NDArrayHandle), ctypes.byref(chunk_type)))
+            ret_list.append(_ndarray_cls_map[chunk_type.value](ctypes.cast(output_vars[i], NDArrayHandle)))
+        if num_output.value == 1:
+            return ret_list[0]
+        return ret_list
 
-            print(chunk_type, result.shape)
-            return result
-        else:
-            return [_ndarray_cls(ctypes.cast(output_vars[i], NDArrayHandle))
-                    for i in range(num_output.value)]
     # End of function declaration
+    # All operators are registered under mxnet.ndarray namespace
     generic_ndarray_function.__name__ = func_name
     generic_ndarray_function.__doc__ = doc_str
     generic_ndarray_function.__module__ = 'mxnet.ndarray'
     return generic_ndarray_function
 
 
-def _set_ndarray_class(cls):
+def _set_chunk_nd_map(chunk_nd_map):
     """Set the symbolic class to be cls"""
-    global _ndarray_cls
     global _ndarray_cls_map 
-    _ndarray_cls = cls['1']
-    _ndarray_cls_map = cls
+    _ndarray_cls_map = chunk_nd_map
 
 
 # pylint: enable=too-many-locals, invalid-name
-def _init_ndarray_module(ndarray_class, root_namespace):
+def _init_ndarray_module(chunk_nd_map, root_namespace):
     """List and add all the ndarray functions to current module."""
-    _set_ndarray_class(ndarray_class)
+    _set_chunk_nd_map(chunk_nd_map)
     plist = ctypes.POINTER(ctypes.c_char_p)()
     size = ctypes.c_uint()
 

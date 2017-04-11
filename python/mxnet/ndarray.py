@@ -28,15 +28,15 @@ from . import _ndarray_internal as _internal
 # When possible, use cython to speedup part of computation.
 try:
     if int(_os.environ.get("MXNET_ENABLE_CYTHON", True)) == 0:
-        from ._ctypes.ndarray import NDArrayBase, _init_ndarray_module
+        from ._ctypes.ndarray import NDArrayBase
     elif _sys.version_info >= (3, 0):
-        from ._cy3.ndarray import NDArrayBase, _init_ndarray_module
+        from ._cy3.ndarray import NDArrayBase
     else:
-        from ._cy2.ndarray import NDArrayBase, _init_ndarray_module
+        from ._cy2.ndarray import NDArrayBase
 except ImportError:
     if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
-    from ._ctypes.ndarray import NDArrayBase, _init_ndarray_module
+    from ._ctypes.ndarray import NDArrayBase
 
 
 # pylint: disable= no-member
