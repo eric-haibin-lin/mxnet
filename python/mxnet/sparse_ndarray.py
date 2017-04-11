@@ -63,15 +63,15 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     hdl = NDArrayHandle()
     assert(isinstance(values, NDArrayBase))
     assert(isinstance(index, NDArrayBase))
+    indices = c_array(NDArrayHandle, [index.handle])
     check_call(_LIB.MXNDArrayCreateSparse(
-        values.handle, index.handle,
+        values.handle, mx_uint(1), indices,
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
-        #TODO sparse type
         ctypes.c_int(_CHUNK_TYPE_STR_TO_ID['row_sparse']),
         ctypes.c_int(ctx.device_typeid),
         ctypes.c_int(ctx.device_id),
-        ctypes.c_int(int(False)), #delay alloc
+        ctypes.c_int(int(False)), 
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
         ctypes.byref(hdl)))
     return SparseNDArray(hdl)

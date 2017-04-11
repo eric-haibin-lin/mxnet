@@ -527,7 +527,7 @@ TBlob NDArray::data(bool force_dense) const {
   } else {
     // Convert to dense first
     // FIXME no need to convert if it's dense already!
-    // xpu?
+    // Conversion should be an op instead xpu?
     res = ToDense<cpu>(nullptr).data();
   }
 #if MKL_EXPERIMENTAL == 1
@@ -564,8 +564,8 @@ NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
       // Copy over
       auto in_data = data().FlatTo2D<xpu, DType>(s);
       auto out_data = result.data().FlatTo2D<xpu, DType>(s);
-      auto num_rows = aux_shape()[0];
-      auto in_idx = aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+      auto num_rows = aux_shape(0)[0];
+      auto in_idx = aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
       for (size_t i = 0; i < num_rows; i += 1) {
         mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
       }

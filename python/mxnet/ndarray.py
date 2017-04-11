@@ -105,7 +105,7 @@ def _new_alloc_handle(shape, ctx, delay_alloc, dtype=mx_real_t):
         ctypes.byref(hdl)))
     return hdl
 
-#TODO change default type for aux_type
+#FIXME change default type for aux_type. Make aux type a list
 def _new_alloc_handle_sparse(sparse_type, shape, ctx, delay_alloc=True, dtype=mx_real_t, aux_type=mx_real_t):
     """Return a new handle with specified shape and context.
 
@@ -117,6 +117,7 @@ def _new_alloc_handle_sparse(sparse_type, shape, ctx, delay_alloc=True, dtype=mx
         A new empty ndarray handle
     """
     hdl = NDArrayHandle()
+    aux_type_list = [int(_DTYPE_NP_TO_MX[np.dtype(aux_type).type])]
     check_call(_LIB.MXNDArrayCreateSparseEx(
         ctypes.c_int(int(_CHUNK_TYPE_STR_TO_ID[sparse_type])),
         c_array(mx_uint, shape),
@@ -125,7 +126,8 @@ def _new_alloc_handle_sparse(sparse_type, shape, ctx, delay_alloc=True, dtype=mx
         ctypes.c_int(ctx.device_id),
         ctypes.c_int(int(delay_alloc)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(aux_type).type])),
+        mx_uint(1),
+        c_array(ctypes.c_int, aux_type_list),
         ctypes.byref(hdl)))
     return hdl
 
@@ -983,7 +985,7 @@ def zeros(shape, ctx=None, dtype=mx_real_t):
         ctx = Context.default_ctx
     if sparse_type != 'default':
       # pylint: disable= no-member, protected-access
-      out = _new_alloc_handle_sparse(sparse_type, shape, ctx)
+      out = SparseNDArray(_new_alloc_handle_sparse(sparse_type, shape, ctx))
       return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=[out])
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access

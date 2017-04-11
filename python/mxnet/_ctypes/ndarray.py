@@ -17,8 +17,6 @@ from ..ndarray_doc import _build_doc
 _ndarray_cls = None
 _ndarray_cls_map = {}
 
-#TODO create a mapping between int and chunk_types
-
 class NDArrayBase(object):
     """Base data structure for ndarray"""
     __slots__ = ["handle", "writable"]

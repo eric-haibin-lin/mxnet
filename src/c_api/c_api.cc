@@ -131,9 +131,9 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
-//TODO redesign this api
 int MXNDArrayCreateSparse(NDArrayHandle data,
-                    NDArrayHandle aux_data,
+                    int num_aux,
+                    NDArrayHandle *aux_vec,
                     const mx_uint *shape,
                     mx_uint ndim,
                     int sparse_type,
@@ -144,15 +144,18 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
                     NDArrayHandle *out) {
   API_BEGIN();
   // Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id)
-  NDArray* nd_data = reinterpret_cast<NDArray*>(data);
-  NDArray* nd_aux_data = reinterpret_cast<NDArray*>(aux_data);
+  std::vector<NDArray> aux_ndarrays;
+  NDArray* data_ptr = reinterpret_cast<NDArray*>(data);
+  for (int i = 0; i < num_aux; i++) {
+    NDArray* nd_aux_ptr = reinterpret_cast<NDArray*>(aux_vec[i]);
+    aux_ndarrays.push_back(*nd_aux_ptr);
+  }
   // TODO fix dev_id
   int dev_id = 0;
-  *out = new NDArray(nd_data, nd_aux_data, dev_id, kRowSparseChunk, TShape(shape, shape + ndim));
+  *out = new NDArray(*data_ptr, aux_ndarrays, dev_id, kRowSparseChunk, TShape(shape, shape + ndim));
   API_END();
 }
 
-// Probably move to ndarray_api?
 // TODO context?
 int MXNDArrayConvert(NDArrayHandle in,
                      int chunk_type,
@@ -186,15 +189,18 @@ int MXNDArrayCreateSparseEx(int chunk_type,
                     int dev_id,
                     int delay_alloc,
                     int dtype,
-                    int aux_type,
+                    int num_aux,
+                    int *aux_type,
                     NDArrayHandle *out) {
   API_BEGIN();
+  std::vector<int> aux_types;
+  for (int i = 0; i < num_aux; i++) aux_types.push_back(aux_type[i]);
   *out = new NDArray(
       NDArrayChunkType(chunk_type),
       TShape(shape, shape + ndim),
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
       delay_alloc != 0,
-      dtype, aux_type);
+      dtype, aux_types);
   API_END();
 }
 

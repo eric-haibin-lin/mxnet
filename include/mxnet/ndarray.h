@@ -56,7 +56,6 @@ class AutogradRuntime;
 #define ROW_SPARSE_TYPE int32_t
 #define DEFAULT_AUX_TYPE mshadow::kInt32
 
-// TODO Doc
 enum NDArrayChunkType {
   kUndefinedChunk, // undefined chunk
   kDefaultChunk,   // dense
@@ -92,19 +91,17 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  // Constructor for NDArray with chunk type. Could probably replace the one above?
+  // Constructor for NDArray with chunk type
   NDArray(NDArrayChunkType chunk_type, const TShape &shape, Context ctx,
-          // No kInt64 in mshadow?
-          bool delay_alloc = true, int dtype = mshadow::default_type_flag, int aux_type = DEFAULT_AUX_TYPE)
-      : ptr_(std::make_shared<Chunk>(ctx, delay_alloc, aux_type, chunk_type)),
+          bool delay_alloc = true, int dtype = mshadow::default_type_flag,
+          std::vector<int> aux_types = {DEFAULT_AUX_TYPE})
+      : ptr_(std::make_shared<Chunk>(ctx, delay_alloc, aux_types, chunk_type)),
         shape_(shape), offset_(0), dtype_(dtype) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
-      if (chunk_type == kRowSparseChunk) {
-        // TODO support high dim row sparse
-        CHECK(shape.ndim() <= 2);
-      }
+      // TODO Support other chunk types, too
+      CHECK(chunk_type == kRowSparseChunk);
   }
   /*!
    * \brief constructing a static NDArray that shares data with TBlob
@@ -120,22 +117,18 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  // For testing purpose. Need to make a copy of the data
-  NDArray(NDArray *data, NDArray *aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data->data(), aux_data->data(), dev_id, chunk_type)), shape_(shape), offset_(0),
-        dtype_(data->data().type_flag_) {
+  // TODO Need to make a copy of the data
+  // TODO replace dev_id with Context
+  NDArray(NDArray data, std::vector<NDArray> aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
+      : ptr_(std::make_shared<Chunk>(data.data(), aux_data[0].data(), dev_id, chunk_type)), shape_(shape), offset_(0),
+        dtype_(data.data().type_flag_) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
+      // TODO support CSR format, which comes with multiple aux data
+      CHECK(aux_data.size() == 1);
   }
-  // For testing purpose
-  NDArray(const TBlob &data, const TBlob &aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data, aux_data, dev_id, chunk_type)), shape_(shape), offset_(0),
-        dtype_(data.type_flag_) {
-#if MKL_EXPERIMENTAL == 1
-      Mkl_mem_ = std::make_shared<MKLMemHolder>();
-#endif
-  }
+  // TODO Get stream from context?
   template<typename xpu>
   NDArray ConvertTo(NDArrayChunkType chunk_type) const;
   /*!
@@ -145,28 +138,29 @@ class NDArray {
     return shape_;
   }
   inline const TShape &chunk_shape() const {
-    //TODO CHECK CHUNK TYPE
     CHECK(ptr_ != nullptr);
     return ptr_->chunk_shape;
   }
-  inline const TShape &aux_shape() const {
-    //TODO CHECK CHUNK TYPE
-    return ptr_->aux_shape;
+  /*!
+   * \return the shape of aux data at ith index
+   */
+  inline const TShape &aux_shape(size_t i) const {
+    CHECK(chunk_type() != kDefaultChunk);
+    CHECK(i < ptr_->aux_shapes.size());
+    return ptr_->aux_shapes[i];
   }
   /*!
    * \return the data TBlob
    */
   TBlob data(bool force_dense = false) const;
 
-  //TODO we could have a list of aux_data instead
-  inline TBlob aux_data() const {
+  inline TBlob aux_data(size_t i) const {
     CHECK(chunk_type() != kDefaultChunk);
-    CHECK(aux_type() == DEFAULT_AUX_TYPE);
-    //this->WaitToRead();
+    CHECK(aux_type(i) == DEFAULT_AUX_TYPE);
     TBlob res;
-    MSHADOW_TYPE_SWITCH(aux_type(), DType, {
-      res = TBlob(static_cast<DType*>(ptr_->aux_handle.dptr), ptr_->aux_shape, 
-                 ptr_->aux_handle.ctx.dev_mask(), ptr_->aux_type);
+    MSHADOW_TYPE_SWITCH(aux_type(i), DType, {
+      res = TBlob(static_cast<DType*>(ptr_->aux_handles[i].dptr), aux_shape(i), 
+                 ptr_->aux_handles[i].ctx.dev_mask(), aux_type(i));
     });
 #if MKL_EXPERIMENTAL == 1
     res.Mkl_mem_ = Mkl_mem_;
@@ -177,6 +171,8 @@ class NDArray {
    * \return a chunk of raw data in TBlob
    */
   inline TBlob raw_data(index_t offset, index_t length) const {
+    CHECK(chunk_type() == kDefaultChunk);
+    // TODO support slice for sparse data types, too
     TBlob res;
     TShape raw_shape(1);
     raw_shape[0] = length;
@@ -201,12 +197,12 @@ class NDArray {
   inline int dtype() const {
     return dtype_;
   }
-  inline int aux_type() const {
+  inline int aux_type(size_t i) const {
     CHECK(ptr_ != nullptr);
-    return ptr_->aux_type;
+    return ptr_->aux_types[i];
   }
   inline NDArrayChunkType chunk_type() const {
-    if (ptr_ == nullptr) { return kUndefinedChunk; }
+    if (ptr_ == nullptr) return kUndefinedChunk;
     return ptr_->chunk_type;
   }
   /*! \return whether this ndarray is not initialized */
@@ -221,7 +217,9 @@ class NDArray {
     if (is_none()) return;
     Engine::Get()->WaitForVar(ptr_->var);
     if (chunk_type() != kDefaultChunk) {
-      Engine::Get()->WaitForVar(ptr_->aux_var);
+      for (auto &aux_var : ptr_->aux_vars) {
+        Engine::Get()->WaitForVar(aux_var);
+      }
     }
   }
   /*!
@@ -238,12 +236,19 @@ class NDArray {
     Engine::Get()->WaitForVar(ptr_->var);
   }
   /*! \return the associated variable of the ndarray.*/
+  // TODO Check all the callers of var()
   inline Engine::VarHandle var() const {
     return ptr_->var;
   }
-  inline Engine::VarHandle aux_var() const {
+  inline Engine::VarHandle aux_var(size_t i) const {
     CHECK(chunk_type() != kDefaultChunk);
-    return ptr_->aux_var;
+    return ptr_->aux_vars[i];
+  }
+  inline std::vector<Engine::VarHandle> vars() const {
+    std::vector<Engine::VarHandle> result;
+    if (chunk_type() != kDefaultChunk) result = ptr_->aux_vars;
+    result.push_back(ptr_->var);
+    return result;
   }
   /*!
    * \brief save the content into binary stream
@@ -423,13 +428,15 @@ class NDArray {
    * This is an internal function used by system that normal user should not use
    */
   inline void CheckAndAlloc() const {
-    //TODO reuse the existing CheckAndAlloc(dsize, aux_size = 0);
     ptr_->CheckAndAlloc();
   }
-  // Alloc number of dense rows for kRowSparseChunk
-  // aux_shape is only known at run time
-  inline void CheckAndAlloc(TShape aux_shape) const {
-    ptr_->CheckAndAlloc(shape_, aux_shape, dtype_);
+  /* !
+   * \brief Alloc number of dense rows for kRowSparseChunk
+   * aux_shape is only known at run time
+   */
+  inline void CheckAndAlloc(std::vector<TShape> aux_shapes) const {
+    // probably should round up memory reservation
+    ptr_->CheckAndAlloc(shape_, aux_shapes, dtype_);
   }
 
   /*!
@@ -461,11 +468,11 @@ class NDArray {
   struct Chunk {
     /*! \brief storage handle from storage engine */
     Storage::Handle shandle;
-    //TODO index
-    Storage::Handle aux_handle;
+    /*! \brief storage handles for aux data (e.g index) */
+    std::vector<Storage::Handle> aux_handles;
     /*! \brief variable from engine */
     Engine::VarHandle var;
-    Engine::VarHandle aux_var;
+    std::vector<Engine::VarHandle> aux_vars;
     /*!
      * \brief if this is true, this means the data do not come
      * from Storage, and do not need to be freed
@@ -475,18 +482,17 @@ class NDArray {
     bool delay_alloc;
     /*! \brief construct from static data */
     NDArrayChunkType chunk_type = kDefaultChunk;
-    // type of aux
-    int aux_type = -1;
+    /*! \brief type of aux */
+    std::vector<int> aux_types;
     // TODO make a copy of ctx
     Context ctx;
-    // The shape of the chunk data. This might not be the same shape as the NDArray, since the chunk may be sparse.
+    // The shape of the chunk data. 
+    // This might not be the same shape as the NDArray, since the chunk may be sparse.
     TShape chunk_shape;
     // The shape of aux data
-    TShape aux_shape;
+    std::vector<TShape> aux_shapes;
 
-    /*! \brief construct a new chunk */  //TODO also make a copy of the dtype
-    //Chunk(uint64_t size, Context ctx_, bool delay_alloc_, int dtype)
-    // TODO instead, let NDArray hold chunk shape, aux shape
+    /*! \brief construct a new chunk */
     Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
         : static_data(false), delay_alloc(true) {
       auto size = shape.Size();
@@ -498,11 +504,16 @@ class NDArray {
       ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
     }
+    // TODO change to list of aux_data instead..
     Chunk(const TBlob &data, const TBlob &aux_data, int dev_id, NDArrayChunkType chunk_type_)
         : static_data(true), delay_alloc(false), chunk_type(chunk_type_),
-          aux_type(aux_data.type_flag_) {
+          aux_types({aux_data.type_flag_}) {
+      CHECK(chunk_type_ == kRowSparseChunk);
+      // Vars
       var = Engine::Get()->NewVariable();
-      aux_var = Engine::Get()->NewVariable();
+      aux_vars = {Engine::Get()->NewVariable()};
+      // Handles
+      Storage::Handle aux_handle;
       if (data.dev_mask_ == cpu::kDevMask) {
         shandle.ctx = Context::CPU();
         aux_handle.ctx = Context::CPU();
@@ -514,17 +525,18 @@ class NDArray {
       shandle.dptr = data.dptr_;
       aux_handle.dptr = aux_data.dptr_;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
-      aux_handle.size = aux_data.shape_.Size() * mshadow::mshadow_sizeof(aux_type);
-      aux_shape = aux_data.shape_;
+      aux_handle.size = aux_data.shape_.Size() * mshadow::mshadow_sizeof(aux_types[0]);
+      aux_handles.push_back(aux_handle);
+      // Shapes
+      aux_shapes = {aux_data.shape_};
       chunk_shape = data.shape_;
       CHECK(chunk_shape.ndim() > 0);
-      std::cout << "aux_type" << aux_type << std::endl;
     }
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
           delay_alloc(false) {
+      CHECK(chunk_type == kDefaultChunk);
       var = Engine::Get()->NewVariable();
-      aux_var = Engine::Get()->NewVariable();
       if (data.dev_mask_ == cpu::kDevMask) {
         shandle.ctx = Context::CPU();
       } else {
@@ -536,14 +548,16 @@ class NDArray {
       chunk_shape = data.shape_;
       CHECK(chunk_shape.ndim() > 0);
     }
-    Chunk(Context ctx, bool delay_alloc_, int aux_type_, NDArrayChunkType chunk_type_)
+    Chunk(Context ctx, bool delay_alloc_, std::vector<int> aux_types_, NDArrayChunkType chunk_type_)
         : static_data(false), delay_alloc(delay_alloc_), chunk_type(chunk_type_), 
-          aux_type(aux_type_) {
+          aux_types(aux_types_) {
       var = Engine::Get()->NewVariable();
-      aux_var = Engine::Get()->NewVariable();
+      for (auto& aux_type : aux_types_) {
+         Engine::VarHandle aux_var = Engine::Get()->NewVariable();
+         aux_vars.push_back(aux_var);
+      }
       // Assume alloc is always delayed for non-default chunks
       CHECK(delay_alloc_);
-      // Attention, init shandle later.
       if (!delay_alloc_) {
         this->CheckAndAlloc();
       }
@@ -555,29 +569,29 @@ class NDArray {
         delay_alloc = false;
       }
     }
-    inline void CheckAndAlloc(TShape shape, TShape aux_shape, int dtype) {
-      // TODO CHECK shape_;
-      // For row sparse chunk, size is the number of rows to allocate
+    inline void CheckAndAlloc(TShape shape, std::vector<TShape> aux_shapes, int dtype) {
       // calculate size, perform allocation
       if (delay_alloc && chunk_type == kRowSparseChunk) {
-      // TODO hack delay_alloc for now.. We need to check it
-      //if (chunk_type == kRowSparseChunk) {
+        // For row sparse chunk, aux_shape indicates the number of rows to allocate
+        auto aux_shape = aux_shapes[0];
         CHECK(aux_shape.ndim() == 1);
-        uint64_t num_rows = aux_shape[0];
+        auto num_rows = aux_shape[0];
+        // TODO support more than 2 dims for kRowSparse
+        CHECK(shape.ndim() == 2);
         auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
-        auto aux_bytes = num_rows * mshadow::mshadow_sizeof(aux_type);
+        auto aux_bytes = num_rows * mshadow::mshadow_sizeof(aux_types[0]);
         shandle = Storage::Get()->Alloc(dbytes, ctx);
-        aux_handle = Storage::Get()->Alloc(aux_bytes, ctx);
+        aux_handles.push_back(Storage::Get()->Alloc(aux_bytes, ctx));
         delay_alloc = false;
         // Initialize aux_shape and shape
-        this->aux_shape = aux_shape;
+        this->aux_shapes = aux_shapes;
         chunk_shape = shape;
         chunk_shape[0] = num_rows;
       }
     }
     /*! \brief destructor */
     ~Chunk() {
-      // TODO Also cleanup aux_var
+      // TODO Also cleanup aux_vars
       if (static_data || delay_alloc || chunk_type == kRowSparseChunk) {
         Engine::Get()->DeleteVariable([](RunContext s) {}, shandle.ctx, var);
       } else {
