@@ -14,7 +14,6 @@ from ..base import NDArrayHandle, OpHandle
 from ..base import check_call
 from ..ndarray_doc import _build_doc
 
-_ndarray_cls = None
 _ndarray_cls_map = {}
 
 class NDArrayBase(object):
@@ -38,7 +37,7 @@ class NDArrayBase(object):
         check_call(_LIB.MXNDArrayFree(self.handle))
 
     def __reduce__(self):
-        return (_ndarray_cls, (None,), self.__getstate__())
+        return (_ndarray_cls[1], (None,), self.__getstate__())
 
     @property
     def shape(self):
@@ -210,18 +209,16 @@ def %s(%s):
     return ndarray_function
 
 
-def _set_ndarray_class(cls):
+def _set_chunk_nd_map(chunk_nd_map):
     """Set the symbolic class to be cls"""
-    global _ndarray_cls
     global _ndarray_cls_map 
-    _ndarray_cls = cls['1']
-    _ndarray_cls_map = cls
+    _ndarray_cls_map = chunk_nd_map
 
 
 # pylint: enable=too-many-locals, invalid-name
-def _init_ndarray_module(ndarray_class, root_namespace):
+def _init_ndarray_module(chunk_nd_map, root_namespace):
     """List and add all the ndarray functions to current module."""
-    _set_ndarray_class(ndarray_class)
+    _set_chunk_nd_map(chunk_nd_map)
     plist = ctypes.POINTER(ctypes.c_char_p)()
     size = ctypes.c_uint()
 

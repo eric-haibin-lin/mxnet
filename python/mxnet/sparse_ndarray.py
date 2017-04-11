@@ -174,7 +174,9 @@ def zeros(shape, sparse_type, ctx=None, dtype=mx_real_t):
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access
 
-ndarray_map = {}
-ndarray_map['1'] = ndarray.NDArray
-ndarray_map['2'] = SparseNDArray
-_init_ndarray_module(ndarray_map, "mxnet")
+_CHUNK_TYPE_TO_ND_CLASS = {
+    1 : ndarray.NDArray,
+    2 : SparseNDArray,
+    3 : SparseNDArray
+}
+_init_ndarray_module(_CHUNK_TYPE_TO_ND_CLASS, "mxnet")
