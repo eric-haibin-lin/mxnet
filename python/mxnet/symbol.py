@@ -1250,13 +1250,16 @@ class Symbol(SymbolBase):
                                              ctypes.byref(aux_state_handles),
                                              ctypes.byref(exe_handle)))
 
+        arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
+        grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
+                       if arg_grad_handles[i] is not None
+                       else None
+                       for i in range(len(listed_arguments))]
+        aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(len(listed_aux_states))]
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
-        executor.arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
-        executor.grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
-                                if arg_grad_handles[i] is not None
-                                else None
-                                for i in range(len(listed_arguments))]
-        executor.aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(len(listed_aux_states))]
+        executor.arg_arrays = arg_arrays
+        executor.grad_arrays = grad_arrays
+        executor.aux_arrays = aux_arrays
         return executor
 
     def simple_bind(self, ctx,
