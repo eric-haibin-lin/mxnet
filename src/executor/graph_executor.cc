@@ -561,6 +561,7 @@ void GraphExecutor::Init2(nnvm::Symbol symbol,
   nnvm::Graph g = InitGraph2(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
                              aux_state_ctxes, arg_shapes, arg_dtypes, grad_req_types,
                              in_arg_vec, arg_grad_vec, aux_state_vec);
+  g.attrs["saved_opr"] = std::make_shared<nnvm::any>(std::move(saved_opr_));
   g = AttachOpExecs(g);
   g = AttachOpResources(g);
   graph_ = std::move(g);
