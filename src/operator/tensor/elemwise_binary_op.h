@@ -39,31 +39,29 @@ void BinaryComputeNDSpSp(const nnvm::NodeAttrs& attrs,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
-  (void) attrs;
-  (void) req; 
+  std::cout << "BinaryComputeNDSpSp invoked\n";
   CHECK(inputs.size() == 2);
   CHECK(outputs.size() == 1);
   auto &nd_l = inputs[0];
   auto &nd_r = inputs[1];
   auto &output = outputs[0];
 
+  // TODO support other sparse types, too
+  CHECK(nd_l.chunk_type() == kRowSparseChunk);
   // Memory Estimation
-  auto num_rows_l = nd_l.aux_shape()[0];
-  auto num_rows_r = nd_r.aux_shape()[0];
+  auto num_rows_l = nd_l.aux_shape(0)[0];
+  auto num_rows_r = nd_r.aux_shape(0)[0];
   // This is (roughly) the number of result rows
-  output.CheckAndAlloc(TShape({num_rows_l + num_rows_r}));
+  output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
 
   // Indices
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
-  // Hardcode data type for indices
-  // FIXME type for index?
-  auto indices_l = nd_l.aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
-  auto indices_r = nd_r.aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
-  auto indices_out = output.aux_data().FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+  auto indices_l = nd_l.aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+  auto indices_r = nd_r.aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+  auto indices_out = output.aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
 
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
     // Data
-    // TODO type switch for data, too
     auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
     auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
     auto out = output.data().FlatTo2D<xpu, DType>(s);

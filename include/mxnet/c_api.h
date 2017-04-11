@@ -218,7 +218,8 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               NDArrayHandle *out);
 
 MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
-                    NDArrayHandle aux_data,
+                    int num_aux,
+                    NDArrayHandle *aux_data,
                     const mx_uint *shape,
                     mx_uint ndim,
                     int sparse_type,
@@ -255,7 +256,8 @@ MXNET_DLL int MXNDArrayCreateSparseEx(int chunk_type,
                     int dev_id,
                     int delay_alloc,
                     int dtype,
-                    int aux_type,
+                    int num_aux,
+                    int *aux_types,
                     NDArrayHandle *out);
 
 MXNET_DLL int MXNDArrayConvert(NDArrayHandle in,

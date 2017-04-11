@@ -51,8 +51,8 @@ void BinarySparseTest() {
   raw_data1 = 5;
   Engine::Get()->WaitForAll();
 
-  NDArray input_nd0(raw_data0.data(), index0.data(), dev_id, kRowSparseChunk, data_shape);
-  NDArray input_nd1(raw_data1.data(), index1.data(), dev_id, kRowSparseChunk, data_shape);
+  NDArray input_nd0(raw_data0, {index0}, dev_id, kRowSparseChunk, data_shape);
+  NDArray input_nd1(raw_data1, {index1}, dev_id, kRowSparseChunk, data_shape);
   CheckDataRegion(input_nd0.data(), raw_data0.data());
   CheckDataRegion(input_nd1.data(), raw_data1.data());
 
@@ -142,7 +142,7 @@ TEST(NDArray, conversion) {
   index0 = 0;
 
   TShape shape({2, 2});
-  NDArray nd(raw_data0.data(), index0.data(), dev_id, kRowSparseChunk, shape);
+  NDArray nd(raw_data0, {index0}, dev_id, kRowSparseChunk, shape);
 
   // Dense ndarray
   NDArray dense_nd(shape, ctx, false);

@@ -261,22 +261,19 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
   }
 
   for (auto& i : ndinputs) {
-    read_vars.push_back(i.var());
-    if (i.chunk_type() != kDefaultChunk) {
-      read_vars.push_back(i.aux_var());
-    }
+    auto vars = i.vars();
+    read_vars.insert(read_vars.end(), vars.begin(), vars.end());
   }
   for (auto& i : ndoutputs) {
-    write_vars.push_back(i.var());
-    if (i.chunk_type() != kDefaultChunk) {
-      write_vars.push_back(i.aux_var());
-    }
+    auto vars = i.vars();
+    write_vars.insert(write_vars.end(), vars.begin(), vars.end());
   }
   if (mutate.count(op)) {
     auxidx = mutate[op](attrs);
     std::sort(auxidx.begin(), auxidx.end());
     for (auto & i : auxidx) {
-      write_vars.push_back(ndinputs[i].var());
+      auto vars = ndinputs[i].vars();
+      write_vars.insert(write_vars.end(), vars.begin(), vars.end());
     }
   }
   common::DeduplicateVarHandle(&read_vars, &write_vars);
