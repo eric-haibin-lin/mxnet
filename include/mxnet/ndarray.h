@@ -119,8 +119,8 @@ class NDArray {
   }
   // TODO Need to make a copy of the data
   // TODO replace dev_id with Context
-  NDArray(NDArray data, std::vector<NDArray> aux_data, int dev_id, NDArrayChunkType chunk_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data.data(), aux_data[0].data(), dev_id, chunk_type)), shape_(shape), offset_(0),
+  NDArray(NDArray data, std::vector<NDArray> aux_data, Context ctx, NDArrayChunkType chunk_type, const TShape &shape)
+      : ptr_(std::make_shared<Chunk>(data, aux_data[0], ctx, chunk_type)), shape_(shape), offset_(0),
         dtype_(data.data().type_flag_) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
@@ -130,7 +130,7 @@ class NDArray {
   }
   // TODO Get stream from context?
   template<typename xpu>
-  NDArray ConvertTo(NDArrayChunkType chunk_type) const;
+  NDArray ConvertTo(NDArrayChunkType chunk_type, mshadow::Stream<xpu> *s) const;
   /*!
    * \return the shape of current NDArray
    */
@@ -152,7 +152,20 @@ class NDArray {
   /*!
    * \return the data TBlob
    */
-  TBlob data(bool force_dense = false) const;
+  inline TBlob data() const {
+    CHECK(ptr_ != nullptr);
+    TBlob res;
+    MSHADOW_TYPE_SWITCH(dtype(), DType, {
+      CHECK(ptr_->shandle.dptr != nullptr);
+      res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
+        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask(), dtype());
+    });
+#if MKL_EXPERIMENTAL == 1
+    res.Mkl_mem_ = Mkl_mem_;
+#endif
+    return res;
+  }
+  // TODO chunk_data()
 
   inline TBlob aux_data(size_t i) const {
     CHECK(chunk_type() != kDefaultChunk);
@@ -462,7 +475,7 @@ class NDArray {
   friend class autograd::AutogradRuntime;
   // Make a copy of the ndarray in dense format
   template<typename xpu>
-  NDArray ToDense(mshadow::Stream<xpu> *) const;
+  NDArray ToDefault(mshadow::Stream<xpu> *s) const;
 
   /*! \brief the real data chunk that backs NDArray */
   struct Chunk {
@@ -504,33 +517,53 @@ class NDArray {
       ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
     }
-    // TODO change to list of aux_data instead..
-    Chunk(const TBlob &data, const TBlob &aux_data, int dev_id, NDArrayChunkType chunk_type_)
-        : static_data(true), delay_alloc(false), chunk_type(chunk_type_),
-          aux_types({aux_data.type_flag_}) {
+    // TODO change to list of aux_data instead
+    Chunk(const NDArray &nd_data, const NDArray &nd_aux_data, Context ctx_, NDArrayChunkType chunk_type_)
+        : static_data(false), delay_alloc(false), chunk_type(chunk_type_),
+          aux_types({nd_aux_data.data().type_flag_}) {
+      const auto &data = nd_data.data();
+      const auto &aux_data = nd_aux_data.data(); 
       CHECK(chunk_type_ == kRowSparseChunk);
+      // Shapes
+      aux_shapes = {aux_data.shape_};
+      chunk_shape = data.shape_;
+      CHECK(chunk_shape.ndim() > 0);
       // Vars
       var = Engine::Get()->NewVariable();
       aux_vars = {Engine::Get()->NewVariable()};
       // Handles
       Storage::Handle aux_handle;
-      if (data.dev_mask_ == cpu::kDevMask) {
-        shandle.ctx = Context::CPU();
-        aux_handle.ctx = Context::CPU();
-      } else {
-        CHECK_EQ(data.dev_mask_, gpu::kDevMask);
-        shandle.ctx = Context::GPU(dev_id);
-        aux_handle.ctx = Context::GPU(dev_id);
-      }
-      shandle.dptr = data.dptr_;
-      aux_handle.dptr = aux_data.dptr_;
+      shandle.ctx = ctx_;
+      aux_handle.ctx = ctx_;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
       aux_handle.size = aux_data.shape_.Size() * mshadow::mshadow_sizeof(aux_types[0]);
+      
+      // Storage Allocation
+      shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
+      aux_handle = Storage::Get()->Alloc(aux_handle.size, aux_handle.ctx);
+
+      // Copy data
+      // TODO refactor
+      nd_data.WaitToRead();
+      CHECK(nd_data.chunk_type() == kDefaultChunk);
+      CHECK(nd_data.dtype() == data.type_flag_);
+      MSHADOW_TYPE_SWITCH(nd_data.dtype(), DType, {
+        auto copy = TBlob(static_cast<DType*>(shandle.dptr), chunk_shape,
+                 shandle.ctx.dev_mask(), data.type_flag_);
+        mshadow::Copy(copy.FlatTo1D<cpu, DType>(), data.FlatTo1D<cpu, DType>());
+      });
+      // Copy aux data
+      nd_aux_data.WaitToRead();
+      CHECK(nd_aux_data.chunk_type() == kDefaultChunk);
+      CHECK(nd_aux_data.dtype() == aux_data.type_flag_);
+      MSHADOW_TYPE_SWITCH(nd_aux_data.dtype(), DType, {
+        auto copy = TBlob(static_cast<DType*>(aux_handle.dptr), aux_shapes[0],
+                 aux_handle.ctx.dev_mask(), aux_types[0]);
+        mshadow::Copy(copy.FlatTo1D<cpu, DType>(), aux_data.FlatTo1D<cpu, DType>());
+      });
+
+      // Update aux_handles
       aux_handles.push_back(aux_handle);
-      // Shapes
-      aux_shapes = {aux_data.shape_};
-      chunk_shape = data.shape_;
-      CHECK(chunk_shape.ndim() > 0);
     }
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
@@ -591,14 +624,16 @@ class NDArray {
     }
     /*! \brief destructor */
     ~Chunk() {
-      // TODO Also cleanup aux_vars
-      if (static_data || delay_alloc || chunk_type == kRowSparseChunk) {
-        Engine::Get()->DeleteVariable([](RunContext s) {}, shandle.ctx, var);
-      } else {
-        Storage::Handle h = this->shandle;
-        Engine::Get()->DeleteVariable([h](RunContext s) {
-          //  Storage::Get()->Free(h);
-          }, shandle.ctx, var);
+      bool skip_free = static_data || delay_alloc;
+      Storage::Handle h = this->shandle;
+      Engine::Get()->DeleteVariable([h, skip_free](RunContext s) {
+        if (skip_free == false) Storage::Get()->Free(h);
+      }, shandle.ctx, var);
+      for (size_t i = 0; i < aux_handles.size(); i++) {
+        Storage::Handle aux_h = aux_handles[i];
+        Engine::Get()->DeleteVariable([aux_h, skip_free](RunContext s) {
+          if (skip_free == false) Storage::Get()->Free(aux_h);
+        }, aux_h.ctx, aux_vars[i]);
       }
     }
   };

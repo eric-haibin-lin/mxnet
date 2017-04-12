@@ -282,6 +282,7 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
   Engine::Get()->DeduplicateVarHandle(&read_vars, &write_vars);
 }
 
+
 void PushFCompute(const FCompute& fn,
                   const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
@@ -297,13 +298,16 @@ void PushFCompute(const FCompute& fn,
         RunContext rctx,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
-      // By default FCompute assumes kDefaultChunk
-      for (auto& i : ndinputs) {
-        input_blobs.push_back(i.data(true));
-      }
-      for (auto& i : ndoutputs) {
-        i.CheckAndAlloc();
-        output_blobs.push_back(i.data());
+      std::vector<NDArray> tmp_nds;
+     
+      if (ctx.dev_mask() == gpu::kDevMask) {
+        mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
+        common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, input_blobs, output_blobs,
+                                  tmp_nds, true, s);
+      } else {
+        mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
+        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, input_blobs, output_blobs,
+                                  tmp_nds, true, s);
       }
       OpContext opctx{is_train, rctx,
                       engine::CallbackOnComplete(),
