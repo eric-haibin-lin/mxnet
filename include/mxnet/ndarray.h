@@ -231,11 +231,6 @@ class NDArray {
   inline void WaitToRead() const {
     if (is_none()) return;
     Engine::Get()->WaitForVar(ptr_->var);
-    if (chunk_type() != kDefaultChunk) {
-      for (auto &aux_var : ptr_->aux_vars) {
-        Engine::Get()->WaitForVar(aux_var);
-      }
-    }
   }
   /*!
    * \brief Block until all the pending read/write operations with respect
@@ -253,19 +248,6 @@ class NDArray {
   /*! \return the associated variable of the ndarray.*/
   inline Engine::VarHandle var() const {
     return ptr_->var;
-  }
-  inline Engine::VarHandle aux_var(size_t i) const {
-    CHECK(chunk_type() != kDefaultChunk);
-    return ptr_->aux_vars[i];
-  }
-  /*!
-   * Return all the variables related to this NDArray, including ones for aux data.
-   */
-  inline std::vector<Engine::VarHandle> vars() const {
-    std::vector<Engine::VarHandle> result;
-    if (chunk_type() != kDefaultChunk) result = ptr_->aux_vars;
-    result.push_back(ptr_->var);
-    return result;
   }
   /*!
    * \brief save the content into binary stream
@@ -493,7 +475,6 @@ class NDArray {
     std::vector<Storage::Handle> aux_handles;
     /*! \brief variable from engine */
     Engine::VarHandle var;
-    std::vector<Engine::VarHandle> aux_vars;
     /*!
      * \brief if this is true, this means the data do not come
      * from Storage, and do not need to be freed
@@ -536,7 +517,6 @@ class NDArray {
       CHECK(chunk_shape.ndim() > 0);
       // Vars
       var = Engine::Get()->NewVariable();
-      aux_vars = {Engine::Get()->NewVariable()};
       // Handles
       Storage::Handle aux_handle;
       shandle.ctx = ctx_;
@@ -591,10 +571,6 @@ class NDArray {
         : static_data(false), delay_alloc(delay_alloc_), chunk_type(chunk_type_), 
           aux_types(aux_types_), ctx(ctx_) {
       var = Engine::Get()->NewVariable();
-      for (auto& aux_type : aux_types_) {
-         Engine::VarHandle aux_var = Engine::Get()->NewVariable();
-         aux_vars.push_back(aux_var);
-      }
       // Assume alloc is always delayed for non-default chunks
       CHECK(delay_alloc_);
       if (!delay_alloc_) {
@@ -635,15 +611,15 @@ class NDArray {
     ~Chunk() {
       bool skip_free = static_data || delay_alloc;
       Storage::Handle h = this->shandle;
-      Engine::Get()->DeleteVariable([h, skip_free](RunContext s) {
-        if (skip_free == false) Storage::Get()->Free(h);
+      std::vector<Storage::Handle> aux_h = this->aux_handles;
+      Engine::Get()->DeleteVariable([h, aux_h, skip_free](RunContext s) {
+        if (skip_free == false) {
+          Storage::Get()->Free(h);
+          for (size_t i = 0; i < aux_h.size(); i++) {
+            Storage::Get()->Free(aux_h[i]);
+          }
+        }
       }, shandle.ctx, var);
-      for (size_t i = 0; i < aux_handles.size(); i++) {
-        Storage::Handle aux_h = aux_handles[i];
-        Engine::Get()->DeleteVariable([aux_h, skip_free](RunContext s) {
-          if (skip_free == false) Storage::Get()->Free(aux_h);
-        }, aux_h.ctx, aux_vars[i]);
-      }
     }
   };
 
