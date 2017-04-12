@@ -18,6 +18,7 @@
 
 #include <dmlc/logging.h>
 #include <mxnet/engine.h>
+#include <mxnet/ndarray.h>
 
 namespace mxnet {
 namespace common {
@@ -42,6 +43,29 @@ inline void DeduplicateVarHandle(std::vector<engine::VarHandle> *read_vars,
     }
   }
   read_vars->resize(rtop - read_vars->begin());
+}
+
+template <typename xpu>
+inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
+                                 const std::vector<NDArray>& ndoutputs,
+                                 std::vector<TBlob>& input_blobs,
+                                 std::vector<TBlob>& output_blobs,
+                                 std::vector<NDArray>& tmp_nds,
+                                 bool alloc_outputs,
+                                 mshadow::Stream<xpu> *s) {
+  for (auto& i : ndinputs) {
+    if (i.chunk_type() != kDefaultChunk) {
+      NDArray tmp_nd = i.ConvertTo<xpu>(kDefaultChunk, s);
+      tmp_nds.push_back(tmp_nd);
+      input_blobs.push_back(tmp_nd.data());
+    } else {
+      input_blobs.push_back(i.data());
+    }
+  }
+  for (auto& i : ndoutputs) {
+    if (alloc_outputs) i.CheckAndAlloc();
+    output_blobs.push_back(i.data());
+  }
 }
 
 // heuristic to dermine number of threads per GPU

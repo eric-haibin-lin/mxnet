@@ -143,26 +143,24 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
                     int dtype,
                     NDArrayHandle *out) {
   API_BEGIN();
-  // Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id)
+  auto ctx = Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id);
   std::vector<NDArray> aux_ndarrays;
   NDArray* data_ptr = reinterpret_cast<NDArray*>(data);
   for (int i = 0; i < num_aux; i++) {
     NDArray* nd_aux_ptr = reinterpret_cast<NDArray*>(aux_vec[i]);
     aux_ndarrays.push_back(*nd_aux_ptr);
   }
-  // TODO fix dev_id
-  int dev_id = 0;
-  *out = new NDArray(*data_ptr, aux_ndarrays, dev_id, kRowSparseChunk, TShape(shape, shape + ndim));
+  *out = new NDArray(*data_ptr, aux_ndarrays, ctx, kRowSparseChunk, TShape(shape, shape + ndim));
   API_END();
 }
 
-// TODO context?
+// TODO Should implement conversion as ops instead.
 int MXNDArrayConvert(NDArrayHandle in,
                      int chunk_type,
                      NDArrayHandle *out) {
   API_BEGIN();
   NDArray* nd = reinterpret_cast<NDArray*>(in);
-  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayChunkType>(chunk_type)));
+  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayChunkType>(chunk_type), nullptr));
   API_END();
 }
 

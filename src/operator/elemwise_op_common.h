@@ -113,6 +113,7 @@ inline bool ElemwiseChunkType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
+  //TODO replace type_is_none to chunk_type_is_none & type_assign
   return ElemwiseChunkAttr<int, type_is_none, type_assign, true>(
     attrs, in_attrs, out_attrs, -1);
 }

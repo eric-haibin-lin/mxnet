@@ -484,34 +484,10 @@ inline NDArray &ScalarOpApply(NDArray *dst,
   return *dst;
 }
 
-// Attributes
-TBlob NDArray::data(bool force_dense) const {
-  CHECK(ptr_ != nullptr);
-  if (chunk_type() != kDefaultChunk) CHECK(offset_ == 0);
-  TBlob res;
-  if (force_dense == false || chunk_type() == kDefaultChunk) {
-    MSHADOW_TYPE_SWITCH(dtype(), DType, {
-      res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
-        + offset_, chunk_shape(), ptr_->shandle.ctx.dev_mask(), dtype());
-    });
-  } else {
-    // Convert to dense first
-    // FIXME no need to convert if it's dense already!
-    // Conversion should be an op instead xpu?
-    res = ToDense<cpu>(nullptr).data();
-  }
-#if MKL_EXPERIMENTAL == 1
-  res.Mkl_mem_ = Mkl_mem_;
-#endif
-  return res;
-}
-
 // NDArray Convertion
-// Necessary to take a stream as input?
-// Make a copy of data, and convert to dense format
-// CopyToDense
+// Make a copy of data, and convert to kDefaultChunk type
 template<typename xpu>
-NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
+NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
   //TODO CHECK TYPE
   WaitToRead();
   NDArray result(shape_, ptr_->ctx, false, dtype());
@@ -522,9 +498,6 @@ NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
     return result;
   }
   CHECK(chunk_type() == kRowSparseChunk);
-  // TODO be care of the context
-  // Get the stream according to TBlob.dev_mask_
-  //mshadow::Stream<xpu> *s = ptr_->ctx.get_stream<xpu>();
   MSHADOW_TYPE_SWITCH(dtype(), DType, {
     // Fill in zeros
     result.data().FlatTo1D<xpu, DType>(s) = 0;
@@ -544,17 +517,11 @@ NDArray NDArray::ToDense(mshadow::Stream<xpu> *s) const {
   return result;
 }
 
-// Explicit template instantiation
-template NDArray NDArray::ToDense<mshadow::cpu>(mshadow::Stream<mshadow::cpu> *s) const;
-//template NDArray NDArray::ToDense<mshadow::gpu>(mshadow::Stream<mshadow::gpu> *s) const;
-template NDArray NDArray::ConvertTo<mshadow::cpu>(NDArrayChunkType chunk_type) const;
-//template NDArray NDArray::ConvertTo<mshadow::gpu>(NDArrayChunkType chunk_type) const;
-
 template<typename xpu>
-NDArray NDArray::ConvertTo(NDArrayChunkType chunk_type) const {
+NDArray NDArray::ConvertTo(NDArrayChunkType chunk_type, mshadow::Stream<xpu> *s) const {
   //TODO implement convertion to other chunk types
   CHECK(chunk_type == kDefaultChunk);
-  return ToDense<xpu>(nullptr);
+  return ToDefault<xpu>(s);
 }
 
 // Binary
