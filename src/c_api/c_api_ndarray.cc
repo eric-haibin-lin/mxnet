@@ -297,9 +297,9 @@ void PushFCompute(const FCompute& fn,
       std::vector<NDArray> tmp_nds;
      
       if (ctx.dev_mask() == gpu::kDevMask) {
-        mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
-        common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, input_blobs, output_blobs,
-                                  tmp_nds, true, s);
+        //mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
+        //common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, input_blobs, output_blobs,
+        //                          tmp_nds, true, s);
       } else {
         mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
         common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, input_blobs, output_blobs,

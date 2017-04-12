@@ -523,6 +523,8 @@ NDArray NDArray::ConvertTo(NDArrayChunkType chunk_type, mshadow::Stream<xpu> *s)
   CHECK(chunk_type == kDefaultChunk);
   return ToDefault<xpu>(s);
 }
+//temporarily explicit instantiate this template so that we don't get complaints in c_api.. To remove later
+template NDArray NDArray::ConvertTo<cpu>(NDArrayChunkType chunk_type, mshadow::Stream<cpu> *s) const;
 
 // Binary
 NDArray operator+(const NDArray &lhs, const NDArray &rhs) {
