@@ -71,8 +71,8 @@ inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
 inline void PrepVars(const std::vector<NDArray> &nds,
                      std::vector<Engine::VarHandle> *vars) {
   for (auto& i : nds) {
-    auto vs = i.vars();
-    vars->insert(vars->end(), vs.begin(), vs.end());
+    auto v = i.var();
+    vars->push_back(v);
   }
 }
 

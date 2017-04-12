@@ -182,7 +182,6 @@ void SetShapeType(const nnvm::Op* op,
     out_chunk_types.push_back(chunk_type);
   }
   if (inferchunktype.count(op)) {
-    std::cout << "InferChunk invoked" << std::endl;
     CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
     CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
   } else {
@@ -264,9 +263,9 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
     auxidx = mutate[op](attrs);
     std::sort(auxidx.begin(), auxidx.end());
     // TODO replace with common::PrepVars
-    for (auto & i : auxidx) {
-      auto vars = ndinputs[i].vars();
-      write_vars.insert(write_vars.end(), vars.begin(), vars.end());
+    for (auto& i : auxidx) {
+      auto var = ndinputs[i].var();
+      write_vars.push_back(var);
     }
   }
   common::DeduplicateVarHandle(&read_vars, &write_vars);
