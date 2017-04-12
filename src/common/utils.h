@@ -26,24 +26,32 @@ namespace common {
 #if DMLC_USE_CXX11
 template <typename xpu>
 inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
-                                 const std::vector<NDArray>& ndoutputs,
-                                 std::vector<TBlob>& input_blobs,
-                                 std::vector<TBlob>& output_blobs,
-                                 std::vector<NDArray>& tmp_nds,
-                                 bool alloc_outputs,
-                                 mshadow::Stream<xpu> *s) {
+                             const std::vector<NDArray>& ndoutputs,
+                             std::vector<TBlob> *input_blobs,
+                             std::vector<TBlob> *output_blobs,
+                             std::vector<NDArray> *tmp_nds,
+                             bool alloc_outputs,
+                             mshadow::Stream<xpu> *s) {
   for (auto& i : ndinputs) {
     if (i.chunk_type() != kDefaultChunk) {
       NDArray tmp_nd = i.ConvertTo<xpu>(kDefaultChunk, s);
-      tmp_nds.push_back(tmp_nd);
-      input_blobs.push_back(tmp_nd.data());
+      tmp_nds->push_back(tmp_nd);
+      input_blobs->push_back(tmp_nd.data());
     } else {
-      input_blobs.push_back(i.data());
+      input_blobs->push_back(i.data());
     }
   }
   for (auto& i : ndoutputs) {
     if (alloc_outputs) i.CheckAndAlloc();
-    output_blobs.push_back(i.data());
+    output_blobs->push_back(i.data());
+  }
+}
+
+inline void PrepVars(const std::vector<NDArray> &nds,
+                     std::vector<Engine::VarHandle> *vars) {
+  for (auto& i : nds) {
+    auto vs = i.vars();
+    vars->insert(vars->end(), vs.begin(), vs.end());
   }
 }
 

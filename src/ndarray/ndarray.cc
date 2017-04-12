@@ -156,19 +156,10 @@ void SetValueOp(const real_t &rhs, NDArray *out) {
   switch (ret.ctx().dev_mask()) {
     case cpu::kDevMask: {
       Engine::Get()->PushSync([rhs, ret](RunContext ctx) {
-          auto chunk_type = ret.chunk_type();
-          if (chunk_type == kDefaultChunk) {
-            ret.CheckAndAlloc();
-            TBlob tmp = ret.data();
-            ndarray::Eval<cpu>(rhs, &tmp, ctx);
-          } else {
-            // TODO Support other types;
-            CHECK(chunk_type == kRowSparseChunk);
-            // assume already allocated??
-            TBlob tmp = ret.data();
-            ndarray::Eval<cpu>(rhs, &tmp, ctx);
-            // Add to index?
-          }
+          CHECK(ret.chunk_type() == kDefaultChunk);
+          ret.CheckAndAlloc();
+          TBlob tmp = ret.data();
+          ndarray::Eval<cpu>(rhs, &tmp, ctx);
         }, ret.ctx(), {}, {ret.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
       break;
@@ -810,7 +801,7 @@ void NDArray::SyncCopyToCPU(void *data, size_t size) const {
                             Context::CPU(), Context::CPU(), rctx);
   } else {
 #if MXNET_USE_CUDA
-    //TODO read_vars include this->aux_var()
+    //TODO read_vars should include this->aux_var()
     Engine::Get()->PushSync([&](RunContext rctx) {
         ndarray::Copy<gpu, cpu>(this->data(), &dst,
                                 this->ctx(), Context::CPU(), rctx);

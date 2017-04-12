@@ -144,6 +144,7 @@ class FComputeExecutor : public OpExecutor {
 #endif
   }
   void Setup() override {
+    // TODO use PrepDefaultBlob
     in_data_.resize(in_array.size());
     out_data_.resize(out_array.size());
     auto get_blob =  [](const NDArray& nd) {
@@ -178,7 +179,7 @@ class FComputeExecutor : public OpExecutor {
   std::vector<TBlob> in_data_, out_data_;
 };
 
-// fcompute ndarrayr executor
+// fcomputend executor
 class FComputeNDExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {

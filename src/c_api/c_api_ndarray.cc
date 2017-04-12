@@ -208,9 +208,8 @@ void SetShapeType(const nnvm::Op* op,
 
   for (int i = 0; i < infered_num_outputs; ++i) {
     NDArrayChunkType chunk_type = static_cast<NDArrayChunkType>(out_chunk_types[i]);
-    std::cout << "out chunk type: " << chunk_type << std::endl;
     if (ndoutputs[i].is_none()) {
-      // If FInferChunkType is not present, assume the output chunk is dense
+      // If failed to infer the chunk type, assume the output chunk is dense
       if (chunk_type == kDefaultChunk || out_chunk_types[i] == -1) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
@@ -262,18 +261,12 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
     }
     CHECK_LE(ntmp, 1) << "Only support 1 temp space request";
   }
-
-  for (auto& i : ndinputs) {
-    auto vars = i.vars();
-    read_vars.insert(read_vars.end(), vars.begin(), vars.end());
-  }
-  for (auto& i : ndoutputs) {
-    auto vars = i.vars();
-    write_vars.insert(write_vars.end(), vars.begin(), vars.end());
-  }
+  common::PrepVars(ndinputs, &read_vars);
+  common::PrepVars(ndoutputs, &write_vars);
   if (mutate.count(op)) {
     auxidx = mutate[op](attrs);
     std::sort(auxidx.begin(), auxidx.end());
+    // TODO replace with common::PrepVars
     for (auto & i : auxidx) {
       auto vars = ndinputs[i].vars();
       write_vars.insert(write_vars.end(), vars.begin(), vars.end());
@@ -302,12 +295,12 @@ void PushFCompute(const FCompute& fn,
      
       if (ctx.dev_mask() == gpu::kDevMask) {
         //mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
-        //common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, input_blobs, output_blobs,
-        //                          tmp_nds, true, s);
+        //common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
+        //                          &tmp_nds, true, s);
       } else {
         mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
-        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, input_blobs, output_blobs,
-                                  tmp_nds, true, s);
+        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
+                                  &tmp_nds, true, s);
       }
       OpContext opctx{is_train, rctx,
                       engine::CallbackOnComplete(),

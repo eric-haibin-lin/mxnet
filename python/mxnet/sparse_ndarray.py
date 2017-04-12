@@ -116,13 +116,8 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     return SparseNDArray(hdl)
 
 def array(values, index_list, sparse_type, shape, ctx=None, dtype=mx_real_t):
-    # input array types?
-    #if not isinstance(source_array, np.ndarray):
-    #    try:
-    #        source_array = np.array(source_array, dtype=dtype)
-    #    except:
-    #        raise TypeError('source_array must be array like object')
-    # TODO should the value/indices be ndarray or array like?
+    # TODO check input array types. Assume NDArray class for now
+    # TODO support other types
     assert(sparse_type == 'row_sparse')
     if isinstance(shape, int):
         shape = (shape, )
@@ -131,6 +126,7 @@ def array(values, index_list, sparse_type, shape, ctx=None, dtype=mx_real_t):
     arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype)
     return arr
 
+# Temporary function for testing purpose
 def to_dense(source):
     hdl = NDArrayHandle()
     check_call(_LIB.MXNDArrayConvert(
@@ -146,6 +142,7 @@ def zeros(shape, sparse_type, ctx=None, dtype=mx_real_t):
     shape : int or tuple of int
         The shape of the empty array
     sparse_type:
+
     ctx : Context, optional
         An optional device context (default is the current default context)
     dtype : str or numpy.dtype, optional

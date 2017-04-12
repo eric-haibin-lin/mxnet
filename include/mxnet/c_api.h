@@ -222,6 +222,10 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               int delay_alloc,
                               NDArrayHandle *out);
 
+/*!
+ * \brief create a NDArray with specified sparse type, shape and aux data(e.g. index)
+ * aux data is copied during construction.
+ */
 MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
                     int num_aux,
                     NDArrayHandle *aux_data,
@@ -254,6 +258,9 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
                               NDArrayHandle *out);
 
 
+/*!
+ * \brief create an empty sparse NDArray with specified shape and data type
+ */
 MXNET_DLL int MXNDArrayCreateSparseEx(int chunk_type,
                     const mx_uint *shape,
                     mx_uint ndim,
@@ -265,6 +272,7 @@ MXNET_DLL int MXNDArrayCreateSparseEx(int chunk_type,
                     int *aux_types,
                     NDArrayHandle *out);
 
+// TEMPORARY API FOR TESTING PURPOSE. Conversion should be an op instead
 MXNET_DLL int MXNDArrayConvert(NDArrayHandle in,
                                int chunk_type,
                                NDArrayHandle *out);
@@ -392,8 +400,11 @@ MXNET_DLL int MXNDArrayAt(NDArrayHandle handle,
                           mx_uint idx,
                           NDArrayHandle *out);
 
+/*!
+ * \brief get the chunk type of the array
+ */
 MXNET_DLL int MXNDArrayGetChunkType(NDArrayHandle handle,
-                     int *out_chunk_type);
+                                    int *out_chunk_type);
 
 /*!
  * \brief Reshape the NDArray.
@@ -968,6 +979,9 @@ MXNET_DLL int MXSymbolInferType(SymbolHandle sym,
 
 
 
+/*!
+ * \brief infer chunk type of unknown input types given the known one.
+ */
 MXNET_DLL int MXSymbolInferChunkType(SymbolHandle sym,
                       mx_uint num_args,
                       const char** keys,

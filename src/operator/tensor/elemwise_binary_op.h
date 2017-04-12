@@ -122,19 +122,8 @@ void BinaryComputeND(const nnvm::NodeAttrs& attrs,
   if (fallback) {
     std::vector<TBlob> input_blobs, output_blobs;
     std::vector<NDArray> tmp_nds;
-    common::PrepDefaultBlobs<xpu>(inputs, outputs, input_blobs, output_blobs,
-                                  tmp_nds, false, s);
-    /*
-    for (auto &i : inputs) {
-      if (i.chunk_type() != kDefaultChunk) {
-        NDArray temp_nd = i.ConvertTo<xpu>(kDefaultChunk, s);
-        temp_nds.push_back(temp_nd);
-        input_blobs.push_back(temp_nd.data());
-      } else input_blobs.push_back(i.data());
-    }
-    for (auto &i : outputs) {
-      output_blobs.push_back(i.data());
-    }*/
+    common::PrepDefaultBlobs<xpu>(inputs, outputs, &input_blobs, &output_blobs,
+                                  &tmp_nds, false, s);
     BinaryCompute<xpu, OP>(attrs, ctx, input_blobs, req, output_blobs);
     return;
   }
