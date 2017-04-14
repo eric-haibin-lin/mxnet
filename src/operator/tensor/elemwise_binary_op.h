@@ -49,7 +49,7 @@ void BinaryComputeNDSpSp(const nnvm::NodeAttrs& attrs,
   auto &output = outputs[0];
 
   // TODO support other sparse types, too
-  CHECK(nd_l.chunk_type() == kRowSparseChunk);
+  CHECK(nd_l.storage_type() == kRowSparseStorage);
   // Memory Estimation
   auto num_rows_l = nd_l.aux_shape(0)[0];
   auto num_rows_r = nd_r.aux_shape(0)[0];
@@ -115,7 +115,7 @@ void BinaryComputeND(const nnvm::NodeAttrs& attrs,
   // Check if any input is dense
   bool fallback = false;
   for (auto &nd : inputs) {
-    if (nd.chunk_type() == kDefaultChunk) {
+    if (nd.storage_type() == kDefaultStorage) {
       fallback = true;
     }
   }
@@ -129,7 +129,7 @@ void BinaryComputeND(const nnvm::NodeAttrs& attrs,
   }
   // TODO Support more chunk types
   // Call SpSp function
-  CHECK(inputs[0].chunk_type() == kRowSparseChunk);
+  CHECK(inputs[0].storage_type() == kRowSparseStorage);
   BinaryComputeNDSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 

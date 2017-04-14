@@ -54,8 +54,8 @@ inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
                              bool alloc_outputs,
                              mshadow::Stream<xpu> *s) {
   for (auto& i : ndinputs) {
-    if (i.chunk_type() != kDefaultChunk) {
-      NDArray tmp_nd = i.ConvertTo<xpu>(kDefaultChunk, s);
+    if (i.storage_type() != kDefaultStorage) {
+      NDArray tmp_nd = i.ConvertTo<xpu>(kDefaultStorage, s);
       tmp_nds->push_back(tmp_nd);
       input_blobs->push_back(tmp_nd.data());
     } else {

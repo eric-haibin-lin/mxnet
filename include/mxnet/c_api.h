@@ -226,7 +226,7 @@ MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
                     NDArrayHandle *aux_data,
                     const mx_uint *shape,
                     mx_uint ndim,
-                    int sparse_type,
+                    int storage_type,
                     int dev_type,
                     int dev_id,
                     int delay_alloc,
@@ -256,7 +256,7 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
 /*!
  * \brief create an empty sparse NDArray with specified shape and data type
  */
-MXNET_DLL int MXNDArrayCreateSparseEx(int chunk_type,
+MXNET_DLL int MXNDArrayCreateSparseEx(int storage_type,
                     const mx_uint *shape,
                     mx_uint ndim,
                     int dev_type,
@@ -269,7 +269,7 @@ MXNET_DLL int MXNDArrayCreateSparseEx(int chunk_type,
 
 // TEMPORARY API FOR TESTING PURPOSE. Conversion should be an op instead
 MXNET_DLL int MXNDArrayConvert(NDArrayHandle in,
-                               int chunk_type,
+                               int storage_type,
                                NDArrayHandle *out);
 
 /*!
@@ -398,8 +398,8 @@ MXNET_DLL int MXNDArrayAt(NDArrayHandle handle,
 /*!
  * \brief get the chunk type of the array
  */
-MXNET_DLL int MXNDArrayGetChunkType(NDArrayHandle handle,
-                                    int *out_chunk_type);
+MXNET_DLL int MXNDArrayGetStorageType(NDArrayHandle handle,
+                                    int *out_storage_type);
 
 /*!
  * \brief Reshape the NDArray.
@@ -953,18 +953,17 @@ MXNET_DLL int MXSymbolInferType(SymbolHandle sym,
 /*!
  * \brief infer chunk type of unknown input types given the known one.
  */
-MXNET_DLL int MXSymbolInferChunkType(SymbolHandle sym,
+MXNET_DLL int MXSymbolInferStorageType(SymbolHandle sym,
                       mx_uint num_args,
                       const char** keys,
-                      const int *arg_chunk_type_data,
-                      mx_uint *in_chunk_type_size,
-                      const int **in_chunk_type_data,
-                      mx_uint *out_chunk_type_size,
-                      const int **out_chunk_type_data,
-                      mx_uint *aux_chunk_type_size,
-                      const int **aux_chunk_type_data,
+                      const int *arg_storage_type_data,
+                      mx_uint *in_storage_type_size,
+                      const int **in_storage_type_data,
+                      mx_uint *out_storage_type_size,
+                      const int **out_storage_type_data,
+                      mx_uint *aux_storage_type_size,
+                      const int **aux_storage_type_data,
                       int *complete);
-
 
 //--------------------------------------------
 // Part 4: Executor interface

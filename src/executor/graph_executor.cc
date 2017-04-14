@@ -384,7 +384,7 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   auto mutable_nodes = idx.mutable_input_nodes();
   nnvm::ShapeVector arg_shapes;
   nnvm::DTypeVector arg_types;
-  nnvm::ChunkTypeVector arg_chunk_types;
+  nnvm::StorageTypeVector arg_storage_types;
   size_t arg_top = 0, aux_top = 0;
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
@@ -393,14 +393,14 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
       data_entry_[idx.entry_id(nid, 0)] = aux_states[aux_top];
       arg_shapes.push_back(aux_states[aux_top].shape());
       arg_types.push_back(aux_states[aux_top].dtype());
-      arg_chunk_types.push_back(aux_states[aux_top].chunk_type());
+      arg_storage_types.push_back(aux_states[aux_top].storage_type());
       ++aux_top;
     } else {
       CHECK_LT(arg_top, in_args.size());
       data_entry_[idx.entry_id(nid, 0)] = in_args[arg_top];
       arg_shapes.push_back(in_args[arg_top].shape());
       arg_types.push_back(in_args[arg_top].dtype());
-      arg_chunk_types.push_back(in_args[arg_top].chunk_type());
+      arg_storage_types.push_back(in_args[arg_top].storage_type());
       ++arg_top;
     }
   }
@@ -410,11 +410,11 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   }
   arg_shapes.resize(idx.input_nodes().size(), TShape());
   arg_types.resize(idx.input_nodes().size(), -1);
-  arg_chunk_types.resize(idx.input_nodes().size(), -1);
+  arg_storage_types.resize(idx.input_nodes().size(), -1);
   // other initializations
   g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
   g = nnvm::pass::InferType(g, arg_types, "__dtype__");
-  g = nnvm::pass::InferChunkType(g, arg_chunk_types, "__chunk_type__");
+  g = nnvm::pass::InferStorageType(g, arg_storage_types, "__storage_type__");
 
   {
     // memory allocator
@@ -435,14 +435,14 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
 // initialize the memory of each entries
 void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   using nnvm::DTypeVector;
-  using nnvm::ChunkTypeVector;
+  using nnvm::StorageTypeVector;
   using nnvm::ShapeVector;
   using nnvm::StorageVector;
   // get the graph
   const auto& idx = graph_.indexed_graph();
   // get the storage
   const auto& vdtype = graph_.GetAttr<DTypeVector>("dtype");
-  const auto& vchunk_type = graph_.GetAttr<ChunkTypeVector>("chunk_type");
+  const auto& vstorage_type = graph_.GetAttr<StorageTypeVector>("storage_type");
   const auto& vshape = graph_.GetAttr<ShapeVector>("shape");
   const auto& vstorage = graph_.GetAttr<StorageVector>("storage_id");
   const auto& vctx = graph_.GetAttr<ContextVector>("context");
@@ -451,15 +451,15 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   CHECK_EQ(idx.num_node_entries(), vstorage.size());
   CHECK_EQ(data_entry_.size(), vshape.size());
   std::vector<Context> data_context(idx.num_node_entries());
-  std::vector<NDArrayChunkType> data_chunk_type(idx.num_node_entries());
+  std::vector<NDArrayStorageType> data_storage_type(idx.num_node_entries());
   // reverse mapping for id. Used for DEBUGGING..
   std::unordered_map<int, size_t> id_maps;
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
       data_context[idx.entry_id(nid, i)] = vctx[nid];
-      CHECK_NE(vchunk_type[nid], -1);
+      CHECK_NE(vstorage_type[nid], -1);
       id_maps[idx.entry_id(nid, i)] = nid;
-      data_chunk_type[idx.entry_id(nid, i)] = (NDArrayChunkType) vchunk_type[nid];
+      data_storage_type[idx.entry_id(nid, i)] = (NDArrayStorageType) vstorage_type[nid];
     }
   }
 
@@ -467,7 +467,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   struct PoolEntry {
     Context ctx;
     size_t bytes;
-    NDArrayChunkType chunk_type;
+    NDArrayStorageType storage_type;
     size_t nid;
   };
   //using PoolEntry = std::pair<Context, size_t>;
@@ -478,15 +478,15 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     uint32_t nid = idx.input_nodes().at(i);
     uint32_t oid = head_grad_map_.at(idx[nid].source);
     uint32_t eid = idx.entry_id(idx.outputs()[oid]);
-    auto chunk_type = vchunk_type[eid];
+    auto storage_type = vstorage_type[eid];
     CHECK_NE(vshape[eid].ndim(), 0U);
     CHECK_NE(vdtype[eid], -1);
-    CHECK_NE(chunk_type, -1);
-    // init NDArray based on chunk_type
-    //if (chunk_type != kDefaultChunk) {
+    CHECK_NE(storage_type, -1);
+    // init NDArray based on storage_type
+    //if (storage_type != kDefaultStorage) {
       //std::cout << "Sparse NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       //data_entry_[idx.entry_id(nid, 0)] =
-      //  NDArray((NDArrayChunkType)chunk_type, vshape[eid], data_context[eid], true, vdtype[eid]);
+      //  NDArray((NDArrayStorageType)storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
     //} else {
       std::cout << "Densee NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       data_entry_[idx.entry_id(nid, 0)] =
@@ -505,7 +505,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     }
     PoolEntry& info = pool_info[sid];
     if (info.bytes == 0) {
-      info = PoolEntry{data_context[i], bytes, data_chunk_type[i], id_maps[i]};
+      info = PoolEntry{data_context[i], bytes, data_storage_type[i], id_maps[i]};
     } else {
       std::cout << "WARNING Updated info.bytes" << std::endl;
       info.bytes = std::max(info.bytes, bytes);
@@ -536,7 +536,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   for (size_t i : sorted_pool_index) {
     const Context& ctx = pool_info[i].ctx;
     size_t bytes = pool_info[i].bytes;
-    NDArrayChunkType chunk_type = pool_info[i].chunk_type;
+    NDArrayStorageType storage_type = pool_info[i].storage_type;
     size_t nid = pool_info[i].nid;
     bool allocated = false;
     for (auto it = free_pool.lower_bound(bytes); it != free_pool.end(); ++it) {
@@ -552,10 +552,10 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       CHECK_LE(nword, std::numeric_limits<index_t>::max());
       // allocate float arrays
       TShape shape{index_t(nword)};
-      // init NDArray based on chunk_type
-      if (chunk_type != kDefaultChunk) {
+      // init NDArray based on storage_type
+      if (storage_type != kDefaultStorage) {
         //std::cout << "Sparse NDArray for node " << nid << "\n";
-        //data_pool_[i] = NDArray((NDArrayChunkType)chunk_type, shape, ctx);
+        //data_pool_[i] = NDArray((NDArrayStorageType)storage_type, shape, ctx);
       } else {
         //std::cout << "Densee NDArray for node " << nid << std::endl;
         NDArray nd(shape, ctx);
@@ -578,9 +578,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     //const NDArray& src = data_pool_.at(storage_id);
     //std::cout << "WARNING: sharing data arrays data_entry_[" << i << "]" << std::endl;
     //data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
-    auto chunk_type = (NDArrayChunkType) vchunk_type[i];
-    if (chunk_type != kDefaultChunk) {
-      data_entry_[i] = NDArray(chunk_type, vshape[i], vctx[i]);
+    auto storage_type = (NDArrayStorageType) vstorage_type[i];
+    if (storage_type != kDefaultStorage) {
+      data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
       std::cout << "Sparse NDArray " << i << " " << data_entry_[i].var() << "\n";
     } else {
       data_entry_[i] = NDArray(vshape[i], vctx[i]);
@@ -600,13 +600,13 @@ void GraphExecutor::InitCachedOps() {
   const auto& vctx = graph_.GetAttr<ContextVector>("context");
   //const auto& addto_entry = graph_.GetAttr<std::vector<int> >("addto_entry");
   //const auto& skip_plus_node = graph_.GetAttr<std::vector<int> >("skip_plus_node");
-  const auto& vchunk_type = graph_.GetAttr<nnvm::ChunkTypeVector>("chunk_type");
+  const auto& vstorage_type = graph_.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   op_nodes_.resize(idx.num_nodes());
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
-    std::cout << "node " << nid << " chunk_type = " << vchunk_type[nid] << " ";
+    std::cout << "node " << nid << " storage_type = " << vstorage_type[nid] << " ";
     if (inode.source->is_variable()) { std::cout << "var" << std::endl; continue;}
     else {std::cout << inode.source->attrs.op->name << std::endl;}
 #if MXNET_USE_PROFILER

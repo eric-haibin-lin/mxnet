@@ -136,7 +136,7 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
                     NDArrayHandle *aux_vec,
                     const mx_uint *shape,
                     mx_uint ndim,
-                    int sparse_type,
+                    int storage_type,
                     int dev_type,
                     int dev_id,
                     int delay_alloc,
@@ -150,17 +150,17 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
     NDArray* nd_aux_ptr = reinterpret_cast<NDArray*>(aux_vec[i]);
     aux_ndarrays.push_back(*nd_aux_ptr);
   }
-  *out = new NDArray(*data_ptr, aux_ndarrays, ctx, kRowSparseChunk, TShape(shape, shape + ndim));
+  *out = new NDArray(*data_ptr, aux_ndarrays, ctx, kRowSparseStorage, TShape(shape, shape + ndim));
   API_END();
 }
 
 // TODO Should implement conversion as ops instead.
 int MXNDArrayConvert(NDArrayHandle in,
-                     int chunk_type,
+                     int storage_type,
                      NDArrayHandle *out) {
   API_BEGIN();
   NDArray* nd = reinterpret_cast<NDArray*>(in);
-  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayChunkType>(chunk_type), nullptr));
+  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayStorageType>(storage_type), nullptr));
   API_END();
 }
 
@@ -180,7 +180,7 @@ int MXNDArrayCreateEx(const mx_uint *shape,
   API_END();
 }
 
-int MXNDArrayCreateSparseEx(int chunk_type,
+int MXNDArrayCreateSparseEx(int storage_type,
                     const mx_uint *shape,
                     mx_uint ndim,
                     int dev_type,
@@ -194,7 +194,7 @@ int MXNDArrayCreateSparseEx(int chunk_type,
   std::vector<int> aux_types;
   for (int i = 0; i < num_aux; i++) aux_types.push_back(aux_type[i]);
   *out = new NDArray(
-      NDArrayChunkType(chunk_type),
+      NDArrayStorageType(storage_type),
       TShape(shape, shape + ndim),
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
       delay_alloc != 0,
@@ -358,15 +358,15 @@ MXNET_DLL int MXNDArrayReshape(NDArrayHandle handle,
   API_END_HANDLE_ERROR(delete ptr);
 }
 
-int MXNDArrayGetChunkType(NDArrayHandle handle,
-                     int *out_chunk_type) {
+int MXNDArrayGetStorageType(NDArrayHandle handle,
+                     int *out_storage_type) {
   API_BEGIN();
   NDArray *arr = static_cast<NDArray*>(handle);
   // Check is_none?
   if (!arr->is_none()) {
-    *out_chunk_type = arr->chunk_type();
+    *out_storage_type = arr->storage_type();
   } else {
-    *out_chunk_type = -1;
+    *out_storage_type = -1;
   }
   API_END();
 }

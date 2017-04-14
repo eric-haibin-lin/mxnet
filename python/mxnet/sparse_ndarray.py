@@ -41,14 +41,14 @@ except ImportError:
     from ._ctypes.ndarray import NDArrayBase, _init_ndarray_module
 
 # pylint: enable= no-member
-_CHUNK_TYPE_ID_TO_STR = {
+_STORAGE_TYPE_ID_TO_STR = {
     0 : 'undefined',
     1 : 'default',
     2 : 'row_sparse',
     3 : 'csr',
 }
 
-_CHUNK_TYPE_STR_TO_ID = {
+_STORAGE_TYPE_STR_TO_ID = {
     'undefined' : 0,
     'default' : 1,
     'row_sparse' : 2,
@@ -56,7 +56,7 @@ _CHUNK_TYPE_STR_TO_ID = {
 }
 
 #FIXME change default type for aux_type. Make aux type a list
-def _new_alloc_handle(sparse_type, shape, ctx, delay_alloc=True, dtype=mx_real_t, aux_type=mx_real_t):
+def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True, dtype=mx_real_t, aux_type=mx_real_t):
     """Return a new handle with specified shape and context.
 
     Empty handle is only used to hold results
@@ -69,7 +69,7 @@ def _new_alloc_handle(sparse_type, shape, ctx, delay_alloc=True, dtype=mx_real_t
     hdl = NDArrayHandle()
     aux_type_list = [int(_DTYPE_NP_TO_MX[np.dtype(aux_type).type])]
     check_call(_LIB.MXNDArrayCreateSparseEx(
-        ctypes.c_int(int(_CHUNK_TYPE_STR_TO_ID[sparse_type])),
+        ctypes.c_int(int(_STORAGE_TYPE_STR_TO_ID[storage_type])),
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
         ctypes.c_int(ctx.device_typeid),
@@ -109,7 +109,7 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
         values.handle, mx_uint(1), indices,
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
-        ctypes.c_int(_CHUNK_TYPE_STR_TO_ID['row_sparse']),
+        ctypes.c_int(_STORAGE_TYPE_STR_TO_ID['row_sparse']),
         ctypes.c_int(ctx.device_typeid),
         ctypes.c_int(ctx.device_id),
         ctypes.c_int(int(False)), 
@@ -117,10 +117,10 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
         ctypes.byref(hdl)))
     return SparseNDArray(hdl)
 
-def array(values, index_list, sparse_type, shape, ctx=None, dtype=mx_real_t):
+def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t):
     # TODO check input array types. Assume NDArray class for now
     # TODO support other types
-    assert(sparse_type == 'row_sparse')
+    assert(storage_type == 'row_sparse')
     if isinstance(shape, int):
         shape = (shape, )
     if ctx is None:
@@ -132,20 +132,20 @@ def array(values, index_list, sparse_type, shape, ctx=None, dtype=mx_real_t):
 def to_dense(source):
     hdl = NDArrayHandle()
     check_call(_LIB.MXNDArrayConvert(
-        source.handle, _CHUNK_TYPE_STR_TO_ID['default'],
+        source.handle, _STORAGE_TYPE_STR_TO_ID['default'],
         ctypes.byref(hdl)))
     return ndarray.NDArray(handle=hdl, writable=True)
 
 
 
-def zeros(shape, sparse_type, ctx=None, dtype=mx_real_t):
+def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
     """Return a new array of given shape and type, filled with zeros.
 
     Parameters
     ----------
     shape : int or tuple of int
         The shape of the empty array
-    sparse_type:
+    storage_type:
 
     ctx : Context, optional
         An optional device context (default is the current default context)
@@ -168,16 +168,16 @@ def zeros(shape, sparse_type, ctx=None, dtype=mx_real_t):
     """
     if ctx is None:
         ctx = Context.default_ctx
-    if sparse_type != 'default':
+    if storage_type != 'default':
       # pylint: disable= no-member, protected-access
-      out = SparseNDArray(_new_alloc_handle(sparse_type, shape, ctx))
+      out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx))
       return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access
 
-_CHUNK_TYPE_TO_ND_CLASS = {
+_STORAGE_TYPE_TO_ND_CLASS = {
     1 : ndarray.NDArray,
     2 : SparseNDArray,
     3 : SparseNDArray
 }
-_init_ndarray_module(_CHUNK_TYPE_TO_ND_CLASS, "mxnet")
+_init_ndarray_module(_STORAGE_TYPE_TO_ND_CLASS, "mxnet")

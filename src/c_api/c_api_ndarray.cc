@@ -123,12 +123,12 @@ void SetShapeType(const nnvm::Op* op,
                   const std::vector<NDArray>& ndinputs,
                   const int& infered_num_outputs,
                   std::vector<NDArray>* p_ndoutputs,
-                  NDArrayChunkType& contains_chunk_type) {
-  contains_chunk_type = kDefaultChunk;
+                  NDArrayStorageType& contains_storage_type) {
+  contains_storage_type = kDefaultStorage;
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
-  static auto& inferchunktype = nnvm::Op::GetAttr<nnvm::FInferChunkType>("FInferChunkType");
+  static auto& inferchunktype = nnvm::Op::GetAttr<nnvm::FInferStorageType>("FInferStorageType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;
@@ -165,51 +165,51 @@ void SetShapeType(const nnvm::Op* op,
   CHECK_EQ(out_types.size(), static_cast<size_t>(infered_num_outputs));
 
   // infer chunk type
-  auto& in_chunk_types = ret->arg_chunk_types;
-  auto& out_chunk_types = ret->out_chunk_types;
-  in_chunk_types.clear();
-  out_chunk_types.clear();
+  auto& in_storage_types = ret->arg_storage_types;
+  auto& out_storage_types = ret->out_storage_types;
+  in_storage_types.clear();
+  out_storage_types.clear();
 
   for (auto& i : ndinputs) {
-    in_chunk_types.push_back(i.chunk_type());
-    std::cout << "in chunk:" << i.chunk_type() << std::endl;
+    in_storage_types.push_back(i.storage_type());
+    std::cout << "in chunk:" << i.storage_type() << std::endl;
   }
   for (auto& i : ndoutputs) {
-    int chunk_type = i.chunk_type();
-    if (chunk_type == kUndefinedChunk) {
-      chunk_type = -1;
+    int storage_type = i.storage_type();
+    if (storage_type == kUndefinedChunk) {
+      storage_type = -1;
     }
-    out_chunk_types.push_back(chunk_type);
+    out_storage_types.push_back(storage_type);
   }
   if (inferchunktype.count(op)) {
-    CHECK(inferchunktype[op](attrs, &in_chunk_types, &out_chunk_types));
-    CHECK_EQ(out_chunk_types.size(), static_cast<size_t>(infered_num_outputs));
+    CHECK(inferchunktype[op](attrs, &in_storage_types, &out_storage_types));
+    CHECK_EQ(out_storage_types.size(), static_cast<size_t>(infered_num_outputs));
   } else {
-    std::cout << "FInferChunkType not present." << std::endl;
+    std::cout << "FInferStorageType not present." << std::endl;
   }
 
-  for (auto &i : in_chunk_types) {
+  for (auto &i : in_storage_types) {
     CHECK(i != -1);
-    if (i != kDefaultChunk) {
-      contains_chunk_type = static_cast<NDArrayChunkType>(i);
+    if (i != kDefaultStorage) {
+      contains_storage_type = static_cast<NDArrayStorageType>(i);
       break;
     }
   }
-  for (auto &i : out_chunk_types) {
-    if (i != kDefaultChunk && i != -1) {
-      contains_chunk_type = static_cast<NDArrayChunkType>(i);
+  for (auto &i : out_storage_types) {
+    if (i != kDefaultStorage && i != -1) {
+      contains_storage_type = static_cast<NDArrayStorageType>(i);
       break;
     }
   }
 
   for (int i = 0; i < infered_num_outputs; ++i) {
-    NDArrayChunkType chunk_type = static_cast<NDArrayChunkType>(out_chunk_types[i]);
+    NDArrayStorageType storage_type = static_cast<NDArrayStorageType>(out_storage_types[i]);
     if (ndoutputs[i].is_none()) {
       // If failed to infer the chunk type, assume the output chunk is dense
-      if (chunk_type == kDefaultChunk || out_chunk_types[i] == -1) {
+      if (storage_type == kDefaultStorage || out_storage_types[i] == -1) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
-        ndoutputs[i] = NDArray(chunk_type, out_shapes[i], ctx, true, out_types[i]);
+        ndoutputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i]);
       }
     } else {
       CHECK_EQ(ndoutputs[i].shape(), out_shapes[i])
@@ -325,7 +325,7 @@ void PushFComputeND(const FComputeND& fn,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
       for (auto& i : ndoutputs) {
-        if (i.chunk_type() == kDefaultChunk) {
+        if (i.storage_type() == kDefaultStorage) {
           i.CheckAndAlloc();
         }
       }
@@ -437,9 +437,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
   } else {
     // TODO(piiswrong): infer ctx
     Context ctx;
-    NDArrayChunkType chunk_type;
+    NDArrayStorageType storage_type;
     SetContext(&ctx, attrs, num_inputs, ndinputs, infered_num_outputs, ndoutputs);
-    SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs, chunk_type);
+    SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs, storage_type);
 
     std::vector<engine::VarHandle> read_vars, write_vars;
     std::vector<Resource> requested;
@@ -449,10 +449,10 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
 
     FCompute fn;
     FComputeND fn_nd;
-    // dispatch based on ctx and chunk_type
-    std::cout << "Dispatching for chunk_type: " << chunk_type << std::endl;
+    // dispatch based on ctx and storage_type
+    std::cout << "Dispatching for storage_type: " << storage_type << std::endl;
     if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
-        chunk_type == kRowSparseChunk) {
+        storage_type == kRowSparseStorage) {
       fn_nd = fnd_cpu_row_sparse[op];
       std::cout << "IMP: fnd_cpu_row_sparse dispatched." << std::endl;
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {

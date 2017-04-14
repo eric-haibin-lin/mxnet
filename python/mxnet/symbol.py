@@ -19,7 +19,7 @@ from .base import check_call, MXNetError
 from .context import Context, cpu
 from .ndarray import NDArray, zeros as _nd_zeros, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
 from .sparse_ndarray import SparseNDArray, zeros as _sparse_nd_zeros
-from .sparse_ndarray import _CHUNK_TYPE_ID_TO_STR, _CHUNK_TYPE_STR_TO_ID
+from .sparse_ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope
@@ -477,7 +477,7 @@ class Symbol(SymbolBase):
             self.handle, ctypes.byref(size), ctypes.byref(sarr)))
         return [py_str(sarr[i]) for i in range(size.value)]
 
-    def infer_chunk_type(self, *args, **kwargs):
+    def infer_storage_type(self, *args, **kwargs):
         #TODO refactor with dtype 
         #FIXME update doc
         """Infer the chunk type of outputs and arguments of given known types of arguments.
@@ -497,13 +497,13 @@ class Symbol(SymbolBase):
 
         Returns
         -------
-        arg_chunk_types : list of numpy.dtype or None
+        arg_storage_types : list of numpy.dtype or None
             List of types of arguments.
             The order is in the same order as list_arguments()
-        out_chunk_types : list of numpy.dtype or None
+        out_storage_types : list of numpy.dtype or None
             List of types of outputs.
             The order is in the same order as list_outputs()
-        aux_chunk_types : list of numpy.dtype or None
+        aux_storage_types : list of numpy.dtype or None
             List of types of outputs.
             The order is in the same order as list_auxiliary_states()
         """
@@ -516,45 +516,45 @@ class Symbol(SymbolBase):
             keys = None
             for s in args:
                 if s is not None:
-                    if s not in _CHUNK_TYPE_STR_TO_ID or not isinstance(s, basestring):
-                        raise TypeError('Argument need to be one of '+str(_CHUNK_TYPE_STR_TO_ID))
-                    sdata.append(_CHUNK_TYPE_STR_TO_ID[s])
+                    if s not in _STORAGE_TYPE_STR_TO_ID or not isinstance(s, basestring):
+                        raise TypeError('Argument need to be one of '+str(_STORAGE_TYPE_STR_TO_ID))
+                    sdata.append(_STORAGE_TYPE_STR_TO_ID[s])
                 else:
                     #FIXME -1 or 0 for unknown / error chunk type?
                     sdata.append(-1)
         else:
             keys = []
             for k, v in kwargs.items():
-                if v in _CHUNK_TYPE_STR_TO_ID:
+                if v in _STORAGE_TYPE_STR_TO_ID:
                     keys.append(c_str(k))
-                    sdata.append(_CHUNK_TYPE_STR_TO_ID[v])
-        arg_chunk_type_size = mx_uint()
-        arg_chunk_type_data = ctypes.POINTER(ctypes.c_int)()
-        out_chunk_type_size = mx_uint()
-        out_chunk_type_data = ctypes.POINTER(ctypes.c_int)()
-        aux_chunk_type_size = mx_uint()
-        aux_chunk_type_data = ctypes.POINTER(ctypes.c_int)()
+                    sdata.append(_STORAGE_TYPE_STR_TO_ID[v])
+        arg_storage_type_size = mx_uint()
+        arg_storage_type_data = ctypes.POINTER(ctypes.c_int)()
+        out_storage_type_size = mx_uint()
+        out_storage_type_data = ctypes.POINTER(ctypes.c_int)()
+        aux_storage_type_size = mx_uint()
+        aux_storage_type_data = ctypes.POINTER(ctypes.c_int)()
         complete = ctypes.c_int()
-        check_call(_LIB.MXSymbolInferChunkType(
+        check_call(_LIB.MXSymbolInferStorageType(
             self.handle,
             mx_uint(len(sdata)),
             c_array(ctypes.c_char_p, keys),
             c_array(ctypes.c_int, sdata),
-            ctypes.byref(arg_chunk_type_size),
-            ctypes.byref(arg_chunk_type_data),
-            ctypes.byref(out_chunk_type_size),
-            ctypes.byref(out_chunk_type_data),
-            ctypes.byref(aux_chunk_type_size),
-            ctypes.byref(aux_chunk_type_data),
+            ctypes.byref(arg_storage_type_size),
+            ctypes.byref(arg_storage_type_data),
+            ctypes.byref(out_storage_type_size),
+            ctypes.byref(out_storage_type_data),
+            ctypes.byref(aux_storage_type_size),
+            ctypes.byref(aux_storage_type_data),
             ctypes.byref(complete)))
         if complete.value != 0:
-            arg_chunk_types = [
-                _CHUNK_TYPE_ID_TO_STR[arg_chunk_type_data[i]] for i in range(arg_chunk_type_size.value)]
-            out_chunk_types = [
-                _CHUNK_TYPE_ID_TO_STR[out_chunk_type_data[i]] for i in range(out_chunk_type_size.value)]
-            aux_chunk_types = [
-                _CHUNK_TYPE_ID_TO_STR[aux_chunk_type_data[i]] for i in range(aux_chunk_type_size.value)]
-            return (arg_chunk_types, out_chunk_types, aux_chunk_types)
+            arg_storage_types = [
+                _STORAGE_TYPE_ID_TO_STR[arg_storage_type_data[i]] for i in range(arg_storage_type_size.value)]
+            out_storage_types = [
+                _STORAGE_TYPE_ID_TO_STR[out_storage_type_data[i]] for i in range(out_storage_type_size.value)]
+            aux_storage_types = [
+                _STORAGE_TYPE_ID_TO_STR[aux_storage_type_data[i]] for i in range(aux_storage_type_size.value)]
+            return (arg_storage_types, out_storage_types, aux_storage_types)
         else:
             return (None, None, None)
         # pylint: enable=too-many-locals
@@ -875,7 +875,7 @@ class Symbol(SymbolBase):
                     grad_req='write',
                     type_dict=None,
                     group2ctx=None,
-                    sparse_type_dict=None,
+                    storage_type_dict=None,
                     **kwargs):
         """Bind current symbol to get an executor, allocate all the ndarrays needed.
         Allows specifying data types.
@@ -916,19 +916,19 @@ class Symbol(SymbolBase):
             attrs = self.attr_dict()
             type_dict = {k: mx_real_t for k in self.list_arguments()
                          if k not in attrs or '__dtype__' not in attrs[k]}
-        if sparse_type_dict is None:
+        if storage_type_dict is None:
             attrs = self.attr_dict()
             print(attrs)
-            sparse_type_dict = {k: 'default' \
-                if k not in attrs or '__chunk_type__' not in attrs[k] \
-                else attrs[k]['__chunk_type__'] for k in self.list_arguments()}
+            storage_type_dict = {k: 'default' \
+                if k not in attrs or '__storage_type__' not in attrs[k] \
+                else attrs[k]['__storage_type__'] for k in self.list_arguments()}
         arg_shapes, _, aux_shapes = self.infer_shape(**kwargs)
         arg_types, _, aux_types = self.infer_type(**type_dict)
-        print(sparse_type_dict)
-        arg_chunk_types, out_chunk_types, aux_chunk_types = \
-            self.infer_chunk_type(**sparse_type_dict)
-        print("arg_chunk_types", arg_chunk_types)
-        print("out_chunk_types", out_chunk_types)
+        print(storage_type_dict)
+        arg_storage_types, out_storage_types, aux_storage_types = \
+            self.infer_storage_type(**storage_type_dict)
+        print("arg_storage_types", arg_storage_types)
+        print("out_storage_types", out_storage_types)
 
         if arg_shapes is None or arg_types is None:
             raise ValueError("Input node is not complete")
@@ -948,9 +948,9 @@ class Symbol(SymbolBase):
         # alloc space
 	arg_ndarrays = [
 	    # TODO We should avoid allocating space for sparse inputs.
-	    _nd_zeros(shape, dev, dtype=dtype) if chunk_type != 'row_sparse' 
-	    else _sparse_nd_zeros(shape, chunk_type, dev, dtype=dtype)
-	    for dtype, dev, shape, chunk_type in zip(arg_types, arg_ctx, arg_shapes, arg_chunk_types)]
+	    _nd_zeros(shape, dev, dtype=dtype) if storage_type != 'row_sparse' 
+	    else _sparse_nd_zeros(shape, storage_type, dev, dtype=dtype)
+	    for dtype, dev, shape, storage_type in zip(arg_types, arg_ctx, arg_shapes, arg_storage_types)]
         print(arg_ndarrays)
         #arg_ndarrays = [
         #    # TODO We should avoid allocating space for sparse inputs.
@@ -1165,7 +1165,7 @@ class Symbol(SymbolBase):
 
 
 
-def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, sparse_type=None):
+def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, storage_type=None):
     """Create a symbolic variable with specified name.
 
     Parameters
@@ -1209,8 +1209,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, ini
         attr['__dtype__'] = str(_DTYPE_NP_TO_MX[_numpy.dtype(dtype).type])
     if init is not None:
         attr['__init__'] = init.dumps()
-    if sparse_type is not None:
-        attr['__chunk_type__'] = str(sparse_type)
+    if storage_type is not None:
+        attr['__storage_type__'] = str(storage_type)
     ret._set_attr(**attr)
     return ret
 

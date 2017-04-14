@@ -83,9 +83,9 @@ class Executor(object):
         check_call(_LIB.MXExecutorOutputs(self.handle,
                                           ctypes.byref(out_size), ctypes.byref(handles)))
         #TODO perform on a list
-        chunk_type = ctypes.c_int(0)
-        check_call(_LIB.MXNDArrayGetChunkType(ctypes.cast(handles[0], NDArrayHandle), ctypes.byref(chunk_type)))
-        return [NDArray(NDArrayHandle(handles[i])) if chunk_type.value == 1 else SparseNDArray(NDArrayHandle(handles[i])) for i in range(out_size.value)]
+        storage_type = ctypes.c_int(0)
+        check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(handles[0], NDArrayHandle), ctypes.byref(storage_type)))
+        return [NDArray(NDArrayHandle(handles[i])) if storage_type.value == 1 else SparseNDArray(NDArrayHandle(handles[i])) for i in range(out_size.value)]
 
     def forward(self, is_train=False, **kwargs):
         """Calculate the outputs specified by the bound symbol.

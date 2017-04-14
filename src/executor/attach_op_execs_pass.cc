@@ -176,10 +176,10 @@ class FComputeNDExecutor : public OpExecutor {
       : fcompute_(fcompute), attrs_(attrs) {
   }
 
-  static FComputeND GetFComputeND(const Op* op, Context ctx, NDArrayChunkType dispatch_chunk_type) {
+  static FComputeND GetFComputeND(const Op* op, Context ctx, NDArrayStorageType dispatch_storage_type) {
     static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu, row_sparse>");
     static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<gpu, row_sparse>");
-    if (dispatch_chunk_type != kRowSparseChunk) {
+    if (dispatch_storage_type != kRowSparseStorage) {
       return nullptr;
     }
     if (ctx.dev_mask() == cpu::kDevMask) {
@@ -202,7 +202,7 @@ class FComputeNDExecutor : public OpExecutor {
 // pass to attach operator executors
 Graph AttachOpExecs(Graph g) {
   using nnvm::DTypeVector;
-  using nnvm::ChunkTypeVector;
+  using nnvm::StorageTypeVector;
   using nnvm::ShapeVector;
   using nnvm::FMutateInputs;
 
@@ -214,12 +214,12 @@ Graph AttachOpExecs(Graph g) {
   const auto& vshape = g.GetAttr<ShapeVector>("shape");
   const auto& vctx = g.GetAttr<ContextVector>("context");
 
-  // Also obtain chunk_type vector
-  const auto& vchunk_type = g.GetAttr<ChunkTypeVector>("chunk_type");
-  NDArrayChunkType dispatch_chunk_type = kDefaultChunk;
-  for (auto& i : vchunk_type) {
-    if (i != kDefaultChunk) {
-      dispatch_chunk_type = NDArrayChunkType(i);
+  // Also obtain storage_type vector
+  const auto& vstorage_type = g.GetAttr<StorageTypeVector>("storage_type");
+  NDArrayStorageType dispatch_storage_type = kDefaultStorage;
+  for (auto& i : vstorage_type) {
+    if (i != kDefaultStorage) {
+      dispatch_storage_type = NDArrayStorageType(i);
       break;
     }
   }
@@ -237,7 +237,7 @@ Graph AttachOpExecs(Graph g) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
     FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
-    FComputeND fcompute_ndarray = FComputeNDExecutor::GetFComputeND(inode.source->op(), vctx[i], dispatch_chunk_type);
+    FComputeND fcompute_ndarray = FComputeNDExecutor::GetFComputeND(inode.source->op(), vctx[i], dispatch_storage_type);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;

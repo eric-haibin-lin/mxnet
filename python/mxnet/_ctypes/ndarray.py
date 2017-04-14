@@ -153,9 +153,9 @@ def _make_ndarray_function(handle, name):
             return original_output
         ret_list = []
         for i in xrange(num_output.value):
-            chunk_type = ctypes.c_int(0)
-            check_call(_LIB.MXNDArrayGetChunkType(ctypes.cast(output_vars[i], NDArrayHandle), ctypes.byref(chunk_type)))
-            ret_list.append(_ndarray_cls_map[chunk_type.value](ctypes.cast(output_vars[i], NDArrayHandle)))
+            storage_type = ctypes.c_int(0)
+            check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(output_vars[i], NDArrayHandle), ctypes.byref(storage_type)))
+            ret_list.append(_ndarray_cls_map[storage_type.value](ctypes.cast(output_vars[i], NDArrayHandle)))
         if num_output.value == 1:
             return ret_list[0]
         return ret_list

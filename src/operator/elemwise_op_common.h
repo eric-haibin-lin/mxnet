@@ -63,7 +63,7 @@ inline bool ElemwiseChunkAttr(const nnvm::NodeAttrs& attrs,
       for (size_t i = 0; i < vec->size(); ++i) {
         if (assign(&result, (*vec)[i]) == false) {
           fallback = true;
-          result = kDefaultChunk;
+          result = kDefaultStorage;
           return;
         }
       }
@@ -108,12 +108,12 @@ inline bool ElemwiseType(const nnvm::NodeAttrs& attrs,
 }
 
 template<int n_in, int n_out>
-inline bool ElemwiseChunkType(const nnvm::NodeAttrs& attrs,
+inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *in_attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  //TODO replace type_is_none to chunk_type_is_none & type_assign
+  //TODO replace type_is_none to storage_type_is_none & type_assign
   return ElemwiseChunkAttr<int, type_is_none, type_assign, true>(
     attrs, in_attrs, out_attrs, -1);
 }

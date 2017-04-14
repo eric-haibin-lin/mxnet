@@ -132,11 +132,11 @@ def test_fc_infer_type():
 
 def check_infer_chunk(v1, v2, v1_chunk, v2_chunk, out_chunk):
     out = mx.symbol.elemwise_add(v1, v2)
-    arg_chunk_types, out_chunk_types, aux_chunk_types = out.infer_chunk_type(v1=v1_chunk, v2=v2_chunk)
-    assert len(out_chunk_types) == 1
-    assert out_chunk_types[0] == out_chunk
+    arg_storage_types, out_storage_types, aux_storage_types = out.infer_storage_type(v1=v1_chunk, v2=v2_chunk)
+    assert len(out_storage_types) == 1
+    assert out_storage_types[0] == out_chunk
 
-def test_broadcast_add_infer_chunk_type():
+def test_broadcast_add_infer_storage_type():
     v1 = mx.symbol.Variable('v1')
     v2 = mx.symbol.Variable('v2')
     check_infer_chunk(v1, v2, 'default', 'default', 'default')
@@ -154,4 +154,4 @@ if __name__ == "__main__":
     test_incomplete_infer_slicechannel()
     test_incomplete_infer_convolution()
     test_incomplete_infer_concat()'''
-    test_broadcast_add_infer_chunk_type()
+    test_broadcast_add_infer_storage_type()
