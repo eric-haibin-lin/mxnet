@@ -24,7 +24,7 @@ from .base import ctypes2buffer
 from .context import Context
 from . import _ndarray_internal as _internal
 from . import ndarray
-from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
+from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP, NDArray
 
 # Use different verison of SymbolBase
 # When possible, use cython to speedup part of computation.
@@ -81,23 +81,116 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True, dtype=mx_real_
         ctypes.byref(hdl)))
     return hdl
 
-
-class SparseNDArray(NDArrayBase):
+class SparseNDArray(NDArray):
     __slots__ = []
-    # pylint: disable= no-member, undefined-variable
+
     def __repr__(self):
         """Return a string representation of the array"""
+        #TODO also print shape info
         #shape_info = 'x'.join(['%d' % x for x in self.shape])
         return '<%s>' % (self.__class__.__name__)
+    def __add__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __iadd__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __radd__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __sub__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __isub__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __rsub__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __mul__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __neg__(self):
+        raise Exception('Not implemented for SparseND yet!')
+    def __imul__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __rmul__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __div__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __rdiv__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __idiv__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __truediv__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __rtruediv__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __itruediv__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __pow__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __rpow__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __eq__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __ne__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __gt__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __ge__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __lt__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __le__(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def __getstate__(self):
+        raise Exception('Not implemented for SparseND yet!')
+    def __setstate__(self, state):
+        raise Exception('Not implemented for SparseND yet!')
+    def __setitem__(self, key, value):
+        raise Exception('Not implemented for SparseND yet!')
+    def __getitem__(self, key):
+        raise Exception('Not implemented for SparseND yet!')
+    def _sync_copyfrom(self, source_array):
+        raise Exception('Not implemented for SparseND yet!')
+    def _slice(self, start, stop):
+        raise Exception('Not implemented for SparseND yet!')
+    def _at(self, idx):
+        raise Exception('Not implemented for SparseND yet!')
+    def reshape(self, shape):
+        raise Exception('Not implemented for SparseND yet!')
+    def broadcast_to(self, shape):
+        raise Exception('Not implemented for SparseND yet!')
+    def wait_to_read(self):
+        raise Exception('Not implemented for SparseND yet!')
+    #@property
+    #def shape(self):
+    #inherited from parent     
 
-    def to_dense(self):
-        return to_dense(self)
-
+    @property
+    def size(self):
+        raise Exception('Not implemented for SparseND yet!')
+    @property
+    def context(self):
+        raise Exception('Not implemented for SparseND yet!')
+    @property
+    def dtype(self):
+        raise Exception('Not implemented for SparseND yet!')
+    @property
+    # pylint: disable= invalid-name, undefined-variable
+    def T(self):
+        raise Exception('Not implemented for SparseND yet!')
     def asnumpy(self):
         """Return a dense ``numpy.ndarray`` object with value copied from this array
         """
         dense_nd = self.to_dense()
         return dense_nd.asnumpy()
+    def asscalar(self):
+        raise Exception('Not implemented for SparseND yet!')
+    def astype(self, dtype):
+        raise Exception('Not implemented for SparseND yet!')
+    def copyto(self, other):
+        raise Exception('Not implemented for SparseND yet!')
+    def copy(self):        
+        raise Exception('Not implemented for SparseND yet!')
+    def as_in_context(self, context):
+        raise Exception('Not implemented for SparseND yet!')
+    def to_dense(self):
+        return to_dense(self)
 
 # pylint: enable= no-member
 def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
@@ -135,8 +228,6 @@ def to_dense(source):
         source.handle, _STORAGE_TYPE_STR_TO_ID['default'],
         ctypes.byref(hdl)))
     return ndarray.NDArray(handle=hdl, writable=True)
-
-
 
 def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
     """Return a new array of given shape and type, filled with zeros.

@@ -179,7 +179,7 @@ void SetShapeType(const nnvm::Op* op,
   }
   for (auto& i : ndoutputs) {
     int storage_type = i.storage_type();
-    if (storage_type == kUndefinedChunk) {
+    if (storage_type == kUndefinedStorage) {
       storage_type = -1;
     }
     out_storage_types.push_back(storage_type);

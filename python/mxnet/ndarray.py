@@ -591,6 +591,9 @@ fixed-size items.
         """
         check_call(_LIB.MXNDArrayWaitToRead(self.handle))
 
+    @property
+    def shape(self):
+        """Tuple of array dimensions.
 
     @property
     def ndim(self):

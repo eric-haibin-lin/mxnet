@@ -57,7 +57,7 @@ class AutogradRuntime;
 #define DEFAULT_AUX_TYPE mshadow::kInt32
 
 enum NDArrayStorageType {
-  kUndefinedChunk, // undefined chunk
+  kUndefinedStorage, // undefined chunk
   kDefaultStorage,   // dense
   kRowSparseStorage, // row sparse
   kCSRStorage,       // csr
@@ -217,7 +217,7 @@ class NDArray {
     return ptr_->aux_types[i];
   }
   inline NDArrayStorageType storage_type() const {
-    if (is_none()) return kUndefinedChunk;
+    if (is_none()) return kUndefinedStorage;
     return ptr_->storage_type;
   }
   /*! \return whether this ndarray is not initialized */
