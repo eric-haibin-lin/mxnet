@@ -38,24 +38,6 @@ class NDArrayBase(object):
     def __reduce__(self):
         return (_ndarray_cls[1], (None,), self.__getstate__())
 
-    @property
-    def shape(self):
-        """Tuple of array dimensions.
-
-        Examples
-        --------
-        >>> x = mx.nd.array([1, 2, 3, 4])
-        >>> x.shape
-        (4,)
-        >>> y = mx.nd.zeros((2, 3, 4))
-        >>> y.shape
-        (2, 3, 4)
-        """
-        ndim = mx_uint()
-        pdata = ctypes.POINTER(mx_uint)()
-        check_call(_LIB.MXNDArrayGetShape(
-            self.handle, ctypes.byref(ndim), ctypes.byref(pdata)))
-        return tuple(pdata[:ndim.value])
 
 # pylint: disable=too-many-locals, invalid-name
 def _make_ndarray_function(handle, name):
@@ -168,16 +150,16 @@ def _make_ndarray_function(handle, name):
     return generic_ndarray_function
 
 
-def _set_chunk_nd_map(chunk_nd_map):
+def _set_storage_nd_map(storage_nd_map):
     """Set the symbolic class to be cls"""
     global _ndarray_cls_map 
-    _ndarray_cls_map = chunk_nd_map
+    _ndarray_cls_map = storage_nd_map
 
 
 # pylint: enable=too-many-locals, invalid-name
-def _init_ndarray_module(chunk_nd_map, root_namespace):
+def _init_ndarray_module(storage_nd_map, root_namespace):
     """List and add all the ndarray functions to current module."""
-    _set_chunk_nd_map(chunk_nd_map)
+    _set_storage_nd_map(storage_nd_map)
     plist = ctypes.POINTER(ctypes.c_char_p)()
     size = ctypes.c_uint()
 

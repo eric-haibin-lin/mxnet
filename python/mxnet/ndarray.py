@@ -558,7 +558,24 @@ fixed-size items.
         """
         check_call(_LIB.MXNDArrayWaitToRead(self.handle))
 
+    @property
+    def shape(self):
+        """Tuple of array dimensions.
 
+        Examples
+        --------
+        >>> x = mx.nd.array([1, 2, 3, 4])
+        >>> x.shape
+        (4,)
+        >>> y = mx.nd.zeros((2, 3, 4))
+        >>> y.shape
+        (2, 3, 4)
+        """
+        ndim = mx_uint()
+        pdata = ctypes.POINTER(mx_uint)()
+        check_call(_LIB.MXNDArrayGetShape(
+            self.handle, ctypes.byref(ndim), ctypes.byref(pdata)))
+        return tuple(pdata[:ndim.value])
 
     @property
     def size(self):

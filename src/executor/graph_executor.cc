@@ -501,7 +501,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     if (storage_id < 0) continue;
     size_t sid = static_cast<size_t>(storage_id);
     if (sid >= pool_info.size()) {
-      pool_info.resize(sid + 1, PoolEntry{Context::CPU(), size_t(0), kUndefinedChunk});
+      pool_info.resize(sid + 1, PoolEntry{Context::CPU(), size_t(0), kUndefinedStorage});
     }
     PoolEntry& info = pool_info[sid];
     if (info.bytes == 0) {
