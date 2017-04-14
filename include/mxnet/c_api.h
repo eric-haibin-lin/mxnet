@@ -1079,32 +1079,46 @@ MXNET_DLL int MXExecutorBindEX(SymbolHandle symbol_handle,
                                ExecutorHandle shared_exec,
                                ExecutorHandle *out);
 
-MXNET_DLL int MXExecutorSimpleBind(SymbolHandle symbol_handle,
-                                   int dev_type,  // default device type
-                                   int dev_id,  // default device id
-                                   const mx_uint num_g2c_keys,  // num of keys in group2ctx
-                                   const char** g2c_keys,  // arg names of group2ctx
-                                   const int* g2c_dev_types,  // ctx dev_types of group2ctx
-                                   const int* g2c_dev_ids,  // ctx dev_ids of group2ctx
-                                   const mx_uint in_arg_len,  // num of all in_args (no aux_states)
-                                   const int* in_arg_dev_types,  // all in_arg dev_types
-                                   const int* in_arg_dev_ids,  // all in_arg dev_ids
-                                   const mx_uint* grad_req_types,  // req types of all in_arg_grads
-                                   const mx_uint aux_state_len,  // number of aux_states
-                                   const int* aux_state_dev_types,  // aux_state ctx dev_types
-                                   const int* aux_state_dev_ids,  // aux_state ctx dev_ids
-                                   const mx_uint num_provided_args,  // #user provided in_args and aux_states
-                                   const char** provided_arg_shape_names,  // user provided arg names
-                                   const mx_uint* provided_arg_shape_data,  // provided arg shapes
-                                   const mx_uint* provided_arg_shape_idx,  // provided arg shape idx
-                                   const mx_uint num_provided_arg_dtypes,  // #provided arg dtypes
-                                   const char** provided_arg_dtype_names,  // provided arg dtype names
-                                   const int* provided_arg_dtypes,  // provided dtypes of args
-                                   NDArrayHandle** in_args,
-                                   NDArrayHandle** arg_grads,
-                                   NDArrayHandle** aux_states,
-                                   ExecutorHandle* out);
-
+int MXExecutorSimpleBind(SymbolHandle symbol_handle,
+                         int dev_type,  // default device type
+                         int dev_id,  // default device id
+                         const mx_uint num_g2c_keys,  // num of keys in group2ctx
+                         const char** g2c_keys,  // arg names of group2ctx
+                         const int* g2c_dev_types,  // ctx dev_types of group2ctx
+                         const int* g2c_dev_ids,  // ctx dev_ids of group2ctx
+                         const mx_uint in_arg_len,  // num of all in_args (no aux_states)
+                         const int* in_arg_dev_types,  // all in_arg dev_types
+                         const int* in_arg_dev_ids,  // all in_arg dev_ids
+                         const mx_uint* grad_req_types,  // req types of all in_arg_grads
+                         const mx_uint aux_state_len,  // number of aux_states
+                         const int* aux_state_dev_types,  // aux_state ctx dev_types
+                         const int* aux_state_dev_ids,  // aux_state ctx dev_ids
+                         const mx_uint num_provided_args,  // #user provided in_args and aux_states
+                         const char** provided_arg_shape_names,  // user provided arg names
+                         const mx_uint* provided_arg_shape_data,  // provided arg shapes
+                         const mx_uint* provided_arg_shape_idx,  // provided arg shape idx
+                         const mx_uint num_provided_arg_dtypes,  // #provided arg dtypes
+                         const char** provided_arg_dtype_names,  // provided arg dtype names
+                         const int* provided_arg_dtypes,  // provided dtypes of args
+                         const mx_uint num_param_names,
+                         const char** param_name_list,
+                         const mx_uint num_shared_data_arrays,
+                         const char** shared_data_array_name_list,
+                         NDArrayHandle* shared_data_array_handle_list,
+                         mx_uint* num_updated_shared_data_arrays,
+                         const char*** updated_shared_data_array_name_list,
+                         NDArrayHandle** updated_shared_data_array_handle_list,
+                         const mx_uint num_shared_exec_in_args,
+                         const NDArrayHandle* shared_exec_in_arg_handles,
+                         const mx_uint num_shared_exec_arg_grads,
+                         const NDArrayHandle* shared_exec_arg_grad_handles,
+                         const mx_uint num_shared_exec_aux_states,
+                         const NDArrayHandle* shared_exec_aux_state_handles,
+                         NDArrayHandle** in_args,
+                         NDArrayHandle** arg_grads,
+                         NDArrayHandle** aux_states,
+                         ExecutorHandle shared_exec_handle,
+                         ExecutorHandle* out);
 /*!
  * \brief set a call back to notify the completion of operation
  */

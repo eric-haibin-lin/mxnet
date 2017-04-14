@@ -101,9 +101,15 @@ class Executor {
                               std::vector<TShape>* arg_shapes,
                               std::vector<int>* arg_dtypes,
                               const std::vector<OpReqType>& grad_req_types,
+                              const std::unordered_set<std::string>& param_names,
+                              const std::vector<NDArray>& shared_exec_in_args,
+                              const std::vector<NDArray>& shared_exec_arg_grads,
+                              const std::vector<NDArray>& shared_exec_aux_states,
                               std::vector<NDArray>* in_args,
                               std::vector<NDArray>* arg_grads,
-                              std::vector<NDArray>* aux_states);
+                              std::vector<NDArray>* aux_states,
+                              std::unordered_map<std::string, NDArray>* shared_data_arrays = nullptr,
+                              Executor* shared_exec = nullptr);
   /*!
    * \brief the prototype of user-defined monitor callback
    */

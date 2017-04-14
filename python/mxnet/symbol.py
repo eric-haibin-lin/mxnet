@@ -1114,7 +1114,8 @@ class Symbol(SymbolBase):
             raise TypeError('Only accept list of NDArrays or dict of str to NDArray')
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
-    def simple_bind2(self, ctx, grad_req='write', type_dict=None, group2ctx=None, **kwargs):
+    def simple_bind2(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
+                     param_names=None, shared_exec=None, shared_data_arrays=None, **kwargs):
         """Bind current symbol to get an executor, allocate all the ndarrays needed.
         Allows specifying data types.
 

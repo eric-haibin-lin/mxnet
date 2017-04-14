@@ -72,9 +72,14 @@ class GraphExecutor : public Executor {
              std::vector<TShape>* arg_shapes,
              std::vector<int>* arg_dtypes,
              const std::vector<OpReqType>& grad_req_types,
+             const std::unordered_set<std::string>& param_names,
+             const std::vector<NDArray>& shared_exec_in_args,
+             const std::vector<NDArray>& shared_exec_arg_grads,
+             const std::vector<NDArray>& shared_exec_aux_states,
              std::vector<NDArray>* in_arg_vec,
              std::vector<NDArray>* arg_grad_vec,
              std::vector<NDArray>* aux_state_vec,
+             std::unordered_map<std::string, NDArray>* shared_data_arrays = nullptr,
              Executor* shared_exec = nullptr);
 
  protected:
@@ -108,7 +113,35 @@ class GraphExecutor : public Executor {
     // list of op executors
     std::vector<OpExecutor*> exec_list;
   };
-
+  // Initialize in_args, arg_grads, and aux_states
+  void InitArguments(const nnvm::IndexedGraph& idx,
+                     const nnvm::ShapeVector& inferred_shapes,
+                     const nnvm::DTypeVector& inferred_dtypes,
+                     const std::vector<Context>& in_arg_ctxes,
+                     const std::vector<Context>& arg_grad_ctxes,
+                     const std::vector<Context>& aux_state_ctxes,
+                     const std::vector<OpReqType>& grad_req_types,
+                     std::vector<NDArray>* in_arg_vec,
+                     std::vector<NDArray>* arg_grad_vec,
+                     std::vector<NDArray>* aux_state_vec);
+  // Initialize in_args, arg_grads and aux_states with
+  // shared_data_arrays and shared_exec
+  void InitArguments(const nnvm::IndexedGraph& idx,
+                     const nnvm::ShapeVector& inferred_shapes,
+                     const nnvm::DTypeVector& inferred_dtypes,
+                     const std::vector<Context>& in_arg_ctxes,
+                     const std::vector<Context>& arg_grad_ctxes,
+                     const std::vector<Context>& aux_state_ctxes,
+                     const std::vector<OpReqType>& grad_req_types,
+                     const std::unordered_set<std::string>& param_names,  // DataParallelExecutorGroup.param_names
+                     const bool has_shared_exec,  // shared_exec != nullptr
+                     const std::vector<NDArray>& shared_exec_in_args,
+                     const std::vector<NDArray>& shared_exec_arg_grads,
+                     const std::vector<NDArray>& shared_exec_aux_states,
+                     std::unordered_map<std::string, NDArray>* shared_data_arrays,  // self.shared_data_arrays[i] L636
+                     std::vector<NDArray>* in_arg_vec,
+                     std::vector<NDArray>* arg_grad_vec,
+                     std::vector<NDArray>* aux_state_vec);
   // internal initialization of the graph.
   Graph InitGraph(nnvm::Symbol symbol,
                   const Context& default_ctx,
@@ -128,10 +161,7 @@ class GraphExecutor : public Executor {
                    const std::vector<Context>& aux_state_ctxes,
                    std::vector<TShape>* arg_shapes,
                    std::vector<int>* arg_dtypes,
-                   const std::vector<OpReqType>& grad_req_types,
-                   std::vector<NDArray>* in_arg_vec,
-                   std::vector<NDArray>* arg_grad_vec,
-                   std::vector<NDArray>* aux_state_vec);
+                   const std::vector<OpReqType>& grad_req_types);
   // initialize the full graph, including gradient.
   Graph InitFullGraph(nnvm::Symbol symbol,
                       const std::vector<OpReqType>& grad_req_type,
