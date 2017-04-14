@@ -83,10 +83,6 @@ def _new_alloc_handle(sparse_type, shape, ctx, delay_alloc=True, dtype=mx_real_t
 
 
 class SparseNDArray(NDArrayBase):
-    """An array object represents a multidimensional, homogeneous array of
-fixed-size items.
-
-    """
     __slots__ = []
     # pylint: disable= no-member, undefined-variable
     def __repr__(self):
@@ -96,6 +92,12 @@ fixed-size items.
 
     def to_dense(self):
         return to_dense(self)
+
+    def asnumpy(self):
+        """Return a dense ``numpy.ndarray`` object with value copied from this array
+        """
+        dense_nd = self.to_dense()
+        return dense_nd.asnumpy()
 
 # pylint: enable= no-member
 def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
@@ -133,6 +135,8 @@ def to_dense(source):
         source.handle, _CHUNK_TYPE_STR_TO_ID['default'],
         ctypes.byref(hdl)))
     return ndarray.NDArray(handle=hdl, writable=True)
+
+
 
 def zeros(shape, sparse_type, ctx=None, dtype=mx_real_t):
     """Return a new array of given shape and type, filled with zeros.

@@ -47,11 +47,11 @@ def test_ndarray_elementwise_add():
     assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)
     # dense - sparse addition
     dense_plus_sparse = mx.nd.elemwise_add(dense_nd, sparse_nd1)
+    print(dense_plus_sparse)
     assert_almost_equal(dense_plus_sparse.asnumpy(), dense_np + sparse_np1)
     # sparse - sparse addition
     sparse_plus_sparse = mx.nd.elemwise_add(sparse_nd1, sparse_nd1)
-    sparse_plus_sparse_dense_nd = sparse_plus_sparse.to_dense()
-    assert_almost_equal(sparse_plus_sparse_dense_nd.asnumpy(), sparse_np1 + sparse_np1)
+    assert_almost_equal(sparse_plus_sparse.asnumpy(), sparse_np1 + sparse_np1)
 
 def test_ndarray_elementwise_fallback():
     dense_np = np.array([[1,2],[3,4],[5,6]])
@@ -64,12 +64,14 @@ def test_ndarray_elementwise_fallback():
     # dense - dense addition
     dense_plus_dense = mx.nd.add_n(dense_nd, dense_nd);
     assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)
+    
+
     # dense - sparse addition
     dense_plus_sparse = mx.nd.add_n(dense_nd, sparse_nd1)
     assert_almost_equal(dense_plus_sparse.asnumpy(), dense_np + sparse_np1)
+
     # sparse - sparse addition
     sparse_plus_sparse = mx.nd.add_n(sparse_nd1, sparse_nd1)
-    #sparse_plus_sparse_dense_nd = sparse_plus_sparse.to_dense()
     assert_almost_equal(sparse_plus_sparse.asnumpy(), sparse_np1 + sparse_np1)
 
 def test_ndarray_conversion():
@@ -85,7 +87,7 @@ def test_ndarray_conversion():
 def test_ndarray_zeros():
     zero = mx.nd.zeros((2,2))
     sparse_zero = mx.sparse_nd.zeros((2,2), 'row_sparse')
-    assert_almost_equal(sparse_zero.to_dense().asnumpy(), zero.asnumpy())
+    assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
 
 def test_ndarray_copyto():
     zero = mx.nd.zeros((2,2))
@@ -99,3 +101,4 @@ if __name__ == '__main__':
     test_ndarray_zeros()
     test_ndarray_copyto()
     test_ndarray_elementwise_fallback()
+    print("done")

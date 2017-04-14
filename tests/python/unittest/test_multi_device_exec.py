@@ -32,25 +32,36 @@ def test_ctx_group():
             assert arr.context == group2ctx['stage1']
         else:
             assert arr.context == group2ctx['stage2']
-
-def test_ctx_group_sparse():
-    data1 = mx.symbol.Variable('data1', sparse_type='row_sparse')
-    data2 = mx.symbol.Variable('data2', sparse_type='row_sparse')
-    mlp  = mx.symbol.elemwise_add(data1, data2, name='plus')
-    texec = mlp.simple_bind(mx.cpu(0), data1=(3,2), data2=(3,2))
-
-    # Feed Data
+'''
+This tests the simple bind function
+'''
+def test_ctx_group_sparse(mode):
+    # Input Data
     dense_np = np.array([[1,2],[3,4],[5,6]])
     sparse_np1 = np.array([[5,10],[0,0],[0,0]])
     dense_nd = mx.nd.array(dense_np)
-
     val = mx.nd.array([5, 10]);
     idx = mx.nd.array([0], dtype=np.int32);
     sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2))
     sparse_nd2 = mx.sparse_nd.row_sparse(val, idx, (3,2))
 
-    texec.arg_dict['data1'] = sparse_nd1
-    texec.arg_dict['data2'] = sparse_nd2
+    # Symbols
+    if mode == 'dense_dense':
+      data1 = mx.symbol.Variable('data1')
+      data2 = mx.symbol.Variable('data2')
+      
+    elif mode == 'dense_sparse':
+      data1 = mx.symbol.Variable('data1')
+      #data1 = mx.symbol.Variable('data1', sparse_type='row_sparse')
+      data2 = mx.symbol.Variable('data2', sparse_type='row_sparse')
+
+    mlp  = mx.symbol.elemwise_add(data1, data2, name='plus')
+    texec = mlp.simple_bind(mx.cpu(0), data1=(3,2), data2=(3,2))
+    print("Done simple_bind")
+    
+    #texec.arg_dict['data1'] = sparse_nd1
+    #texec.arg_dict['data1'] = dense_nd
+    #texec.arg_dict['data2'] = sparse_nd2
     #texec.outputs = texec._get_outputs()
 
     print("Done data preparation")
@@ -59,7 +70,6 @@ def test_ctx_group_sparse():
     print(output[0].asnumpy())
     for arr, name in zip(texec.arg_arrays, mlp.list_arguments()):
          pass
-
 if __name__ == '__main__':
     #test_ctx_group()
-    test_ctx_group_sparse()
+    test_ctx_group_sparse('dense_sparse')

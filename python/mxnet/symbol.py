@@ -1119,15 +1119,15 @@ class Symbol(SymbolBase):
             attrs = self.attr_dict()
             print(attrs)
             sparse_type_dict = {k: 'default' \
-                if k not in attrs or '__sparse_type__' not in attrs[k] \
-                else attrs[k]['__sparse_type__'] for k in self.list_arguments()}
+                if k not in attrs or '__chunk_type__' not in attrs[k] \
+                else attrs[k]['__chunk_type__'] for k in self.list_arguments()}
         arg_shapes, _, aux_shapes = self.infer_shape(**kwargs)
         arg_types, _, aux_types = self.infer_type(**type_dict)
         print(sparse_type_dict)
         arg_chunk_types, out_chunk_types, aux_chunk_types = \
             self.infer_chunk_type(**sparse_type_dict)
-        print(arg_chunk_types)
-        print(out_chunk_types)
+        print("arg_chunk_types", arg_chunk_types)
+        print("out_chunk_types", out_chunk_types)
 
         if arg_shapes is None or arg_types is None:
             raise ValueError("Input node is not complete")
@@ -1145,10 +1145,16 @@ class Symbol(SymbolBase):
             aux_ctx = [ctx] * len(aux_shapes)
 
         # alloc space
-        arg_ndarrays = [
-            # TODO We should avoid allocating space for sparse inputs.
-            _nd_zeros(shape, dev, dtype=dtype)
-            for dtype, dev, shape in zip(arg_types, arg_ctx, arg_shapes)]
+	arg_ndarrays = [
+	    # TODO We should avoid allocating space for sparse inputs.
+	    _nd_zeros(shape, dev, dtype=dtype) if chunk_type != 'row_sparse' 
+	    else _sparse_nd_zeros(shape, chunk_type, dev, dtype=dtype)
+	    for dtype, dev, shape, chunk_type in zip(arg_types, arg_ctx, arg_shapes, arg_chunk_types)]
+        print(arg_ndarrays)
+        #arg_ndarrays = [
+        #    # TODO We should avoid allocating space for sparse inputs.
+        #    _nd_zeros(shape, dev, dtype=dtype) 
+        #    for dtype, dev, shape in zip(arg_types, arg_ctx, arg_shapes)]
         if grad_req != 'null':
             grad_ndarrays = {}
             for name, shape, dev, dtype in zip(
