@@ -11,6 +11,7 @@ from .base import _LIB
 from .base import mx_uint, NDArrayHandle, ExecutorHandle
 from .base import check_call, c_array, py_str
 from .ndarray import NDArray
+from .sparse_ndarray import SparseNDArray
 from . import ndarray as nd
 
 # those functions are not used here, we just import them to keep backward compatibility
@@ -81,7 +82,10 @@ class Executor(object):
         handles = ctypes.POINTER(NDArrayHandle)()
         check_call(_LIB.MXExecutorOutputs(self.handle,
                                           ctypes.byref(out_size), ctypes.byref(handles)))
-        return [NDArray(NDArrayHandle(handles[i])) for i in range(out_size.value)]
+        #TODO perform on a list
+        chunk_type = ctypes.c_int(0)
+        check_call(_LIB.MXNDArrayGetChunkType(ctypes.cast(handles[0], NDArrayHandle), ctypes.byref(chunk_type)))
+        return [NDArray(NDArrayHandle(handles[i])) if chunk_type.value == 1 else SparseNDArray(NDArrayHandle(handles[i])) for i in range(out_size.value)]
 
     def forward(self, is_train=False, **kwargs):
         """Calculate the outputs specified by the bound symbol.

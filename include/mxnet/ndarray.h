@@ -463,15 +463,15 @@ class NDArray {
     // The shape of the chunk data. 
     // This might not be the same shape as the NDArray, since the chunk may be sparse.
     TShape chunk_shape;
-    // The shape of aux data
-    std::vector<TShape> aux_shapes;
+    // The shape of aux data. The default value for the shape is 0.
+    // TODO replace vector with array
+    std::vector<TShape> aux_shapes = {TShape()};
 
     /*! \brief construct a new chunk */
     Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
         : static_data(false), delay_alloc(true), ctx(ctx_) {
       auto size = shape.Size();
       chunk_shape = shape;
-      CHECK(chunk_shape.ndim() > 0);
       var = Engine::Get()->NewVariable();
       shandle.size = size * mshadow::mshadow_sizeof(dtype);
       shandle.ctx = ctx_;

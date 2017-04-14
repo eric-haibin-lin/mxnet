@@ -268,7 +268,7 @@ def _parse_location(sym, location, ctx):
                              % (str(set(sym.list_arguments())), str(set(location.keys()))))
     else:
         location = {k: v for k, v in zip(sym.list_arguments(), location)}
-    location = {k: mx.nd.array(v, ctx=ctx) for k, v in location.items()}
+    location = {k: mx.nd.array(v, ctx=ctx) if isinstance(v, np.ndarray) else v for k, v in location.items()}
     return location
 
 

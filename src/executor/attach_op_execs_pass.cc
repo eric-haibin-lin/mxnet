@@ -8,6 +8,7 @@
 #include <mxnet/op_attr_types.h>
 #include <nnvm/graph_attr_types.h>
 #include "./exec_pass.h"
+#include "../common/utils.h"
 
 namespace mxnet {
 
@@ -120,17 +121,15 @@ class FComputeExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {
     op_ctx.run_ctx = rctx;
+    //TODO Get stream?
+    //mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
+    common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_, &out_data_,
+                                  &tmp_nds_, true, nullptr);
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
   }
   void Setup() override {
-    // TODO use PrepDefaultBlob
-    in_data_.resize(in_array.size());
-    out_data_.resize(out_array.size());
-    auto get_blob =  [](const NDArray& nd) {
-      return nd.data();
-    };
-    std::transform(in_array.begin(), in_array.end(), in_data_.begin(), get_blob);
-    std::transform(out_array.begin(), out_array.end(), out_data_.begin(), get_blob);
+    in_array_ = in_array;
+    out_array_ = out_array;    
   }
   Operator::ExecType exec_type() const override {
     return Operator::kSync;
@@ -156,6 +155,7 @@ class FComputeExecutor : public OpExecutor {
   FCompute fcompute_;
   NodeAttrs attrs_;
   std::vector<TBlob> in_data_, out_data_;
+  std::vector<NDArray> in_array_, out_array_, tmp_nds_;
 };
 
 // fcomputend executor
@@ -176,10 +176,14 @@ class FComputeNDExecutor : public OpExecutor {
       : fcompute_(fcompute), attrs_(attrs) {
   }
 
-  static FComputeND GetFComputeND(const Op* op, Context ctx) {
+  static FComputeND GetFComputeND(const Op* op, Context ctx, NDArrayChunkType dispatch_chunk_type) {
     static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu, row_sparse>");
     static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeND>("FComputeND<gpu, row_sparse>");
+    if (dispatch_chunk_type != kRowSparseChunk) {
+      return nullptr;
+    }
     if (ctx.dev_mask() == cpu::kDevMask) {
+      if (fcompute_cpu.get(op, nullptr) != nullptr) std::cout << "FComputeND for op " << op->name << std::endl;
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -198,6 +202,7 @@ class FComputeNDExecutor : public OpExecutor {
 // pass to attach operator executors
 Graph AttachOpExecs(Graph g) {
   using nnvm::DTypeVector;
+  using nnvm::ChunkTypeVector;
   using nnvm::ShapeVector;
   using nnvm::FMutateInputs;
 
@@ -208,6 +213,16 @@ Graph AttachOpExecs(Graph g) {
   const auto& vdtype = g.GetAttr<DTypeVector>("dtype");
   const auto& vshape = g.GetAttr<ShapeVector>("shape");
   const auto& vctx = g.GetAttr<ContextVector>("context");
+
+  // Also obtain chunk_type vector
+  const auto& vchunk_type = g.GetAttr<ChunkTypeVector>("chunk_type");
+  NDArrayChunkType dispatch_chunk_type = kDefaultChunk;
+  for (auto& i : vchunk_type) {
+    if (i != kDefaultChunk) {
+      dispatch_chunk_type = NDArrayChunkType(i);
+      break;
+    }
+  }
 
   // get the graph
   const auto& idx = g.indexed_graph();
@@ -222,7 +237,7 @@ Graph AttachOpExecs(Graph g) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
     FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
-    FComputeND fcompute_ndarray = FComputeNDExecutor::GetFComputeND(inode.source->op(), vctx[i]);
+    FComputeND fcompute_ndarray = FComputeNDExecutor::GetFComputeND(inode.source->op(), vctx[i], dispatch_chunk_type);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;
@@ -243,10 +258,11 @@ Graph AttachOpExecs(Graph g) {
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
     } else if (fcompute_ndarray != nullptr) {
-      std::cout << "dispatching fcompute_ndarray" << std::endl;
+      // Also check the chunk type
+      std::cout << "SYM: dispatching fcompute_ndarray" << std::endl;
       ret[i] = std::make_shared<FComputeNDExecutor>(fcompute_ndarray, inode.source->attrs);
     } else if (fcompute != nullptr) {
-      std::cout << "dispatching fcompute" << std::endl;
+      std::cout << "SYM: dispatching fcompute" << std::endl;
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);
     } else {
       LOG(INFO) << "FCompute not registered " << inode.source->op()->name;

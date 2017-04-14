@@ -454,9 +454,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
         chunk_type == kRowSparseChunk) {
       fn_nd = fnd_cpu_row_sparse[op];
-      std::cout << "fnd_cpu_row_sparse dispatched." << std::endl;
+      std::cout << "IMP: fnd_cpu_row_sparse dispatched." << std::endl;
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
-      std::cout << "fcpu dispatched." << std::endl;
+      std::cout << "IMP: fcpu dispatched." << std::endl;
       fn = fcpu[op];
     } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
       fn = fgpu[op];
