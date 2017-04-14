@@ -64,7 +64,7 @@ using FCompute = std::function<void (const nnvm::NodeAttrs& attrs,
 /*!
  * \brief Resiger an NDArray compute function for simple stateless forward only operator
  *
- * \note Register under "FComputeND<cpu, `chunk_type`>" and "FComputeND<gpu, `chunk_type`>" 
+ * \note Register under "FComputeND<cpu, `storage_type`>" and "FComputeND<gpu, `storage_type`>" 
  * e.g FComputeND<cpu, row_sparse>
  * TODO should probably change const std::vector<NDArray>& outputs to
                                std::vector<NDArray> *outputs

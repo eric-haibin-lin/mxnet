@@ -56,11 +56,11 @@ void BinaryDenseSparseTest() {
   NDArray raw_data0 = GetDenseND(data_shape, ctx, {10, 10, 10, 10});
 
   TShape output_shape({3, 2});
-  NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseChunk, data_shape);
+  NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseStorage, data_shape);
   NDArray input_nd1 = GetDenseND(output_shape, ctx, {1, 2, 3, 4, 5, 6});
   Engine::Get()->WaitForAll();
 
-  NDArray output(kRowSparseChunk, output_shape, ctx);
+  NDArray output(kRowSparseStorage, output_shape, ctx);
   // Push the right vars! FIXME
   std::vector<Engine::VarHandle> const_vars;
   const_vars.push_back(raw_data0.var());
@@ -95,13 +95,13 @@ void BinarySpSpTest() {
   NDArray raw_data1 = GetDenseND(data_shape, ctx, {5, 5, 5, 5});
   Engine::Get()->WaitForAll();
 
-  NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseChunk, data_shape);
-  NDArray input_nd1(raw_data1, {index1}, ctx, kRowSparseChunk, data_shape);
+  NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseStorage, data_shape);
+  NDArray input_nd1(raw_data1, {index1}, ctx, kRowSparseStorage, data_shape);
   CheckDataRegion(input_nd0.data(), raw_data0.data());
   CheckDataRegion(input_nd1.data(), raw_data1.data());
 
   TShape output_shape({3, 2});
-  NDArray output(kRowSparseChunk, output_shape, ctx);
+  NDArray output(kRowSparseStorage, output_shape, ctx);
   std::vector<Engine::VarHandle> const_vars;
   const_vars.push_back(raw_data0.var());
   const_vars.push_back(raw_data1.var());
@@ -130,15 +130,15 @@ void BinarySpSpTest() {
 void InferElemwiseChunkTest() {
   nnvm::NodeAttrs attrs;
   attrs.name = "Test op";
-  std::vector<int> in_attrs({kRowSparseChunk, kDefaultChunk});
+  std::vector<int> in_attrs({kRowSparseStorage, kDefaultStorage});
   std::vector<int> out_attrs({-1});
 
-  op::ElemwiseChunkType<2, 1>(attrs, &in_attrs, &out_attrs);
-  EXPECT_EQ(out_attrs[0], kDefaultChunk);
-  in_attrs = {kDefaultChunk, kRowSparseChunk};
+  op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
+  EXPECT_EQ(out_attrs[0], kDefaultStorage);
+  in_attrs = {kDefaultStorage, kRowSparseStorage};
   out_attrs = {-1};
-  op::ElemwiseChunkType<2, 1>(attrs, &in_attrs, &out_attrs);
-  EXPECT_EQ(out_attrs[0], kDefaultChunk);
+  op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
+  EXPECT_EQ(out_attrs[0], kDefaultStorage);
 }
 
 TEST(NDArray, basics) {
@@ -159,7 +159,7 @@ void TestDenseToDenseConversion() {
   nd = val;
   // TODO remove WaitFroAll
   Engine::Get()->WaitForAll();
-  auto nd_copy = nd.ConvertTo<cpu>(kDefaultChunk, nullptr);
+  auto nd_copy = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
   CheckDataRegion(nd_copy.data(), nd.data());
 }
 // TODO refactor: GetDense, GetSparse
@@ -176,7 +176,7 @@ void TestSparseToDenseConversion() {
   index0 = 0;
 
   TShape shape({2, 2});
-  NDArray nd(raw_data0, {index0}, ctx, kRowSparseChunk, shape);
+  NDArray nd(raw_data0, {index0}, ctx, kRowSparseStorage, shape);
 
   // Dense ndarray
   NDArray dense_nd(shape, ctx, false);
@@ -185,7 +185,7 @@ void TestSparseToDenseConversion() {
   dense_nd.data().FlatTo2D<cpu, real_t>()[0][1] = 1;
   Engine::Get()->WaitForAll(); 
 
-  auto converted_nd = nd.ConvertTo<cpu>(kDefaultChunk, nullptr);
+  auto converted_nd = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
   auto converted_data = converted_nd.data();
   CheckDataRegion(converted_data, dense_nd.data());
 }

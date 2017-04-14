@@ -29,7 +29,7 @@ def test_elemwise_add_dense_sparse():
     sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2))
 
     data1 = mx.symbol.Variable('data1')
-    data2 = mx.symbol.Variable('data2', sparse_type='row_sparse')
+    data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
     test  = mx.symbol.elemwise_add(data1, data2, name='plus')
     check_symbolic_forward(test, {'data1':dense_nd,
                                   'data2':sparse_nd1}, [dense_np + sparse_np1])
@@ -48,8 +48,8 @@ def test_elemwise_add_sparse_sparse():
     sparse_nd1 = mx.sparse_nd.row_sparse(val1, idx1, (3,2))
     sparse_nd2 = mx.sparse_nd.row_sparse(val2, idx2, (3,2))
 
-    data1 = mx.symbol.Variable('data1', sparse_type='row_sparse')
-    data2 = mx.symbol.Variable('data2', sparse_type='row_sparse')
+    data1 = mx.symbol.Variable('data1', storage_type='row_sparse')
+    data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
     test  = mx.symbol.elemwise_add(data1, data2, name='plus')
     check_symbolic_forward(test, {'data1':sparse_nd1,
                                   'data2':sparse_nd2}, [sparse_np1 + sparse_np2])

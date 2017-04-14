@@ -156,7 +156,7 @@ void SetValueOp(const real_t &rhs, NDArray *out) {
   switch (ret.ctx().dev_mask()) {
     case cpu::kDevMask: {
       Engine::Get()->PushSync([rhs, ret](RunContext ctx) {
-          CHECK(ret.chunk_type() == kDefaultChunk);
+          CHECK(ret.storage_type() == kDefaultStorage);
           ret.CheckAndAlloc();
           TBlob tmp = ret.data();
           ndarray::Eval<cpu>(rhs, &tmp, ctx);
@@ -506,19 +506,20 @@ inline NDArray &ScalarOpApply(NDArray *dst,
 }
 
 // NDArray Convertion
-// Make a copy of data, and convert to kDefaultChunk type
+// Make a copy of data, and convert to kDefaultStorage type
 template<typename xpu>
 NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
   //TODO CHECK TYPE
-  WaitToRead();
+  LOG(INFO) << "NDArray::ToDefault " << this->var();
+  this->WaitToRead();
   NDArray result(shape_, ptr_->ctx, false, dtype());
-  if (chunk_type() == kDefaultChunk) {
+  if (storage_type() == kDefaultStorage) {
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
       mshadow::Copy(result.data().FlatTo1D<xpu, DType>(), data().FlatTo1D<xpu, DType>());
     });
     return result;
   }
-  CHECK(chunk_type() == kRowSparseChunk);
+  CHECK(storage_type() == kRowSparseStorage);
   MSHADOW_TYPE_SWITCH(dtype(), DType, {
     // Fill in zeros
     result.data().FlatTo1D<xpu, DType>(s) = 0;
@@ -539,13 +540,13 @@ NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
 }
 
 template<typename xpu>
-NDArray NDArray::ConvertTo(NDArrayChunkType chunk_type, mshadow::Stream<xpu> *s) const {
+NDArray NDArray::ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const {
   //TODO implement convertion to other chunk types
-  CHECK(chunk_type == kDefaultChunk);
+  CHECK(storage_type == kDefaultStorage);
   return ToDefault<xpu>(s);
 }
 //temporarily explicit instantiate this template so that we don't get complaints in c_api.. To remove later
-template NDArray NDArray::ConvertTo<cpu>(NDArrayChunkType chunk_type, mshadow::Stream<cpu> *s) const;
+template NDArray NDArray::ConvertTo<cpu>(NDArrayStorageType storage_type, mshadow::Stream<cpu> *s) const;
 
 // Binary
 NDArray operator+(const NDArray &lhs, const NDArray &rhs) {

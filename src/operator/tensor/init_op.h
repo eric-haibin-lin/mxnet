@@ -113,7 +113,7 @@ inline bool InitType(const nnvm::NodeAttrs& attrs,
 
 
 template<typename xpu, int value>
-void FillComputeND(const nnvm::NodeAttrs& attrs,
+void FillComputeEx(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
                  const std::vector<NDArray>& inputs,
                  const std::vector<OpReqType>& req,
@@ -121,7 +121,7 @@ void FillComputeND(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (value == 0 && outputs[0].chunk_type() != kDefaultChunk) {
+  if (value == 0 && outputs[0].storage_type() != kDefaultStorage) {
     return;
   }
   // TODO Fallback

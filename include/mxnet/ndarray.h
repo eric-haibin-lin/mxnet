@@ -56,11 +56,11 @@ class AutogradRuntime;
 #define ROW_SPARSE_TYPE int32_t
 #define DEFAULT_AUX_TYPE mshadow::kInt32
 
-enum NDArrayChunkType {
+enum NDArrayStorageType {
   kUndefinedChunk, // undefined chunk
-  kDefaultChunk,   // dense
-  kRowSparseChunk, // row sparse
-  kCSRChunk,       // csr
+  kDefaultStorage,   // dense
+  kRowSparseStorage, // row sparse
+  kCSRStorage,       // csr
 };
 
 /*!
@@ -92,16 +92,16 @@ class NDArray {
 #endif
   }
   // Constructor for NDArray with chunk type
-  NDArray(NDArrayChunkType chunk_type, const TShape &shape, Context ctx,
+  NDArray(NDArrayStorageType storage_type, const TShape &shape, Context ctx,
           bool delay_alloc = true, int dtype = mshadow::default_type_flag,
           std::vector<int> aux_types = {DEFAULT_AUX_TYPE})
-      : ptr_(std::make_shared<Chunk>(ctx, delay_alloc, aux_types, chunk_type)),
+      : ptr_(std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type)),
         shape_(shape), offset_(0), dtype_(dtype) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
       // TODO Support other chunk types, too
-      CHECK(chunk_type == kRowSparseChunk);
+      CHECK(storage_type == kRowSparseStorage);
   }
   /*!
    * \brief constructing a static NDArray that shares data with TBlob
@@ -117,8 +117,8 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  NDArray(NDArray data, std::vector<NDArray> aux_data, Context ctx, NDArrayChunkType chunk_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data, aux_data[0], ctx, chunk_type)), shape_(shape), offset_(0),
+  NDArray(NDArray data, std::vector<NDArray> aux_data, Context ctx, NDArrayStorageType storage_type, const TShape &shape)
+      : ptr_(std::make_shared<Chunk>(data, aux_data[0], ctx, storage_type)), shape_(shape), offset_(0),
         dtype_(data.data().type_flag_) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
@@ -128,7 +128,7 @@ class NDArray {
   }
   // TODO Also take a pointer of NDArray as the output ndarray
   template<typename xpu>
-  NDArray ConvertTo(NDArrayChunkType chunk_type, mshadow::Stream<xpu> *s) const;
+  NDArray ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const;
   /*!
    * \return the shape of current NDArray.
    */
@@ -148,7 +148,7 @@ class NDArray {
    * \return the shape of aux data at ith index
    */
   inline const TShape &aux_shape(size_t i) const {
-    CHECK(chunk_type() != kDefaultChunk);
+    CHECK(storage_type() != kDefaultStorage);
     CHECK(i < ptr_->aux_shapes.size());
     return ptr_->aux_shapes[i];
   }
@@ -172,7 +172,7 @@ class NDArray {
    * \return the aux TBlob
    */
   inline TBlob aux_data(size_t i) const {
-    CHECK(chunk_type() != kDefaultChunk);
+    CHECK(storage_type() != kDefaultStorage);
     TBlob res;
     MSHADOW_TYPE_SWITCH(aux_type(i), DType, {
       res = TBlob(static_cast<DType*>(ptr_->aux_handles[i].dptr), aux_shape(i), 
@@ -187,7 +187,7 @@ class NDArray {
    * \return a chunk of raw data in TBlob
    */
   inline TBlob raw_data(index_t offset, index_t length) const {
-    CHECK(chunk_type() == kDefaultChunk);
+    CHECK(storage_type() == kDefaultStorage);
     TBlob res;
     TShape raw_shape(1);
     raw_shape[0] = length;
@@ -216,9 +216,9 @@ class NDArray {
     CHECK(ptr_ != nullptr);
     return ptr_->aux_types[i];
   }
-  inline NDArrayChunkType chunk_type() const {
+  inline NDArrayStorageType storage_type() const {
     if (is_none()) return kUndefinedChunk;
-    return ptr_->chunk_type;
+    return ptr_->storage_type;
   }
   /*! \return whether this ndarray is not initialized */
   inline bool is_none() const {
@@ -430,7 +430,7 @@ class NDArray {
     ptr_->CheckAndAlloc();
   }
   /* !
-   * \brief Alloc number of dense rows for kRowSparseChunk
+   * \brief Alloc number of dense rows for kRowSparseStorage
    * aux_shape is only known at run time
    */
   inline void CheckAndAlloc(std::vector<TShape> aux_shapes) const {
@@ -483,7 +483,7 @@ class NDArray {
     /*! \brief whether allocation is delayed */
     bool delay_alloc;
     /*! \brief construct from static data */
-    NDArrayChunkType chunk_type = kDefaultChunk;
+    NDArrayStorageType storage_type = kDefaultStorage;
     /*! \brief type of aux */
     std::vector<int> aux_types;
     Context ctx;
@@ -505,12 +505,12 @@ class NDArray {
       if (!delay_alloc_) this->CheckAndAlloc();
     }
     // TODO change to list of aux_data instead
-    Chunk(const NDArray &nd_data, const NDArray &nd_aux_data, Context ctx_, NDArrayChunkType chunk_type_)
-        : static_data(false), delay_alloc(false), chunk_type(chunk_type_),
+    Chunk(const NDArray &nd_data, const NDArray &nd_aux_data, Context ctx_, NDArrayStorageType storage_type_)
+        : static_data(false), delay_alloc(false), storage_type(storage_type_),
           aux_types({nd_aux_data.data().type_flag_}), ctx(ctx_) {
       const auto &data = nd_data.data();
       const auto &aux_data = nd_aux_data.data(); 
-      CHECK(chunk_type_ == kRowSparseChunk);
+      CHECK(storage_type_ == kRowSparseStorage);
       // Shapes
       aux_shapes = {aux_data.shape_};
       chunk_shape = data.shape_;
@@ -531,7 +531,7 @@ class NDArray {
       // Copy data
       // TODO refactor
       nd_data.WaitToRead();
-      CHECK(nd_data.chunk_type() == kDefaultChunk);
+      CHECK(nd_data.storage_type() == kDefaultStorage);
       CHECK(nd_data.dtype() == data.type_flag_);
       MSHADOW_TYPE_SWITCH(nd_data.dtype(), DType, {
         auto copy = TBlob(static_cast<DType*>(shandle.dptr), chunk_shape,
@@ -540,7 +540,7 @@ class NDArray {
       });
       // Copy aux data
       nd_aux_data.WaitToRead();
-      CHECK(nd_aux_data.chunk_type() == kDefaultChunk);
+      CHECK(nd_aux_data.storage_type() == kDefaultStorage);
       CHECK(nd_aux_data.dtype() == aux_data.type_flag_);
       MSHADOW_TYPE_SWITCH(nd_aux_data.dtype(), DType, {
         auto copy = TBlob(static_cast<DType*>(aux_handle.dptr), aux_shapes[0],
@@ -554,7 +554,7 @@ class NDArray {
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
           delay_alloc(false) {
-      CHECK(chunk_type == kDefaultChunk);
+      CHECK(storage_type == kDefaultStorage);
       var = Engine::Get()->NewVariable();
       if (data.dev_mask_ == cpu::kDevMask) {
         shandle.ctx = Context::CPU();
@@ -567,8 +567,8 @@ class NDArray {
       chunk_shape = data.shape_;
       CHECK(chunk_shape.ndim() > 0);
     }
-    Chunk(Context ctx_, bool delay_alloc_, std::vector<int> aux_types_, NDArrayChunkType chunk_type_)
-        : static_data(false), delay_alloc(delay_alloc_), chunk_type(chunk_type_), 
+    Chunk(Context ctx_, bool delay_alloc_, std::vector<int> aux_types_, NDArrayStorageType storage_type_)
+        : static_data(false), delay_alloc(delay_alloc_), storage_type(storage_type_), 
           aux_types(aux_types_), ctx(ctx_) {
       var = Engine::Get()->NewVariable();
       // Assume alloc is always delayed for non-default chunks
@@ -579,15 +579,15 @@ class NDArray {
     }
     /*! \brief check if delay alloc is on, do alloc if not yet done */
     inline void CheckAndAlloc(void) {
-      // Should only be used for kDefaultChunk
-      if (delay_alloc && chunk_type == kDefaultChunk) {
+      // Should only be used for kDefaultStorage
+      if (delay_alloc && storage_type == kDefaultStorage) {
         shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
         delay_alloc = false;
       }
     }
     inline void CheckAndAlloc(TShape shape, std::vector<TShape> aux_shapes, int dtype) {
       // TODO support other types, too
-      CHECK(chunk_type == kRowSparseChunk);
+      CHECK(storage_type == kRowSparseStorage);
       // calculate size, perform allocation
       if (delay_alloc) {
         // For row sparse chunk, aux_shape indicates the number of rows to allocate

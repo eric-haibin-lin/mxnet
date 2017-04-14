@@ -13,7 +13,7 @@ MXNET_OPERATOR_REGISTER_BINARY(elemwise_add)
 .set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::plus>)
 .set_attr<FComputeND>("FComputeND<cpu, row_sparse>", BinaryComputeND<cpu, mshadow::op::plus>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_add"})
-.set_attr<nnvm::FInferChunkType>("FInferChunkType", ElemwiseChunkType<2, 1>);
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
 
 // specialized gradient add function to do add to optimization
 // this must differ from elemwise_add to prevent add to optimization in forward pass.
