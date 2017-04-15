@@ -272,7 +272,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     // create shared_data_array_map
     NDArray*** shared_data_array_ptrs =
       reinterpret_cast<NDArray***>(shared_data_array_handle_list);
-    for (int i = 0; i < *num_shared_data_arrays; ++i) {
+    for (mx_uint i = 0; i < *num_shared_data_arrays; ++i) {
       shared_data_array_map[*shared_data_array_name_list[i]] = *(*shared_data_array_ptrs)[i];
     }
     
@@ -318,12 +318,18 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   ret->ret_handles.clear();
   ret->ret_handles.reserve(in_arg_vec.size()+arg_grad_vec.size()+aux_state_vec.size()
                            +shared_data_array_map.size());
+  size_t nd_idx = 0;
   for (const auto& nd : in_arg_vec) {
     if (nd.is_none()) {
       LOG(FATAL) << "Input argument NDArray cannot be un-allocated";
     }
     ret->ret_handles.push_back(new NDArray(nd));
   }
+  if (in_arg_vec.size() > 0) {
+    *in_args = &(ret->ret_handles[nd_idx]);
+    nd_idx = ret->ret_handles.size();
+  }
+
   for (const auto& nd : arg_grad_vec) {
     if (nd.is_none()) {
       ret->ret_handles.push_back(nullptr);
@@ -331,21 +337,16 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
       ret->ret_handles.push_back(new NDArray(nd));
     }
   }
+  if (arg_grad_vec.size() > 0) {
+    *arg_grads = &(ret->ret_handles[nd_idx]);
+    nd_idx = ret->ret_handles.size();
+  }
+
   for (const auto& nd : aux_state_vec) {
     if (nd.is_none()) {
       LOG(FATAL) << "Auxiliary argument NDArray cannot be un-allocated";
     }
     ret->ret_handles.push_back(new NDArray(nd));
-  }
-
-  size_t nd_idx = 0;
-  if (in_arg_vec.size() > 0) {
-    *in_args = &(ret->ret_handles[nd_idx]);
-    nd_idx = ret->ret_handles.size();
-  }
-  if (arg_grad_vec.size() > 0) {
-    *arg_grads = &(ret->ret_handles[nd_idx]);
-    nd_idx = ret->ret_handles.size();
   }
   if (aux_state_vec.size() > 0) {
     *aux_states = &(ret->ret_handles[nd_idx]);
