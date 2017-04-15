@@ -1323,6 +1323,16 @@ class Symbol(SymbolBase):
                                              shared_exec_handle,
                                              ctypes.byref(exe_handle)))
 
+        # update shared_data_arrays
+        if shared_data_arrays is not None:
+            updated_shared_data_arrays = [NDArray(NDArrayHandle(shared_data_array_handles[i]))
+                                          for i in range(num_shared_data_arrays.value)]
+            updated_shared_data_array_names = [py_str(shared_data_array_names[i])
+                                               for i in range(num_shared_data_arrays.value)]
+            for k, v in zip(updated_shared_data_array_names, updated_shared_data_arrays):
+                shared_data_arrays[k] = v
+
+        # create in_args, arg_grads, and aux_states for the current executor
         arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
         grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
                        if arg_grad_handles[i] is not None
