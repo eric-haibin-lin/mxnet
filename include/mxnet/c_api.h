@@ -1079,7 +1079,7 @@ MXNET_DLL int MXExecutorBindEX(SymbolHandle symbol_handle,
                                ExecutorHandle shared_exec,
                                ExecutorHandle *out);
 
-int MXExecutorSimpleBind(SymbolHandle symbol_handle,
+MXNET_DLL int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                          int dev_type,  // default device type
                          int dev_id,  // default device id
                          const mx_uint num_g2c_keys,  // num of keys in group2ctx
@@ -1102,18 +1102,15 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                          const int* provided_arg_dtypes,  // provided dtypes of args
                          const mx_uint num_param_names,
                          const char** param_name_list,
-                         const mx_uint num_shared_data_arrays,
-                         const char** shared_data_array_name_list,
-                         NDArrayHandle* shared_data_array_handle_list,
-                         mx_uint* num_updated_shared_data_arrays,
-                         const char*** updated_shared_data_array_name_list,
-                         NDArrayHandle** updated_shared_data_array_handle_list,
+                         mx_uint* num_shared_data_arrays,
+                         const char*** shared_data_array_name_list,
+                         NDArrayHandle** shared_data_array_handle_list,
                          const mx_uint num_shared_exec_in_args,
-                         const NDArrayHandle* shared_exec_in_arg_handles,
+                         NDArrayHandle* shared_exec_in_arg_handles,
                          const mx_uint num_shared_exec_arg_grads,
-                         const NDArrayHandle* shared_exec_arg_grad_handles,
+                         NDArrayHandle* shared_exec_arg_grad_handles,
                          const mx_uint num_shared_exec_aux_states,
-                         const NDArrayHandle* shared_exec_aux_state_handles,
+                         NDArrayHandle* shared_exec_aux_state_handles,
                          NDArrayHandle** in_args,
                          NDArrayHandle** arg_grads,
                          NDArrayHandle** aux_states,

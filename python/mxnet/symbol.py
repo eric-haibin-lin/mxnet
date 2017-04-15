@@ -520,7 +520,7 @@ class Symbol(SymbolBase):
         pairs = ctypes.POINTER(ctypes.c_char_p)()
         f_handle = _LIB.MXSymbolListAttrShallow
         check_call(f_handle(self.handle, ctypes.byref(size), ctypes.byref(pairs)))
-        return {py_str(pairs[i*2]): py_str(pairs[i*2+1]) for i in range(size.value)}
+        return {py_str(pairs[i * 2]): py_str(pairs[i * 2 + 1]) for i in range(size.value)}
 
     def attr_dict(self):
         """Recursively gets all attributes from the symbol and its children.
@@ -546,8 +546,8 @@ class Symbol(SymbolBase):
         check_call(f_handle(self.handle, ctypes.byref(size), ctypes.byref(pairs)))
         ret = {}
         for i in range(size.value):
-            name, key = py_str(pairs[i*2]).split('$')
-            val = py_str(pairs[i*2+1])
+            name, key = py_str(pairs[i * 2]).split('$')
+            val = py_str(pairs[i * 2 + 1])
             if name not in ret:
                 ret[name] = {}
             ret[name][key] = val
@@ -770,7 +770,7 @@ class Symbol(SymbolBase):
                 if s is not None:
                     s = _numpy.dtype(s).type
                     if s not in _DTYPE_NP_TO_MX:
-                        raise TypeError('Argument need to be one of '+str(_DTYPE_NP_TO_MX))
+                        raise TypeError('Argument need to be one of ' + str(_DTYPE_NP_TO_MX))
                     sdata.append(_DTYPE_NP_TO_MX[s])
                 else:
                     sdata.append(-1)
@@ -879,7 +879,7 @@ class Symbol(SymbolBase):
                         if len(unknowns) >= 10:
                             unknowns.append('...')
                             break
-                        unknowns.append('%s: %s'%(name, str(shape)))
+                        unknowns.append('%s: %s' % (name, str(shape)))
                 warnings.warn(
                     "Cannot decide shape for the following arguments " +
                     "(0s in shape means unknown dimensions). " +
@@ -1132,14 +1132,28 @@ class Symbol(SymbolBase):
             {'write', 'add', 'null'}, or list of str or dict of str to str, optional
             Specifies how we should update the gradient to the args_grad.
             - 'write' means everytime gradient is write to specified args_grad NDArray.
-            - 'add' means everytime gradient is add to the specified NDArray.
+            - 'add' means every time gradient is add to the specified NDArray.
             - 'null' means no action is taken, the gradient may not be calculated.
 
-        type_dict  : dict of str->numpy.dtype
+        type_dict : dict of str->numpy.dtype
             Input type dictionary, name->dtype
 
         group2ctx : dict of string to mx.Context
             The dict mapping the ``ctx_group`` attribute to the context assignment.
+        
+        param_names : list of strings
+            Model parameter names list. The parameters can be weights, filters, etc.
+            This argument is passed from _bind_ith_exec.
+        
+        shared_exec : Executor
+            The executor which can be shared with the current for same NDArrays.
+        
+        shared_data_arrays : dict of str->ndarray
+            The allocated NDArrays that can be shared with for use in the current
+            executor. The shared_data_arrays will be updated with a newly allocated
+            NDArray if the existing same NDArray size is smaller than the
+            requested size with the same argument name.
+            This argument is passed from _bind_ith_exec.
 
         kwargs : dict of str->shape
             Input shape dictionary, name->shape
@@ -1218,7 +1232,53 @@ class Symbol(SymbolBase):
                 ctx_map_dev_types.append(ctypes.c_int(val.device_typeid))
                 ctx_map_dev_ids.append(ctypes.c_int(val.device_id))
 
+        # prepare param names
+        if param_names is None:
+            param_names = []
+        else:
+            if not isinstance(param_names, list):
+                raise ValueError('param_names in simple_bind must be a list or None')
+
+        # prepare shared_data_arrays
+        if shared_data_arrays is None:
+            num_shared_data_arrays = mx_uint()
+            shared_data_array_names = ctypes.POINTER(ctypes.c_char_p)()
+            shared_data_array_handles = ctypes.POINTER(NDArrayHandle)()
+        else:
+            if not isinstance(shared_data_arrays, dict):
+                raise ValueError('shared_data_arrays in simple_bind must be dict or None')
+            shared_data_array_names = []
+            shared_data_array_handles = []
+            for k, v in shared_data_arrays.items():
+                shared_data_array_names.append(k)
+                shared_data_array_handles.append(v.handle)
+            shared_data_array_names = ctypes.POINTER(ctypes.c_char_p)(shared_data_array_names)
+            num_shared_data_arrays = mx_uint(len(shared_data_array_handles))
+
+        # prepare shared_exec_in_args
+        if shared_exec is None:
+            num_shared_exec_in_args = 0
+            shared_exec_in_arg_handles = ctypes.POINTER(NDArrayHandle)()
+            num_shared_exec_arg_grads = 0
+            shared_exec_arg_grad_handles = ctypes.POINTER(NDArrayHandle)()
+            num_shared_exec_aux_states = 0
+            shared_exec_aux_state_handles = ctypes.POINTER(NDArrayHandle)()
+        else:
+            shared_exec_in_arg_handles = [nd.handle for nd in shared_exec.arg_arrays]
+            num_shared_exec_in_args = len(shared_exec_in_arg_handles)
+            shared_exec_arg_grad_handles = [nd.handle if nd is not None
+                                            else None for nd in shared_exec.grad_arrays]
+            num_shared_exec_arg_grads = len(shared_exec_arg_grad_handles)
+            shared_exec_aux_state_handles = [nd.handle for nd in shared_exec.aux_arrays]
+            num_shared_exec_aux_states = len(shared_exec_aux_state_handles)
+
+        # prepare shared_exec_handle
+        shared_exec_handle = shared_exec.handle if shared_exec is not None else ExecutorHandle()
+
+        # prepare current executor handle
         exe_handle = ExecutorHandle()
+
+        # prepare current executor's in_args, arg_grads, and aux_states
         in_arg_handles = ctypes.POINTER(NDArrayHandle)()
         arg_grad_handles = ctypes.POINTER(NDArrayHandle)()
         aux_state_handles = ctypes.POINTER(NDArrayHandle)()
@@ -1246,9 +1306,21 @@ class Symbol(SymbolBase):
                                              len(provided_arg_type_names),
                                              c_array(ctypes.c_char_p, provided_arg_type_names),
                                              c_array(ctypes.c_int, provided_arg_type_data),
+                                             mx_uint(len(param_names)),
+                                             c_array(ctypes.c_char_p, param_names),
+                                             ctypes.byref(num_shared_data_arrays),
+                                             ctypes.byref(shared_data_array_names),
+                                             ctypes.byref(shared_data_array_handles),
+                                             mx_uint(num_shared_exec_in_args),
+                                             shared_exec_in_arg_handles,
+                                             mx_uint(num_shared_exec_arg_grads),
+                                             shared_exec_arg_grad_handles,
+                                             mx_uint(num_shared_exec_aux_states),
+                                             shared_exec_aux_state_handles,
                                              ctypes.byref(in_arg_handles),
                                              ctypes.byref(arg_grad_handles),
                                              ctypes.byref(aux_state_handles),
+                                             shared_exec_handle,
                                              ctypes.byref(exe_handle)))
 
         arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
@@ -1257,6 +1329,7 @@ class Symbol(SymbolBase):
                        else None
                        for i in range(len(listed_arguments))]
         aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(len(listed_aux_states))]
+
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
         executor.arg_arrays = arg_arrays
         executor.grad_arrays = grad_arrays
@@ -1333,11 +1406,11 @@ class Symbol(SymbolBase):
         if group2ctx is not None:
             attr_dict = self.attr_dict()
             arg_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx) \
-                         if name in attr_dict and '__ctx_group__' in attr_dict[name] \
-                         else ctx for name in self.list_arguments()]
+                           if name in attr_dict and '__ctx_group__' in attr_dict[name] \
+                           else ctx for name in self.list_arguments()]
             aux_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx) \
-                         if name in attr_dict and '__ctx_group__' in attr_dict[name] \
-                         else ctx for name in self.list_auxiliary_states()]
+                           if name in attr_dict and '__ctx_group__' in attr_dict[name] \
+                           else ctx for name in self.list_auxiliary_states()]
         else:
             arg_ctx = [ctx] * len(arg_shapes)
             aux_ctx = [ctx] * len(aux_shapes)
@@ -1544,6 +1617,7 @@ class Symbol(SymbolBase):
                                      c_wrt,
                                      ctypes.byref(handle)))
         return Symbol(handle)
+
     # pylint: enable= no-member
 
     def eval(self, ctx=cpu(), **kwargs):
@@ -1602,7 +1676,6 @@ class Symbol(SymbolBase):
             A reshaped symbol.
         """
         return reshape(self, shape=shape)
-
 
 def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, **kwargs):
     """Creates a symbolic variable with specified name.
@@ -1668,8 +1741,10 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, ini
     ret._set_attr(**attr)
     return ret
 
+
 # for back compatibility
 Variable = var
+
 
 def Group(symbols):
     """Creates a symbol that contains a collection of other symbols, grouped together.
@@ -1756,6 +1831,7 @@ def load_json(json_str):
 # Initialize the atomic symbol in startups
 _init_symbol_module(Symbol, "mxnet")
 
+
 # pylint: disable=no-member
 # pylint: disable=redefined-builtin
 def pow(base, exp):
@@ -1777,7 +1853,7 @@ def pow(base, exp):
     if isinstance(base, Number) and isinstance(exp, Symbol):
         return _internal._RPowerScalar(exp, scalar=base)
     if isinstance(base, Number) and isinstance(exp, Number):
-        return base**exp
+        return base ** exp
     else:
         raise TypeError('types (%s, %s) not supported' % (str(type(base)), str(type(exp))))
 

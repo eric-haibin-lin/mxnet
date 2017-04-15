@@ -178,12 +178,9 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                          const int* provided_arg_dtypes,  // provided dtypes of args
                          const mx_uint num_param_names,
                          const char** param_name_list,
-                         const mx_uint num_shared_data_arrays,
-                         const char** shared_data_array_name_list,
-                         NDArrayHandle* shared_data_array_handle_list,
-                         mx_uint* num_updated_shared_data_arrays,
-                         const char*** updated_shared_data_array_name_list,
-                         NDArrayHandle** updated_shared_data_array_handle_list,
+                         mx_uint* num_shared_data_arrays,  // negative number indicates no shared_data_arrays
+                         const char*** shared_data_array_name_list,
+                         NDArrayHandle** shared_data_array_handle_list,
                          const mx_uint num_shared_exec_in_args,
                          NDArrayHandle* shared_exec_in_arg_handles,
                          const mx_uint num_shared_exec_arg_grads,
@@ -273,10 +270,10 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   bool use_shared_data_arrays = (nullptr != *shared_data_array_handle_list);
   if (use_shared_data_arrays) {
     // create shared_data_array_map
-    NDArray** shared_data_array_ptrs =
-      reinterpret_cast<NDArray**>(shared_data_array_handle_list);
-    for (mx_uint i = 0; i < num_shared_data_arrays; ++i) {
-      shared_data_array_map[shared_data_array_name_list[i]] = *shared_data_array_ptrs[i];
+    NDArray*** shared_data_array_ptrs =
+      reinterpret_cast<NDArray***>(shared_data_array_handle_list);
+    for (int i = 0; i < *num_shared_data_arrays; ++i) {
+      shared_data_array_map[*shared_data_array_name_list[i]] = *(*shared_data_array_ptrs)[i];
     }
     
     // create shared_exec_in_args
@@ -355,18 +352,19 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     nd_idx = ret->ret_handles.size();
   }
 
-  ret->ret_vec_charp.clear();
-  ret->ret_vec_charp.reserve(shared_data_array_map.size());
-  for (const auto kv : shared_data_array_map) {
-    if (kv.second.is_none()) {
-      LOG(FATAL) << "Shared data NDArray cannot be un-allocated";
+  if (use_shared_data_arrays) {
+    ret->ret_vec_charp.clear();
+    ret->ret_vec_charp.reserve(shared_data_array_map.size());
+    for (const auto kv : shared_data_array_map) {
+      if (kv.second.is_none()) {
+        LOG(FATAL) << "Shared data NDArray cannot be un-allocated";
+      }
+      ret->ret_handles.push_back(new NDArray(kv.second));
+      ret->ret_vec_charp.push_back(kv.first.c_str());
     }
-    ret->ret_handles.push_back(new NDArray(kv.second));
-    ret->ret_vec_charp.push_back(kv.first.c_str());
-  }
-  if (shared_data_array_map.size() > 0) {
-    *updated_shared_data_array_handle_list = &(ret->ret_handles[nd_idx]);
-    *updated_shared_data_array_name_list = &(ret->ret_vec_charp[0]);
+    *num_shared_data_arrays = shared_data_array_map.size();
+    *shared_data_array_handle_list = &(ret->ret_handles[nd_idx]);
+    *shared_data_array_name_list = &(ret->ret_vec_charp[0]);
   }
 
   API_END();
