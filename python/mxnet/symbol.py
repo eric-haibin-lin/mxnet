@@ -1336,8 +1336,7 @@ class Symbol(SymbolBase):
         arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(len(listed_arguments))]
         grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
                        if arg_grad_handles[i] is not None
-                       else None
-                       for i in range(len(listed_arguments))]
+                       else None for i in range(len(listed_arguments))]
         aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(len(listed_aux_states))]
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
