@@ -241,12 +241,12 @@ nnvm::Graph GraphExecutor::InitFullGraph(
   return g;
 }
 
-// this is for simple_bind
-nnvm::Graph GraphExecutor::InitFullGraph2(
-    nnvm::Symbol symbol,
-    const std::vector<OpReqType>& grad_req_types
-    //const std::vector<NDArray>& arg_grad_store
-    ) {
+/*!
+ * \brief Create the graph for backward pass.
+ * This is triggered by both simple_bind and bind flows.
+ */
+nnvm::Graph GraphExecutor::InitFullGraph2(nnvm::Symbol symbol,
+                                          const std::vector<OpReqType>& grad_req_types) {
   using nnvm::NodePtr;
   using nnvm::NodeEntry;
   // initial information
@@ -269,8 +269,6 @@ nnvm::Graph GraphExecutor::InitFullGraph2(
   std::vector<NodeEntry> xs;
   for (size_t i = 0; i < grad_req_types.size(); ++i) {
     if (grad_req_types[i] != kNullOp) {
-      // delay populating grad_store_ to after InferShape pass
-      //grad_store_.emplace_back(std::make_pair(grad_req_types[i], arg_grad_store[i]));
       xs.emplace_back(NodeEntry{args[i], 0, 0});
     }
   }
@@ -398,17 +396,16 @@ Graph AssignContext(Graph g,
   return g;
 }
 
-// pass to assign context to the graph
-// this is for simple bind
+/*!
+ * \brief Assign context to the graph.
+ * This is triggered by both simple_bind and bind flows.
+ */
 Graph AssignContext2(Graph g,
                      const Context& default_ctx,
-                     const std::map<std::string, Context>& ctx_map,  // map arg name to ctx
-                     //const std::vector<NDArray>& in_args,
+                     const std::map<std::string, Context>& ctx_map,
                      const std::vector<Context>& in_arg_ctxes,
                      const std::vector<Context>& arg_grad_ctxes,
                      const std::vector<Context>& aux_state_ctxes,
-                     //const std::vector<std::pair<OpReqType, NDArray> >& grad_store,
-                     //const std::vector<NDArray>& aux_states,
                      size_t num_forward_inputs,
                      size_t num_forward_outputs) {
   const auto& idx = g.indexed_graph();
@@ -504,6 +501,11 @@ Graph AssignContext2(Graph g,
   return g;
 }
 
+/*!
+ * \brief GraphExecutor initializer for regular bind flow in which
+ * input arguments and gradients are provided by users. This initializer
+ * uses the user provided NDArrays to populate data entries of the graph.
+ */
 void GraphExecutor::Init2(nnvm::Symbol symbol,
                           const Context& default_ctx,
                           const std::map<std::string, Context>& ctx_map,
@@ -608,8 +610,12 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   this->InitOpSegs();
 }
 
-// Initialize in_args, arg_grads, and aux_states
-// and their data_entry_ of the executor
+/*!
+ * \brief Initialize in_args, arg_grads, and aux_states
+ * and their data_entry_ of the executor. This function
+ * is called for regular simple_bind flow, i.e. no
+ * shared data arrays are provided.
+ */
 void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const nnvm::ShapeVector& inferred_shapes,
                                   const nnvm::DTypeVector& inferred_dtypes,
@@ -620,13 +626,10 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   std::vector<NDArray>* in_arg_vec,
                                   std::vector<NDArray>* arg_grad_vec,
                                   std::vector<NDArray>* aux_state_vec) {
-  //const auto& idx = g.indexed_graph();
   // initialize in_args, arg_grads, and aux_states
   // populate grad_store_
   data_entry_.resize(idx.num_node_entries());
   size_t arg_top = 0, aux_top = 0;
-  //const nnvm::ShapeVector& inferred_shapes = g.GetAttr<nnvm::ShapeVector>("shape");
-  //const nnvm::DTypeVector& inferred_dtypes = g.GetAttr<nnvm::DTypeVector>("dtype");
   auto mutable_nodes = idx.mutable_input_nodes();
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
@@ -684,13 +687,15 @@ NDArray ReshapeOrCreate(const std::string& name,
     auto p = shared_data_arrays->emplace(name, NDArray(dest_arg_shape, ctx, false, dest_arg_dtype));
     p.first->second = 0;
     return p.first->second;
-  }  // it != shared_data_arrays->end()
+  }  // if (it != shared_data_arrays->end())
 }
 
-// Initialize in_args, arg_grads, and aux_states
-// and their data_entry_ of the executor using
-// shared_data_arrays from DataParallelExecutorGroup
-// and shared_exec if available
+/*!
+ * \brief Initialize in_args, arg_grads, and aux_states
+ * and their data_entry_ of the executor using
+ * shared_data_arrays from DataParallelExecutorGroup
+ * and shared_exec if available.
+ */
 void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const nnvm::ShapeVector& inferred_shapes,
                                   const nnvm::DTypeVector& inferred_dtypes,
@@ -698,12 +703,12 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const std::vector<Context>& arg_grad_ctxes,
                                   const std::vector<Context>& aux_state_ctxes,
                                   const std::vector<OpReqType>& grad_req_types,
-                                  const std::unordered_set<std::string>& param_names,  // DataParallelExecutorGroup.param_names
-                                  const bool has_shared_exec,  // shared_exec != nullptr
+                                  const std::unordered_set<std::string>& param_names,
+                                  const bool has_shared_exec,
                                   const std::vector<NDArray>& shared_exec_in_args,
                                   const std::vector<NDArray>& shared_exec_arg_grads,
                                   const std::vector<NDArray>& shared_exec_aux_states,
-                                  std::unordered_map<std::string, NDArray>* shared_data_arrays,  // self.shared_data_arrays[i] L636
+                                  std::unordered_map<std::string, NDArray>* shared_data_arrays,
                                   std::vector<NDArray>* in_arg_vec,
                                   std::vector<NDArray>* arg_grad_vec,
                                   std::vector<NDArray>* aux_state_vec) {
@@ -712,8 +717,7 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
     CHECK_EQ(arg_grad_ctxes.size(), shared_exec_arg_grads.size());
     CHECK_EQ(aux_state_ctxes.size(), shared_exec_aux_states.size());
   }
-  // initialize in_args, arg_grads, and aux_states
-  // populate grad_store_
+  // initialize in_args, arg_grads, and aux_states and populate grad_store_
   data_entry_.resize(idx.num_node_entries());
   size_t arg_top = 0, aux_top = 0;
   auto mutable_nodes = idx.mutable_input_nodes();
@@ -777,6 +781,10 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
   }
 }
 
+/*!
+ * \brief Finish graph initialization after shape and dtype inferences.
+ * This function is used by both simple_bind and bind flows.
+ */
 void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor* shared_exec) {
   const auto& idx = g.indexed_graph();
   for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
@@ -826,7 +834,20 @@ void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor
   this->InitOpSegs();
 }
 
-// this is for simple bind
+/*!
+ * \brief GraphExecutor initializer for simple bind flow in
+ * which only certain input shapes and dtypes are provided by users.
+ * The initializer uses these shapes and dtypes to perform
+ * shape and dtype inferences, and then create NDArrays
+ * to populate data entries of the graph. The created NDArrays
+ * for in_args, arg_grads and aux_states are passed to the
+ * front end to attach the created executor.
+ * In front end, iff the simple_bind flow is trigger by
+ * _bind_ith_exec, the shared data arrays of DataParallelExecutorGroup
+ * and shared executor will be taken into account in creating
+ * NDArrays for in_args, arg_grads, and aux_states for resuing
+ * already allocated memory.
+ */
 void GraphExecutor::Init2(nnvm::Symbol symbol,
                           const Context& default_ctx,
                           const std::map<std::string, Context>& ctx_map,
@@ -1478,8 +1499,6 @@ Executor *Executor::SimpleBind(nnvm::Symbol symbol,
                                const std::vector<Context>& aux_state_ctxes,
                                const std::unordered_map<std::string, TShape>& arg_shape_map,
                                const std::unordered_map<std::string, int>& arg_dtype_map,
-                               //std::vector<TShape>* arg_shapes,
-                               //std::vector<int>* arg_dtypes,
                                const std::vector<OpReqType>& grad_req_types,
                                const std::unordered_set<std::string>& param_names,
                                const std::vector<NDArray>& shared_exec_in_args,

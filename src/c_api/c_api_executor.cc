@@ -155,30 +155,70 @@ int MXExecutorBindEX(SymbolHandle symbol_handle,
   API_END_HANDLE_ERROR(delete exec);
 }
 
+/*!
+ * \brief
+ * \param symbol_handle symbol handle
+ * \param dev_type default device type
+ * \param dev_id default device id
+ * \param num_g2c_keys number of group2ctx keys
+ * \param g2c_keys key list of group2ctx
+ * \param g2c_dev_types device type list of group2ctx
+ * \param g2c_dev_ids id list of group2ctx
+ * \param in_arg_len number of list_arguments
+ * \param in_arg_dev_types device type list of list_arguments
+ * \param in_arg_dev_ids device id list of list_arguments
+ * \param grad_req_types req type list of all gradients of list_arguments
+ * \param aux_state_len number of list_auxiliary_states
+ * \param aux_state_dev_types device type list of list_auxiliary_states
+ * \param aux_state_dev_ids device id list of list_auxiliary_states
+ * \param num_provided_args number of user provided in_arg and aux_state shapes
+ * \param provided_arg_shape_names name list of provided shapes
+ * \param provided_arg_shape_data provided shape data
+ * \param provided_arg_shape_idx provided shape data index
+ * \param num_provided_arg_dtypes number of user provided in_arg and axu_state dtypes
+ * \param provided_arg_dtype_names argument name list of provided dtypes
+ * \param provided_arg_dtypes data of provided dtypes
+ * \param num_param_names number of parameter names passed from _bind_ith_exec
+ * \param param_name_list parameter name list passed from _bind_ith_exec
+ * \param num_shared_data_arrays number of shared data arrays passed from _bind_ith_exec
+ * \param shared_data_array_name_list shared data array names passed from _bind_ith_exec
+ * \param shared_data_array_handle_list shared data array handles passed from _bind_ith_exec
+ * \param num_shared_exec_in_args number of in_args associated with the shared executor
+ * \param shared_exec_in_arg_handles in_arg arrays associated with the shared executor
+ * \param num_shared_exec_arg_grads number of arg gradients associated with the shared executor
+ * \param shared_exec_arg_grad_handles arg gradient handles associated with the shared executor
+ * \param num_shared_exec_aux_states number of aux states associated with the shared executor
+ * \param shared_exec_aux_state_handles aux state handles associated with the shared executor
+ * \param in_args list_arguments associated with the current executor
+ * \param arg_grads list of gradients of in_args associated with the current executor
+ * \param aux_states list_auxiliary_states associated with the current executor
+ * \param shared_exec_handle shared excutor handle passed from _bind_ith_exec
+ * \param out the handle of the executor to be created
+ */
 int MXExecutorSimpleBind(SymbolHandle symbol_handle,
-                         int dev_type,  // default device type
-                         int dev_id,  // default device id
-                         const mx_uint num_g2c_keys,  // num of keys in group2ctx
-                         const char** g2c_keys,  // arg names of group2ctx
-                         const int* g2c_dev_types,  // ctx dev_types of group2ctx
-                         const int* g2c_dev_ids,  // ctx dev_ids of group2ctx
-                         const mx_uint in_arg_len,  // num of all in_args (no aux_states)
-                         const int* in_arg_dev_types,  // all in_arg dev_types
-                         const int* in_arg_dev_ids,  // all in_arg dev_ids
-                         const mx_uint* grad_req_types,  // req types of all in_arg_grads
-                         const mx_uint aux_state_len,  // number of aux_states
-                         const int* aux_state_dev_types,  // aux_state ctx dev_types
-                         const int* aux_state_dev_ids,  // aux_state ctx dev_ids
-                         const mx_uint num_provided_args,  // #user provided in_args and aux_states
-                         const char** provided_arg_shape_names,  // user provided arg names
-                         const mx_uint* provided_arg_shape_data,  // provided arg shapes
-                         const mx_uint* provided_arg_shape_idx,  // provided arg shape idx
-                         const mx_uint num_provided_arg_dtypes,  // #provided arg dtypes
-                         const char** provided_arg_dtype_names,  // provided arg dtype names
-                         const int* provided_arg_dtypes,  // provided dtypes of args
+                         int dev_type,
+                         int dev_id,
+                         const mx_uint num_g2c_keys,
+                         const char** g2c_keys,
+                         const int* g2c_dev_types,
+                         const int* g2c_dev_ids,
+                         const mx_uint in_arg_len,
+                         const int* in_arg_dev_types,
+                         const int* in_arg_dev_ids,
+                         const mx_uint* grad_req_types,
+                         const mx_uint aux_state_len,
+                         const int* aux_state_dev_types,
+                         const int* aux_state_dev_ids,
+                         const mx_uint num_provided_args,
+                         const char** provided_arg_shape_names,
+                         const mx_uint* provided_arg_shape_data,
+                         const mx_uint* provided_arg_shape_idx,
+                         const mx_uint num_provided_arg_dtypes,
+                         const char** provided_arg_dtype_names,
+                         const int* provided_arg_dtypes,
                          const mx_uint num_param_names,
                          const char** param_name_list,
-                         mx_uint* num_shared_data_arrays,  // negative number indicates no shared_data_arrays
+                         mx_uint* num_shared_data_arrays,
                          const char*** shared_data_array_name_list,
                          NDArrayHandle** shared_data_array_handle_list,
                          const mx_uint num_shared_exec_in_args,
@@ -201,7 +241,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   // create ctx map
   std::map<std::string, Context> ctx_map;
   for (mx_uint i = 0; i < num_g2c_keys; ++i) {
-    ctx_map[std::string(g2c_keys[i])] = Context::Create(
+    ctx_map[g2c_keys[i]] = Context::Create(
         static_cast<Context::DeviceType>(g2c_dev_types[i]), g2c_dev_ids[i]);
   }
 
@@ -238,27 +278,11 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
              provided_arg_shape_data+provided_arg_shape_idx[i+1]);
   }
 
-#if 0
-  // create arg_shape vector for all input nodes including
-  // in_args and aux_states that are not provided by the user
-  nnvm::Graph g = Symbol2Graph(*sym);
-  const size_t num_input_nodes = g.indexed_graph().input_nodes().size();
-  nnvm::ShapeVector arg_shapes(num_input_nodes, TShape());
-  mxnet::MatchArguments(g.indexed_graph(), arg_shape_map, &arg_shapes, "SimpleBind");
-#endif
-
   // create dtype map for in_args and aux_states
   std::unordered_map<std::string, int> arg_dtype_map;
   for (mx_uint i = 0; i < num_provided_arg_dtypes; ++i) {
     arg_dtype_map[provided_arg_dtype_names[i]] = provided_arg_dtypes[i];
   }
-
-#if 0
-  // create arg_dtype vector for all input nodes including
-  // in_args and aux_states that are not provided by the user
-  nnvm::DTypeVector arg_dtypes(num_input_nodes, -1);
-  mxnet::MatchArguments(g.indexed_graph(), arg_dtype_map, &arg_dtypes, "SimpleBind");
-#endif
 
   // create para name set for sharing data array memory
   std::unordered_set<std::string> param_name_set;
@@ -306,7 +330,8 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     }
   }
 
-
+  // create temporary place holders for the initialized NDArrays
+  // to be passed back to front end
   std::vector<NDArray> in_arg_vec;
   std::vector<NDArray> arg_grad_vec;
   std::vector<NDArray> aux_state_vec;
@@ -318,7 +343,8 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                               use_shared_data_arrays? &shared_data_array_map : nullptr,
                               reinterpret_cast<Executor*>(shared_exec_handle));
 
-  // copy ndarray ptrs to ret->handles for persistence
+  // copy ndarray ptrs to ret->handles so that front end
+  // can access them
   ret->ret_handles.clear();
   ret->ret_handles.reserve(in_arg_vec.size()+arg_grad_vec.size()+aux_state_vec.size()
                            +shared_data_array_map.size());
