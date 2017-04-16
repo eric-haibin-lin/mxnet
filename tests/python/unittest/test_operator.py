@@ -3091,8 +3091,6 @@ def test_custom_op():
 
 
 if __name__ == '__main__':
-    test_where()
-    exit()
     test_custom_op()
     test_log_softmax()
     test_new_softmax()

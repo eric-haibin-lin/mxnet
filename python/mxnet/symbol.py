@@ -1115,7 +1115,7 @@ class Symbol(SymbolBase):
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
     def simple_bind(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
-                     param_names=None, shared_exec=None, shared_data_arrays=None, **kwargs):
+                    param_names=None, shared_exec=None, shared_data_arrays=None, **kwargs):
         """This function is DEPRECATED.
         Bind current symbol to get an executor, allocate all the arguments needed.
         Allows specifying data types.
@@ -1169,9 +1169,6 @@ class Symbol(SymbolBase):
         executor : mxnet.Executor
             The generated executor
         """
-        if len(kwargs) == 0:
-            raise ValueError("Argument shapes must be provided in kwargs way for simple_bind2")
-
         listed_arguments = self.list_arguments()  # read-only args
         listed_aux_states = self.list_auxiliary_states()  # aux states
 
