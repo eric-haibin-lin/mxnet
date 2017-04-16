@@ -1006,7 +1006,7 @@ class Symbol(SymbolBase):
             return (arg_shapes, out_shapes, aux_shapes)
         else:
             return (None, None, None)
-            # pylint: enable=too-many-locals
+        # pylint: enable=too-many-locals
 
     def debug_str(self):
         """Gets a debug string.
@@ -1873,7 +1873,7 @@ def pow(base, exp):
     if isinstance(base, Number) and isinstance(exp, Symbol):
         return _internal._RPowerScalar(exp, scalar=base)
     if isinstance(base, Number) and isinstance(exp, Number):
-        return base ** exp
+        return base**exp
     else:
         raise TypeError('types (%s, %s) not supported' % (str(type(base)), str(type(exp))))
 
