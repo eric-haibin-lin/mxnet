@@ -64,12 +64,12 @@ using FCompute = std::function<void (const nnvm::NodeAttrs& attrs,
 /*!
  * \brief Resiger an NDArray compute function for simple stateless forward only operator
  *
- * \note Register under "FComputeND<cpu, `storage_type`>" and "FComputeND<gpu, `storage_type`>" 
- * e.g FComputeND<cpu, row_sparse>
+ * \note Register under "FComputeEx<cpu, `storage_type`>" and "FComputeEx<gpu, `storage_type`>" 
+ * e.g FComputeEx<cpu, row_sparse>
  * TODO should probably change const std::vector<NDArray>& outputs to
                                std::vector<NDArray> *outputs
  */
-using FComputeND = std::function<void (const nnvm::NodeAttrs& attrs,
+using FComputeEx = std::function<void (const nnvm::NodeAttrs& attrs,
                                      const OpContext& ctx,
                                      const std::vector<NDArray>& inputs,
                                      const std::vector<OpReqType>& req,

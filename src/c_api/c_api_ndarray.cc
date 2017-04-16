@@ -191,6 +191,7 @@ void SetShapeType(const nnvm::Op* op,
     std::cout << "FInferStorageType not present." << std::endl;
   }
 
+  //TODO replace with common::
   for (auto &i : in_storage_types) {
     CHECK(i != -1);
     if (i != kDefaultStorage) {
@@ -314,7 +315,7 @@ void PushFCompute(const FCompute& fn,
     0, PROFILER_MESSAGE(op->name.c_str()));
 }
 
-void PushFComputeND(const FComputeND& fn,
+void PushFComputeEx(const FComputeEx& fn,
                   const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
                   const Context& ctx,
@@ -411,7 +412,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        const char **param_keys,
                        const char **param_vals) {
   static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
-  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeND>("FComputeND<cpu, row_sparse>");
+  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu, row_sparse>");
   static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
   static auto& createop = nnvm::Op::GetAttr<FCreateLayerOp>("FCreateLayerOp");
@@ -449,15 +450,15 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
         op, attrs, ctx, ndinputs, ndoutputs);
 
     FCompute fn;
-    FComputeND fn_nd;
+    FComputeEx fn_nd;
     // dispatch based on ctx and storage_type
-    std::cout << "Dispatching for storage_type: " << storage_type << std::endl;
+    std::cout << "I - Dispatching for storage_type: " << storage_type << std::endl;
     if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
         storage_type == kRowSparseStorage) {
       fn_nd = fnd_cpu_row_sparse[op];
-      std::cout << "IMP: fnd_cpu_row_sparse dispatched." << std::endl;
+      std::cout << "I - fnd_cpu_row_sparse dispatched." << std::endl;
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
-      std::cout << "IMP: fcpu dispatched." << std::endl;
+      std::cout << "I - fcpu dispatched." << std::endl;
       fn = fcpu[op];
     } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
       fn = fgpu[op];
