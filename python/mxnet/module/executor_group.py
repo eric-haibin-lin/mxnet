@@ -670,6 +670,7 @@ class DataParallelExecutorGroup(object):
         input_types = {x.name: x.dtype for x in data_shapes}
         if label_shapes is not None:
             input_types.update({x.name: x.dtype for x in label_shapes})
+
         executor = self.symbol.simple_bind2(ctx=context, grad_req=self.grad_req, type_dict=input_types,
                                             param_names=self.param_names, shared_exec=shared_exec,
                                             shared_data_arrays=shared_data_arrays, **input_shapes)

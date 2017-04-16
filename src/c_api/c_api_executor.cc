@@ -238,12 +238,14 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
              provided_arg_shape_data+provided_arg_shape_idx[i+1]);
   }
 
+#if 0
   // create arg_shape vector for all input nodes including
   // in_args and aux_states that are not provided by the user
   nnvm::Graph g = Symbol2Graph(*sym);
   const size_t num_input_nodes = g.indexed_graph().input_nodes().size();
   nnvm::ShapeVector arg_shapes(num_input_nodes, TShape());
   mxnet::MatchArguments(g.indexed_graph(), arg_shape_map, &arg_shapes, "SimpleBind");
+#endif
 
   // create dtype map for in_args and aux_states
   std::unordered_map<std::string, int> arg_dtype_map;
@@ -251,10 +253,12 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     arg_dtype_map[provided_arg_dtype_names[i]] = provided_arg_dtypes[i];
   }
 
+#if 0
   // create arg_dtype vector for all input nodes including
   // in_args and aux_states that are not provided by the user
   nnvm::DTypeVector arg_dtypes(num_input_nodes, -1);
   mxnet::MatchArguments(g.indexed_graph(), arg_dtype_map, &arg_dtypes, "SimpleBind");
+#endif
 
   // create para name set for sharing data array memory
   std::unordered_set<std::string> param_name_set;
@@ -308,7 +312,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   std::vector<NDArray> aux_state_vec;
 
   *out = Executor::SimpleBind(*sym, ctx, ctx_map, in_arg_ctx_vec, arg_grad_ctx_vec,
-                              aux_state_ctx_vec, &arg_shapes, &arg_dtypes, grad_req_type_vec,
+                              aux_state_ctx_vec, arg_shape_map, arg_dtype_map, grad_req_type_vec,
                               param_name_set, shared_exec_in_args, shared_exec_arg_grads,
                               shared_exec_aux_states, &in_arg_vec, &arg_grad_vec, &aux_state_vec,
                               use_shared_data_arrays? &shared_data_array_map : nullptr,

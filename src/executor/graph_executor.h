@@ -62,6 +62,9 @@ class GraphExecutor : public Executor {
             Executor* shared_exec = nullptr,
             const nnvm::NodeEntryMap<NDArray>& feed_dict
               = nnvm::NodeEntryMap<NDArray>());
+  // Initialize the rest of attributes
+  // after setting up arguments.
+  void FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor* shared_exec = nullptr);
   // initialize executor for simple bind
   void Init2(nnvm::Symbol symbol,
              const Context& default_ctx,
@@ -69,8 +72,10 @@ class GraphExecutor : public Executor {
              const std::vector<Context>& in_arg_ctxes,
              const std::vector<Context>& arg_grad_ctxes,
              const std::vector<Context>& aux_state_ctxes,
-             std::vector<TShape>* arg_shapes,
-             std::vector<int>* arg_dtypes,
+             const std::unordered_map<std::string, TShape>& arg_shape_map,
+             const std::unordered_map<std::string, int>& arg_dtype_map,
+             //std::vector<TShape>* arg_shapes,
+             //std::vector<int>* arg_dtypes,
              const std::vector<OpReqType>& grad_req_types,
              const std::unordered_set<std::string>& param_names,
              const std::vector<NDArray>& shared_exec_in_args,
@@ -159,8 +164,8 @@ class GraphExecutor : public Executor {
                    const std::vector<Context>& in_arg_ctxes,
                    const std::vector<Context>& arg_grad_ctxes,
                    const std::vector<Context>& aux_state_ctxes,
-                   std::vector<TShape>* arg_shapes,
-                   std::vector<int>* arg_dtypes,
+                   //std::vector<TShape>* arg_shapes,
+                   //std::vector<int>* arg_dtypes,
                    const std::vector<OpReqType>& grad_req_types);
   // initialize the full graph, including gradient.
   Graph InitFullGraph(nnvm::Symbol symbol,
