@@ -74,7 +74,7 @@ void BinaryDenseSparseTest() {
           inputs.push_back(input_nd0);
           inputs.push_back(input_nd1);
           outputs.push_back(output);
-          op::BinaryComputeND<cpu, mshadow::op::plus>(attrs, op_ctx, inputs, req, outputs);
+          op::BinaryComputeEx<cpu, mshadow::op::plus>(attrs, op_ctx, inputs, req, outputs);
         }, input_nd0.ctx(), const_vars, {output.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   std::vector<real_t> output_vals({11, 12, 3, 4, 15, 16});
@@ -116,7 +116,7 @@ void BinarySpSpTest() {
           inputs.push_back(input_nd0);
           inputs.push_back(input_nd1);
           outputs.push_back(output);
-          op::BinaryComputeNDSpSp<cpu, cpu>(attrs, op_ctx, inputs, req, outputs);
+          op::BinaryComputeExSpSp<cpu, cpu>(attrs, op_ctx, inputs, req, outputs);
         }, input_nd0.ctx(), const_vars, {output.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 

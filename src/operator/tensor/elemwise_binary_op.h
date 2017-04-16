@@ -36,12 +36,11 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
 
 // TODO make use of templated OP
 template<typename xpu, typename OP>
-void BinaryComputeNDSpSp(const nnvm::NodeAttrs& attrs,
+void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
-  std::cout << "BinaryComputeNDSpSp invoked\n";
   CHECK(inputs.size() == 2);
   CHECK(outputs.size() == 1);
   auto &nd_l = inputs[0];
@@ -104,11 +103,12 @@ void BinaryComputeNDSpSp(const nnvm::NodeAttrs& attrs,
 }
 
 template<typename xpu, typename OP>
-void BinaryComputeND(const nnvm::NodeAttrs& attrs,
+void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
+  std::cout << "BinaryComputeEx invoked\n";
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -130,7 +130,7 @@ void BinaryComputeND(const nnvm::NodeAttrs& attrs,
   // TODO Support more chunk types
   // Call SpSp function
   CHECK(inputs[0].storage_type() == kRowSparseStorage);
-  BinaryComputeNDSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
+  BinaryComputeExSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 
 template<typename xpu, typename LOP, typename ROP>

@@ -11,7 +11,7 @@ namespace op {
 MXNET_OPERATOR_REGISTER_BINARY(elemwise_add)
 .add_alias("_add").add_alias("_plus").add_alias("_Plus")
 .set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::plus>)
-.set_attr<FComputeND>("FComputeND<cpu, row_sparse>", BinaryComputeND<cpu, mshadow::op::plus>)
+.set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>", BinaryComputeEx<cpu, mshadow::op::plus>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_add"})
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
 

@@ -20,7 +20,7 @@ NNVM_REGISTER_OP(_zeros)
 .set_attr<nnvm::FInferShape>("FInferShape", InitShape<InitOpParam>)
 .set_attr<nnvm::FInferType>("FInferType", InitType<InitOpParam>)
 .set_attr<FCompute>("FCompute<cpu>", FillCompute<cpu, 0>)
-.set_attr<FComputeND>("FComputeND<cpu, row_sparse>", FillComputeEx<cpu, 0>)
+.set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>", FillComputeEx<cpu, 0>)
 .add_arguments(InitOpParam::__FIELDS__());
 
 NNVM_REGISTER_OP(_ones)

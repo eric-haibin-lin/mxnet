@@ -12,6 +12,7 @@
 #include "./exec_pass.h"
 #include "./graph_executor.h"
 #include "../engine/profiler.h"
+#include "../common/utils.h"
 
 namespace mxnet {
 namespace exec {
@@ -415,7 +416,10 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
   g = nnvm::pass::InferType(g, arg_types, "__dtype__");
   g = nnvm::pass::InferStorageType(g, arg_storage_types, "__storage_type__");
-
+  const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
+  int dispatch_storage_type = common::GetDispatchStorageType(vstorage_type);
+  g.attrs["dispatch_storage_type"] = std::make_shared<dmlc::any>(std::move(dispatch_storage_type));
+  std::cout << "S - dispatch_storage_type: " << dispatch_storage_type << std::endl;
   {
     // memory allocator
     const int kBadStorageID = -1;
@@ -427,8 +431,8 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
     g.attrs["storage"] = std::make_shared<dmlc::any>(std::move(arg_storage_id));
     g = nnvm::ApplyPass(g, "PlanMemory");
   }
-  // TODO Inplace option for sparse chunk
-  // g = DetectInplaceAddTo(g);
+  // Temporarily disable inplace option for graph with sparse input
+  if (dispatch_storage_type == kDefaultStorage) g = DetectInplaceAddTo(g);
   return g;
 }
 
@@ -446,6 +450,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   const auto& vshape = graph_.GetAttr<ShapeVector>("shape");
   const auto& vstorage = graph_.GetAttr<StorageVector>("storage_id");
   const auto& vctx = graph_.GetAttr<ContextVector>("context");
+  const auto& dispatch_storage_type = graph_.GetAttr<int>("dispatch_storage_type");
   CHECK_EQ(idx.num_node_entries(), vshape.size());
   CHECK_EQ(idx.num_node_entries(), vdtype.size());
   CHECK_EQ(idx.num_node_entries(), vstorage.size());
@@ -482,6 +487,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     CHECK_NE(vshape[eid].ndim(), 0U);
     CHECK_NE(vdtype[eid], -1);
     CHECK_NE(storage_type, -1);
+    // FIXME enable sparse gradient update
     // init NDArray based on storage_type
     //if (storage_type != kDefaultStorage) {
       //std::cout << "Sparse NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
@@ -513,7 +519,8 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   }
   // construct the re-use pool, if needed
   std::multimap<size_t, NDArray> free_pool;
-  if (shared_pool != nullptr) {
+  // Don't share memory for sparse storage types
+  if (shared_pool != nullptr && dispatch_storage_type == kDefaultStorage) {
     for (const NDArray& nd : *shared_pool) {
       size_t bytes = nd.shape().Size() * mshadow::mshadow_sizeof(nd.dtype());
       free_pool.insert(std::make_pair(bytes, nd));
@@ -541,7 +548,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     bool allocated = false;
     for (auto it = free_pool.lower_bound(bytes); it != free_pool.end(); ++it) {
       if (it->second.ctx() == ctx && it->first >= bytes) {
-        //data_pool_[i] = it->second;
+        data_pool_[i] = it->second;
         free_pool.erase(it);
         allocated = true;
         break;
@@ -553,13 +560,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       // allocate float arrays
       TShape shape{index_t(nword)};
       // init NDArray based on storage_type
-      if (storage_type != kDefaultStorage) {
-        //std::cout << "Sparse NDArray for node " << nid << "\n";
-        //data_pool_[i] = NDArray((NDArrayStorageType)storage_type, shape, ctx);
-      } else {
-        //std::cout << "Densee NDArray for node " << nid << std::endl;
+      if (dispatch_storage_type == kDefaultStorage) {
         NDArray nd(shape, ctx);
-        //data_pool_[i] = nd;
+        data_pool_[i] = nd;
         // put the new allocated arrays to shared pool
         if (shared_pool != nullptr)  {
           shared_pool->push_back(nd);
@@ -567,39 +570,45 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       }
     }
   }
-  //CHECK_EQ(data_pool_.size(), pool_info.size());
   // assign the data entries
   for (size_t i = 0; i < data_entry_.size(); ++i) {
     // avoid pre-allocated arrays
     if (!data_entry_[i].is_none()) continue;
     // assign allocated array by storage id
     int storage_id = vstorage[i];
-    //CHECK_GE(storage_id, 0) << "Do not support runtime shape op yet";
-    //const NDArray& src = data_pool_.at(storage_id);
-    //std::cout << "WARNING: sharing data arrays data_entry_[" << i << "]" << std::endl;
-    //data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
-    auto storage_type = (NDArrayStorageType) vstorage_type[i];
-    if (storage_type != kDefaultStorage) {
-      data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
-      std::cout << "Sparse NDArray " << i << " " << data_entry_[i].var() << "\n";
+    if (dispatch_storage_type == kDefaultStorage) {
+      CHECK_GE(storage_id, 0) << "Do not support runtime shape op yet";
+      const NDArray& src = data_pool_.at(storage_id);
+      data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
     } else {
-      data_entry_[i] = NDArray(vshape[i], vctx[i]);
-      std::cout << "Densee NDArray " << i << " " << data_entry_[i].var() <<  std::endl;
+      auto storage_type = (NDArrayStorageType) vstorage_type[i];
+      if (storage_type != kDefaultStorage) {
+        data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
+        std::cout << "Sparse NDArray " << i << " " << data_entry_[i].var() << "\n";
+      } else {
+        data_entry_[i] = NDArray(vshape[i], vctx[i]);
+        std::cout << "Densee NDArray " << i << " " << data_entry_[i].var() <<  std::endl;
+      }
     }
   }
 }
 
-
 void GraphExecutor::InitCachedOps() {
   // get the graph
   const auto& idx = graph_.indexed_graph();
-  const auto& vstorage_inplace =
-      graph_.GetAttr<std::vector<int> >("storage_inplace_index");
-  const auto& op_execs =
-      graph_.GetAttr<OpExecVector>("op_execs");
+  const auto& vstorage_inplace = graph_.GetAttr<std::vector<int> >("storage_inplace_index");
+  const auto& op_execs = graph_.GetAttr<OpExecVector>("op_execs");
   const auto& vctx = graph_.GetAttr<ContextVector>("context");
-  //const auto& addto_entry = graph_.GetAttr<std::vector<int> >("addto_entry");
-  //const auto& skip_plus_node = graph_.GetAttr<std::vector<int> >("skip_plus_node");
+  const auto& dispatch_storage_type = graph_.GetAttr<int>("dispatch_storage_type");
+  // FIXME this is inefficient: made copies
+  std::vector<int> addto_entry;
+  std::vector<int> skip_plus_node;
+  if (graph_.attrs.count("addto_entry") > 0) {
+    addto_entry = graph_.GetAttr<std::vector<int> >("addto_entry");
+  }
+  if (graph_.attrs.count("skip_plus_node") > 0) {
+    skip_plus_node = graph_.GetAttr<std::vector<int> >("skip_plus_node");
+  }
   const auto& vstorage_type = graph_.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   op_nodes_.resize(idx.num_nodes());
@@ -614,9 +623,9 @@ void GraphExecutor::InitCachedOps() {
 #else
     op_nodes_[nid].opr_name = nullptr;
 #endif
-    //if (skip_plus_node.at(nid)) {
-    //  op_nodes_[nid].skip_exec_node = true; continue;
-    //}
+    if (skip_plus_node.size() > nid && skip_plus_node.at(nid)) {
+      op_nodes_[nid].skip_exec_node = true; continue;
+    }
 
     op_nodes_[nid].exec = op_execs[nid];
     op_nodes_[nid].ctx = vctx[nid];
@@ -630,16 +639,21 @@ void GraphExecutor::InitCachedOps() {
     for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
       uint32_t eid = idx.entry_id(nid, index);
       exec->out_array.push_back(data_entry_[eid]);
-      //if (addto_entry.at(eid) != 0) {
-      //  exec->req.push_back(kAddTo);
-      //} else if (vstorage_inplace[eid] >= 0) {
-      //  exec->req.push_back(kWriteInplace);
-      //} else if (vstorage_inplace[eid] == -2) {
-      //  // -2 indicate that the entry is never referenced.
-      //  exec->req.push_back(kNullOp);
-      //} else {
+      if (dispatch_storage_type != kDefaultStorage) {
+        //FIXME
         exec->req.push_back(kWriteTo);
-      //}
+      } else {
+        if (addto_entry.at(eid) != 0) {
+          exec->req.push_back(kAddTo);
+        } else if (vstorage_inplace[eid] >= 0) {
+          exec->req.push_back(kWriteInplace);
+        } else if (vstorage_inplace[eid] == -2) {
+          // -2 indicate that the entry is never referenced.
+         exec->req.push_back(kNullOp);
+        } else {
+          exec->req.push_back(kWriteTo);
+        }
+      }
     }
   }
   // Note that this modifies the requirment of kWriteInplace

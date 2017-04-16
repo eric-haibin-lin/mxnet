@@ -19,6 +19,7 @@
 #include <dmlc/logging.h>
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
+#include <nnvm/graph_attr_types.h>
 
 namespace mxnet {
 namespace common {
@@ -74,6 +75,19 @@ inline void PrepVars(const std::vector<NDArray> &nds,
     auto v = i.var();
     vars->push_back(v);
   }
+}
+
+inline NDArrayStorageType GetDispatchStorageType(const nnvm::StorageTypeVector& vstorage_type) {
+  NDArrayStorageType dispatch_storage_type = kDefaultStorage;
+  for (auto& i : vstorage_type) {
+    if (i != kDefaultStorage) {
+      //TODO the check is not necessary?
+      CHECK(i != -1);
+      dispatch_storage_type = NDArrayStorageType(i);
+      break;
+    }
+  }
+  return dispatch_storage_type;
 }
 
 // heuristic to dermine number of threads per GPU
