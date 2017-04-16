@@ -993,12 +993,13 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   return g;
 }
 
-// this is for simple_bind
-// grad_req_types has the same size as in_arg_shapes,
-// should also for in_args and arg_grads
-// For the req=null or user un-specified grads,
-// grad_req_types is filled with null and
-// arg_grads filled with an emtpy NDArray
+/*!
+ * \brief This function is triggered by both simple_bind
+ * and bind flows.
+ * Setup backward graph, create device and context
+ * attributes in the graph, and calculate the number
+ * of forward nodes.
+ */
 Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
                                 const Context& default_ctx,
                                 const std::map<std::string, Context>& ctx_map,
