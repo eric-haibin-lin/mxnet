@@ -504,6 +504,70 @@ Graph AssignContext2(Graph g,
   return g;
 }
 
+void GraphExecutor::Init2(nnvm::Symbol symbol,
+                          const Context& default_ctx,
+                          const std::map<std::string, Context>& ctx_map,
+                          const std::vector<NDArray>& in_args,
+                          const std::vector<NDArray>& arg_grad_store,
+                          const std::vector<OpReqType>& grad_req_types,
+                          const std::vector<NDArray>& aux_states,
+                          Executor* shared_exec) {
+  // create in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes
+  auto get_ctx1 = [](const NDArray& nd) { return nd.ctx(); };
+  auto get_ctx2 = [default_ctx](const NDArray& nd) {
+    if (nd.is_none()) return default_ctx;
+    return nd.ctx();
+  };
+  std::vector<Context> in_arg_ctxes(in_args.size());
+  std::transform(in_args.begin(), in_args.end(), in_arg_ctxes.begin(), get_ctx1);
+  std::vector<Context> arg_grad_ctxes(arg_grad_store.size());
+  std::transform(arg_grad_store.begin(), arg_grad_store.end(), arg_grad_ctxes.begin(), get_ctx2);
+  std::vector<Context> aux_state_ctxes(aux_states.size());
+  std::transform(aux_states.begin(), aux_states.end(), aux_state_ctxes.begin(), get_ctx1);
+
+  nnvm::Graph g = InitGraph2(symbol, default_ctx, ctx_map, in_arg_ctxes,
+                             arg_grad_ctxes, aux_state_ctxes, grad_req_types);
+
+  // create arg_shapes and arg_dtypes for shape and type inferences
+  const auto& idx = g.indexed_graph();
+  auto mutable_nodes = idx.mutable_input_nodes();
+  size_t arg_top = 0, aux_top = 0;
+  data_entry_.resize(idx.num_node_entries());
+  nnvm::ShapeVector arg_shapes;
+  nnvm::DTypeVector arg_dtypes;
+  for (size_t i = 0; i < num_forward_inputs_; ++i) {
+    const uint32_t nid = idx.input_nodes().at(i);
+    if (mutable_nodes.count(nid)) {
+      CHECK_LT(aux_top, aux_states.size());
+      data_entry_[idx.entry_id(nid, 0)] = aux_states[aux_top];
+      arg_shapes.push_back(aux_states[aux_top].shape());
+      arg_dtypes.push_back(aux_states[aux_top].dtype());
+      ++aux_top;
+    } else {
+      CHECK_LT(arg_top, in_args.size());
+      data_entry_[idx.entry_id(nid, 0)] = in_args[arg_top];
+      arg_shapes.push_back(in_args[arg_top].shape());
+      arg_dtypes.push_back(in_args[arg_top].dtype());
+      if (kNullOp != grad_req_types[arg_top]) {
+        grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_store[arg_top]);
+      }
+      ++arg_top;
+    }
+  }
+
+  // expand arg_shapes and arg_dtypes to contain backward inputs
+  arg_shapes.resize(idx.input_nodes().size(), TShape());
+  arg_dtypes.resize(idx.input_nodes().size(), -1);
+  // Infer shapes and dtypes
+  g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
+  g = nnvm::pass::InferType(g, arg_dtypes, "__dtype__");
+
+  // Initialize the rest attributes of the graph.
+  // This function can be called by regular bind
+  // operation flow as well.
+  FinishInitGraph(symbol, g, shared_exec);
+}
+
 void GraphExecutor::Init(nnvm::Symbol symbol,
                          const Context& default_ctx,
                          const std::map<std::string, Context>& ctx_map,
@@ -920,8 +984,6 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
                                 const std::vector<Context>& in_arg_ctxes,
                                 const std::vector<Context>& arg_grad_ctxes,
                                 const std::vector<Context>& aux_state_ctxes,
-                                //std::vector<TShape>* arg_shapes,
-                                //std::vector<int>* arg_dtypes,
                                 const std::vector<OpReqType>& grad_req_types) {
   // setup gradient
   nnvm::Graph g = InitFullGraph2(symbol, grad_req_types);
@@ -942,28 +1004,6 @@ Graph GraphExecutor::InitGraph2(nnvm::Symbol symbol,
         num_forward_nodes_, static_cast<size_t>(idx.outputs()[i].node_id + 1));
   }
   return g;
-#if 0
-  // expand arg_shapes and arg_types to include num_backward_inputs
-  arg_shapes->resize(idx.input_nodes().size(), TShape());
-  arg_dtypes->resize(idx.input_nodes().size(), -1);
-  // other initializations
-  g = nnvm::pass::InferShape(g, *arg_shapes, "__shape__");
-  g = nnvm::pass::InferType(g, *arg_dtypes, "__dtype__");
-
-  {
-    // memory allocator
-    const int kBadStorageID = -1;
-    const int kExternalStorageID = -2;
-    nnvm::StorageVector arg_storage_id(idx.num_node_entries(), kBadStorageID);
-    for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
-      arg_storage_id[idx.entry_id(idx.outputs()[j])] = kExternalStorageID;
-    }
-    g.attrs["storage"] = std::make_shared<dmlc::any>(std::move(arg_storage_id));
-    g = nnvm::ApplyPass(g, "PlanMemory");
-  }
-  g = DetectInplaceAddTo(g);
-  return g;
-#endif
 }
 
 // initialize the memory of each entries
@@ -1470,9 +1510,9 @@ Executor *Executor::Bind(nnvm::Symbol symbol,
                          const std::vector<NDArray> &aux_states,
                          Executor* shared_exec) {
   auto exec = new exec::GraphExecutor();
-  exec->Init(symbol, default_ctx, group2ctx,
-             in_args, arg_grad_store, grad_req_type, aux_states,
-             reinterpret_cast<Executor*>(shared_exec));
+  exec->Init2(symbol, default_ctx, group2ctx,
+              in_args, arg_grad_store, grad_req_type, aux_states,
+              reinterpret_cast<Executor*>(shared_exec));
   return exec;
 }
 }  // namespace mxnet

@@ -1114,14 +1114,33 @@ class Symbol(SymbolBase):
             raise TypeError('Only accept list of NDArrays or dict of str to NDArray')
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
-    def simple_bind2(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
+    def simple_bind(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
                      param_names=None, shared_exec=None, shared_data_arrays=None, **kwargs):
-        """Bind current symbol to get an executor, allocate all the ndarrays needed.
+        """This function is DEPRECATED.
+        Bind current symbol to get an executor, allocate all the arguments needed.
         Allows specifying data types.
 
-        This function will ask user to pass in ndarray of position
-        they like to bind to, and it will automatically allocate the ndarray
-        for arguments and auxiliary states that user did not specify explicitly.
+        This function simplifies the binding procedure. You need to specify only input data shapes.
+        Before binding the executor, the function allocates arguments and auxiliary states
+        that were not explicitly specified. Allows specifying data types.
+
+        Example usage:
+        ----------
+        >>> x = mx.sym.Variable('x')
+        >>> y = mx.sym.FullyConnected(x, num_hidden=4)
+        >>> exe = y.simple_bind(mx.cpu(), x=(5,4), grad_req=[])
+        >>> exe.forward()
+        [<NDArray 5x4 @cpu(0)>]
+        >>> exe.outputs[0].asnumpy()
+        array([[ 0.,  0.,  0.,  0.],
+               [ 0.,  0.,  0.,  0.],
+               [ 0.,  0.,  0.,  0.],
+               [ 0.,  0.,  0.,  0.],
+               [ 0.,  0.,  0.,  0.]], dtype=float32)
+        >>> exe.arg_arrays
+        [<NDArray 5x4 @cpu(0)>, <NDArray 4x4 @cpu(0)>, <NDArray 4 @cpu(0)>]
+        >>> exe.grad_arrays
+        [<NDArray 5x4 @cpu(0)>, <NDArray 4x4 @cpu(0)>, <NDArray 4 @cpu(0)>]
 
         Parameters
         ----------
@@ -1130,38 +1149,25 @@ class Symbol(SymbolBase):
 
         grad_req: string
             {'write', 'add', 'null'}, or list of str or dict of str to str, optional
-            Specifies how we should update the gradient to the args_grad.
-            - 'write' means everytime gradient is write to specified args_grad NDArray.
-            - 'add' means every time gradient is add to the specified NDArray.
+            To specify how we should update the gradient to the `args_grad`.
+
+            - 'write' means every time gradient is written to specified `args_grad` NDArray.
+            - 'add' means every time gradient is added to the specified NDArray.
             - 'null' means no action is taken, the gradient may not be calculated.
 
-        type_dict : dict of str->numpy.dtype
+        type_dict  : Dict of str->numpy.dtype
             Input type dictionary, name->dtype
 
-        group2ctx : dict of string to mx.Context
-            The dict mapping the ``ctx_group`` attribute to the context assignment.
-        
-        param_names : list of strings
-            Model parameter names list. The parameters can be weights, filters, etc.
-            This argument is passed from _bind_ith_exec.
-        
-        shared_exec : Executor
-            The executor which can be shared with the current for same NDArrays.
-        
-        shared_data_arrays : dict of str->ndarray
-            The allocated NDArrays that can be shared with for use in the current
-            executor. The shared_data_arrays will be updated with a newly allocated
-            NDArray if the existing same NDArray size is smaller than the
-            requested size with the same argument name.
-            This argument is passed from _bind_ith_exec.
+        group2ctx : Dict of string to mx.Context
+            The dict mapping the `ctx_group` attribute to the context assignment.
 
-        kwargs : dict of str->shape
+        kwargs : Dict of str->shape
             Input shape dictionary, name->shape
 
         Returns
         -------
         executor : mxnet.Executor
-            The generated Executor
+            The generated executor
         """
         if len(kwargs) == 0:
             raise ValueError("Argument shapes must be provided in kwargs way for simple_bind2")
@@ -1345,12 +1351,14 @@ class Symbol(SymbolBase):
         executor.aux_arrays = aux_arrays
         return executor
 
-    def simple_bind(self, ctx,
-                    grad_req='write',
-                    type_dict=None,
-                    group2ctx=None,
-                    **kwargs):
-        """Binds current symbol to get an executor, allocate all the arguments needed.
+    def simple_bind_v1(self, ctx,
+                       grad_req='write',
+                       type_dict=None,
+                       group2ctx=None,
+                       **kwargs):
+        """This function is DEPRECATED.
+        Bind current symbol to get an executor, allocate all the arguments needed.
+        Allows specifying data types.
 
         This function simplifies the binding procedure. You need to specify only input data shapes.
         Before binding the executor, the function allocates arguments and auxiliary states
@@ -1402,6 +1410,12 @@ class Symbol(SymbolBase):
             The generated executor
         """
         # pylint: disable=too-many-locals
+        warnings.warn(
+            '\033[91mmxnet.symbol.simple_bind_v1' +
+            'has been deprecated. ' +
+            'Please use simple_bind instead.\033[0m',
+            DeprecationWarning, stacklevel=2)
+
         if type_dict is None:
             attrs = self.attr_dict()
             type_dict = {k: mx_real_t for k in self.list_arguments()
