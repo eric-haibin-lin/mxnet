@@ -100,8 +100,6 @@ class Executor {
                               const std::vector<Context>& aux_state_ctxes,
                               const std::unordered_map<std::string, TShape>& arg_shape_map,
                               const std::unordered_map<std::string, int>& arg_dtype_map,
-                              //std::vector<TShape>* arg_shapes,
-                              //std::vector<int>* arg_dtypes,
                               const std::vector<OpReqType>& grad_req_types,
                               const std::unordered_set<std::string>& param_names,
                               const std::vector<NDArray>& shared_exec_in_args,

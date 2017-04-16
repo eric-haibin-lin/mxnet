@@ -1080,26 +1080,26 @@ MXNET_DLL int MXExecutorBindEX(SymbolHandle symbol_handle,
                                ExecutorHandle *out);
 
 MXNET_DLL int MXExecutorSimpleBind(SymbolHandle symbol_handle,
-                         int dev_type,  // default device type
-                         int dev_id,  // default device id
-                         const mx_uint num_g2c_keys,  // num of keys in group2ctx
-                         const char** g2c_keys,  // arg names of group2ctx
-                         const int* g2c_dev_types,  // ctx dev_types of group2ctx
-                         const int* g2c_dev_ids,  // ctx dev_ids of group2ctx
-                         const mx_uint in_arg_len,  // num of all in_args (no aux_states)
-                         const int* in_arg_dev_types,  // all in_arg dev_types
-                         const int* in_arg_dev_ids,  // all in_arg dev_ids
-                         const mx_uint* grad_req_types,  // req types of all in_arg_grads
-                         const mx_uint aux_state_len,  // number of aux_states
-                         const int* aux_state_dev_types,  // aux_state ctx dev_types
-                         const int* aux_state_dev_ids,  // aux_state ctx dev_ids
-                         const mx_uint num_provided_args,  // #user provided in_args and aux_states
-                         const char** provided_arg_shape_names,  // user provided arg names
-                         const mx_uint* provided_arg_shape_data,  // provided arg shapes
-                         const mx_uint* provided_arg_shape_idx,  // provided arg shape idx
-                         const mx_uint num_provided_arg_dtypes,  // #provided arg dtypes
-                         const char** provided_arg_dtype_names,  // provided arg dtype names
-                         const int* provided_arg_dtypes,  // provided dtypes of args
+                         int dev_type,
+                         int dev_id,
+                         const mx_uint num_g2c_keys,
+                         const char** g2c_keys,
+                         const int* g2c_dev_types,
+                         const int* g2c_dev_ids,
+                         const mx_uint in_arg_len,
+                         const int* in_arg_dev_types,
+                         const int* in_arg_dev_ids,
+                         const mx_uint* grad_req_types,
+                         const mx_uint aux_state_len,
+                         const int* aux_state_dev_types,
+                         const int* aux_state_dev_ids,
+                         const mx_uint num_provided_args,
+                         const char** provided_arg_shape_names,
+                         const mx_uint* provided_arg_shape_data,
+                         const mx_uint* provided_arg_shape_idx,
+                         const mx_uint num_provided_arg_dtypes,
+                         const char** provided_arg_dtype_names,
+                         const int* provided_arg_dtypes,
                          const mx_uint num_param_names,
                          const char** param_name_list,
                          mx_uint* num_shared_data_arrays,
