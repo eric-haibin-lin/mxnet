@@ -193,7 +193,7 @@ def %s(%s):
 
 def _set_storage_nd_map(storage_nd_map):
     """Set the symbolic class to be cls"""
-    global _ndarray_cls_map 
+    global _ndarray_cls_map
     _ndarray_cls_map = storage_nd_map
 
 
