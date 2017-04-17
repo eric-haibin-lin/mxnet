@@ -136,8 +136,10 @@ def _make_ndarray_function(handle, name):
         ret_list = []
         for i in xrange(num_output.value):
             storage_type = ctypes.c_int(0)
-            check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(output_vars[i], NDArrayHandle), ctypes.byref(storage_type)))
-            ret_list.append(_ndarray_cls_map[storage_type.value](ctypes.cast(output_vars[i], NDArrayHandle)))
+            check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(output_vars[i], NDArrayHandle),
+                                                    ctypes.byref(storage_type)))
+            ret_list.append(_ndarray_cls_map[storage_type.value](ctypes.cast(output_vars[i], \
+                                                                 NDArrayHandle)))
         if num_output.value == 1:
             return ret_list[0]
         return ret_list
@@ -152,7 +154,7 @@ def _make_ndarray_function(handle, name):
 
 def _set_storage_nd_map(storage_nd_map):
     """Set the symbolic class to be cls"""
-    global _ndarray_cls_map 
+    global _ndarray_cls_map
     _ndarray_cls_map = storage_nd_map
 
 

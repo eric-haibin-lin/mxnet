@@ -4,27 +4,28 @@
 """NDArray API of mxnet."""
 from __future__ import absolute_import
 from __future__ import division
-try:
-    from __builtin__ import slice as py_slice
-except ImportError:
-    from builtins import slice as py_slice
+#try:
+#    from __builtin__ import slice as py_slice
+#except ImportError:
+#    from builtins import slice as py_slice
 
 import ctypes
-import warnings
+#import warnings
 
 import os as _os
 import sys as _sys
 
-import operator
+#import operator
 import numpy as np
-from .base import _LIB, string_types, numeric_types
-from .base import c_array, py_str, c_str, mx_real_t
+from .base import _LIB#, string_types, numeric_types
+from .base import c_array, mx_real_t#, py_str, c_str
 from .base import mx_uint, NDArrayHandle, check_call
-from .base import ctypes2buffer
+#from .base import ctypes2buffer
 from .context import Context
 from . import _ndarray_internal as _internal
 from . import ndarray
-from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP, NDArray
+from .ndarray import _DTYPE_NP_TO_MX#, _DTYPE_MX_TO_NP
+from .ndarray import NDArray
 
 # Use different verison of SymbolBase
 # When possible, use cython to speedup part of computation.
@@ -56,7 +57,8 @@ _STORAGE_TYPE_STR_TO_ID = {
 }
 
 #FIXME change default type for aux_type. Make aux type a list
-def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True, dtype=mx_real_t, aux_type=mx_real_t):
+def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
+                      dtype=mx_real_t, aux_type=mx_real_t):
     """Return a new handle with specified shape and context.
 
     Empty handle is only used to hold results
@@ -82,6 +84,7 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True, dtype=mx_real_
     return hdl
 
 class SparseNDArray(NDArray):
+    ''' sparse ndarray '''
     __slots__ = []
 
     def __repr__(self):
@@ -159,7 +162,7 @@ class SparseNDArray(NDArray):
         raise Exception('Not implemented for SparseND yet!')
     #@property
     #def shape(self):
-    #inherited from parent     
+    #inherited from parent
 
     @property
     def size(self):
@@ -185,7 +188,7 @@ class SparseNDArray(NDArray):
         raise Exception('Not implemented for SparseND yet!')
     def copyto(self, other):
         raise Exception('Not implemented for SparseND yet!')
-    def copy(self):        
+    def copy(self):
         raise Exception('Not implemented for SparseND yet!')
     def as_in_context(self, context):
         raise Exception('Not implemented for SparseND yet!')
@@ -194,6 +197,7 @@ class SparseNDArray(NDArray):
 
 # pylint: enable= no-member
 def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
+    ''' constructor '''
     hdl = NDArrayHandle()
     assert(isinstance(values, NDArrayBase))
     assert(isinstance(index, NDArrayBase))
@@ -205,7 +209,7 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
         ctypes.c_int(_STORAGE_TYPE_STR_TO_ID['row_sparse']),
         ctypes.c_int(ctx.device_typeid),
         ctypes.c_int(ctx.device_id),
-        ctypes.c_int(int(False)), 
+        ctypes.c_int(int(False)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
         ctypes.byref(hdl)))
     return SparseNDArray(hdl)
@@ -260,9 +264,9 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
     if ctx is None:
         ctx = Context.default_ctx
     if storage_type != 'default':
-      # pylint: disable= no-member, protected-access
-      out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx))
-      return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
+        # pylint: disable= no-member, protected-access
+        out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx))
+        return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access
 
