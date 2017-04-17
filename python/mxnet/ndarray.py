@@ -47,7 +47,6 @@ _DTYPE_NP_TO_MX = {
     np.uint8   : 3,
     np.int32   : 4
 }
-
 _DTYPE_MX_TO_NP = {
     0 : np.float32,
     1 : np.float64,

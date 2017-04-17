@@ -127,7 +127,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
     BinaryCompute<xpu, OP>(attrs, ctx, input_blobs, req, output_blobs);
     return;
   }
-  // TODO Support more chunk types
+  // TODO Support more storage types
   // Call SpSp function
   CHECK(inputs[0].storage_type() == kRowSparseStorage);
   BinaryComputeExSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
@@ -190,14 +190,6 @@ void BinaryBackwardUseIn(const nnvm::NodeAttrs& attrs,
   });
 }
 
-
-  /* TEMPORARILY DISABLE INPLACE OPTION
-  .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
-    [](const NodeAttrs& attrs){                                     \
-      return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \
-    })                                                              \
-  */
-
 #define MXNET_OPERATOR_REGISTER_BINARY(name)                        \
   NNVM_REGISTER_OP(name)                                            \
   .set_num_inputs(2)                                                \
@@ -208,8 +200,12 @@ void BinaryBackwardUseIn(const nnvm::NodeAttrs& attrs,
     })                                                              \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)     \
-  .add_argument("lhs", "ndarray-or-symbol", "first input")                    \
-  .add_argument("rhs", "ndarray-or-symbol", "second input")
+  .add_argument("lhs", "ndarray-or-symbol", "first input")          \
+  .add_argument("rhs", "ndarray-or-symbol", "second input")         \
+  .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
+    [](const NodeAttrs& attrs){                                     \
+      return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \
+    })                                                              \
 
 }  // namespace op
 }  // namespace mxnet

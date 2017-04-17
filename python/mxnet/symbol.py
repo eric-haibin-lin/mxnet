@@ -918,7 +918,6 @@ class Symbol(SymbolBase):
                          if k not in attrs or '__dtype__' not in attrs[k]}
         if storage_type_dict is None:
             attrs = self.attr_dict()
-            print(attrs)
             storage_type_dict = {k: 'default' \
                 if k not in attrs or '__storage_type__' not in attrs[k] \
                 else attrs[k]['__storage_type__'] for k in self.list_arguments()}

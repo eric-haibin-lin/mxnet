@@ -172,7 +172,6 @@ void SetShapeType(const nnvm::Op* op,
 
   for (auto& i : ndinputs) {
     in_storage_types.push_back(i.storage_type());
-    std::cout << "in chunk:" << i.storage_type() << std::endl;
   }
   for (auto& i : ndoutputs) {
     int storage_type = i.storage_type();
@@ -185,7 +184,7 @@ void SetShapeType(const nnvm::Op* op,
     CHECK(inferchunktype[op](attrs, &in_storage_types, &out_storage_types));
     CHECK_EQ(out_storage_types.size(), static_cast<size_t>(infered_num_outputs));
   } else {
-    std::cout << "FInferStorageType not present." << std::endl;
+    LOG(INFO) << "FInferStorageType not present.";
   }
 
   //TODO replace with common::
@@ -206,7 +205,7 @@ void SetShapeType(const nnvm::Op* op,
   for (int i = 0; i < infered_num_outputs; ++i) {
     NDArrayStorageType storage_type = static_cast<NDArrayStorageType>(out_storage_types[i]);
     if (ndoutputs[i].is_none()) {
-      // If failed to infer the chunk type, assume the output chunk is dense
+      // If failed to infer the storage type, assume the output storage is dense
       if (storage_type == kDefaultStorage || out_storage_types[i] == -1) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
@@ -296,7 +295,7 @@ void PushFCompute(const FCompute& fn,
       } else {
         mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
         common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
-                                  &tmp_nds, true, s);
+                                      &tmp_nds, true, s);
       }
       OpContext opctx{false, rctx,
                       engine::CallbackOnComplete(),
@@ -451,7 +450,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     FCompute fn;
     FComputeEx fn_nd;
     // dispatch based on ctx and storage_type
-    std::cout << "I - Dispatching for storage_type: " << storage_type << std::endl;
+    std::cout << "I - dispatch_storage_type: " << storage_type << " for op " << op->name << std::endl;
     if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
         storage_type == kRowSparseStorage) {
       fn_nd = fnd_cpu_row_sparse[op];

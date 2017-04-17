@@ -495,7 +495,7 @@ NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
     result.data().FlatTo1D<xpu, DType>(s) = 0;
     result.data().shape_ = shape_;
     // data() is not empty
-    if (chunk_shape().ndim() != 0) {
+    if (storage_shape().ndim() != 0) {
       // Copy over
       auto in_data = data().FlatTo2D<xpu, DType>(s);
       auto out_data = result.data().FlatTo2D<xpu, DType>(s);
@@ -772,7 +772,6 @@ void NDArray::SyncCopyToCPU(void *data, size_t size) const {
                             Context::CPU(), Context::CPU(), rctx);
   } else {
 #if MXNET_USE_CUDA
-    //TODO read_vars should include this->aux_var()
     Engine::Get()->PushSync([&](RunContext rctx) {
         ndarray::Copy<gpu, cpu>(this->data(), &dst,
                                 this->ctx(), Context::CPU(), rctx);
