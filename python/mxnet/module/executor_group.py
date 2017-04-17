@@ -657,7 +657,7 @@ class DataParallelExecutorGroup(object):
 
     def _bind_ith_exec(self, i, data_shapes, label_shapes, shared_group):
         """Internal utility function to bind the i-th executor.
-        This function utilizes simple_bind2 python interface.
+        This function utilizes simple_bind python interface.
         """
         shared_exec = None if shared_group is None else shared_group.execs[i]
         context = self.contexts[i]
@@ -671,9 +671,9 @@ class DataParallelExecutorGroup(object):
         if label_shapes is not None:
             input_types.update({x.name: x.dtype for x in label_shapes})
 
-        executor = self.symbol.simple_bind2(ctx=context, grad_req=self.grad_req, type_dict=input_types,
-                                            param_names=self.param_names, shared_exec=shared_exec,
-                                            shared_data_arrays=shared_data_arrays, **input_shapes)
+        executor = self.symbol.simple_bind(ctx=context, grad_req=self.grad_req, type_dict=input_types,
+                                           param_names=self.param_names, shared_exec=shared_exec,
+                                           shared_data_arrays=shared_data_arrays, **input_shapes)
         self._total_exec_bytes += int(executor.debug_str().split('\n')[-3].split()[1])
         return executor
 

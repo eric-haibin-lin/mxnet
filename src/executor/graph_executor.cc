@@ -842,7 +842,7 @@ void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor
  * to populate data entries of the graph. The created NDArrays
  * for in_args, arg_grads and aux_states are passed to the
  * front end to attach the created executor.
- * In front end, iff the simple_bind flow is trigger by
+ * In front end, if the simple_bind flow is trigger by
  * _bind_ith_exec, the shared data arrays of DataParallelExecutorGroup
  * and shared executor will be taken into account in creating
  * NDArrays for in_args, arg_grads, and aux_states for resuing
