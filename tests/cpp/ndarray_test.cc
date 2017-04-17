@@ -81,7 +81,7 @@ void BinaryDenseSparseTest() {
   NDArray out_data = GetDenseND(output_shape, ctx, output_vals);
   Engine::Get()->WaitForAll();
   CheckDataRegion(out_data.data(), output.data());
-  // TODO also check with zeros..
+  // TODO(haibin) also check with zeros..
 }
 
 void SetValueTest() {

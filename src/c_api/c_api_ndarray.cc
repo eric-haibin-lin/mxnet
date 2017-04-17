@@ -126,8 +126,8 @@ void SetShapeType(const nnvm::Op* op,
                   const std::vector<NDArray>& ndinputs,
                   const int& infered_num_outputs,
                   std::vector<NDArray>* p_ndoutputs,
-                  NDArrayStorageType& contains_storage_type) {
-  contains_storage_type = kDefaultStorage;
+                  NDArrayStorageType* contains_storage_type) {
+  *contains_storage_type = kDefaultStorage;
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
@@ -187,20 +187,20 @@ void SetShapeType(const nnvm::Op* op,
     CHECK(inferchunktype[op](attrs, &in_storage_types, &out_storage_types));
     CHECK_EQ(out_storage_types.size(), static_cast<size_t>(infered_num_outputs));
   } else {
-    LOG(INFO) << "FInferStorageType not present.";
+    // LOG(INFO) << "FInferStorageType not present.";
   }
 
-  //TODO replace with common::
+  // TODO(haibin) replace with common::
   for (auto &i : in_storage_types) {
-    CHECK(i != -1);
+    CHECK_NE(i, -1);
     if (i != kDefaultStorage) {
-      contains_storage_type = static_cast<NDArrayStorageType>(i);
+      *contains_storage_type = static_cast<NDArrayStorageType>(i);
       break;
     }
   }
   for (auto &i : out_storage_types) {
     if (i != kDefaultStorage && i != -1) {
-      contains_storage_type = static_cast<NDArrayStorageType>(i);
+      *contains_storage_type = static_cast<NDArrayStorageType>(i);
       break;
     }
   }
@@ -265,7 +265,7 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
   if (mutate.count(op)) {
     auxidx = mutate[op](attrs);
     std::sort(auxidx.begin(), auxidx.end());
-    // TODO replace with common::PrepVars
+    // TODO(haibin) replace with common::PrepVars
     for (auto& i : auxidx) {
       auto var = ndinputs[i].var();
       write_vars.push_back(var);
@@ -291,10 +291,10 @@ void PushFCompute(const FCompute& fn,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
       std::vector<NDArray> tmp_nds;
-     
+
       if (ctx.dev_mask() == gpu::kDevMask) {
-        //mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
-        //common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
+        // mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
+        // common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
         //                          &tmp_nds, true, s);
       } else {
         mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
@@ -440,7 +440,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     Context ctx;
     NDArrayStorageType storage_type;
     SetContext(&ctx, attrs, num_inputs, ndinputs, infered_num_outputs, ndoutputs);
-    SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs, storage_type);
+    SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs, &storage_type);
 
     std::vector<engine::VarHandle> read_vars, write_vars;
     std::vector<Resource> requested;
@@ -451,13 +451,13 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     FCompute fn;
     FComputeEx fn_nd;
     // dispatch based on ctx and storage_type
-    std::cout << "I - dispatch_storage_type: " << storage_type << " for op " << op->name << std::endl;
-    if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) && 
+    // std::cout << "I - dispatch: " << storage_type << " for op " << op->name << std::endl;
+    if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) &&
         storage_type == kRowSparseStorage) {
       fn_nd = fnd_cpu_row_sparse[op];
-      std::cout << "I - fnd_cpu_row_sparse dispatched." << std::endl;
+      // std::cout << "I - fnd_cpu_row_sparse dispatched." << std::endl;
     } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
-      std::cout << "I - fcpu dispatched." << std::endl;
+      // std::cout << "I - fcpu dispatched." << std::endl;
       fn = fcpu[op];
     } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
       fn = fgpu[op];

@@ -60,8 +60,8 @@ inline NDArrayStorageType GetDispatchStorageType(const nnvm::StorageTypeVector& 
   NDArrayStorageType dispatch_storage_type = kDefaultStorage;
   for (auto& i : vstorage_type) {
     if (i != kDefaultStorage) {
-      //TODO the check is not necessary?
-      CHECK(i != -1);
+      // TODO(haibin) the check is not necessary?
+      CHECK_NE(i, -1);
       dispatch_storage_type = NDArrayStorageType(i);
       break;
     }
