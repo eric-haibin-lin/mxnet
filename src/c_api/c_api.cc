@@ -154,7 +154,7 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   API_END();
 }
 
-// TODO Should implement conversion as ops instead.
+// TODO(haibin) Should implement conversion as ops instead.
 int MXNDArrayConvert(NDArrayHandle in,
                      int storage_type,
                      NDArrayHandle *out) {

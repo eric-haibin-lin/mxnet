@@ -124,7 +124,7 @@ void FillComputeEx(const nnvm::NodeAttrs& attrs,
   if (value == 0 && outputs[0].storage_type() != kDefaultStorage) {
     return;
   }
-  // TODO Fallback
+  // TODO(haibin) Fallback
   /*
   MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
     Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);

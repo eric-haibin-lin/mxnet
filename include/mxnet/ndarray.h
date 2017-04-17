@@ -91,8 +91,8 @@ class NDArray {
   }
   NDArray(NDArray data, std::vector<NDArray> aux_data, Context ctx,
           NDArrayStorageType storage_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data, aux_data[0], ctx, storage_type)), shape_(shape), offset_(0),
-        dtype_(data.data().type_flag_) {
+      : ptr_(std::make_shared<Chunk>(data, aux_data[0], ctx, storage_type)), shape_(shape),
+        offset_(0), dtype_(data.data().type_flag_) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
@@ -488,7 +488,8 @@ class NDArray {
       if (!delay_alloc_) this->CheckAndAlloc();
     }
     // TODO(haibin) change to list of aux_data instead
-    Chunk(const NDArray &nd_data, const NDArray &nd_aux_data, Context ctx_, NDArrayStorageType storage_type_)
+    Chunk(const NDArray &nd_data, const NDArray &nd_aux_data, Context ctx_,
+          NDArrayStorageType storage_type_)
         : static_data(false), delay_alloc(false), storage_type(storage_type_),
           aux_types({nd_aux_data.data().type_flag_}), ctx(ctx_) {
       const auto &data = nd_data.data();
@@ -552,7 +553,7 @@ class NDArray {
     }
     Chunk(Context ctx_, bool delay_alloc_, std::vector<int> aux_types_,
           NDArrayStorageType storage_type_)
-        : static_data(false), delay_alloc(delay_alloc_), storage_type(storage_type_), 
+        : static_data(false), delay_alloc(delay_alloc_), storage_type(storage_type_),
           aux_types(aux_types_), ctx(ctx_) {
       var = Engine::Get()->NewVariable();
       // Assume alloc is always delayed for non-default storage type
@@ -578,7 +579,7 @@ class NDArray {
       if (delay_alloc) {
         // For row sparse chunk, aux_shape indicates the number of rows to allocate
         auto aux_shape = aux_shapes[0];
-        CHECK(aux_shape.ndim() == 1);
+        CHECK_EQ(aux_shape.ndim(), 1);
         auto num_rows = aux_shape[0];
         CHECK(shape.ndim() == 2) << "Not yet implemented";
         auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);

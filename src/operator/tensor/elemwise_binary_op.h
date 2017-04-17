@@ -12,8 +12,6 @@
 #include <utility>
 #include "../mshadow_op.h"
 #include "../elemwise_op_common.h"
-//TODO move include to upper header files
-#include "../../common/utils.h"
 
 namespace mxnet {
 namespace op {
@@ -34,21 +32,20 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
-// TODO make use of templated OP
+// TODO(haibin) This is temporary implementation. Make use of templated OP
 template<typename xpu, typename OP>
 void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
-  CHECK(inputs.size() == 2);
-  CHECK(outputs.size() == 1);
+  CHECK_EQ(inputs.size(), 2);
+  CHECK_EQ(outputs.size(), 1);
   auto &nd_l = inputs[0];
   auto &nd_r = inputs[1];
   auto &output = outputs[0];
 
-  // TODO support other sparse types, too
-  CHECK(nd_l.storage_type() == kRowSparseStorage);
+  CHECK_EQ(nd_l.storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
   // Memory Estimation
   auto num_rows_l = nd_l.aux_shape(0)[0];
   auto num_rows_r = nd_r.aux_shape(0)[0];
@@ -66,8 +63,8 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
     auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
     auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
     auto out = output.data().FlatTo2D<xpu, DType>(s);
-  
-    // TODO A more appropriate way: Copy to output, then apply ops
+
+    // TODO(haibin) A more appropriate way: Copy to output, then apply ops
     size_t iter_l = 0;
     size_t iter_r = 0;
     size_t iter_out = 0;
@@ -108,7 +105,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
-  std::cout << "BinaryComputeEx invoked\n";
+  // std::cout << "BinaryComputeEx invoked\n";
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -127,9 +124,8 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
     BinaryCompute<xpu, OP>(attrs, ctx, input_blobs, req, output_blobs);
     return;
   }
-  // TODO Support more storage types
   // Call SpSp function
-  CHECK(inputs[0].storage_type() == kRowSparseStorage);
+  CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
   BinaryComputeExSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 

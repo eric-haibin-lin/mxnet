@@ -35,7 +35,7 @@ def test_ctx_group():
 '''
 This tests the simple bind function
 '''
-def test_ctx_group_sparse(mode):
+def test_ctx_group_sparse(mode='dense_sparse'):
     # Input Data
     dense_np = np.array([[1,2],[3,4],[5,6]])
     sparse_np1 = np.array([[5,10],[0,0],[0,0]])

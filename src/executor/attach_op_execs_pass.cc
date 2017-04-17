@@ -121,15 +121,15 @@ class FComputeExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {
     op_ctx.run_ctx = rctx;
-    //TODO Get stream?
-    //mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
+    // TODO(haibin) Get stream?
+    // mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
     common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_, &out_data_,
                                   &tmp_nds_, true, nullptr);
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
   }
   void Setup() override {
     in_array_ = in_array;
-    out_array_ = out_array;    
+    out_array_ = out_array;
   }
   Operator::ExecType exec_type() const override {
     return Operator::kSync;
@@ -176,14 +176,16 @@ class FComputeExExecutor : public OpExecutor {
       : fcompute_(fcompute), attrs_(attrs) {
   }
 
-  static FComputeEx GetFComputeEx(const Op* op, Context ctx, NDArrayStorageType dispatch_storage_type) {
+  static FComputeEx GetFComputeEx(const Op* op, Context ctx,
+                                  NDArrayStorageType dispatch_storage_type) {
     static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu, row_sparse>");
     static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<gpu, row_sparse>");
     if (dispatch_storage_type != kRowSparseStorage) {
       return nullptr;
     }
     if (ctx.dev_mask() == cpu::kDevMask) {
-      if (fcompute_cpu.get(op, nullptr) != nullptr) std::cout << "FComputeEx for op " << op->name << std::endl;
+      // if (fcompute_cpu.get(op, nullptr) != nullptr)
+      //    std::cout << "FComputeEx for op " << op->name << std::endl;
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -213,7 +215,8 @@ Graph AttachOpExecs(Graph g) {
   const auto& vdtype = g.GetAttr<DTypeVector>("dtype");
   const auto& vshape = g.GetAttr<ShapeVector>("shape");
   const auto& vctx = g.GetAttr<ContextVector>("context");
-  NDArrayStorageType dispatch_storage_type = (NDArrayStorageType) g.GetAttr<int>("dispatch_storage_type");
+  NDArrayStorageType dispatch_storage_type =
+                     (NDArrayStorageType) g.GetAttr<int>("dispatch_storage_type");
 
   // get the graph
   const auto& idx = g.indexed_graph();
@@ -228,7 +231,8 @@ Graph AttachOpExecs(Graph g) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
     FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
-    FComputeEx fcompute_ndarray = FComputeExExecutor::GetFComputeEx(inode.source->op(), vctx[i], dispatch_storage_type);
+    FComputeEx fcompute_ndarray =
+      FComputeExExecutor::GetFComputeEx(inode.source->op(), vctx[i], dispatch_storage_type);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;
@@ -250,10 +254,10 @@ Graph AttachOpExecs(Graph g) {
           mutate_index);
     } else if (fcompute_ndarray != nullptr) {
       // Also check the chunk type
-      std::cout << "S - fcompute_ndarray" << std::endl;
+      // std::cout << "S - fcompute_ndarray" << std::endl;
       ret[i] = std::make_shared<FComputeExExecutor>(fcompute_ndarray, inode.source->attrs);
     } else if (fcompute != nullptr) {
-      std::cout << "S - fcompute" << std::endl;
+      // std::cout << "S - fcompute" << std::endl;
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);
     } else {
       LOG(INFO) << "FCompute not registered " << inode.source->op()->name;

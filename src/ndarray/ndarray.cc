@@ -479,8 +479,7 @@ inline NDArray &ScalarOpApply(NDArray *dst,
 // Make a copy of data, and convert to kDefaultStorage type
 template<typename xpu>
 NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
-  //TODO CHECK TYPE
-  LOG(INFO) << "NDArray::ToDefault " << this->var();
+  // LOG(INFO) << "NDArray::ToDefault " << this->var();
   this->WaitToRead();
   NDArray result(shape_, ptr_->ctx, false, dtype());
   if (storage_type() == kDefaultStorage) {
@@ -511,12 +510,13 @@ NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
 
 template<typename xpu>
 NDArray NDArray::ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const {
-  //TODO implement convertion to other chunk types
-  CHECK(storage_type == kDefaultStorage);
+  CHECK_EQ(storage_type, kDefaultStorage) << "other storage type not supported yet";
   return ToDefault<xpu>(s);
 }
-//temporarily explicit instantiate this template so that we don't get complaints in c_api.. To remove later
-template NDArray NDArray::ConvertTo<cpu>(NDArrayStorageType storage_type, mshadow::Stream<cpu> *s) const;
+// temporarily explicit instantiate this template so that we don't get complaints in c_api.
+// To remove later
+template NDArray NDArray::ConvertTo<cpu>(NDArrayStorageType storage_type,
+                                         mshadow::Stream<cpu> *s) const;
 
 // Binary
 NDArray operator+(const NDArray &lhs, const NDArray &rhs) {
