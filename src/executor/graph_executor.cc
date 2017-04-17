@@ -494,7 +494,6 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     NDArrayStorageType storage_type;
     size_t nid;
   };
-  //using PoolEntry = std::pair<Context, size_t>;
   std::vector<PoolEntry> pool_info;
 
   // assign array to head gradient
@@ -508,15 +507,15 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     CHECK_NE(storage_type, -1);
     // FIXME enable sparse gradient update
     // init NDArray based on storage_type
-    //if (storage_type != kDefaultStorage) {
-      //std::cout << "Sparse NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
-      //data_entry_[idx.entry_id(nid, 0)] =
-      //  NDArray((NDArrayStorageType)storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
-    //} else {
+    /* if (storage_type != kDefaultStorage) {
+      std::cout << "Sparse NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
+      data_entry_[idx.entry_id(nid, 0)] =
+        NDArray((NDArrayStorageType)storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
+    } else {*/
       std::cout << "Densee NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       data_entry_[idx.entry_id(nid, 0)] =
         NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
-    //}
+    // }
   }
   // get maximum bytes in each pool
   for (size_t i = 0; i < vshape.size(); ++i) {
@@ -635,9 +634,9 @@ void GraphExecutor::InitCachedOps() {
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
-    std::cout << "node " << nid << " storage_type = " << vstorage_type[nid] << " ";
+    //std::cout << "node " << nid << " storage_type = " << vstorage_type[nid] << " ";
     if (inode.source->is_variable()) { std::cout << "var" << std::endl; continue;}
-    else {std::cout << inode.source->attrs.op->name << std::endl;}
+    //else { std::cout << inode.source->attrs.op->name << std::endl;}
 #if MXNET_USE_PROFILER
     op_nodes_[nid].opr_name = inode.source->op()->name.c_str();
 #else

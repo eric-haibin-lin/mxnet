@@ -65,7 +65,6 @@ def test_ndarray_elementwise_fallback():
     dense_plus_dense = mx.nd.add_n(dense_nd, dense_nd);
     assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)
     
-
     # dense - sparse addition
     dense_plus_sparse = mx.nd.add_n(dense_nd, sparse_nd1)
     assert_almost_equal(dense_plus_sparse.asnumpy(), dense_np + sparse_np1)

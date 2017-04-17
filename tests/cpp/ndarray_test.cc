@@ -83,6 +83,17 @@ void BinaryDenseSparseTest() {
   CheckDataRegion(out_data.data(), output.data());
   // TODO also check with zeros..
 }
+
+void SetValueTest() {
+  Context ctx = Context::CPU();
+  TShape data_shape({2, 2});
+  NDArray nd0 = GetDenseND(data_shape, ctx, {10, 10, 10, 10});
+  NDArray nd1(data_shape, ctx, false);
+  nd1 = 10;
+  nd1.WaitToRead();
+  CheckDataRegion(nd0.data(), nd1.data());
+}
+
 void BinarySpSpTest() {
   Context ctx = Context::CPU();
 
@@ -93,7 +104,6 @@ void BinarySpSpTest() {
   TShape data_shape({2, 2});
   NDArray raw_data0 = GetDenseND(data_shape, ctx, {10, 10, 10, 10});
   NDArray raw_data1 = GetDenseND(data_shape, ctx, {5, 5, 5, 5});
-  Engine::Get()->WaitForAll();
 
   NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseStorage, data_shape);
   NDArray input_nd1(raw_data1, {index1}, ctx, kRowSparseStorage, data_shape);
@@ -107,6 +117,7 @@ void BinarySpSpTest() {
   const_vars.push_back(raw_data1.var());
   const_vars.push_back(index0.var());
   const_vars.push_back(index1.var());
+  Engine::Get()->WaitForAll();
 
       Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
           nnvm::NodeAttrs attrs;
@@ -195,4 +206,10 @@ TEST(NDArray, conversion) {
   TestSparseToDenseConversion();
   Engine::Get()->WaitForAll();
   LOG(INFO) << "All pass";
+}
+
+TEST(NDArray, setvalue) {
+  SetValueTest();
+  //Wait for all operations to finish
+  Engine::Get()->WaitForAll();
 }

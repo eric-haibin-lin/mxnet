@@ -12,7 +12,7 @@ def test_elemwise_add_dense():
     data1_tmp = np.ones(shape)
     data2_tmp = np.ones(shape)
     test = mx.symbol.elemwise_add(data1, data2)
-    #check_numeric_gradient(test, [data_tmp])
+    # check_numeric_gradient(test, [data_tmp])
     # TODO implement symbolic execution
     check_symbolic_forward(test, {'data1':data1_tmp,
                                   'data2':data2_tmp}, [data1_tmp + data2_tmp])
@@ -55,6 +55,7 @@ def test_elemwise_add_sparse_sparse():
                                   'data2':sparse_nd2}, [sparse_np1 + sparse_np2])
 
 if __name__ == '__main__':
-    #test_elemwise_add_dense()
-    #test_elemwise_add_dense_sparse()
+    test_elemwise_add_dense()
+    test_elemwise_add_dense_sparse()
     test_elemwise_add_sparse_sparse()
+    print("done")
