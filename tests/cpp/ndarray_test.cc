@@ -12,18 +12,17 @@
 #include "../src/ndarray/ndarray.cc"
 
 using namespace mxnet;
-
 void CheckDataRegion(const TBlob &src, const TBlob &dst) {
   auto size = src.shape_.Size() * mshadow::mshadow_sizeof(src.type_flag_);
   auto equals = memcmp(src.dptr_, dst.dptr_, size);
   EXPECT_EQ(equals, 0);
 }
-
-NDArray GetIndexND(TShape shape, Context ctx, std::vector<ROW_SPARSE_TYPE> values) {
+// TODO(haibin) Use MSHADOW_TYPE_SWITCH instead
+NDArray GetIndexND(TShape shape, Context ctx, std::vector<int32_t> values) {
   NDArray nd(shape, ctx, false, DEFAULT_AUX_TYPE);
   size_t num_vals = values.size();
   for (size_t i = 0; i < num_vals; i++) {
-      nd.data().FlatTo1D<cpu, ROW_SPARSE_TYPE>()[i] = values[i];
+      nd.data().FlatTo1D<cpu, int32_t>()[i] = values[i];
   }
   return nd;
 }
