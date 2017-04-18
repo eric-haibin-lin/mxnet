@@ -153,6 +153,19 @@ class NDArray {
 #endif
     return res;
   }
+  // \return the index data for row sparse storage
+  inline TBlob row_sp_idx_data() const {
+    CHECK_EQ(storage_type(), kRowSparseStorage);
+    return aux_data(0);
+  }
+  inline TBlob csr_indptr_data() const {
+    CHECK_EQ(storage_type(), kCSRStorage);
+    return aux_data(0);
+  }
+  inline TBlob csr_idx_data() const {
+    CHECK_EQ(storage_type(), kCSRStorage);
+    return aux_data(1);
+  }
   /*!
    * \return the aux TBlob
    */
@@ -196,6 +209,19 @@ class NDArray {
    */
   inline int dtype() const {
     return dtype_;
+  }
+  // \return the index data for row sparse storage
+  inline int row_sp_idx_type() const {
+    CHECK_EQ(storage_type(), kRowSparseStorage);
+    return aux_type(0);
+  }
+  inline int csr_indptr_type() const {
+    CHECK_EQ(storage_type(), kCSRStorage);
+    return aux_type(0);
+  }
+  inline int csr_ind_type() const {
+    CHECK_EQ(storage_type(), kCSRStorage);
+    return aux_type(1);
   }
   inline int aux_type(size_t i) const {
     CHECK(ptr_ != nullptr);
@@ -589,7 +615,7 @@ class NDArray {
         delay_alloc = false;
       }
     }
-    inline void CheckAndAlloc(TShape shape, std::vector<TShape> aux_shapes, int dtype) {
+    inline void CheckAndAlloc(TShape shape, const std::vector<TShape> &aux_shapes, int dtype) {
       CHECK_EQ(storage_type, kRowSparseStorage) << "Not yet implemented";
       // calculate size, perform allocation
       if (delay_alloc) {

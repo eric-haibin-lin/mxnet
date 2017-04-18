@@ -54,48 +54,51 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
 
   // Indices
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
-  auto indices_l = nd_l.aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
-  auto indices_r = nd_r.aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
-  auto indices_out = output.aux_data(0).FlatTo1D<xpu, ROW_SPARSE_TYPE>(s);
+  // TODO(haibin) MSHADOW_TYPE_SWITCH to get tensors
 
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    // Data
-    auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
-    auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
-    auto out = output.data().FlatTo2D<xpu, DType>(s);
+    MSHADOW_TYPE_SWITCH(nd_l.row_sp_idx_type(), AuxType, {
+      auto indices_l = nd_l.aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      auto indices_r = nd_r.aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      auto indices_out = output.aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      // Data
+      auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
+      auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
+      auto out = output.data().FlatTo2D<xpu, DType>(s);
 
-    // TODO(haibin) A more appropriate way: Copy to output, then apply ops
-    size_t iter_l = 0;
-    size_t iter_r = 0;
-    size_t iter_out = 0;
-    while (iter_l < num_rows_l && iter_r < num_rows_r) {
-      size_t idx_l = indices_l[iter_l];
-      size_t idx_r = indices_r[iter_r];
-      if (idx_l == idx_r) {
-        // Same row
-        indices_out[iter_out] = idx_l;
-        mshadow::Copy(out[iter_out], data_l[iter_l++], s);
-        out[iter_out] += data_r[iter_r++];
-      } else if (idx_l < idx_r) {
-        // Left only
-        indices_out[iter_out] = idx_l;
-        mshadow::Copy(out[iter_out], data_l[iter_l++], s);
-      } else {
-        // Right only
-        indices_out[iter_out] = idx_r;
-        mshadow::Copy(out[iter_out], data_r[iter_r++], s);
+      // TODO(haibin) A more appropriate way: Copy to output, then apply ops
+      size_t iter_l = 0;
+      size_t iter_r = 0;
+      size_t iter_out = 0;
+      while (iter_l < num_rows_l && iter_r < num_rows_r) {
+        size_t idx_l = indices_l[iter_l];
+        size_t idx_r = indices_r[iter_r];
+        if (idx_l == idx_r) {
+          // Same row
+          indices_out[iter_out] = idx_l;
+          mshadow::Copy(out[iter_out], data_l[iter_l++], s);
+          out[iter_out] += data_r[iter_r++];
+        } else if (idx_l < idx_r) {
+          // Left only
+          indices_out[iter_out] = idx_l;
+          mshadow::Copy(out[iter_out], data_l[iter_l++], s);
+        } else {
+          // Right only
+          indices_out[iter_out] = idx_r;
+          mshadow::Copy(out[iter_out], data_r[iter_r++], s);
+        }
+        iter_out++;
       }
-      iter_out++;
-    }
-    // Copying over the rest of the rows
-    while (iter_l < num_rows_l) {
-      indices_out[iter_out] = indices_l[iter_l];
-      mshadow::Copy(out[iter_out++], data_l[iter_l++], s);
-    }
-    while (iter_r < num_rows_r) {
-      indices_out[iter_out] = indices_r[iter_r];
-      mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
-    }
+      // Copying over the rest of the rows
+      while (iter_l < num_rows_l) {
+        indices_out[iter_out] = indices_l[iter_l];
+        mshadow::Copy(out[iter_out++], data_l[iter_l++], s);
+      }
+      while (iter_r < num_rows_r) {
+        indices_out[iter_out] = indices_r[iter_r];
+        mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
+      }
+    });
   });
 }
 
