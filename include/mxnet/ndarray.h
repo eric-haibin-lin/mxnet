@@ -28,8 +28,6 @@
 #endif
 
 namespace mxnet {
-
-<<<<<<< HEAD
 // forward declaration
 namespace autograd {
 class AGNode;
@@ -54,7 +52,11 @@ class AutogradRuntime;
 }  // namespace autograd
 
 #define ROW_SPARSE_TYPE int32_t
+// FIXME int64_t is not available mshadow
 #define DEFAULT_AUX_TYPE mshadow::kInt32
+#define CSR_IDX_PTR_TYPE mshadow::kInt32
+#define CSR_IDX_DTYPE mshadow::kInt32
+#define ROW_SPARSE_IDX_TYPE mshadow::kInt32
 
 enum NDArrayStorageType {
   kUndefinedStorage,  // undefined chunk
@@ -90,12 +92,18 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  // Constructor for NDArray with chunk type
+  /*! \brief constructor for NDArray with chunk type
+   */
   NDArray(NDArrayStorageType storage_type, const TShape &shape, Context ctx,
           bool delay_alloc = true, int dtype = mshadow::default_type_flag,
-          std::vector<int> aux_types = {DEFAULT_AUX_TYPE})
-      : ptr_(std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type)),
-        shape_(shape), offset_(0), dtype_(dtype) {
+          std::vector<int> aux_types = {})
+      : shape_(shape), offset_(0), dtype_(dtype) {
+      if (aux_types.size() == 0) {
+        if (storage_type == kRowSparseStorage) aux_types = {DEFAULT_AUX_TYPE};
+        if (storage_type == kCSRStorage) aux_types = {DEFAULT_AUX_TYPE, DEFAULT_AUX_TYPE};
+        CHECK_NE(storage_type, kDefaultStorage);
+      }
+      ptr_ = std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type);
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
@@ -115,9 +123,9 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  NDArray(NDArray data, std::vector<NDArray> aux_data, Context ctx,
+  NDArray(NDArray data, const std::vector<NDArray> aux_data, Context ctx,
           NDArrayStorageType storage_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data, aux_data[0], ctx, storage_type)), shape_(shape),
+      : ptr_(std::make_shared<Chunk>(data, aux_data, ctx, storage_type)), shape_(shape),
         offset_(0), dtype_(data.data().type_flag_) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
@@ -135,7 +143,7 @@ class NDArray {
   }
   /*!
    * \return the shape of underlying chunk which stores the NDArray values. 
-   *  For default chunks, it is the same as shape(). For row-sparse chunks, it is the shape of
+   *  For default storage, it is the same as shape(). For row-sparse chunks, it is the shape of
    *  the tensor which stores the non-zero values.
    */
   inline const TShape &storage_shape() const {
@@ -143,11 +151,11 @@ class NDArray {
     return ptr_->storage_shape;
   }
   /*!
-   * \return the shape of aux data at ith index
+   * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
    */
-  inline const TShape &aux_shape(size_t i) const {
+  inline const TShape aux_shape(size_t i) const {
     CHECK(storage_type() != kDefaultStorage);
-    CHECK(i < ptr_->aux_shapes.size());
+    if (i >= ptr_->aux_shapes.size()) return TShape();
     return ptr_->aux_shapes[i];
   }
   /*!
@@ -474,13 +482,18 @@ class NDArray {
 
   /*! \brief the real data chunk that backs NDArray */
   // shandle is used to store the actual values in the NDArray
-  // aux_handles store the aux data(such as indices) if it's needed by non-default chunks.
+  // aux_handles store the aux data(such as indices) if it's needed by non-default storage.
   struct Chunk {
     // TODO(haibin) Also specify the capacity & size of the chunk, we don't want to resize it
-    // every time a new element is added to a non default chunk
-    /*! \brief storage handle from storage engine */
+    // every time a new element is added to a non default storage
+    /*! \brief storage handle from storage engine.
+               for non-default storage, shandle stores the data(value) array.
+     */
     Storage::Handle shandle;
-    /*! \brief storage handles for aux data (e.g index) */
+    /*! \brief storage handles for aux data (e.g index)
+               for row_sparse, aux_handles[0] = indic
+               for csr, aux_handles[0] = indptr, aux_handles[1] = indices
+    */
     std::vector<Storage::Handle> aux_handles;
     /*! \brief variable from engine */
     Engine::VarHandle var;
@@ -501,8 +514,7 @@ class NDArray {
     // This might not be the same shape as the NDArray, since the chunk may be sparse.
     TShape storage_shape;
     // The shape of aux data. The default value for the shape is 0.
-    // TODO(haibin) replace vector with array
-    std::vector<TShape> aux_shapes = {TShape()};
+    std::vector<TShape> aux_shapes;
 
     /*! \brief construct a new chunk */
     Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
@@ -514,54 +526,58 @@ class NDArray {
       shandle.ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
     }
-    // TODO(haibin) change to list of aux_data instead
-    Chunk(const NDArray &nd_data, const NDArray &nd_aux_data, Context ctx_,
+    Chunk(const NDArray &nd_data, const std::vector<NDArray> &nd_aux, Context ctx_,
           NDArrayStorageType storage_type_)
-        : static_data(false), delay_alloc(false), storage_type(storage_type_),
-          aux_types({nd_aux_data.data().type_flag_}), ctx(ctx_) {
-      const auto &data = nd_data.data();
-      const auto &aux_data = nd_aux_data.data();
-      CHECK(storage_type_ == kRowSparseStorage);
-      // Shapes
-      aux_shapes = {aux_data.shape_};
-      storage_shape = data.shape_;
-      CHECK_GT(storage_shape.ndim(), 0);
+        : static_data(false), delay_alloc(false), storage_type(storage_type_), ctx(ctx_) {
       // Vars
       var = Engine::Get()->NewVariable();
-      // Handles
-      Storage::Handle aux_handle;
-      shandle.ctx = ctx_;
-      aux_handle.ctx = ctx_;
+      // Data Storage
+      const auto &data = nd_data.data();
+      storage_shape = data.shape_;
+      shandle.ctx = ctx;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
-      aux_handle.size = aux_data.shape_.Size() * mshadow::mshadow_sizeof(aux_types[0]);
-
-      // Storage Allocation
       shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
-      aux_handle = Storage::Get()->Alloc(aux_handle.size, aux_handle.ctx);
 
       // Copy data
-      // TODO(haibin) refactor.
+      // TODO(haibin) refactor. Single threaded copy is slow.
       nd_data.WaitToRead();
-      CHECK(nd_data.storage_type() == kDefaultStorage);
-      CHECK(nd_data.dtype() == data.type_flag_);
+      CHECK_EQ(nd_data.storage_type(), kDefaultStorage);
+      CHECK_EQ(nd_data.dtype(), data.type_flag_);
+      CHECK_EQ(shandle.ctx.dev_mask(), cpu::kDevMask)
+               << "Sparse NDArray on GPU not yet supported";
       MSHADOW_TYPE_SWITCH(nd_data.dtype(), DType, {
         auto copy = TBlob(static_cast<DType*>(shandle.dptr), storage_shape,
-                 shandle.ctx.dev_mask(), data.type_flag_);
+                          shandle.ctx.dev_mask(), data.type_flag_);
         mshadow::Copy(copy.FlatTo1D<cpu, DType>(), data.FlatTo1D<cpu, DType>());
       });
-      // Copy aux data
-      nd_aux_data.WaitToRead();
-      CHECK(nd_aux_data.storage_type() == kDefaultStorage);
-      CHECK(nd_aux_data.dtype() == aux_data.type_flag_);
-      MSHADOW_TYPE_SWITCH(nd_aux_data.dtype(), DType, {
-        auto copy = TBlob(static_cast<DType*>(aux_handle.dptr), aux_shapes[0],
-                 aux_handle.ctx.dev_mask(), aux_types[0]);
-        mshadow::Copy(copy.FlatTo1D<cpu, DType>(), aux_data.FlatTo1D<cpu, DType>());
-      });
 
-      // Update aux_handles
-      aux_handles.push_back(aux_handle);
+      // Aux shapes, types and storage
+      storage_shape = data.shape_;
+      CHECK_GT(storage_shape.ndim(), 0);
+      for (size_t i = 0; i < nd_aux.size(); i++) {
+        const auto &aux_d = nd_aux[i].data();
+        aux_shapes.emplace_back(aux_d.shape_);
+        aux_types.emplace_back(aux_d.type_flag_);
+        Storage::Handle aux_handle;
+        aux_handle.ctx = ctx;
+        aux_handle.size = aux_shapes[i].Size() * mshadow::mshadow_sizeof(aux_types[i]);
+        aux_handle = Storage::Get()->Alloc(aux_handle.size, aux_handle.ctx);
+        aux_handles.emplace_back(aux_handle);
+
+        // Copy aux data
+        nd_aux[i].WaitToRead();
+        CHECK_EQ(nd_aux[i].storage_type(), kDefaultStorage);
+        CHECK_EQ(nd_aux[i].dtype(), aux_types[i]);
+        CHECK_EQ(aux_handle.ctx.dev_mask(), cpu::kDevMask)
+                 << "Sparse NDArray on GPU not yet supported";
+        MSHADOW_TYPE_SWITCH(nd_aux[i].dtype(), DType, {
+          auto copy = TBlob(static_cast<DType*>(aux_handle.dptr), aux_shapes[i],
+                            ctx.dev_mask(), aux_types[i]);
+          mshadow::Copy(copy.FlatTo1D<cpu, DType>(), aux_d.FlatTo1D<cpu, DType>());
+        });
+      }
     }
+
     Chunk(const TBlob &data, int dev_id)
         : static_data(true),
           delay_alloc(false) {
@@ -640,7 +656,7 @@ class NDArray {
   std::shared_ptr<MKLMemHolder> Mkl_mem_;
 #endif
   /*! \brief internal data of NDArray */
-  std::shared_ptr<Chunk> ptr_;
+  std::shared_ptr<Chunk> ptr_{nullptr};
   /*! \brief shape of current NDArray */
   TShape shape_;
   /*! \brief offset in chunk */

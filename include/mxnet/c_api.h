@@ -227,7 +227,7 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
  * aux data is copied during construction.
  */
 MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
-                    int num_aux,
+                    mx_uint num_aux,
                     NDArrayHandle *aux_data,
                     const mx_uint *shape,
                     mx_uint ndim,
@@ -268,7 +268,7 @@ MXNET_DLL int MXNDArrayCreateSparseEx(int storage_type,
                     int dev_id,
                     int delay_alloc,
                     int dtype,
-                    int num_aux,
+                    mx_uint num_aux,
                     int *aux_types,
                     NDArrayHandle *out);
 

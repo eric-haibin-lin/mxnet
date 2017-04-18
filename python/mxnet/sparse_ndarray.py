@@ -204,8 +204,9 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     assert(isinstance(values, NDArrayBase))
     assert(isinstance(index, NDArrayBase))
     indices = c_array(NDArrayHandle, [index.handle])
+    num_aux = mx_uint(1)
     check_call(_LIB.MXNDArrayCreateSparse(
-        values.handle, mx_uint(1), indices,
+        values.handle, num_aux, indices,
         c_array(mx_uint, shape),
         mx_uint(len(shape)),
         ctypes.c_int(_STORAGE_TYPE_STR_TO_ID['row_sparse']),
