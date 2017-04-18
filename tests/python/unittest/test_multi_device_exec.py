@@ -71,5 +71,5 @@ def test_ctx_group_sparse(mode='dense_sparse'):
     for arr, name in zip(texec.arg_arrays, mlp.list_arguments()):
          pass
 if __name__ == '__main__':
-    #test_ctx_group()
+    test_ctx_group()
     test_ctx_group_sparse('dense_sparse')

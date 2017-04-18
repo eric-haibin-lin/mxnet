@@ -1771,7 +1771,7 @@ def check_pad_with_shape(shape, xpu, pad_width, mode):
     assert_almost_equal(out, np_out)
     # grad check
     check_numeric_gradient(Y, [x.asnumpy()], numeric_eps=1e-2, rtol=1e-2)
-'''
+
 def test_pad():
     shape1 = (2, 3, 2, 3)
     pad1 = (0, 0, 0, 0, 1, 2, 3, 4)
@@ -1781,7 +1781,7 @@ def test_pad():
     check_pad_with_shape(shape1, default_context(), pad1, 'edge')
     check_pad_with_shape(shape2, default_context(), pad2, 'constant')
     check_pad_with_shape(shape2, default_context(), pad2, 'edge')
-'''
+
 def np_instance_norm(data, weight, bias, eps):
     spatial_dims = data.shape[2::]
     num_spatial_vals = np.prod(np.array(spatial_dims))
@@ -3061,7 +3061,7 @@ if __name__ == '__main__':
     test_correlation()
     test_support_vector_machine_l1_svm()
     test_support_vector_machine_l2_svm()
-    #test_pad()
+    test_pad()
     test_instance_normalization()
     test_mathematical()
     test_special_functions_using_scipy()

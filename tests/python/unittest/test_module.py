@@ -17,7 +17,7 @@ def test_module_layout():
     hdshape = (3, 4, 7)
     for x in mod.get_outputs(merge_multi_context=False)[0]:
         assert x.shape == hdshape
-'''
+
 def test_save_load():
     def dict_equ(a, b):
         assert set(a) == set(b)
@@ -56,7 +56,7 @@ def test_save_load():
     assert mod._symbol.tojson() == mod2._symbol.tojson()
     dict_equ(mod.get_params()[0], mod2.get_params()[0])
     dict_equ(mod._kvstore._updater.states, mod2._updater.states)
-'''
+
 
 def test_module_reshape():
     data = mx.sym.Variable('data')
@@ -214,7 +214,7 @@ def test_monitor():
 if __name__ == '__main__':
     test_module_states()
     test_module_reshape()
-    #test_save_load()
+    test_save_load()
     test_module_layout()
     test_module_switch_bucket()
     test_monitor()

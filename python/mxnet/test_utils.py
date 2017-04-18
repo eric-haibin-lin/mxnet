@@ -516,6 +516,7 @@ def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
         g[:] = 0
 
     executor.forward(is_train=False)
+
     outputs = [x.asnumpy() for x in executor.outputs]
     for output_name, expect, output in zip(sym.list_outputs(), expected, outputs):
         assert_almost_equal(expect, output, rtol, atol,
