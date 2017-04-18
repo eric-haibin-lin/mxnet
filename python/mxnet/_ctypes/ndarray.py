@@ -35,9 +35,6 @@ class NDArrayBase(object):
     def __del__(self):
         check_call(_LIB.MXNDArrayFree(self.handle))
 
-    def __reduce__(self):
-        return (_ndarray_cls[1], (None,), self.__getstate__())
-
 
 # pylint: disable=too-many-locals, invalid-name
 def _make_ndarray_function(handle, name):

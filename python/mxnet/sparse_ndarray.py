@@ -89,9 +89,11 @@ class SparseNDArray(NDArray):
 
     def __repr__(self):
         """Return a string representation of the array"""
-        #TODO also print shape info
+        # TODO(haibin) also print shape info
         #shape_info = 'x'.join(['%d' % x for x in self.shape])
         return '<%s>' % (self.__class__.__name__)
+    def __reduce__(self):
+        return (SparseNDArray, (None,), self.__getstate__())
     def __add__(self, other):
         raise Exception('Not implemented for SparseND yet!')
     def __iadd__(self, other):

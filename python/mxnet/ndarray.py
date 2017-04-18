@@ -110,6 +110,9 @@ fixed-size items.
         return '<%s %s @%s>' % (self.__class__.__name__,
                                 shape_info, self.context)
 
+    def __reduce__(self):
+        return (NDArray, (None,), self.__getstate__())
+
     def __add__(self, other):
         """x.__add__(y) <=> x+y <=> mx.nd.add(x, y) """
         return add(self, other)
@@ -575,6 +578,7 @@ fixed-size items.
         check_call(_LIB.MXNDArrayGetShape(
             self.handle, ctypes.byref(ndim), ctypes.byref(pdata)))
         return tuple(pdata[:ndim.value])
+
 
     @property
     def size(self):

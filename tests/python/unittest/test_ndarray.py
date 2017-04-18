@@ -175,7 +175,7 @@ def test_ndarray_scalar():
     assert(np.sum(c.asnumpy()) - 200 < 1e-5)
     d = -c + 2
     assert(np.sum(d.asnumpy()) < 1e-5)
-'''
+
 def test_ndarray_pickle():
     np.random.seed(0)
     maxdim = 5
@@ -214,7 +214,7 @@ def test_ndarray_saveload():
             y = dmap2[k]
             assert np.sum(x.asnumpy() != y.asnumpy()) == 0
     os.remove(fname)
-'''
+
 
 def test_ndarray_slice():
     shape = (10,)
@@ -270,7 +270,7 @@ def test_clip():
     for i in range(shape[0]):
         assert B1[i] >= -2
         assert B1[i] <= 2
-'''
+
 def test_dot():
     # Test normal dot
     a = np.random.uniform(-3, 3, (3, 4))
@@ -304,7 +304,7 @@ def test_dot():
     B = mx.nd.array(b)
     C = mx.nd.dot(A, B, transpose_a=True, transpose_b=True)
     assert_almost_equal(c, C.asnumpy())
-'''
+
 
 
 def test_reduce():
@@ -599,13 +599,13 @@ if __name__ == '__main__':
     test_ndarray_elementwise()
     test_ndarray_elementwisesum()
     test_ndarray_slice()
-    #test_ndarray_pickle()
-    #test_ndarray_saveload()
+    test_ndarray_pickle()
+    test_ndarray_saveload()
     test_ndarray_copy()
     test_ndarray_negate()
     test_ndarray_scalar()
     test_clip()
-    #test_dot()
+    test_dot()
     test_ndarray_choose()
     test_ndarray_onehot()
     test_ndarray_fill()
