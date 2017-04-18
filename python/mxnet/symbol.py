@@ -18,7 +18,7 @@ from .base import NDArrayHandle, ExecutorHandle, SymbolHandle
 from .base import check_call, MXNetError
 from .context import Context, cpu
 from .ndarray import NDArray, zeros as _nd_zeros, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
-from .sparse_ndarray import SparseNDArray, zeros as _sparse_nd_zeros
+from .sparse_ndarray import zeros as _sparse_nd_zeros
 from .sparse_ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
 from .executor import Executor
 from . import _symbol_internal as _internal
@@ -925,7 +925,7 @@ class Symbol(SymbolBase):
         arg_shapes, _, aux_shapes = self.infer_shape(**kwargs)
         arg_types, _, aux_types = self.infer_type(**type_dict)
         # print(storage_type_dict)
-        arg_storage_types, out_storage_types, _ = \
+        arg_storage_types, _, _ = \
             self.infer_storage_type(**storage_type_dict)
         # print("arg_storage_types", arg_storage_types)
         # print("out_storage_types", out_storage_types)
