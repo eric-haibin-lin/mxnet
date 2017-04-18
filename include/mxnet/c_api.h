@@ -401,7 +401,7 @@ MXNET_DLL int MXNDArrayAt(NDArrayHandle handle,
                           NDArrayHandle *out);
 
 /*!
- * \brief get the chunk type of the array
+ * \brief get the storage type of the array
  */
 MXNET_DLL int MXNDArrayGetStorageType(NDArrayHandle handle,
                                     int *out_storage_type);
@@ -980,7 +980,7 @@ MXNET_DLL int MXSymbolInferType(SymbolHandle sym,
 
 
 /*!
- * \brief infer chunk type of unknown input types given the known one.
+ * \brief infer storage type of unknown input types given the known one.
  */
 MXNET_DLL int MXSymbolInferStorageType(SymbolHandle sym,
                       mx_uint num_args,
