@@ -2620,7 +2620,7 @@ def test_reverse():
     check_symbolic_forward(test, [data_tmp], [data_tmp[:, ::-1, ::-1]])
     check_symbolic_backward(test, [data_tmp], [grad], [grad[:, ::-1, ::-1]])
 
-'''
+
 def test_tile():
     def test_normal_case():
         ndim_max = 3 # max number of dims of the ndarray
@@ -2714,7 +2714,7 @@ def test_tile():
     test_zero_reps()
     test_tile_backward()
     test_tile_numeric_gradient()
-'''
+
 
 def test_one_hot():
     def test_normal_case(index_type=np.int32):
@@ -2771,7 +2771,7 @@ def test_one_hot():
     test_empty_indices()
     test_zero_depth()
 
-'''
+
 def test_where():
     def get_forward_expected_output(condition, x, y):
         original_shape = x.shape
@@ -2906,6 +2906,7 @@ def test_where():
     test_where_numeric_gradient((5, 9), False)
     test_where_numeric_gradient((5, 7, 9), True)
     test_where_numeric_gradient((5, 7, 9), False)
+<<<<<<< HEAD
 <<<<<<< HEAD
 
 
@@ -3069,6 +3070,6 @@ if __name__ == '__main__':
     test_bilinear_sampler()
     test_binary_logic()
     test_repeat()
-    #test_tile()
+    test_tile()
     test_one_hot()
-    #test_where()
+    test_where()

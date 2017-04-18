@@ -141,8 +141,11 @@ class FComputeExecutor : public OpExecutor {
     op_ctx.run_ctx = rctx;
     // TODO(haibin) Get stream?
     // mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
-    common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_, &out_data_,
-                                  &tmp_nds_, true, nullptr);
+    if (!initialized) {
+      common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_, &out_data_,
+                                    &tmp_nds_, true, nullptr);
+      initialized = true;
+    }
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
 #if MKL_EXPERIMENTAL == 1
     mkl_tblobs_prv_to_cpu(in_data_);
@@ -178,6 +181,7 @@ class FComputeExecutor : public OpExecutor {
   NodeAttrs attrs_;
   std::vector<TBlob> in_data_, out_data_;
   std::vector<NDArray> in_array_, out_array_, tmp_nds_;
+  bool initialized = false;
 };
 
 // fcomputend executor
