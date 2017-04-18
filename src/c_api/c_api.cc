@@ -132,7 +132,7 @@ int MXNDArrayCreate(const mx_uint *shape,
 }
 
 int MXNDArrayCreateSparse(NDArrayHandle data,
-                    int num_aux,
+                    mx_uint num_aux,
                     NDArrayHandle *aux_vec,
                     const mx_uint *shape,
                     mx_uint ndim,
@@ -146,7 +146,7 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   auto ctx = Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id);
   std::vector<NDArray> aux_ndarrays;
   NDArray* data_ptr = reinterpret_cast<NDArray*>(data);
-  for (int i = 0; i < num_aux; i++) {
+  for (size_t i = 0; i < num_aux; i++) {
     NDArray* nd_aux_ptr = reinterpret_cast<NDArray*>(aux_vec[i]);
     aux_ndarrays.push_back(*nd_aux_ptr);
   }
@@ -187,12 +187,12 @@ int MXNDArrayCreateSparseEx(int storage_type,
                     int dev_id,
                     int delay_alloc,
                     int dtype,
-                    int num_aux,
+                    mx_uint num_aux,
                     int *aux_type,
                     NDArrayHandle *out) {
   API_BEGIN();
   std::vector<int> aux_types;
-  for (int i = 0; i < num_aux; i++) aux_types.push_back(aux_type[i]);
+  for (size_t i = 0; i < num_aux; i++) aux_types.push_back(aux_type[i]);
   *out = new NDArray(
       NDArrayStorageType(storage_type),
       TShape(shape, shape + ndim),

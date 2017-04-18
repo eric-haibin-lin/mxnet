@@ -173,7 +173,7 @@ void TestDenseToDenseConversion() {
   auto nd_copy = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
   CheckDataRegion(nd_copy.data(), nd.data());
 }
-// TODO refactor: GetDense, GetSparse
+
 // sparse to dense conversion
 void TestSparseToDenseConversion() {
   Context ctx;
