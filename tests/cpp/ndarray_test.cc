@@ -9,7 +9,6 @@
 #include <mxnet/ndarray.h>
 #include "../src/executor/graph_executor.h"
 #include "../src/operator/tensor/elemwise_binary_op.h"
-#include "../src/ndarray/ndarray.cc"
 
 using namespace mxnet;
 void CheckDataRegion(const TBlob &src, const TBlob &dst) {

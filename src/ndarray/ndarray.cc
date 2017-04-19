@@ -475,51 +475,6 @@ inline NDArray &ScalarOpApply(NDArray *dst,
   return *dst;
 }
 
-// NDArray Convertion
-// Make a copy of data, and convert to kDefaultStorage type
-template<typename xpu>
-NDArray NDArray::ToDefault(mshadow::Stream<xpu> *s) const {
-  // LOG(INFO) << "NDArray::ToDefault " << this->var();
-  this->WaitToRead();
-  NDArray result(shape_, ptr_->ctx, false, dtype());
-  if (storage_type() == kDefaultStorage) {
-    MSHADOW_TYPE_SWITCH(dtype(), DType, {
-      mshadow::Copy(result.data().FlatTo1D<xpu, DType>(), data().FlatTo1D<xpu, DType>());
-    });
-    return result;
-  }
-  CHECK(storage_type() == kRowSparseStorage);
-  MSHADOW_TYPE_SWITCH(dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(row_sp_idx_type(), AuxType, {
-      // Fill in zeros
-      result.data().FlatTo1D<xpu, DType>(s) = 0;
-      result.data().shape_ = shape_;
-      // data() is not empty
-      if (storage_shape().ndim() != 0) {
-        // Copy over
-        auto in_data = data().FlatTo2D<xpu, DType>(s);
-        auto out_data = result.data().FlatTo2D<xpu, DType>(s);
-        auto num_rows = aux_shape(0)[0];
-        auto in_idx = aux_data(0).FlatTo1D<xpu, AuxType>(s);
-        for (size_t i = 0; i < num_rows; i += 1) {
-          mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
-        }
-      }
-    });
-  });
-  return result;
-}
-
-template<typename xpu>
-NDArray NDArray::ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const {
-  CHECK_EQ(storage_type, kDefaultStorage) << "other storage type not supported yet";
-  return ToDefault<xpu>(s);
-}
-// temporarily explicit instantiate this template so that we don't get complaints in c_api.
-// To remove later
-template NDArray NDArray::ConvertTo<cpu>(NDArrayStorageType storage_type,
-                                         mshadow::Stream<cpu> *s) const;
-
 // Binary
 NDArray operator+(const NDArray &lhs, const NDArray &rhs) {
   return BinaryOpRet<ndarray::Plus>(lhs, rhs);
