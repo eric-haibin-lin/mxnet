@@ -132,9 +132,12 @@ class NDArray {
 #endif
       CHECK(aux_data.size() == 1) << "Multiple aux_data not supported yet";
   }
-  // TODO(haibin) Also take a pointer of NDArray as the output ndarray
+
   template<typename xpu>
-  NDArray ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const;
+  NDArray ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const {
+    CHECK_EQ(storage_type, kDefaultStorage) << "other storage type not supported yet";
+    return ToDefault<xpu>(s);
+  }
   /*!
    * \return the shape of current NDArray.
    */
@@ -504,7 +507,36 @@ class NDArray {
   friend class autograd::AutogradRuntime;
   // Make a copy of the ndarray in dense format
   template<typename xpu>
-  NDArray ToDefault(mshadow::Stream<xpu> *s) const;
+  NDArray ToDefault(mshadow::Stream<xpu> *s) const {
+    NDArray result(shape_, ptr_->ctx, false, dtype());
+    this->WaitToRead();
+    if (storage_type() == kDefaultStorage) {
+      MSHADOW_TYPE_SWITCH(dtype(), DType, {
+        mshadow::Copy(result.data().FlatTo1D<xpu, DType>(), data().FlatTo1D<xpu, DType>());
+      });
+      return result;
+    }
+    CHECK(storage_type() == kRowSparseStorage);
+    MSHADOW_TYPE_SWITCH(dtype(), DType, {
+      MSHADOW_TYPE_SWITCH(row_sp_idx_type(), AuxType, {
+        // Fill in zeros
+        result.data().FlatTo1D<xpu, DType>(s) = 0;
+        result.data().shape_ = shape_;
+        // data() is not empty
+        if (storage_shape().ndim() != 0) {
+          // Copy over
+          auto in_data = data().FlatTo2D<xpu, DType>(s);
+          auto out_data = result.data().FlatTo2D<xpu, DType>(s);
+          auto num_rows = aux_shape(0)[0];
+          auto in_idx = aux_data(0).FlatTo1D<xpu, AuxType>(s);
+          for (size_t i = 0; i < num_rows; i += 1) {
+            mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
+          }
+        }
+      });
+    });
+    return result;
+  }
 
   /*! \brief the real data chunk that backs NDArray */
   // shandle is used to store the actual values in the NDArray
