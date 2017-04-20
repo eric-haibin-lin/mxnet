@@ -507,7 +507,7 @@ class NDArray {
   friend class autograd::AutogradRuntime;
   // Make a copy of the ndarray in dense format
   template<typename xpu>
-  NDArray ToDefault(mshadow::Stream<xpu> *s) const {
+  NDArray ToDefault(mshadow::Stream<xpu>* s) const {
     NDArray result(shape_, ptr_->ctx, false, dtype());
     this->WaitToRead();
     if (storage_type() == kDefaultStorage) {

@@ -56,11 +56,11 @@ inline void PrepVars(const std::vector<NDArray> &nds,
   }
 }
 
+// Only check input storage type for now.
 inline NDArrayStorageType GetDispatchStorageType(const nnvm::StorageTypeVector& vstorage_type) {
   NDArrayStorageType dispatch_storage_type = kDefaultStorage;
   for (auto& i : vstorage_type) {
     if (i != kDefaultStorage) {
-      // TODO(haibin) the check is not necessary?
       CHECK_NE(i, -1);
       dispatch_storage_type = NDArrayStorageType(i);
       break;

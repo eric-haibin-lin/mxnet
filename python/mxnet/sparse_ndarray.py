@@ -56,7 +56,11 @@ _STORAGE_TYPE_STR_TO_ID = {
     'csr' : 3,
 }
 
-#FIXME change default type for aux_type. Make aux type a list
+_STORAGE_AUX_TYPES = {
+    'row_sparse' : [np.int32],
+    'csr'        : [np.int32, np.int32]
+}
+
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
                       dtype=mx_real_t, aux_types=[]):
     """Return a new handle with specified shape and context.
@@ -267,9 +271,10 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
     """
     if ctx is None:
         ctx = Context.default_ctx
-    if storage_type != 'default':
+    if storage_type == 'row_sparse':
         # pylint: disable= no-member, protected-access
-        out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx))
+        out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx,
+                                              aux_types=_STORAGE_AUX_TYPES['row_sparse']))
         return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access

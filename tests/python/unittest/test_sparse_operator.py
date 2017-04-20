@@ -44,10 +44,9 @@ def test_elemwise_add_dense_sparse():
 
 def test_elemwise_add_sparse_sparse():
     # prep data
-    #dense_np = np.array([[1,2],[3,4],[5,6]])
+    shape = (4, 2)
     sparse_np1 = np.array([[5,10],[0,0],[0,0],[0,0]])
     sparse_np2 = np.array([[0,0],[5,10],[0,0],[0,0]])
-    shape = (4, 2)
 
     val1 = mx.nd.array([5, 10]);
     val2 = mx.nd.array([5, 10]);
@@ -59,11 +58,10 @@ def test_elemwise_add_sparse_sparse():
     data1 = mx.symbol.Variable('data1', storage_type='row_sparse')
     data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
     test  = mx.symbol.elemwise_add(data1, data2, name='plus')
-    #check_symbolic_forward(test, {'data1':sparse_nd1,
-    #                              'data2':sparse_nd2}, [sparse_np1 + sparse_np2])
+    check_symbolic_forward(test, {'data1':sparse_nd1,
+                                  'data2':sparse_nd2}, [sparse_np1 + sparse_np2])
     arr_grad1 = mx.sparse_nd.zeros(shape, 'row_sparse')
     arr_grad2 = mx.sparse_nd.zeros(shape, 'row_sparse')
-    # init grad arrays before bind
     exec_test = test.bind(default_context(), args={'data1':sparse_nd1, 'data2':sparse_nd2},
                           args_grad=[arr_grad1, arr_grad2])
     exec_test.forward(is_train=True)

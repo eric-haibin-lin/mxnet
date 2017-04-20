@@ -73,7 +73,7 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   // FIXME the input index is hard coded for _identity_with_attr_like_rhs op
   NDArrayStorageType storage_type = inputs[1].storage_type();
   if (storage_type == kDefaultStorage) {
-    LOG(INFO) << "IdentityComputeEx Fallback";
+    // LOG(INFO) << "IdentityComputeEx Fallback";
     std::vector<TBlob> input_blobs({inputs[0].data(), inputs[1].data()}), output_blobs({outputs[0].data()});
     IdentityCompute<xpu>(attrs, ctx, input_blobs, req, output_blobs);
     return;
@@ -89,7 +89,7 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   }
   TShape shape = inputs[1].aux_shape(0);
   if (shape.ndim() == 0) {
-    LOG(INFO) << "Identify for all zero sparse ndarray";
+    // LOG(INFO) << "Identify for all zero sparse ndarray";
     // All zeros
     return;
   }

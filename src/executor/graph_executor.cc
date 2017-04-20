@@ -51,11 +51,7 @@ void GraphExecutor::Backward(const std::vector<NDArray>& head_grads) {
         CHECK(i < head_grads.size() && !head_grads[i].is_none())
             << "Because the last operator is not Loss function, "
             << "head_gradient is required in calling backward.";
-        if (head_grads[i].storage_type() == kDefaultStorage) {
-          CopyFromTo(head_grads[i], &(head_grad_array_[i]));
-        } else {
-          LOG(INFO) << "Non-default gradient copy is not implemented yet";
-        }
+        CopyFromTo(head_grads[i], &(head_grad_array_[i]));
       }
     }
   }
@@ -437,14 +433,22 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   g = nnvm::pass::InferType(g, arg_types, "__dtype__");
   g = nnvm::pass::InferStorageType(g, arg_storage_types, "__storage_type__");
   const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
-  int dispatch_storage_type = common::GetDispatchStorageType(vstorage_type);
-  g.attrs["dispatch_storage_type"] = std::make_shared<dmlc::any>(std::move(dispatch_storage_type));
-  // std::cout << "S - dispatch_storage_type: " << dispatch_storage_type << std::endl;
+
+  // dispatch on a per op basis
+  nnvm::StorageTypeVector dispatch_storage_types(idx.num_nodes(), -1);
+  for (size_t nid = 0; nid < idx.num_nodes(); nid++) {
+      const auto& inode = idx[nid];
+      nnvm::StorageTypeVector vs;
+      for (const auto& e : inode.inputs) {
+        vs.emplace_back(vstorage_type[idx.entry_id(e)]);
+      }
+      int dispatch_storage_type = common::GetDispatchStorageType(vs);
+      dispatch_storage_types[nid] = dispatch_storage_type;
+  }
+  g.attrs["dispatch_storage_types"] = std::make_shared<dmlc::any>(std::move(dispatch_storage_types));
+
   {
     // memory allocator
-    const int kBadStorageID = -1;
-    const int kExternalStorageID = -2;
-    const int kDynamicStorageID = -3;
     nnvm::StorageVector arg_storage_id(idx.num_node_entries(), kBadStorageID);
     for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
       arg_storage_id[idx.entry_id(idx.outputs()[j])] = kExternalStorageID;
@@ -611,30 +615,32 @@ void GraphExecutor::InitCachedOps() {
   const auto& vstorage_inplace = graph_.GetAttr<std::vector<int> >("storage_inplace_index");
   const auto& op_execs = graph_.GetAttr<OpExecVector>("op_execs");
   const auto& vctx = graph_.GetAttr<ContextVector>("context");
-  const auto& dispatch_storage_type = graph_.GetAttr<int>("dispatch_storage_type");
   const auto& addto_entry = graph_.GetAttr<std::vector<int> >("addto_entry");
-  const auto&  skip_plus_node = graph_.GetAttr<std::vector<int> >("skip_plus_node");
+  const auto& skip_plus_node = graph_.GetAttr<std::vector<int> >("skip_plus_node");
   const auto& vstorage_type = graph_.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   op_nodes_.resize(idx.num_nodes());
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
+    // TODO remove std::cout
+#if EXECUTOR_DEBUG
     if (inode.source->is_variable()) {
-      // std::cout << "node " << nid << " var" << std::endl;
-      continue;
+      LOG(INFO) << "node " << nid << " var";
     }
     else {
-      // std::cout << "node " << nid << " " << inode.source->attrs.op->name << std::endl;
+      LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
       auto exec = op_execs[nid];
       for (const auto& e : inode.inputs) {
-        // std::cout << "\tinput " << idx.entry_id(e) << " stype: " << vstorage_type[idx.entry_id(e)] << std::endl;
+        LOG(INFO) << "\t\tinput " << idx.entry_id(e) << " stype: " << vstorage_type[idx.entry_id(e)];
       }
       for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
         uint32_t eid = idx.entry_id(nid, index);
-        // std::cout << "\toutput " << eid << " stype: " << vstorage_type[eid] << std::endl;
+        LOG(INFO) << "\t\toutput " << eid << " stype: " << vstorage_type[eid];
       }
     }
+#endif
+    if (inode.source->is_variable()) continue;
 #if MXNET_USE_PROFILER
     op_nodes_[nid].opr_name = inode.source->op()->name.c_str();
 #else
@@ -656,8 +662,8 @@ void GraphExecutor::InitCachedOps() {
     for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
       uint32_t eid = idx.entry_id(nid, index);
       exec->out_array.push_back(data_entry_[eid]);
-      if (dispatch_storage_type != kDefaultStorage) {
-        // FIXME
+      if (vstorage_type[eid] != kDefaultStorage) {
+        // FIXME temporarily disable inplace for sparse ndarrays
         exec->req.push_back(kWriteTo);
       } else {
         if (addto_entry.at(eid) != 0) {
