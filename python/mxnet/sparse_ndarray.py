@@ -58,7 +58,7 @@ _STORAGE_TYPE_STR_TO_ID = {
 
 #FIXME change default type for aux_type. Make aux type a list
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
-                      dtype=mx_real_t, aux_type=mx_real_t):
+                      dtype=mx_real_t, aux_types=[mx_real_t]):
     """Return a new handle with specified shape and context.
 
     Empty handle is only used to hold results
@@ -69,7 +69,7 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
         A new empty ndarray handle
     """
     hdl = NDArrayHandle()
-    aux_type_list = [int(_DTYPE_NP_TO_MX[np.dtype(aux_type).type])]
+    aux_type_list = [int(_DTYPE_NP_TO_MX[np.dtype(aux_t).type]) for aux_t in aux_types]
     check_call(_LIB.MXNDArrayCreateSparseEx(
         ctypes.c_int(int(_STORAGE_TYPE_STR_TO_ID[storage_type])),
         c_array(mx_uint, shape),

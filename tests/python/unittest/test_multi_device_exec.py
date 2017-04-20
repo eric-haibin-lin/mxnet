@@ -58,13 +58,6 @@ def test_ctx_group_sparse(mode='dense_sparse'):
     mlp  = mx.symbol.elemwise_add(data1, data2, name='plus')
     texec = mlp.simple_bind(mx.cpu(0), data1=(3,2), data2=(3,2))
     print("Done simple_bind")
-    
-    #texec.arg_dict['data1'] = sparse_nd1
-    #texec.arg_dict['data1'] = dense_nd
-    #texec.arg_dict['data2'] = sparse_nd2
-    #texec.outputs = texec._get_outputs()
-
-    print("Done data preparation")
     output = texec.forward()
 
     print(output[0].asnumpy())

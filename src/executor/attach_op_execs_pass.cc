@@ -145,6 +145,8 @@ class FComputeExecutor : public OpExecutor {
     static auto& fcompute_cpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
     static auto& fcompute_gpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
     if (ctx.dev_mask() == cpu::kDevMask) {
+      if (fcompute_cpu.get(op, nullptr) != nullptr)
+        std::cout << "FCompute for op " << op->name << std::endl;
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -166,8 +168,10 @@ class FComputeExecutor : public OpExecutor {
 class FComputeExExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {
+    std::cout << "FComputeExExecutor::Run" << std::endl;
     op_ctx.run_ctx = rctx;
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
+    std::cout << "FComputeExExecutor::Done" << std::endl;
   }
   void Setup() override {
     in_data_ = in_array;
@@ -188,8 +192,8 @@ class FComputeExExecutor : public OpExecutor {
       return nullptr;
     }
     if (ctx.dev_mask() == cpu::kDevMask) {
-      // if (fcompute_cpu.get(op, nullptr) != nullptr)
-      //    std::cout << "FComputeEx for op " << op->name << std::endl;
+      if (fcompute_cpu.get(op, nullptr) != nullptr)
+        std::cout << "FComputeEx for op " << op->name << std::endl;
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -257,7 +261,7 @@ Graph AttachOpExecs(Graph g) {
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
     } else if (fcompute_ndarray != nullptr) {
-      // Also check the chunk type
+      // Also check the storage type
       // std::cout << "S - fcompute_ndarray" << std::endl;
       ret[i] = std::make_shared<FComputeExExecutor>(fcompute_ndarray, inode.source->attrs);
     } else if (fcompute != nullptr) {

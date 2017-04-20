@@ -82,12 +82,16 @@ class Executor(object):
         handles = ctypes.POINTER(NDArrayHandle)()
         check_call(_LIB.MXExecutorOutputs(self.handle,
                                           ctypes.byref(out_size), ctypes.byref(handles)))
-        #TODO perform on a list
-        storage_type = ctypes.c_int(0)
-        check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(handles[0], NDArrayHandle),
+        num_output = out_size.value
+        outputs = []
+        for i in xrange(num_output):
+          storage_type = ctypes.c_int(0)
+          check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(handles[i], NDArrayHandle),
                                                 ctypes.byref(storage_type)))
-        return [NDArray(NDArrayHandle(handles[i])) if storage_type.value == 1
-                else SparseNDArray(NDArrayHandle(handles[i])) for i in range(out_size.value)]
+          output = NDArray(NDArrayHandle(handles[i])) if storage_type.value == 1 \
+                   else SparseNDArray(NDArrayHandle(handles[i]))
+          outputs.append(output)
+        return outputs
 
     def forward(self, is_train=False, **kwargs):
         """Calculate the outputs specified by the bound symbol.

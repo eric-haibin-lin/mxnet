@@ -453,7 +453,7 @@ class NDArray {
    * \brief Alloc number of dense rows for kRowSparseStorage
    * aux_shape is only known at run time
    */
-  inline void CheckAndAlloc(std::vector<TShape> aux_shapes) const {
+  inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes) const {
     // probably should round up memory reservation
     ptr_->CheckAndAlloc(shape_, aux_shapes, dtype_);
   }
@@ -655,7 +655,7 @@ class NDArray {
         auto aux_shape = aux_shapes[0];
         CHECK_EQ(aux_shape.ndim(), 1);
         auto num_rows = aux_shape[0];
-        CHECK(shape.ndim() == 2) << "Not yet implemented";
+        CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
         auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
         auto aux_bytes = num_rows * mshadow::mshadow_sizeof(aux_types[0]);
         shandle = Storage::Get()->Alloc(dbytes, ctx);
