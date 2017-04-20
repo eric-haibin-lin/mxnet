@@ -151,6 +151,40 @@ void BinaryBackwardUseNone(const nnvm::NodeAttrs& attrs,
 }
 
 template<typename xpu, typename LOP, typename ROP>
+void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
+                           const OpContext& ctx,
+                           const std::vector<NDArray>& inputs,
+                           const std::vector<OpReqType>& req,
+                           const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  if (inputs[0].storage_type() == kDefaultStorage) {
+    LOG(FATAL) << "FComputeEx on dense, to fallback";   
+  }
+  LOG(INFO) << "BinaryBackwardUseNoneEx";
+  //WARNING: Assume identity op. Assume same shape
+  TShape shape = inputs[0].aux_shape(0);
+  outputs[0].CheckAndAlloc({shape});
+  outputs[1].CheckAndAlloc({shape});
+  // FIXME type doens't match
+  MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(0), AuxType, {
+      Tensor<xpu, 1, AuxType> lgrad_idx = outputs[0].aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> rgrad_idx = outputs[1].aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> ograd_idx = inputs[0].aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, DType> lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
+      Tensor<xpu, 1, DType> rgrad = outputs[1].data().FlatTo1D<xpu, DType>(s);
+      Tensor<xpu, 1, DType> ograd = inputs[0].data().FlatTo1D<xpu, DType>(s);
+      ASSIGN_DISPATCH(lgrad, req[0], F<LOP>(ograd));
+      ASSIGN_DISPATCH(rgrad, req[1], F<ROP>(ograd));
+      ASSIGN_DISPATCH(lgrad_idx, req[0], F<LOP>(ograd_idx));
+      ASSIGN_DISPATCH(rgrad_idx, req[1], F<ROP>(ograd_idx));
+    });
+  });
+}
+
+template<typename xpu, typename LOP, typename ROP>
 void BinaryBackwardUseOut(const nnvm::NodeAttrs& attrs,
                           const OpContext& ctx,
                           const std::vector<TBlob>& inputs,

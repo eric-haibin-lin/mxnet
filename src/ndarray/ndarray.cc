@@ -231,7 +231,7 @@ void ScalarOp(const NDArray &lhs,
     default: LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
   }
 }
-
+// FIXME from and to NDArray may be differnet types
 void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
   if (from.var() == to->var()) {
     // skip to copy to itself
@@ -252,10 +252,16 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
 
   if (a == cpu::kDevMask && b == cpu::kDevMask) {
     Engine::Get()->PushSync([from, ret](RunContext ctx) {
-        ret.CheckAndAlloc();
-        TBlob tmp = ret.data();
-        ndarray::Copy<cpu, cpu>(from.data(), &tmp,
-                                from.ctx(), ret.ctx(), ctx);
+        // TODO perform copy for other storage
+        if (from.storage_type() == kDefaultStorage &&
+            ret.storage_type() == kDefaultStorage) {
+          ret.CheckAndAlloc();
+          TBlob tmp = ret.data();
+          ndarray::Copy<cpu, cpu>(from.data(), &tmp,
+                                  from.ctx(), ret.ctx(), ctx);
+        } else {
+          LOG(FATAL) << "Not implemented yet";
+        }
       }, from.ctx(), const_vars, {ret.var()},
       FnProperty::kNormal, priority, PROFILER_MESSAGE("CopyCPU2CPU"));
   } else {

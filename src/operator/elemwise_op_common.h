@@ -62,11 +62,11 @@ inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
   auto deduce = [&](std::vector<AttrType> *vec, const char *name, AttrType& result,
                     bool &fallback) {
       for (size_t i = 0; i < vec->size(); ++i) {
-        LOG(INFO) << "deduce " << (*vec)[i];
+        // LOG(INFO) << "deduce " << (*vec)[i];
         if (assign(&result, (*vec)[i]) == false) {
           fallback = true;
           result = kDefaultStorage;
-          LOG(INFO) << "ElemwiseStorageAttr Fallback";
+          // LOG(INFO) << "ElemwiseStorageAttr Fallback";
           return;
         }
       }

@@ -73,8 +73,8 @@ class NDArray {
           std::vector<int> aux_types = {})
       : shape_(shape), offset_(0), dtype_(dtype) {
       if (aux_types.size() == 0) {
-        if (storage_type == kRowSparseStorage) aux_types = {DEFAULT_AUX_TYPE};
-        if (storage_type == kCSRStorage) aux_types = {DEFAULT_AUX_TYPE, DEFAULT_AUX_TYPE};
+        if (storage_type == kRowSparseStorage) aux_types = {ROW_SPARSE_IDX_TYPE};
+        if (storage_type == kCSRStorage) aux_types = {CSR_IDX_PTR_TYPE, CSR_IDX_DTYPE};
         CHECK_NE(storage_type, kDefaultStorage);
       }
       ptr_ = std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type);

@@ -62,21 +62,17 @@ def test_elemwise_add_sparse_sparse():
     #check_symbolic_forward(test, {'data1':sparse_nd1,
     #                              'data2':sparse_nd2}, [sparse_np1 + sparse_np2])
     arr_grad1 = mx.sparse_nd.zeros(shape, 'row_sparse')
-    #arr_grad1 = mx.nd.zeros(shape)
     arr_grad2 = mx.sparse_nd.zeros(shape, 'row_sparse')
-    #arr_grad2 = mx.nd.zeros(shape)
     # init grad arrays before bind
     exec_test = test.bind(default_context(), args={'data1':sparse_nd1, 'data2':sparse_nd2},
                           args_grad=[arr_grad1, arr_grad2])
     exec_test.forward(is_train=True)
     assert_almost_equal(exec_test.outputs[0].asnumpy(), sparse_np1 + sparse_np2)
     exec_test.backward(out_grads = exec_test.outputs)
-    import time
-    time.sleep(5)
-    #assert_almost_equal(arr_grad1.asnumpy(), arr_grad2.asnumpy())
+    assert_almost_equal(arr_grad1.asnumpy(), arr_grad2.asnumpy())
 
 if __name__ == '__main__':
-    #test_elemwise_add_dense()
-    #test_elemwise_add_dense_sparse()
+    test_elemwise_add_dense()
+    test_elemwise_add_dense_sparse()
     test_elemwise_add_sparse_sparse()
     print("done")

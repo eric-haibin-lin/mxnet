@@ -120,6 +120,7 @@ class BackwardOpExecutor : public OpExecutor {
 class FComputeExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {
+    // std::cout << "FCompute::Run" << std::endl;
     op_ctx.run_ctx = rctx;
     // TODO(haibin) Get stream?
     // mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
@@ -129,6 +130,7 @@ class FComputeExecutor : public OpExecutor {
       initialized = true;
     }
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
+    // std::cout << "FCompute::Done" << std::endl;
   }
   void Setup() override {
     in_array_ = in_array;
@@ -145,8 +147,7 @@ class FComputeExecutor : public OpExecutor {
     static auto& fcompute_cpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
     static auto& fcompute_gpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
     if (ctx.dev_mask() == cpu::kDevMask) {
-      if (fcompute_cpu.get(op, nullptr) != nullptr)
-        std::cout << "FCompute for op " << op->name << std::endl;
+      // if (fcompute_cpu.get(op, nullptr) != nullptr) std::cout << "FCompute for op " << op->name << std::endl;
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -168,10 +169,10 @@ class FComputeExecutor : public OpExecutor {
 class FComputeExExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx) override {
-    std::cout << "FComputeExExecutor::Run" << std::endl;
+    // std::cout << "FComputeExExecutor::Run" << std::endl;
     op_ctx.run_ctx = rctx;
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
-    std::cout << "FComputeExExecutor::Done" << std::endl;
+    // std::cout << "FComputeExExecutor::Done" << std::endl;
   }
   void Setup() override {
     in_data_ = in_array;
@@ -192,8 +193,7 @@ class FComputeExExecutor : public OpExecutor {
       return nullptr;
     }
     if (ctx.dev_mask() == cpu::kDevMask) {
-      if (fcompute_cpu.get(op, nullptr) != nullptr)
-        std::cout << "FComputeEx for op " << op->name << std::endl;
+      // if (fcompute_cpu.get(op, nullptr) != nullptr) std::cout << "FComputeEx for op " << op->name << std::endl;
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -268,7 +268,7 @@ Graph AttachOpExecs(Graph g) {
       // std::cout << "S - fcompute" << std::endl;
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);
     } else {
-      LOG(INFO) << "FCompute not registered " << inode.source->op()->name;
+      // LOG(INFO) << "FCompute not registered " << inode.source->op()->name;
     }
   }
   g.attrs["op_execs"] = std::make_shared<nnvm::any>(ret);

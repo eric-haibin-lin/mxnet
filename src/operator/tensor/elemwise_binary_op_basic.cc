@@ -29,7 +29,10 @@ NNVM_REGISTER_OP(_backward_add)
     return std::vector<std::pair<int, int> >{{0, 0}, {0, 1}};
   })
 .set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseNone<cpu, mshadow_op::identity,
-                                                                mshadow_op::identity>);
+                                                                mshadow_op::identity>)
+.set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>",
+                      BinaryBackwardUseNoneEx<cpu, mshadow_op::identity, mshadow_op::identity>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_sub)
 .add_alias("_minus").add_alias("_Minus")
