@@ -120,11 +120,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
     }
   }
   if (fallback) {
-    std::vector<TBlob> input_blobs, output_blobs;
-    std::vector<NDArray> tmp_nds;
-    common::PrepDefaultBlobs<xpu>(inputs, outputs, &input_blobs, &output_blobs,
-                                  &tmp_nds, false, s);
-    BinaryCompute<xpu, OP>(attrs, ctx, input_blobs, req, output_blobs);
+    FComputeExFallback(attrs, ctx, inputs, req, outputs, s, BinaryCompute<xpu, OP>);
     return;
   }
   // Call SpSp function
@@ -160,14 +156,13 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   if (inputs[0].storage_type() == kDefaultStorage) {
-    LOG(FATAL) << "FComputeEx on dense, to fallback";   
+    LOG(FATAL) << "BinaryBackwardUseNoneEx fallback not implemented yet";   
   }
-  LOG(INFO) << "BinaryBackwardUseNoneEx";
+  // LOG(INFO) << "BinaryBackwardUseNoneEx";
   //WARNING: Assume identity op. Assume same shape
   TShape shape = inputs[0].aux_shape(0);
   outputs[0].CheckAndAlloc({shape});
   outputs[1].CheckAndAlloc({shape});
-  // FIXME type doens't match
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
     MSHADOW_TYPE_SWITCH(outputs[0].aux_type(0), AuxType, {
       Tensor<xpu, 1, AuxType> lgrad_idx = outputs[0].aux_data(0).FlatTo1D<xpu, AuxType>(s);

@@ -193,7 +193,10 @@ class FComputeExExecutor : public OpExecutor {
       return nullptr;
     }
     if (ctx.dev_mask() == cpu::kDevMask) {
-      // if (fcompute_cpu.get(op, nullptr) != nullptr) std::cout << "FComputeEx for op " << op->name << std::endl;
+#if EXECUTOR_DEBUG
+      if (fcompute_cpu.get(op, nullptr) != nullptr)
+        LOG(INFO) << "FComputeEx for op " << op->name;
+#endif
       return fcompute_cpu.get(op, nullptr);
     } else if (ctx.dev_mask() == gpu::kDevMask) {
       return fcompute_gpu.get(op, nullptr);
@@ -223,8 +226,7 @@ Graph AttachOpExecs(Graph g) {
   const auto& vdtype = g.GetAttr<DTypeVector>("dtype");
   const auto& vshape = g.GetAttr<ShapeVector>("shape");
   const auto& vctx = g.GetAttr<ContextVector>("context");
-  NDArrayStorageType dispatch_storage_type =
-                     (NDArrayStorageType) g.GetAttr<int>("dispatch_storage_type");
+  const auto& dispatch_stypes = g.GetAttr<StorageTypeVector>("dispatch_storage_types");
 
   // get the graph
   const auto& idx = g.indexed_graph();
@@ -238,9 +240,10 @@ Graph AttachOpExecs(Graph g) {
     if (fmutate_inputs.count(inode.source->op())) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
+    NDArrayStorageType dispatch_stype = static_cast<NDArrayStorageType>(dispatch_stypes[i]);
     FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
     FComputeEx fcompute_ndarray =
-      FComputeExExecutor::GetFComputeEx(inode.source->op(), vctx[i], dispatch_storage_type);
+      FComputeExExecutor::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stype);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;

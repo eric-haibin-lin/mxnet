@@ -19,6 +19,8 @@
 #include <vector>
 #include "./exec_pass.h"
 
+#define EXECUTOR_DEBUG 1
+
 namespace mxnet {
 namespace exec {
 

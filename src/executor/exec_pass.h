@@ -19,6 +19,10 @@ namespace exec {
 /*! \brief reuse graph definition */
 using nnvm::Graph;
 
+const int kBadStorageID = -1;
+const int kExternalStorageID = -2;
+const int kDynamicStorageID = -3;
+
 /*!
  * \brief executor to execute an operator
  * This is a graph executor dependent interface
