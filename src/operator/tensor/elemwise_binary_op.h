@@ -57,10 +57,10 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
   // TODO(haibin) MSHADOW_TYPE_SWITCH to get tensors
 
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(nd_l.row_sp_idx_type(), AuxType, {
-      auto indices_l = nd_l.aux_data(0).FlatTo1D<xpu, AuxType>(s);
-      auto indices_r = nd_r.aux_data(0).FlatTo1D<xpu, AuxType>(s);
-      auto indices_out = output.aux_data(0).FlatTo1D<xpu, AuxType>(s);
+    MSHADOW_TYPE_SWITCH(nd_l.aux_type(rowsparse::kIdx), AuxType, {
+      auto indices_l = nd_l.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto indices_r = nd_r.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
       // Data
       auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
       auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
@@ -160,14 +160,15 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
   }
   // LOG(INFO) << "BinaryBackwardUseNoneEx";
   //WARNING: Assume identity op. Assume same shape
-  TShape shape = inputs[0].aux_shape(0);
+  TShape shape = inputs[0].aux_shape(rowsparse::kIdx);
   outputs[0].CheckAndAlloc({shape});
   outputs[1].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(0), AuxType, {
-      Tensor<xpu, 1, AuxType> lgrad_idx = outputs[0].aux_data(0).FlatTo1D<xpu, AuxType>(s);
-      Tensor<xpu, 1, AuxType> rgrad_idx = outputs[1].aux_data(0).FlatTo1D<xpu, AuxType>(s);
-      Tensor<xpu, 1, AuxType> ograd_idx = inputs[0].aux_data(0).FlatTo1D<xpu, AuxType>(s);
+    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
+      //TODO replace with auto
+      Tensor<xpu, 1, AuxType> lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
       Tensor<xpu, 1, DType> lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, DType> rgrad = outputs[1].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, DType> ograd = inputs[0].data().FlatTo1D<xpu, DType>(s);

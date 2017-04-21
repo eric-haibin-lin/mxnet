@@ -29,9 +29,17 @@
 namespace mxnet {
 // FIXME int64_t is not available mshadow
 #define DEFAULT_AUX_TYPE mshadow::kInt32
-#define CSR_IDX_PTR_TYPE mshadow::kInt32
+#define CSR_IND_PTR_TYPE mshadow::kInt32
 #define CSR_IDX_DTYPE mshadow::kInt32
 #define ROW_SPARSE_IDX_TYPE mshadow::kInt32
+
+namespace csr {
+enum CSRAuxType {kIndPtr, kIdx};
+}
+
+namespace rowsparse {
+enum RowSparseAuxType {kIdx};
+}
 
 enum NDArrayStorageType {
   kUndefinedStorage,  // undefined chunk
@@ -74,7 +82,7 @@ class NDArray {
       : shape_(shape), offset_(0), dtype_(dtype) {
       if (aux_types.size() == 0) {
         if (storage_type == kRowSparseStorage) aux_types = {ROW_SPARSE_IDX_TYPE};
-        if (storage_type == kCSRStorage) aux_types = {CSR_IDX_PTR_TYPE, CSR_IDX_DTYPE};
+        if (storage_type == kCSRStorage) aux_types = {CSR_IND_PTR_TYPE, CSR_IDX_DTYPE};
         CHECK_NE(storage_type, kDefaultStorage);
       }
       ptr_ = std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type);
@@ -155,19 +163,6 @@ class NDArray {
     res.Mkl_mem_ = Mkl_mem_;
 #endif
     return res;
-  }
-  // \return the index data for row sparse storage
-  inline TBlob row_sp_idx_data() const {
-    CHECK_EQ(storage_type(), kRowSparseStorage);
-    return aux_data(0);
-  }
-  inline TBlob csr_indptr_data() const {
-    CHECK_EQ(storage_type(), kCSRStorage);
-    return aux_data(0);
-  }
-  inline TBlob csr_idx_data() const {
-    CHECK_EQ(storage_type(), kCSRStorage);
-    return aux_data(1);
   }
   /*!
    * \return the aux TBlob
@@ -500,8 +495,8 @@ class NDArray {
           // Copy over
           auto in_data = data().FlatTo2D<xpu, DType>(s);
           auto out_data = result.data().FlatTo2D<xpu, DType>(s);
-          auto num_rows = aux_shape(0)[0];
-          auto in_idx = aux_data(0).FlatTo1D<xpu, AuxType>(s);
+          auto num_rows = aux_shape(rowsparse::kIdx)[0];
+          auto in_idx = aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
           for (size_t i = 0; i < num_rows; i += 1) {
             mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
           }
