@@ -1368,7 +1368,8 @@ class Symbol(SymbolBase):
 
 
 
-def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, **kwargs):
+def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None,
+        init=None, storage_type=None, **kwargs):
     """Create a symbolic variable with specified name.
 
     Parameters
@@ -1413,6 +1414,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, ini
         attr['__dtype__'] = str(_DTYPE_NP_TO_MX[_numpy.dtype(dtype).type])
     if init is not None:
         attr['__init__'] = init.dumps()
+    if storage_type is not None:
+        attr['__storage_type__'] = str(storage_type)
     for k, v in kwargs.items():
         if k.startswith('__') and k.endswith('__'):
             attr[k] = str(v)

@@ -98,6 +98,6 @@ if __name__ == '__main__':
     test_ndarray_elementwise_add()
     test_ndarray_conversion()
     test_ndarray_zeros()
-    test_ndarray_copyto()
+    #test_ndarray_copyto()
     test_ndarray_elementwise_fallback()
     print("done")
