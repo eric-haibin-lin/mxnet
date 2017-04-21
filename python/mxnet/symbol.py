@@ -947,7 +947,7 @@ class Symbol(SymbolBase):
 
         # alloc space
         arg_ndarrays = [
-            # TODO We should avoid allocating space for sparse inputs.
+            # avoid allocating dense ndarrays for sparse inputs
             _nd_zeros(shape, dev, dtype=dtype) if storage_type != 'row_sparse'
             else _sparse_nd_zeros(shape, storage_type, dev, dtype=dtype)
             for dtype, dev, shape, storage_type in \

@@ -55,16 +55,18 @@ inline bool ElemwiseAttr(const nnvm::NodeAttrs& attrs,
 // Implemented for add & sub now
 template<typename AttrType, bool (*is_none)(const AttrType&),
          bool (*assign)(AttrType*, const AttrType&), bool reverse_infer>
-inline bool ElemwiseChunkAttr(const nnvm::NodeAttrs& attrs,
+inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
                          std::vector<AttrType> *in_attrs,
                          std::vector<AttrType> *out_attrs,
                          const AttrType& none) {
   auto deduce = [&](std::vector<AttrType> *vec, const char *name, AttrType& result,
                     bool &fallback) {
       for (size_t i = 0; i < vec->size(); ++i) {
+        // LOG(INFO) << "deduce " << (*vec)[i];
         if (assign(&result, (*vec)[i]) == false) {
           fallback = true;
           result = kDefaultStorage;
+          // LOG(INFO) << "ElemwiseStorageAttr Fallback";
           return;
         }
       }
@@ -115,7 +117,16 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   // TODO(haibin) replace type_is_none to storage_type_is_none & type_assign
-  return ElemwiseChunkAttr<int, type_is_none, type_assign, true>(
+  return ElemwiseStorageAttr<int, type_is_none, type_assign, true>(
+    attrs, in_attrs, out_attrs, -1);
+}
+
+inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
+                         std::vector<int> *in_attrs,
+                         std::vector<int> *out_attrs) {
+  CHECK_EQ(in_attrs->size(), static_cast<size_t>(2)) << " in operator " << attrs.name;
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(1)) << " in operator " << attrs.name;
+  return ElemwiseAttr<int, type_is_none, type_assign, false>(
     attrs, in_attrs, out_attrs, -1);
 }
 

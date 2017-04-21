@@ -56,9 +56,13 @@ _STORAGE_TYPE_STR_TO_ID = {
     'csr' : 3,
 }
 
-#FIXME change default type for aux_type. Make aux type a list
+_STORAGE_AUX_TYPES = {
+    'row_sparse' : [np.int32],
+    'csr'        : [np.int32, np.int32]
+}
+
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
-                      dtype=mx_real_t, aux_type=mx_real_t):
+                      dtype=mx_real_t, aux_types=[]):
     """Return a new handle with specified shape and context.
 
     Empty handle is only used to hold results
@@ -69,7 +73,8 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
         A new empty ndarray handle
     """
     hdl = NDArrayHandle()
-    aux_type_list = [int(_DTYPE_NP_TO_MX[np.dtype(aux_type).type])]
+    aux_type_list = [int(_DTYPE_NP_TO_MX[np.dtype(aux_t).type]) for aux_t in aux_types]
+    num_aux = mx_uint(len(aux_types))
     check_call(_LIB.MXNDArrayCreateSparseEx(
         ctypes.c_int(int(_STORAGE_TYPE_STR_TO_ID[storage_type])),
         c_array(mx_uint, shape),
@@ -78,7 +83,7 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
         ctypes.c_int(ctx.device_id),
         ctypes.c_int(int(delay_alloc)),
         ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        mx_uint(1),
+        num_aux,
         c_array(ctypes.c_int, aux_type_list),
         ctypes.byref(hdl)))
     return hdl
@@ -266,9 +271,10 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
     """
     if ctx is None:
         ctx = Context.default_ctx
-    if storage_type != 'default':
+    if storage_type == 'row_sparse':
         # pylint: disable= no-member, protected-access
-        out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx))
+        out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx,
+                                              aux_types=_STORAGE_AUX_TYPES['row_sparse']))
         return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access

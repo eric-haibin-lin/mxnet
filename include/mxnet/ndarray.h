@@ -29,9 +29,17 @@
 namespace mxnet {
 // FIXME int64_t is not available mshadow
 #define DEFAULT_AUX_TYPE mshadow::kInt32
-#define CSR_IDX_PTR_TYPE mshadow::kInt32
+#define CSR_IND_PTR_TYPE mshadow::kInt32
 #define CSR_IDX_DTYPE mshadow::kInt32
 #define ROW_SPARSE_IDX_TYPE mshadow::kInt32
+
+namespace csr {
+enum CSRAuxType {kIndPtr, kIdx};
+}
+
+namespace rowsparse {
+enum RowSparseAuxType {kIdx};
+}
 
 enum NDArrayStorageType {
   kUndefinedStorage,  // undefined chunk
@@ -73,8 +81,8 @@ class NDArray {
           std::vector<int> aux_types = {})
       : shape_(shape), offset_(0), dtype_(dtype) {
       if (aux_types.size() == 0) {
-        if (storage_type == kRowSparseStorage) aux_types = {DEFAULT_AUX_TYPE};
-        if (storage_type == kCSRStorage) aux_types = {DEFAULT_AUX_TYPE, DEFAULT_AUX_TYPE};
+        if (storage_type == kRowSparseStorage) aux_types = {ROW_SPARSE_IDX_TYPE};
+        if (storage_type == kCSRStorage) aux_types = {CSR_IND_PTR_TYPE, CSR_IDX_DTYPE};
         CHECK_NE(storage_type, kDefaultStorage);
       }
       ptr_ = std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type);
@@ -155,19 +163,6 @@ class NDArray {
     res.Mkl_mem_ = Mkl_mem_;
 #endif
     return res;
-  }
-  // \return the index data for row sparse storage
-  inline TBlob row_sp_idx_data() const {
-    CHECK_EQ(storage_type(), kRowSparseStorage);
-    return aux_data(0);
-  }
-  inline TBlob csr_indptr_data() const {
-    CHECK_EQ(storage_type(), kCSRStorage);
-    return aux_data(0);
-  }
-  inline TBlob csr_idx_data() const {
-    CHECK_EQ(storage_type(), kCSRStorage);
-    return aux_data(1);
   }
   /*!
    * \return the aux TBlob
@@ -453,7 +448,7 @@ class NDArray {
    * \brief Alloc number of dense rows for kRowSparseStorage
    * aux_shape is only known at run time
    */
-  inline void CheckAndAlloc(std::vector<TShape> aux_shapes) const {
+  inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes) const {
     // probably should round up memory reservation
     ptr_->CheckAndAlloc(shape_, aux_shapes, dtype_);
   }
@@ -480,7 +475,7 @@ class NDArray {
  private:
   // Make a copy of the ndarray in dense format
   template<typename xpu>
-  NDArray ToDefault(mshadow::Stream<xpu> *s) const {
+  NDArray ToDefault(mshadow::Stream<xpu>* s) const {
     NDArray result(shape_, ptr_->ctx, false, dtype());
     this->WaitToRead();
     if (storage_type() == kDefaultStorage) {
@@ -500,8 +495,8 @@ class NDArray {
           // Copy over
           auto in_data = data().FlatTo2D<xpu, DType>(s);
           auto out_data = result.data().FlatTo2D<xpu, DType>(s);
-          auto num_rows = aux_shape(0)[0];
-          auto in_idx = aux_data(0).FlatTo1D<xpu, AuxType>(s);
+          auto num_rows = aux_shape(rowsparse::kIdx)[0];
+          auto in_idx = aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
           for (size_t i = 0; i < num_rows; i += 1) {
             mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
           }
@@ -655,7 +650,7 @@ class NDArray {
         auto aux_shape = aux_shapes[0];
         CHECK_EQ(aux_shape.ndim(), 1);
         auto num_rows = aux_shape[0];
-        CHECK(shape.ndim() == 2) << "Not yet implemented";
+        CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
         auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
         auto aux_bytes = num_rows * mshadow::mshadow_sizeof(aux_types[0]);
         shandle = Storage::Get()->Alloc(dbytes, ctx);

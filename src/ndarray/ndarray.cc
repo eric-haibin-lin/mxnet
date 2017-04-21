@@ -231,12 +231,13 @@ void ScalarOp(const NDArray &lhs,
     default: LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
   }
 }
-
+// FIXME NDArray storage types may be differnet
 void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
   if (from.var() == to->var()) {
     // skip to copy to itself
     return;
   }
+  CHECK(from.storage_type() == to->storage_type());
   CHECK(from.shape() == to->shape())
       << "operands shape mismatch"
       << "from.shape = " << from.shape() << " to.shape=" << to->shape();
@@ -252,16 +253,35 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
 
   if (a == cpu::kDevMask && b == cpu::kDevMask) {
     Engine::Get()->PushSync([from, ret](RunContext ctx) {
-        ret.CheckAndAlloc();
-        TBlob tmp = ret.data();
-        ndarray::Copy<cpu, cpu>(from.data(), &tmp,
-                                from.ctx(), ret.ctx(), ctx);
+        auto storage_type = from.storage_type();
+        if (storage_type == kDefaultStorage) {
+          ret.CheckAndAlloc();
+          TBlob tmp = ret.data();
+          ndarray::Copy<cpu, cpu>(from.data(), &tmp,
+                                  from.ctx(), ret.ctx(), ctx);
+        } else if (storage_type == kRowSparseStorage) {
+          auto aux_shape = from.aux_shape(0);
+          if (aux_shape.ndim() == 0) {
+            // All zeros
+            return;
+          }
+          ret.CheckAndAlloc({aux_shape});
+          TBlob val = ret.data();
+          TBlob idx = ret.aux_data(rowsparse::kIdx);
+          ndarray::Copy<cpu, cpu>(from.data(), &val,
+                                  from.ctx(), ret.ctx(), ctx);
+          ndarray::Copy<cpu, cpu>(from.aux_data(rowsparse::kIdx), &idx,
+                                  from.ctx(), ret.ctx(), ctx);
+        } else {
+          LOG(FATAL) << "Not implemented yet";
+        }
       }, from.ctx(), const_vars, {ret.var()},
       FnProperty::kNormal, priority, PROFILER_MESSAGE("CopyCPU2CPU"));
   } else {
 #if MXNET_USE_CUDA
     if (a == cpu::kDevMask && b == gpu::kDevMask) {
       Engine::Get()->PushSync([from, ret](RunContext ctx) {
+          if (from.storage_type() != kDefaultStorage) LOG(FATAL) << "GPU not implemented yet";
           ret.CheckAndAlloc();
           TBlob tmp = ret.data();
           ndarray::Copy<cpu, gpu>(from.data(), &tmp,
@@ -272,6 +292,7 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
         FnProperty::kCopyToGPU, priority, PROFILER_MESSAGE("CopyCPU2GPU"));
     } else if (a == gpu::kDevMask && b == cpu::kDevMask) {
       Engine::Get()->PushSync([from, ret](RunContext ctx) {
+          if (from.storage_type() != kDefaultStorage) LOG(FATAL) << "GPU not implemented yet";
           ret.CheckAndAlloc();
           TBlob tmp = ret.data();
           ndarray::Copy<gpu, cpu>(from.data(), &tmp,
@@ -282,6 +303,7 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
         FnProperty::kCopyFromGPU, priority, PROFILER_MESSAGE("CopyGPU2CPU"));
     } else if (a == gpu::kDevMask && b == gpu::kDevMask) {
       Engine::Get()->PushSync([from, ret](RunContext ctx) {
+          if (from.storage_type() != kDefaultStorage) LOG(FATAL) << "GPU not implemented yet";
           ret.CheckAndAlloc();
           TBlob tmp = ret.data();
           ndarray::Copy<gpu, gpu>(from.data(), &tmp,

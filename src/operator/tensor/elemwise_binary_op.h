@@ -57,10 +57,10 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
   // TODO(haibin) MSHADOW_TYPE_SWITCH to get tensors
 
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(nd_l.row_sp_idx_type(), AuxType, {
-      auto indices_l = nd_l.aux_data(0).FlatTo1D<xpu, AuxType>(s);
-      auto indices_r = nd_r.aux_data(0).FlatTo1D<xpu, AuxType>(s);
-      auto indices_out = output.aux_data(0).FlatTo1D<xpu, AuxType>(s);
+    MSHADOW_TYPE_SWITCH(nd_l.aux_type(rowsparse::kIdx), AuxType, {
+      auto indices_l = nd_l.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto indices_r = nd_r.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
       // Data
       auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
       auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
@@ -120,11 +120,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
     }
   }
   if (fallback) {
-    std::vector<TBlob> input_blobs, output_blobs;
-    std::vector<NDArray> tmp_nds;
-    common::PrepDefaultBlobs<xpu>(inputs, outputs, &input_blobs, &output_blobs,
-                                  &tmp_nds, false, s);
-    BinaryCompute<xpu, OP>(attrs, ctx, input_blobs, req, output_blobs);
+    FComputeExFallback(attrs, ctx, inputs, req, outputs, s, BinaryCompute<xpu, OP>);
     return;
   }
   // Call SpSp function
@@ -147,6 +143,40 @@ void BinaryBackwardUseNone(const nnvm::NodeAttrs& attrs,
     Tensor<xpu, 1, DType> ograd = inputs[0].FlatTo1D<xpu, DType>(s);
     ASSIGN_DISPATCH(lgrad, req[0], F<LOP>(ograd));
     ASSIGN_DISPATCH(rgrad, req[1], F<ROP>(ograd));
+  });
+}
+
+template<typename xpu, typename LOP, typename ROP>
+void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
+                           const OpContext& ctx,
+                           const std::vector<NDArray>& inputs,
+                           const std::vector<OpReqType>& req,
+                           const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  if (inputs[0].storage_type() == kDefaultStorage) {
+    LOG(FATAL) << "BinaryBackwardUseNoneEx fallback not implemented yet";   
+  }
+  // LOG(INFO) << "BinaryBackwardUseNoneEx";
+  //WARNING: Assume identity op. Assume same shape
+  TShape shape = inputs[0].aux_shape(rowsparse::kIdx);
+  outputs[0].CheckAndAlloc({shape});
+  outputs[1].CheckAndAlloc({shape});
+  MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
+      //TODO replace with auto
+      Tensor<xpu, 1, AuxType> lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, DType> lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
+      Tensor<xpu, 1, DType> rgrad = outputs[1].data().FlatTo1D<xpu, DType>(s);
+      Tensor<xpu, 1, DType> ograd = inputs[0].data().FlatTo1D<xpu, DType>(s);
+      ASSIGN_DISPATCH(lgrad, req[0], F<LOP>(ograd));
+      ASSIGN_DISPATCH(rgrad, req[1], F<ROP>(ograd));
+      ASSIGN_DISPATCH(lgrad_idx, req[0], F<LOP>(ograd_idx));
+      ASSIGN_DISPATCH(rgrad_idx, req[1], F<ROP>(ograd_idx));
+    });
   });
 }
 
