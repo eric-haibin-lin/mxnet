@@ -51,13 +51,10 @@ class AGNodeEntry {
 class AutogradRuntime;
 }  // namespace autograd
 
-#define ROW_SPARSE_TYPE int32_t
 // FIXME int64_t is not available mshadow
-#define DEFAULT_AUX_TYPE mshadow::kInt32
 #define CSR_IND_PTR_TYPE mshadow::kInt32
 #define CSR_IDX_DTYPE mshadow::kInt32
 #define ROW_SPARSE_IDX_TYPE mshadow::kInt32
-
 namespace csr {
 enum CSRAuxType {kIndPtr, kIdx};
 }
@@ -93,9 +90,8 @@ class NDArray {
    */
   NDArray(const TShape &shape, Context ctx,
           bool delay_alloc = false, int dtype = mshadow::default_type_flag)
-      : ptr_(std::make_shared<Chunk>(shape.Size(), ctx, delay_alloc, dtype)),
+      : ptr_(std::make_shared<Chunk>(shape, ctx, delay_alloc, dtype)),
         shape_(shape), offset_(0), dtype_(dtype), entry_({nullptr, 0, 0}) {
-//FIXME init entry_
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
@@ -105,7 +101,7 @@ class NDArray {
   NDArray(NDArrayStorageType storage_type, const TShape &shape, Context ctx,
           bool delay_alloc = true, int dtype = mshadow::default_type_flag,
           std::vector<int> aux_types = {})
-      : shape_(shape), offset_(0), dtype_(dtype) {
+      : shape_(shape), offset_(0), dtype_(dtype), entry_({nullptr, 0, 0}) {
       if (aux_types.size() == 0) {
         if (storage_type == kRowSparseStorage) aux_types = {ROW_SPARSE_IDX_TYPE};
         if (storage_type == kCSRStorage) aux_types = {CSR_IND_PTR_TYPE, CSR_IDX_DTYPE};
@@ -134,7 +130,7 @@ class NDArray {
   NDArray(NDArray data, const std::vector<NDArray> aux_data, Context ctx,
           NDArrayStorageType storage_type, const TShape &shape)
       : ptr_(std::make_shared<Chunk>(data, aux_data, ctx, storage_type)), shape_(shape),
-        offset_(0), dtype_(data.data().type_flag_) {
+        offset_(0), dtype_(data.data().type_flag_), entry_({nullptr, 0, 0}) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif

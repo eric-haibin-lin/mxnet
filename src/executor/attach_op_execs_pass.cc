@@ -250,16 +250,6 @@ Graph AttachOpExecs(Graph g) {
   const auto& vctx = g.GetAttr<ContextVector>("context");
   const auto& saved_opr = g.GetAttr<
     std::unordered_map<const nnvm::Node*, std::shared_ptr<Operator>>>("saved_opr");
-
-  // Also obtain storage_type vector
-  const auto& vstorage_type = g.GetAttr<StorageTypeVector>("storage_type");
-  NDArrayStorageType dispatch_storage_type = kDefaultStorage;
-  for (auto& i : vstorage_type) {
-    if (i != kDefaultStorage) {
-      dispatch_storage_type = NDArrayStorageType(i);
-      break;
-    }
-  }
   const auto& dispatch_stypes = g.GetAttr<StorageTypeVector>("dispatch_storage_types");
 
   // get the graph
