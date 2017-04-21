@@ -69,7 +69,6 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   // LOG(INFO) << "IdentityComputeEx";
-  // Fallback
   // FIXME the input index is hard coded for _identity_with_attr_like_rhs op
   NDArrayStorageType storage_type = inputs[1].storage_type();
   if (storage_type == kDefaultStorage) {
@@ -87,7 +86,7 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
     LOG(FATAL) << "kWriteInplace for sparse storage not supported yet";
     // CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
   }
-  TShape shape = inputs[1].aux_shape(0);
+  TShape shape = inputs[1].aux_shape(rowsparse::kIdx);
   if (shape.ndim() == 0) {
     // LOG(INFO) << "Identify for all zero sparse ndarray";
     // All zeros
@@ -97,13 +96,13 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   outputs[0].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
     //TODO Add macro for aux_type access
-    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(0), AuxType, {
+    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
       Tensor<xpu, 1, DType> out_d = outputs[0].data().FlatTo1D<xpu, DType>(s);
-      Tensor<xpu, 1, AuxType> out_aux = outputs[0].aux_data(0).FlatTo1D<xpu, AuxType>(s);
+      Tensor<xpu, 1, AuxType> out_aux = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
       ASSIGN_DISPATCH(out_d, req[0],
                       F<mshadow_op::identity>(inputs[1].data().FlatTo1D<xpu, DType>(s)));
       ASSIGN_DISPATCH(out_aux, req[0],
-                      F<mshadow_op::identity>(inputs[1].aux_data(0).FlatTo1D<xpu, AuxType>(s)));
+                      F<mshadow_op::identity>(inputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s)));
     });
   });
 }

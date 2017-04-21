@@ -267,10 +267,10 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
           }
           ret.CheckAndAlloc({aux_shape});
           TBlob val = ret.data();
-          TBlob idx = ret.aux_data(0);
+          TBlob idx = ret.aux_data(rowsparse::kIdx);
           ndarray::Copy<cpu, cpu>(from.data(), &val,
                                   from.ctx(), ret.ctx(), ctx);
-          ndarray::Copy<cpu, cpu>(from.aux_data(0), &idx,
+          ndarray::Copy<cpu, cpu>(from.aux_data(rowsparse::kIdx), &idx,
                                   from.ctx(), ret.ctx(), ctx);
         } else {
           LOG(FATAL) << "Not implemented yet";
