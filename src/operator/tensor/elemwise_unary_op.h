@@ -71,12 +71,6 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   // LOG(INFO) << "IdentityComputeEx";
   // FIXME the input index is hard coded for _identity_with_attr_like_rhs op
   NDArrayStorageType storage_type = inputs[1].storage_type();
-  if (storage_type == kDefaultStorage) {
-    // LOG(INFO) << "IdentityComputeEx Fallback";
-    std::vector<TBlob> input_blobs({inputs[0].data(), inputs[1].data()}), output_blobs({outputs[0].data()});
-    IdentityCompute<xpu>(attrs, ctx, input_blobs, req, output_blobs);
-    return;
-  }
   CHECK_EQ(storage_type, kRowSparseStorage) << "storage type " << storage_type << " not supported yet";
   if (req[0] == kNullOp) {
     LOG(FATAL) << "kNullOp in IdentityComputeEx"; 
@@ -86,16 +80,14 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
     LOG(FATAL) << "kWriteInplace for sparse storage not supported yet";
     // CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
   }
+  // TODO probably need an interface to check if a sparse tensor is all zero
   TShape shape = inputs[1].aux_shape(rowsparse::kIdx);
   if (shape.ndim() == 0) {
     // LOG(INFO) << "Identify for all zero sparse ndarray";
-    // All zeros
     return;
   }
-  // TODO alloc shape interface is not very convenient
   outputs[0].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-    //TODO Add macro for aux_type access
     MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
       Tensor<xpu, 1, DType> out_d = outputs[0].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, AuxType> out_aux = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
