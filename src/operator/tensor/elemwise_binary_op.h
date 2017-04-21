@@ -47,15 +47,13 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
 
   CHECK_EQ(nd_l.storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
   // Memory Estimation
-  auto num_rows_l = nd_l.aux_shape(0)[0];
-  auto num_rows_r = nd_r.aux_shape(0)[0];
+  auto num_rows_l = nd_l.aux_shape(rowsparse::kIdx)[0];
+  auto num_rows_r = nd_r.aux_shape(rowsparse::kIdx)[0];
   // This is (roughly) the number of result rows
   output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
-
+  // LOG(INFO) << "BinaryComputeExSpSp" << output.aux_shape(rowsparse::kIdx)[0];
   // Indices
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
-  // TODO(haibin) MSHADOW_TYPE_SWITCH to get tensors
-
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
     MSHADOW_TYPE_SWITCH(nd_l.aux_type(rowsparse::kIdx), AuxType, {
       auto indices_l = nd_l.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
@@ -70,14 +68,16 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
       size_t iter_l = 0;
       size_t iter_r = 0;
       size_t iter_out = 0;
+      int32_t num_common_rows = 0;
       while (iter_l < num_rows_l && iter_r < num_rows_r) {
-        size_t idx_l = indices_l[iter_l];
-        size_t idx_r = indices_r[iter_r];
+        auto idx_l = indices_l[iter_l];
+        auto idx_r = indices_r[iter_r];
         if (idx_l == idx_r) {
           // Same row
           indices_out[iter_out] = idx_l;
           mshadow::Copy(out[iter_out], data_l[iter_l++], s);
           out[iter_out] += data_r[iter_r++];
+          num_common_rows++;
         } else if (idx_l < idx_r) {
           // Left only
           indices_out[iter_out] = idx_l;
@@ -98,6 +98,9 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
         indices_out[iter_out] = indices_r[iter_r];
         mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
       }
+      auto new_shape = output.aux_shape(rowsparse::kIdx);
+      new_shape[0] -= num_common_rows;
+      output.SetAuxShape(rowsparse::kIdx, new_shape);
     });
   });
 }

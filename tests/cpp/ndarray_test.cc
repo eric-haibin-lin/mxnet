@@ -23,20 +23,22 @@ NDArray GetIndexND(const TShape shape, const Context ctx, const std::vector<TEST
   NDArray nd(shape, ctx, false, ROW_SPARSE_IDX_TYPE);
   size_t num_val = values.size();
   MSHADOW_TYPE_SWITCH(nd.dtype(), DType, {
+    auto tensor = nd.data().FlatTo1D<cpu, DType>();
     for (size_t i = 0; i < num_val; i++) {
-      nd.data().FlatTo1D<cpu, DType>()[i] = values[i];
+      tensor[i] = values[i];
     }
   });
   return nd;
 }
 
-NDArray GetDenseND(TShape shape, Context ctx, std::vector<TEST_DTYPE> values) {
+NDArray GetDenseND(const TShape shape, const Context ctx, const std::vector<TEST_DTYPE> &values) {
   NDArray nd(shape, ctx, false);
   size_t num_val = values.size();
   CHECK_EQ(num_val, nd.shape().ProdShape(0, nd.shape().ndim()));
   MSHADOW_TYPE_SWITCH(nd.dtype(), DType, {
+    auto tensor = nd.data().FlatTo1D<cpu, DType>();
     for (size_t i = 0; i < num_val; i++) {
-      nd.data().FlatTo1D<cpu, TEST_DTYPE>()[i] = values[i];
+      tensor[i] = values[i];
     }
   });
   return nd;
@@ -114,14 +116,11 @@ void BinarySpSpTest() {
   CheckDataRegion(input_nd0.data(), raw_data0.data());
   CheckDataRegion(input_nd1.data(), raw_data1.data());
 
-  TShape output_shape({3, 2});
+  TShape output_shape({4, 2});
   NDArray output(kRowSparseStorage, output_shape, ctx);
   std::vector<Engine::VarHandle> const_vars;
-  const_vars.push_back(raw_data0.var());
-  const_vars.push_back(raw_data1.var());
-  const_vars.push_back(index0.var());
-  const_vars.push_back(index1.var());
-  Engine::Get()->WaitForAll();
+  const_vars.push_back(input_nd0.var());
+  const_vars.push_back(input_nd1.var());
 
       Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
           nnvm::NodeAttrs attrs;
@@ -135,14 +134,13 @@ void BinarySpSpTest() {
         }, input_nd0.ctx(), const_vars, {output.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 
-  std::vector<TEST_DTYPE> output_vals({15, 15, 10, 10, 5, 5});
-  NDArray out_data = GetDenseND(output_shape, ctx, output_vals);
-  Engine::Get()->WaitForAll();
-  CheckDataRegion(out_data.data(), output.data());
-  // TODO also check with zeros..
+  // Check the data region of output ndarray
+  NDArray dense_output = GetDenseND(output_shape, ctx, {15, 15, 10, 10, 5, 5, 0, 0});
+  NDArray copy = output.ConvertTo<cpu>(kDefaultStorage, nullptr);
+  CheckDataRegion(dense_output.data(), copy.data());
 }
 
-void InferElemwiseChunkTest() {
+void InferElemwiseStorageTest() {
   nnvm::NodeAttrs attrs;
   attrs.name = "Test op";
   std::vector<int> in_attrs({kRowSparseStorage, kDefaultStorage});
@@ -161,18 +159,14 @@ TEST(NDArray, basics) {
   BinarySpSpTest();
   //Wait for all operations to finish
   Engine::Get()->WaitForAll();
-  InferElemwiseChunkTest();
+  InferElemwiseStorageTest();
 }
 
 // dense to dense conversion
 void TestDenseToDenseConversion() {
   Context ctx;
-  const TEST_DTYPE val = 1;
   TShape shape({2, 2});
-  NDArray nd(shape, ctx, false);
-  EXPECT_NE(nd.data().dptr_, nullptr);
-  nd = val;
-  // TODO remove WaitFroAll
+  NDArray nd = GetDenseND(shape, ctx, {1, 2, 3, 4});
   auto nd_copy = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
   CheckDataRegion(nd_copy.data(), nd.data());
 }
@@ -180,24 +174,16 @@ void TestDenseToDenseConversion() {
 // sparse to dense conversion
 void TestSparseToDenseConversion() {
   Context ctx;
-  const TEST_DTYPE val = 0;
   // Raw Data
-  NDArray raw_data0(TShape({1, 2}), ctx, false);
-  raw_data0 = 0;
-  
+  NDArray raw_data0 = GetDenseND(TShape({1, 2}), ctx, {1, 1});
   // Index
-  NDArray index0(TShape({1}), ctx, false, ROW_SPARSE_IDX_TYPE);
-  index0 = 0;
-
+  NDArray index0 = GetIndexND(TShape({1}), ctx, {0});
+  // Sparse ndarray
   TShape shape({2, 2});
   NDArray nd(raw_data0, {index0}, ctx, kRowSparseStorage, shape);
 
   // Dense ndarray
-  NDArray dense_nd(shape, ctx, false);
-  dense_nd = 0;
-  dense_nd.data().FlatTo2D<cpu, TEST_DTYPE>()[0][0] = 1;
-  dense_nd.data().FlatTo2D<cpu, TEST_DTYPE>()[0][1] = 1;
-  Engine::Get()->WaitForAll(); 
+  NDArray dense_nd = GetDenseND(shape, ctx, {1, 1, 0, 0});
 
   auto converted_nd = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
   auto converted_data = converted_nd.data();

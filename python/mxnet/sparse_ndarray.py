@@ -165,8 +165,8 @@ class SparseNDArray(NDArray):
         raise Exception('Not implemented for SparseND yet!')
     def broadcast_to(self, shape):
         raise Exception('Not implemented for SparseND yet!')
-    def wait_to_read(self):
-        raise Exception('Not implemented for SparseND yet!')
+    #def wait_to_read(self):
+    #inherited from parent
     #@property
     #def shape(self):
     #inherited from parent

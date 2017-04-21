@@ -160,10 +160,14 @@ class NDArray {
   /*!
    * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
    */
+  // TODO(haibin) CamelCase
   inline const TShape aux_shape(size_t i) const {
     CHECK(storage_type() != kDefaultStorage);
     if (i >= ptr_->aux_shapes.size()) return TShape();
     return ptr_->aux_shapes[i];
+  }
+  inline void SetAuxShape(size_t i, const TShape& shape) const {
+    ptr_->aux_shapes[i] = shape;
   }
   /*!
    * \return the data TBlob
@@ -229,19 +233,6 @@ class NDArray {
    */
   inline int dtype() const {
     return dtype_;
-  }
-  // \return the index data for row sparse storage
-  inline int row_sp_idx_type() const {
-    CHECK_EQ(storage_type(), kRowSparseStorage);
-    return aux_type(0);
-  }
-  inline int csr_indptr_type() const {
-    CHECK_EQ(storage_type(), kCSRStorage);
-    return aux_type(0);
-  }
-  inline int csr_ind_type() const {
-    CHECK_EQ(storage_type(), kCSRStorage);
-    return aux_type(1);
   }
   inline int aux_type(size_t i) const {
     CHECK(ptr_ != nullptr);
@@ -509,7 +500,7 @@ class NDArray {
     }
     CHECK(storage_type() == kRowSparseStorage);
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
-      MSHADOW_TYPE_SWITCH(row_sp_idx_type(), AuxType, {
+      MSHADOW_TYPE_SWITCH(aux_type(rowsparse::kIdx), AuxType, {
         // Fill in zeros
         result.data().FlatTo1D<xpu, DType>(s) = 0;
         result.data().shape_ = shape_;

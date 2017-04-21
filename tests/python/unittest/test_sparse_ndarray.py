@@ -41,16 +41,16 @@ def test_ndarray_elementwise_add():
     val = mx.nd.array([5, 10]); 
     idx = mx.nd.array([0], dtype=np.int32); 
     sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2)) 
+    sparse_nd2 = mx.sparse_nd.row_sparse(val, idx, (3,2)) 
     #TODO register under mx.sparse_nd namespace
     # dense - dense addition
     dense_plus_dense = mx.nd.elemwise_add(dense_nd, dense_nd);
     assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)
     # dense - sparse addition
     dense_plus_sparse = mx.nd.elemwise_add(dense_nd, sparse_nd1)
-    print(dense_plus_sparse)
     assert_almost_equal(dense_plus_sparse.asnumpy(), dense_np + sparse_np1)
     # sparse - sparse addition
-    sparse_plus_sparse = mx.nd.elemwise_add(sparse_nd1, sparse_nd1)
+    sparse_plus_sparse = mx.nd.elemwise_add(sparse_nd1, sparse_nd2)
     assert_almost_equal(sparse_plus_sparse.asnumpy(), sparse_np1 + sparse_np1)
 
 def test_ndarray_elementwise_fallback():
@@ -92,12 +92,11 @@ def test_ndarray_copyto():
     zero = mx.nd.zeros((2,2))
     e = mx.nd.ones((2,2))
     zero.copyto(e)
-    print(e.asnumpy())
 
 if __name__ == '__main__':
     test_ndarray_elementwise_add()
     test_ndarray_conversion()
     test_ndarray_zeros()
-    #test_ndarray_copyto()
+    test_ndarray_copyto()
     test_ndarray_elementwise_fallback()
-    print("done")
+
