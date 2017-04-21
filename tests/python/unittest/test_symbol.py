@@ -233,6 +233,7 @@ if __name__ == '__main__':
     test_symbol_infer_shape_var()
     test_symbol_infer_shape()
     test_symbol_infer_type()
+    #TODO test infer storage type
     test_symbol_internal()
     test_symbol_basic()
     test_symbol_compose()
