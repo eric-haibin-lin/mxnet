@@ -418,12 +418,14 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
       arg_storage_types.push_back(in_args[arg_top].storage_type());
       ++arg_top;
     }
-    // LOG(INFO) << "update data_entry_[ " << idx.entry_id(nid, 0) << "]" << " " << data_entry_[idx.entry_id(nid, 0)].storage_type();
+    // LOG(INFO) << "update data_entry_[ " << idx.entry_id(nid, 0) << "]"
+    //  << " " << data_entry_[idx.entry_id(nid, 0)].storage_type();
   }
   for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
     data_entry_[idx.entry_id(idx.outputs()[j])]
         = grad_store_[j - num_forward_outputs_].second;
-    // LOG(INFO) << "update data_entry_[ " << idx.entry_id(idx.outputs()[j]) << "]" << " " << data_entry_[idx.entry_id(idx.outputs()[j])].storage_type() << "(output)";
+    // LOG(INFO) << "update data_entry_[ " << idx.entry_id(idx.outputs()[j]) << "]"
+    //  << " " << data_entry_[idx.entry_id(idx.outputs()[j])].storage_type() << "(output)";
   }
   arg_shapes.resize(idx.input_nodes().size(), TShape());
   arg_types.resize(idx.input_nodes().size(), -1);
@@ -435,7 +437,7 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   // dispatch on a per op basis
-  nnvm::StorageTypeVector dispatch_storage_types(idx.num_nodes(), -1);
+  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes(), -1);
   for (size_t nid = 0; nid < idx.num_nodes(); nid++) {
       const auto& inode = idx[nid];
       nnvm::StorageTypeVector vs;
@@ -443,9 +445,9 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
         vs.emplace_back(vstorage_type[idx.entry_id(e)]);
       }
       int dispatch_storage_type = common::GetDispatchStorageType(vs);
-      dispatch_storage_types[nid] = dispatch_storage_type;
+      dispatch_stypes[nid] = dispatch_storage_type;
   }
-  g.attrs["dispatch_storage_types"] = std::make_shared<dmlc::any>(std::move(dispatch_storage_types));
+  g.attrs["dispatch_storage_types"] = std::make_shared<dmlc::any>(std::move(dispatch_stypes));
 
   {
     // memory allocator
@@ -507,15 +509,14 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     uint32_t nid = idx.input_nodes().at(i);
     uint32_t oid = head_grad_map_.at(idx[nid].source);
     uint32_t eid = idx.entry_id(idx.outputs()[oid]);
-    auto storage_type = vstorage_type[eid];
+    NDArrayStorageType storage_type = (NDArrayStorageType) vstorage_type[eid];
     CHECK_NE(vshape[eid].ndim(), 0U);
     CHECK_NE(vdtype[eid], -1);
-    CHECK_NE(storage_type, -1);
     // enable sparse gradient update, init NDArray based on storage_type
     if (storage_type != kDefaultStorage) {
       // std::cout << "Sparse NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       data_entry_[idx.entry_id(nid, 0)] =
-        NDArray((NDArrayStorageType)storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
+        NDArray(storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
     } else {
       // std::cout << "Dense  NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       data_entry_[idx.entry_id(nid, 0)] =
@@ -623,16 +624,15 @@ void GraphExecutor::InitCachedOps() {
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
-    // TODO remove std::cout
 #if EXECUTOR_DEBUG
     if (inode.source->is_variable()) {
       LOG(INFO) << "node " << nid << " var";
-    }
-    else {
+    } else {
       LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
       auto exec = op_execs[nid];
       for (const auto& e : inode.inputs) {
-        LOG(INFO) << "\t\tinput " << idx.entry_id(e) << " stype: " << vstorage_type[idx.entry_id(e)];
+        auto eid = idx.entry_id(e);
+        LOG(INFO) << "\t\tinput " << eid << " stype: " << vstorage_type[eid];
       }
       for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
         uint32_t eid = idx.entry_id(nid, index);

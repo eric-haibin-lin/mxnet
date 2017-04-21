@@ -71,16 +71,17 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   // LOG(INFO) << "IdentityComputeEx";
   // FIXME the input index is hard coded for _identity_with_attr_like_rhs op
   NDArrayStorageType storage_type = inputs[1].storage_type();
-  CHECK_EQ(storage_type, kRowSparseStorage) << "storage type " << storage_type << " not supported yet";
+  CHECK_EQ(storage_type, kRowSparseStorage)
+     << "storage type " << storage_type << " not supported yet";
   if (req[0] == kNullOp) {
-    LOG(FATAL) << "kNullOp in IdentityComputeEx"; 
+    LOG(FATAL) << "kNullOp in IdentityComputeEx";
     return;
   }
   if (req[0] == kWriteInplace) {
     LOG(FATAL) << "kWriteInplace for sparse storage not supported yet";
     // CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
   }
-  // TODO probably need an interface to check if a sparse tensor is all zero
+  // FIXME probably need an interface to check if a sparse tensor is all zero
   TShape shape = inputs[1].aux_shape(rowsparse::kIdx);
   if (shape.ndim() == 0) {
     // LOG(INFO) << "Identify for all zero sparse ndarray";
@@ -89,12 +90,12 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   outputs[0].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
     MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
-      Tensor<xpu, 1, DType> out_d = outputs[0].data().FlatTo1D<xpu, DType>(s);
-      Tensor<xpu, 1, AuxType> out_aux = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto out_d = outputs[0].data().FlatTo1D<xpu, DType>(s);
+      auto out_aux = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto in_aux = inputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
       ASSIGN_DISPATCH(out_d, req[0],
                       F<mshadow_op::identity>(inputs[1].data().FlatTo1D<xpu, DType>(s)));
-      ASSIGN_DISPATCH(out_aux, req[0],
-                      F<mshadow_op::identity>(inputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s)));
+      ASSIGN_DISPATCH(out_aux, req[0], F<mshadow_op::identity>(in_aux));
     });
   });
 }

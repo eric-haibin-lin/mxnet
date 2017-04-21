@@ -14,11 +14,11 @@
 #include <mxnet/ndarray.h>
 #include <mxnet/op_attr_types.h>
 #include <mxnet/base.h>
-#include "../common/utils.h"
 #include <istream>
 #include <ostream>
 #include <string>
 #include <vector>
+#include "../common/utils.h"
 
 namespace mxnet {
 namespace op {

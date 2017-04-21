@@ -87,7 +87,7 @@ class Executor(object):
         for i in xrange(num_output):
           storage_type = ctypes.c_int(0)
           check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(handles[i], NDArrayHandle),
-                                                ctypes.byref(storage_type)))
+                                                  ctypes.byref(storage_type)))
           output = NDArray(NDArrayHandle(handles[i])) if storage_type.value == 1 \
                    else SparseNDArray(NDArrayHandle(handles[i]))
           outputs.append(output)

@@ -159,20 +159,19 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   if (inputs[0].storage_type() == kDefaultStorage) {
-    LOG(FATAL) << "BinaryBackwardUseNoneEx fallback not implemented yet";   
+    LOG(FATAL) << "BinaryBackwardUseNoneEx fallback not implemented yet";
   }
   // LOG(INFO) << "BinaryBackwardUseNoneEx";
-  //WARNING: Assume identity op. Assume same shape
+  // WARNING: Assume identity op. Assume same shape
   TShape shape = inputs[0].aux_shape(rowsparse::kIdx);
   outputs[0].CheckAndAlloc({shape});
   outputs[1].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
     MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
-      //TODO replace with auto
-      Tensor<xpu, 1, AuxType> lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      Tensor<xpu, 1, AuxType> rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      Tensor<xpu, 1, AuxType> ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      Tensor<xpu, 1, DType> lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
+      auto lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, DType> rgrad = outputs[1].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, DType> ograd = inputs[0].data().FlatTo1D<xpu, DType>(s);
       ASSIGN_DISPATCH(lgrad, req[0], F<LOP>(ograd));
