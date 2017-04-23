@@ -34,6 +34,7 @@ def check_with_uniform(uf, arg_shapes, dim=None, npuf=None, rmin=-10, type_list=
             assert_almost_equal(out1, out2)
 
 def test_ndarray_elementwise_add():
+    # TODO initialize with rand number
     dense_np = np.array([[1,2],[3,4],[5,6]])
     sparse_np1 = np.array([[5,10],[0,0],[0,0]])
     dense_nd = mx.nd.array(dense_np)
@@ -42,7 +43,6 @@ def test_ndarray_elementwise_add():
     idx = mx.nd.array([0], dtype=np.int32); 
     sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2)) 
     sparse_nd2 = mx.sparse_nd.row_sparse(val, idx, (3,2)) 
-    #TODO register under mx.sparse_nd namespace
     # dense - dense addition
     dense_plus_dense = mx.nd.elemwise_add(dense_nd, dense_nd);
     assert_almost_equal(dense_plus_dense.asnumpy(), dense_np + dense_np)

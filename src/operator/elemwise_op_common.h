@@ -63,6 +63,7 @@ inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
                     bool &fallback) {
       for (size_t i = 0; i < vec->size(); ++i) {
         // LOG(INFO) << "deduce " << (*vec)[i];
+        CHECK_NE((*vec)[i], -1) << "ElemwiseStorageAttr assumes all input storage types are known";
         if (assign(&result, (*vec)[i]) == false) {
           fallback = true;
           result = kDefaultStorage;
@@ -75,7 +76,7 @@ inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
   AttrType dattr = none;
   deduce(in_attrs, "input", dattr, fallback);
   if (reverse_infer) {
-    // TODO(haibin) also do reverse pass
+    LOG(FATAL) << "not implemented yet";
   }
   auto write = [&](std::vector<AttrType> *vec, const char *name) {
       for (size_t i = 0; i < vec->size(); ++i) {
@@ -84,7 +85,6 @@ inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
           << name << ": " << "expected " << dattr << ", got " << (*vec)[i];
       }
     };
-  // write(in_attrs, "input");
   write(out_attrs, "output");
   if (is_none(dattr)) return false;
   return true;
@@ -117,7 +117,8 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   // TODO(haibin) replace type_is_none to storage_type_is_none & type_assign
-  return ElemwiseStorageAttr<int, type_is_none, type_assign, true>(
+  // WARNING not doing inverse infer yet
+  return ElemwiseStorageAttr<int, type_is_none, type_assign, false>(
     attrs, in_attrs, out_attrs, -1);
 }
 
