@@ -114,7 +114,6 @@ def test_incomplete_infer_concat():
 
 def test_fc_infer_type():
     mx_real_t = mx.base.mx_real_t
-    # Build MLP
     data = mx.symbol.Variable('data')
     out = mx.symbol.FullyConnected(data=data, name='fc1', num_hidden=1000)
 

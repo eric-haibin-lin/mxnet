@@ -150,7 +150,8 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
     NDArray* nd_aux_ptr = reinterpret_cast<NDArray*>(aux_vec[i]);
     aux_ndarrays.push_back(*nd_aux_ptr);
   }
-  *out = new NDArray(*data_ptr, aux_ndarrays, ctx, kRowSparseStorage, TShape(shape, shape + ndim));
+  NDArrayStorageType stype = (NDArrayStorageType) storage_type;
+  *out = new NDArray(*data_ptr, aux_ndarrays, ctx, stype, TShape(shape, shape + ndim));
   API_END();
 }
 

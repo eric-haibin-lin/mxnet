@@ -73,4 +73,3 @@ if __name__ == '__main__':
     test_elemwise_add_dense()
     test_elemwise_add_dense_sparse()
     test_elemwise_add_sparse_sparse()
-    print("done")

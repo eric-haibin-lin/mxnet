@@ -73,7 +73,7 @@ def test_ndarray_elementwise_fallback():
     sparse_plus_sparse = mx.nd.add_n(sparse_nd1, sparse_nd1)
     assert_almost_equal(sparse_plus_sparse.asnumpy(), sparse_np1 + sparse_np1)
 
-def test_ndarray_conversion():
+def check_conversion_row_sparse():
     val = np.array([5, 10])
     idx = np.array([1])
     sparse_val = np.array([[0, 0], [5, 10], [0, 0], [0, 0], [0, 0]])
@@ -82,6 +82,20 @@ def test_ndarray_conversion():
     d = mx.sparse_nd.array(a, [b], 'row_sparse', (5,2))
     f = mx.sparse_nd.to_dense(d)
     assert_almost_equal(f.asnumpy(), sparse_val)
+
+def check_conversion_csr():
+    val = mx.nd.array([1, 2, 3, 4, 5, 6])
+    indices = mx.nd.array([0, 2, 2, 0, 1, 2], dtype=np.int32)
+    indptr = mx.nd.array([0, 2, 3, 6], dtype=np.int32)
+    shape = (3, 3)
+    #sparse_val = np.array([[0, 0], [5, 10], [0, 0], [0, 0], [0, 0]])
+    d = mx.sparse_nd.csr(val, indices, indptr, (5,2))
+    #f = mx.sparse_nd.to_dense(d)
+    #assert_almost_equal(f.asnumpy(), sparse_val)
+
+def test_ndarray_conversion():
+    check_conversion_row_sparse()
+    #TODO check_conversion_csr()
 
 def test_ndarray_zeros():
     zero = mx.nd.zeros((2,2))
@@ -99,4 +113,3 @@ if __name__ == '__main__':
     test_ndarray_zeros()
     test_ndarray_copyto()
     test_ndarray_elementwise_fallback()
-

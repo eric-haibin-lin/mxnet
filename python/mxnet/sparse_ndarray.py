@@ -31,15 +31,15 @@ from .ndarray import NDArray
 # When possible, use cython to speedup part of computation.
 try:
     if int(_os.environ.get("MXNET_ENABLE_CYTHON", True)) == 0:
-        from ._ctypes.ndarray import NDArrayBase, _init_ndarray_module
+        from ._ctypes.ndarray import _init_ndarray_module
     elif _sys.version_info >= (3, 0):
-        from ._cy3.ndarray import NDArrayBase, _init_ndarray_module
+        from ._cy3.ndarray import _init_ndarray_module
     else:
-        from ._cy2.ndarray import NDArrayBase, _init_ndarray_module
+        from ._cy2.ndarray import _init_ndarray_module
 except ImportError:
     if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
-    from ._ctypes.ndarray import NDArrayBase, _init_ndarray_module
+    from ._ctypes.ndarray import _init_ndarray_module
 
 # pylint: enable= no-member
 _STORAGE_TYPE_ID_TO_STR = {
@@ -62,7 +62,7 @@ _STORAGE_AUX_TYPES = {
 }
 
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc=True,
-                      dtype=mx_real_t, aux_types=[]):
+                      dtype=mx_real_t, aux_types=None):
     """Return a new handle with specified shape and context.
 
     Empty handle is only used to hold results
@@ -202,12 +202,35 @@ class SparseNDArray(NDArray):
     def to_dense(self):
         return to_dense(self)
 
+#TODO(haibin) also add aux_types. Not tested yet.
+#We need a to_dense method to test it
+def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t):
+    ''' constructor '''
+    hdl = NDArrayHandle()
+    #TODO currently only supports NDArray input
+    assert(isinstance(values, NDArray))
+    assert(isinstance(index, NDArray))
+    indices = c_array(NDArrayHandle, [idx.handle, indptr.handle])
+    num_aux = mx_uint(2)
+    check_call(_LIB.MXNDArrayCreateSparse(
+        values.handle, num_aux, indices,
+        c_array(mx_uint, shape),
+        mx_uint(len(shape)),
+        ctypes.c_int(_STORAGE_TYPE_STR_TO_ID['csr']),
+        ctypes.c_int(ctx.device_typeid),
+        ctypes.c_int(ctx.device_id),
+        ctypes.c_int(int(False)),
+        ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
+        ctypes.byref(hdl)))
+    return SparseNDArray(hdl)
+
 # pylint: enable= no-member
+#TODO(haibin) also specify aux_types
 def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     ''' constructor '''
     hdl = NDArrayHandle()
-    assert(isinstance(values, NDArrayBase))
-    assert(isinstance(index, NDArrayBase))
+    assert(isinstance(values, NDArray))
+    assert(isinstance(index, NDArray))
     indices = c_array(NDArrayHandle, [index.handle])
     num_aux = mx_uint(1)
     check_call(_LIB.MXNDArrayCreateSparse(
