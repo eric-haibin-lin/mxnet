@@ -144,6 +144,7 @@ void BinaryBackwardUseNone(const nnvm::NodeAttrs& attrs,
   });
 }
 
+// Only implemented for _backward_add for now
 template<typename xpu, typename LOP, typename ROP>
 void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
                            const OpContext& ctx,
@@ -157,7 +158,8 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
     LOG(FATAL) << "BinaryBackwardUseNoneEx fallback not implemented yet";
   }
   // LOG(INFO) << "BinaryBackwardUseNoneEx";
-  // WARNING: Assume identity op. Assume same shape
+  // The following code assumes LOP == mshadow_op::identity == ROP
+  CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
   TShape shape = inputs[0].aux_shape(rowsparse::kIdx);
   outputs[0].CheckAndAlloc({shape});
   outputs[1].CheckAndAlloc({shape});

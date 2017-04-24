@@ -59,6 +59,8 @@ void IdentityCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
+// FIXME the index is hard coded for _identity_with_attr_like_rhs op
+// Only implemented for row_sparse for now
 template<typename xpu>
 void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
                      const OpContext& ctx,
@@ -69,24 +71,19 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   // LOG(INFO) << "IdentityComputeEx";
-  // FIXME the input index is hard coded for _identity_with_attr_like_rhs op
   NDArrayStorageType storage_type = inputs[1].storage_type();
   CHECK_EQ(storage_type, kRowSparseStorage)
      << "storage type " << storage_type << " not supported yet";
   if (req[0] == kNullOp) {
-    LOG(FATAL) << "kNullOp in IdentityComputeEx";
+    LOG(FATAL) << "kNullOp in IdentityComputeEx not supported yet";
     return;
   }
   if (req[0] == kWriteInplace) {
     LOG(FATAL) << "kWriteInplace for sparse storage not supported yet";
     // CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
   }
-  // FIXME probably need an interface to check if a sparse tensor is all zero
   TShape shape = inputs[1].aux_shape(rowsparse::kIdx);
-  if (shape.ndim() == 0) {
-    // LOG(INFO) << "Identify for all zero sparse ndarray";
-    return;
-  }
+  if (shape.ndim() == 0) return;
   outputs[0].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
     MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {

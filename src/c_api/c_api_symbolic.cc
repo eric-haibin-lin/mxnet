@@ -497,7 +497,7 @@ int MXSymbolInferShapePartial(SymbolHandle sym,
                             &succ);
 }
 
-
+// TODO(haibin) refactor with infer_type
 int MXSymbolInferStorageType(SymbolHandle sym,
                       mx_uint num_args,
                       const char** keys,

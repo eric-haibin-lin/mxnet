@@ -658,20 +658,15 @@ void GraphExecutor::InitCachedOps() {
     for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
       uint32_t eid = idx.entry_id(nid, index);
       exec->out_array.push_back(data_entry_[eid]);
-      if (vstorage_type[eid] != kDefaultStorage) {
-        // FIXME temporarily disable inplace for sparse ndarrays
-        exec->req.push_back(kWriteTo);
+      if (addto_entry.at(eid) != 0) {
+        exec->req.push_back(kAddTo);
+      } else if (vstorage_inplace[eid] >= 0) {
+        exec->req.push_back(kWriteInplace);
+      } else if (vstorage_inplace[eid] == -2) {
+        // -2 indicate that the entry is never referenced.
+       exec->req.push_back(kNullOp);
       } else {
-        if (addto_entry.at(eid) != 0) {
-          exec->req.push_back(kAddTo);
-        } else if (vstorage_inplace[eid] >= 0) {
-          exec->req.push_back(kWriteInplace);
-        } else if (vstorage_inplace[eid] == -2) {
-          // -2 indicate that the entry is never referenced.
-         exec->req.push_back(kNullOp);
-        } else {
-          exec->req.push_back(kWriteTo);
-        }
+        exec->req.push_back(kWriteTo);
       }
     }
   }
