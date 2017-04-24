@@ -131,7 +131,7 @@ void SetShapeType(const nnvm::Op* op,
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
-  static auto& inferchunktype = nnvm::Op::GetAttr<nnvm::FInferStorageType>("FInferStorageType");
+  static auto& inferstorage = nnvm::Op::GetAttr<nnvm::FInferStorageType>("FInferStorageType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;
@@ -183,8 +183,8 @@ void SetShapeType(const nnvm::Op* op,
     }
     out_storage_types.push_back(storage_type);
   }
-  if (inferchunktype.count(op)) {
-    CHECK(inferchunktype[op](attrs, &in_storage_types, &out_storage_types));
+  if (inferstorage.count(op)) {
+    CHECK(inferstorage[op](attrs, &in_storage_types, &out_storage_types));
     CHECK_EQ(out_storage_types.size(), static_cast<size_t>(infered_num_outputs));
   } else {
     // LOG(INFO) << "FInferStorageType not present.";
@@ -293,12 +293,12 @@ void PushFCompute(const FCompute& fn,
 
       if (ctx.dev_mask() == gpu::kDevMask) {
         // mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
-        // common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
-        //                          &tmp_nds, true, s);
+        // common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs,
+        //                              &output_blobs, &tmp_nds, true, s);
       } else {
         mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
-        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs, &output_blobs,
-                                      &tmp_nds, true, s);
+        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs,
+                                      &output_blobs, &tmp_nds, true, s);
       }
       OpContext opctx{false, rctx,
                       engine::CallbackOnComplete(),
@@ -408,9 +408,6 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
                        int num_params,
                        const char **param_keys,
                        const char **param_vals) {
-  static auto& fcpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
-  static auto& fnd_cpu_row_sparse = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu, row_sparse>");
-  static auto& fgpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
   static auto& ndfunc = nnvm::Op::GetAttr<FNDArrayFunction>("FNDArrayFunction");
   static auto& createop = nnvm::Op::GetAttr<FCreateLayerOp>("FCreateLayerOp");
   const nnvm::Op* op = static_cast<nnvm::Op*>(creator);
@@ -446,23 +443,11 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     SetDependency(&read_vars, &write_vars, &requested, &auxidx,
         op, attrs, ctx, ndinputs, ndoutputs);
 
-    FCompute fn;
-    FComputeEx fn_nd;
-    // dispatch based on ctx and storage_type
-    // std::cout << "I - dispatch: " << storage_type << " for op " << op->name << std::endl;
-    if (ctx.dev_mask() == cpu::kDevMask && fnd_cpu_row_sparse.count(op) &&
-        storage_type == kRowSparseStorage) {
-      fn_nd = fnd_cpu_row_sparse[op];
-      // std::cout << "I - fnd_cpu_row_sparse dispatched." << std::endl;
-    } else if (ctx.dev_mask() == cpu::kDevMask && fcpu.count(op)) {
-      // std::cout << "I - fcpu dispatched." << std::endl;
-      fn = fcpu[op];
-    } else if (ctx.dev_mask() == gpu::kDevMask && fgpu.count(op)) {
-      fn = fgpu[op];
-    }
+    FCompute fn = common::GetFCompute(op, ctx);
+    FComputeEx fcompute_ex = common::GetFComputeEx(op, ctx, storage_type);
 
-    if (fn_nd) {
-      PushFComputeEx(fn_nd, op, attrs, ctx, read_vars, write_vars,
+    if (fcompute_ex) {
+      PushFComputeEx(fcompute_ex, op, attrs, ctx, read_vars, write_vars,
           requested, ndinputs, ndoutputs);
     } else if (fn) {
       if (AutogradRuntime::Get()->IsRecording()) {

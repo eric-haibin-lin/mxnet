@@ -66,8 +66,6 @@ using FCompute = std::function<void (const nnvm::NodeAttrs& attrs,
  *
  * \note Register under "FComputeEx<cpu, `storage_type`>" and "FComputeEx<gpu, `storage_type`>" 
  * e.g FComputeEx<cpu, row_sparse>
- * TODO should probably change const std::vector<NDArray>& outputs to
-                               std::vector<NDArray> *outputs
  */
 using FComputeEx = std::function<void (const nnvm::NodeAttrs& attrs,
                                      const OpContext& ctx,

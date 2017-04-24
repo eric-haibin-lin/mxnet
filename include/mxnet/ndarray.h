@@ -98,7 +98,7 @@ class NDArray {
   }
   /*! \brief constructor for NDArray with chunk type
    */
-  NDArray(NDArrayStorageType storage_type, const TShape &shape, Context ctx,
+  NDArray(const NDArrayStorageType storage_type, const TShape &shape, Context ctx,
           bool delay_alloc = true, int dtype = mshadow::default_type_flag,
           std::vector<int> aux_types = {})
       : shape_(shape), offset_(0), dtype_(dtype), entry_({nullptr, 0, 0}) {
@@ -127,6 +127,7 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
+  // TODO this constructor should be removed
   NDArray(NDArray data, const std::vector<NDArray> aux_data, Context ctx,
           NDArrayStorageType storage_type, const TShape &shape)
       : ptr_(std::make_shared<Chunk>(data, aux_data, ctx, storage_type)), shape_(shape),
@@ -524,7 +525,6 @@ class NDArray {
   // shandle is used to store the actual values in the NDArray
   // aux_handles store the aux data(such as indices) if it's needed by non-default storage.
   struct Chunk {
-    // TODO(haibin) Also specify the capacity & size of the chunk, we don't want to resize it
     // every time a new element is added to a non default storage
     /*! \brief storage handle from storage engine.
                for non-default storage, shandle stores the data(value) array.
@@ -551,7 +551,7 @@ class NDArray {
     // context of data
     Context ctx;
     // The shape of the chunk data.
-    // This might not be the same shape as the NDArray, since the chunk may be sparse.
+    // This might not be the same shape as the NDArray, since the storage may be sparse.
     TShape storage_shape;
     // The shape of aux data. The default value for the shape is 0.
     std::vector<TShape> aux_shapes;
@@ -660,7 +660,7 @@ class NDArray {
       CHECK_EQ(storage_type, kRowSparseStorage) << "Not yet implemented";
       // calculate size, perform allocation
       if (delay_alloc) {
-        // For row sparse chunk, aux_shape indicates the number of rows to allocate
+        // For row sparse storage, aux_shape indicates the number of rows to allocate
         auto aux_shape = aux_shapes[0];
         CHECK_EQ(aux_shape.ndim(), 1);
         auto num_rows = aux_shape[0];
@@ -670,7 +670,7 @@ class NDArray {
         shandle = Storage::Get()->Alloc(dbytes, ctx);
         aux_handles.push_back(Storage::Get()->Alloc(aux_bytes, ctx));
         delay_alloc = false;
-        // Initialize aux_shape and shape
+        // Initialize shapes
         this->aux_shapes = aux_shapes;
         storage_shape = shape;
         storage_shape[0] = num_rows;

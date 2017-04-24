@@ -131,6 +131,7 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
+// TODO remove this API
 int MXNDArrayCreateSparse(NDArrayHandle data,
                     mx_uint num_aux,
                     NDArrayHandle *aux_vec,
@@ -363,7 +364,6 @@ int MXNDArrayGetStorageType(NDArrayHandle handle,
                      int *out_storage_type) {
   API_BEGIN();
   NDArray *arr = static_cast<NDArray*>(handle);
-  // Check is_none?
   if (!arr->is_none()) {
     *out_storage_type = arr->storage_type();
   } else {

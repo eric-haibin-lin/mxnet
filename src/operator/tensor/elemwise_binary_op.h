@@ -32,9 +32,10 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
-// TODO(haibin) This is temporary implementation. Make use of templated OP
+// TODO(haibin) This is an inefficient temporary implementation
+// Binary Compute between two row-sparse ndarray
 template<typename xpu, typename OP>
-void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
+void BinaryComputeExRsRs(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
@@ -51,7 +52,7 @@ void BinaryComputeExSpSp(const nnvm::NodeAttrs& attrs,
   auto num_rows_r = nd_r.aux_shape(rowsparse::kIdx)[0];
   // This is (roughly) the number of result rows
   output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
-  // LOG(INFO) << "BinaryComputeExSpSp" << output.aux_shape(rowsparse::kIdx)[0];
+  // LOG(INFO) << "BinaryComputeExRsRs" << output.aux_shape(rowsparse::kIdx)[0];
   // Indices
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
@@ -111,24 +112,18 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
-  // std::cout << "BinaryComputeEx invoked\n";
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   // Check if any input is dense
-  bool fallback = false;
-  for (auto &nd : inputs) {
-    if (nd.storage_type() == kDefaultStorage) {
-      fallback = true;
-    }
-  }
+  bool fallback = common::HasDefaultStorage(inputs);
   if (fallback) {
     FComputeExFallback(attrs, ctx, inputs, req, outputs, s, BinaryCompute<xpu, OP>);
     return;
   }
   // Call SpSp function
   CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
-  BinaryComputeExSpSp<xpu, Op>(attrs, ctx, inputs, req, outputs);
+  BinaryComputeExRsRs<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 
 template<typename xpu, typename LOP, typename ROP>

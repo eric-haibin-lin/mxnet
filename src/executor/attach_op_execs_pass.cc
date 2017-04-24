@@ -142,9 +142,10 @@ class FComputeExecutor : public OpExecutor {
     op_ctx.run_ctx = rctx;
     // TODO(haibin) Get stream?
     // mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
+    // TODO gpu
     if (!initialized) {
-      common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_, &out_data_,
-                                    &tmp_nds_, true, nullptr);
+      common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_,
+                                    &out_data_, &tmp_nds_, true, nullptr);
       initialized = true;
     }
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
@@ -163,21 +164,6 @@ class FComputeExecutor : public OpExecutor {
   }
   explicit FComputeExecutor(FCompute fcompute, const NodeAttrs& attrs)
       : fcompute_(fcompute), attrs_(attrs) {
-  }
-
-  static FCompute GetFCompute(const Op* op, Context ctx) {
-    static auto& fcompute_cpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
-    static auto& fcompute_gpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
-    if (ctx.dev_mask() == cpu::kDevMask) {
-      // if (fcompute_cpu.get(op, nullptr) != nullptr)
-      //  std::cout << "FCompute for op " << op->name << std::endl;
-      return fcompute_cpu.get(op, nullptr);
-    } else if (ctx.dev_mask() == gpu::kDevMask) {
-      return fcompute_gpu.get(op, nullptr);
-    } else {
-      LOG(FATAL) << "Unknown device mask";
-      return nullptr;
-    }
   }
 
  private:
@@ -206,27 +192,6 @@ class FComputeExExecutor : public OpExecutor {
   }
   explicit FComputeExExecutor(FComputeEx fcompute, const NodeAttrs& attrs)
       : fcompute_(fcompute), attrs_(attrs) {
-  }
-
-  static FComputeEx GetFComputeEx(const Op* op, Context ctx,
-                                  NDArrayStorageType dispatch_storage_type) {
-    static auto& fcompute_cpu = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu, row_sparse>");
-    static auto& fcompute_gpu = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<gpu, row_sparse>");
-    if (dispatch_storage_type != kRowSparseStorage) {
-      return nullptr;
-    }
-    if (ctx.dev_mask() == cpu::kDevMask) {
-#if EXECUTOR_DEBUG
-      if (fcompute_cpu.get(op, nullptr) != nullptr)
-        LOG(INFO) << "FComputeEx for op " << op->name;
-#endif
-      return fcompute_cpu.get(op, nullptr);
-    } else if (ctx.dev_mask() == gpu::kDevMask) {
-      return fcompute_gpu.get(op, nullptr);
-    } else {
-      LOG(FATAL) << "Unknown device mask";
-      return nullptr;
-    }
   }
 
  private:
@@ -266,9 +231,9 @@ Graph AttachOpExecs(Graph g) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
     NDArrayStorageType dispatch_stype = static_cast<NDArrayStorageType>(dispatch_stypes[i]);
-    FCompute fcompute = FComputeExecutor::GetFCompute(inode.source->op(), vctx[i]);
-    FComputeEx fcompute_ndarray =
-      FComputeExExecutor::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stype);
+    FCompute fcompute = common::GetFCompute(inode.source->op(), vctx[i]);
+    FComputeEx fcompute_ex =
+      common::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stype);
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;
@@ -293,15 +258,16 @@ Graph AttachOpExecs(Graph g) {
           dynamic_cast<ForwardOpExecutor*>(ret[fwd_id].get())->op_,
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
-    } else if (fcompute_ndarray != nullptr) {
-      // Also check the storage type
-      // std::cout << "S - fcompute_ndarray" << std::endl;
-      ret[i] = std::make_shared<FComputeExExecutor>(fcompute_ndarray, inode.source->attrs);
+    } else if (fcompute_ex != nullptr) {
+#if EXECUTOR_DEBUG
+      LOG(INFO) << "FComputeEx for op " << inode.source->op()->name;
+#endif
+      ret[i] = std::make_shared<FComputeExExecutor>(fcompute_ex, inode.source->attrs);
     } else if (fcompute != nullptr) {
-      // std::cout << "S - fcompute" << std::endl;
+#if EXECUTOR_DEBUG
+      LOG(INFO) << "FCompute for op " << inode.source->op()->name;
+#endif
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);
-    } else {
-      // LOG(INFO) << "FCompute not registered " << inode.source->op()->name;
     }
   }
   g.attrs["op_execs"] = std::make_shared<nnvm::any>(ret);
