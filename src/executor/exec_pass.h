@@ -51,7 +51,7 @@ class OpExecutor {
    *  This function call do not synchronize the stream.
    * \param rctx The runtime context passed in by environment.
    */
-  virtual void Run(RunContext rctx) = 0;
+  virtual void Run(RunContext rctx, bool is_gpu) = 0;
   /*! \return the execution type */
   virtual Operator::ExecType exec_type() const = 0;
 };

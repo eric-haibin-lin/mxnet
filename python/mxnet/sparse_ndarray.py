@@ -251,11 +251,12 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
 
 # Temporary function for testing purpose
 def to_dense(source):
-    hdl = NDArrayHandle()
+    return ndarray.cast_storage(source, storage_type=1)
+    '''hdl = NDArrayHandle()
     check_call(_LIB.MXNDArrayConvert(
         source.handle, _STORAGE_TYPE_STR_TO_ID['default'],
         ctypes.byref(hdl)))
-    return ndarray.NDArray(handle=hdl, writable=True)
+    return ndarray.NDArray(handle=hdl, writable=True)'''
 
 def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     """Return a new array of given shape and type, filled with zeros.

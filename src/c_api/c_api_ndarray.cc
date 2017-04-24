@@ -291,18 +291,20 @@ void PushFCompute(const FCompute& fn,
       std::vector<TBlob> input_blobs, output_blobs;
       std::vector<NDArray> tmp_nds;
 
-      if (ctx.dev_mask() == gpu::kDevMask) {
-        // mshadow::Stream<gpu> *s = rctx.get_stream<gpu>();
-        // common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs,
-        //                              &output_blobs, &tmp_nds, true, s);
-      } else {
-        mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
-        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs,
-                                      &output_blobs, &tmp_nds, true, s);
-      }
       OpContext opctx{false, rctx,
                       engine::CallbackOnComplete(),
                       requested};
+      if (ctx.dev_mask() == gpu::kDevMask) {
+#if MXNET_USE_CUDA
+        common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs,
+                                      &output_blobs, &tmp_nds, true, opctx);
+#else
+        LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
+#endif
+      } else {
+        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs,
+                                      &output_blobs, &tmp_nds, true, opctx);
+      }
       std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
       fn(attrs, opctx, input_blobs, req, output_blobs);
       if (ctx.dev_mask() == gpu::kDevMask) {

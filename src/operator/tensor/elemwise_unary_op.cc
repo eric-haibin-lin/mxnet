@@ -107,9 +107,12 @@ NNVM_REGISTER_OP(_backward_cast)
 NNVM_REGISTER_OP(cast_storage)
 .describe(R"code(Casts tensor storage type to the new type.
 )code" ADD_FILELINE)
+.set_num_inputs(1)
+.set_num_outputs(1)
 .set_attr_parser(ParamParser<CastStorageParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)
-.set_attr<FComputeEx>("FCompute<cpu, row_sparse>", CastStorageComputeEx<cpu>)
+.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>", CastStorageComputeEx<cpu>)
 .add_argument("data", "NDArray-or-Symbol", "The input.")
 .add_arguments(CastStorageParam::__FIELDS__());
 

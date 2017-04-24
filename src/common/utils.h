@@ -23,9 +23,20 @@
 #include <nnvm/graph_attr_types.h>
 
 namespace mxnet {
+// forward declaration
+namespace op {
+template <typename xpu>
+void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
+                 const OpContext& ctx,
+                 const std::vector<NDArray>& inputs,
+                 const std::vector<OpReqType>& req,
+                 const std::vector<NDArray>& outputs);
+}
+
 namespace common {
 
 #if DMLC_USE_CXX11
+// TODO move to op_utils.h
 template <typename xpu>
 inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
                              const std::vector<NDArray>& ndoutputs,
@@ -33,10 +44,11 @@ inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
                              std::vector<TBlob> *output_blobs,
                              std::vector<NDArray> *tmp_nds,
                              bool alloc_outputs,
-                             mshadow::Stream<xpu> *s) {
+                             const OpContext& ctx) {
   for (auto& i : ndinputs) {
     if (i.storage_type() != kDefaultStorage) {
-      NDArray tmp_nd = i.ConvertTo<xpu>(kDefaultStorage, s);
+      NDArray tmp_nd(i.shape(), i.ctx(), false);
+      op::CastStorageComputeEx<xpu>({}, ctx, {i}, {}, {tmp_nd});
       tmp_nds->push_back(tmp_nd);
       input_blobs->push_back(tmp_nd.data());
     } else {

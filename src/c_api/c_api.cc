@@ -156,16 +156,6 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   API_END();
 }
 
-// TODO(haibin) Should also consider context
-int MXNDArrayConvert(NDArrayHandle in,
-                     int storage_type,
-                     NDArrayHandle *out) {
-  API_BEGIN();
-  NDArray* nd = reinterpret_cast<NDArray*>(in);
-  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayStorageType>(storage_type), nullptr));
-  API_END();
-}
-
 int MXNDArrayCreateEx(const mx_uint *shape,
                     mx_uint ndim,
                     int dev_type,

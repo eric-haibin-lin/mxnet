@@ -26,7 +26,7 @@ namespace exec {
 // forward executor
 class ForwardOpExecutor : public OpExecutor {
  public:
-  void Run(RunContext rctx) override {
+  void Run(RunContext rctx, bool is_gpu) override {
     op_ctx.run_ctx = rctx;
     op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
 #if MKL_EXPERIMENTAL == 1
@@ -69,7 +69,7 @@ class ForwardOpExecutor : public OpExecutor {
 // backward executor
 class BackwardOpExecutor : public OpExecutor {
  public:
-  void Run(RunContext rctx) override {
+  void Run(RunContext rctx, bool is_gpu) override {
     op_ctx.run_ctx = rctx;
     op_->Backward(op_ctx, out_grad_, in_data_, out_data_,
                   req, in_grad_, aux_data_);
@@ -137,15 +137,21 @@ class BackwardOpExecutor : public OpExecutor {
 // fcompute executor executor
 class FComputeExecutor : public OpExecutor {
  public:
-  void Run(RunContext rctx) override {
+  void Run(RunContext rctx, bool is_gpu) override {
     // std::cout << "FCompute::Run" << std::endl;
     op_ctx.run_ctx = rctx;
-    // TODO(haibin) Get stream?
-    // mshadow::Stream<cpu> *s = rctx.get_stream<cpu>();
-    // TODO gpu
     if (!initialized) {
-      common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_,
-                                    &out_data_, &tmp_nds_, true, nullptr);
+      if (is_gpu) {
+#if MXNET_USE_CUDA
+        common::PrepDefaultBlobs<gpu>(in_array, out_array, &in_data_,
+                                      &out_data_, &tmp_nds_, true, op_ctx);
+#else
+        LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
+#endif
+      } else {
+        common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_,
+                                      &out_data_, &tmp_nds_, true, op_ctx);
+      }
       initialized = true;
     }
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
@@ -177,7 +183,7 @@ class FComputeExecutor : public OpExecutor {
 // fcomputend executor
 class FComputeExExecutor : public OpExecutor {
  public:
-  void Run(RunContext rctx) override {
+  void Run(RunContext rctx, bool is_gpu) override {
     // std::cout << "FComputeExExecutor::Run" << std::endl;
     op_ctx.run_ctx = rctx;
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);

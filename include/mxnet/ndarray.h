@@ -138,11 +138,6 @@ class NDArray {
       CHECK(aux_data.size() == 1) << "Multiple aux_data not supported yet";
   }
 
-  template<typename xpu>
-  NDArray ConvertTo(NDArrayStorageType storage_type, mshadow::Stream<xpu> *s) const {
-    CHECK_EQ(storage_type, kDefaultStorage) << "other storage type not supported yet";
-    return ToDefault<xpu>(s);
-  }
   /*!
    * \return the shape of current NDArray.
    */
@@ -488,41 +483,6 @@ class NDArray {
 
  private:
   friend class autograd::AutogradRuntime;
-  // Make a copy of the ndarray in dense format
- public:
-  template<typename xpu>
-  NDArray ToDefault(mshadow::Stream<xpu>* s, const NDArray *dst = nullptr) const {
-    NDArray result(shape_, ptr_->ctx, false, dtype());
-    if (dst != nullptr) result = *dst;
-    this->WaitToRead();
-    if (storage_type() == kDefaultStorage) {
-      MSHADOW_TYPE_SWITCH(dtype(), DType, {
-        mshadow::Copy(result.data().FlatTo1D<xpu, DType>(), data().FlatTo1D<xpu, DType>());
-      });
-      return result;
-    }
-    CHECK(storage_type() == kRowSparseStorage);
-    MSHADOW_TYPE_SWITCH(dtype(), DType, {
-      MSHADOW_TYPE_SWITCH(aux_type(rowsparse::kIdx), AuxType, {
-        // Fill in zeros
-        result.data().FlatTo1D<xpu, DType>(s) = 0;
-        result.data().shape_ = shape_;
-        // data() is not empty
-        if (storage_shape().ndim() != 0) {
-          // Copy over
-          auto in_data = data().FlatTo2D<xpu, DType>(s);
-          auto out_data = result.data().FlatTo2D<xpu, DType>(s);
-          auto num_rows = aux_shape(rowsparse::kIdx)[0];
-          auto in_idx = aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-          for (size_t i = 0; i < num_rows; i += 1) {
-            mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
-          }
-        }
-      });
-    });
-    return result;
-  }
-  private:
   /*! \brief the real data chunk that backs NDArray */
   // shandle is used to store the actual values in the NDArray
   // aux_handles store the aux data(such as indices) if it's needed by non-default storage.

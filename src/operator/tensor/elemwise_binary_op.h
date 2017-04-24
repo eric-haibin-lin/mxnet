@@ -115,10 +115,9 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  // Check if any input is dense
-  bool fallback = common::HasDefaultStorage(inputs);
-  if (fallback) {
-    FComputeExFallback(attrs, ctx, inputs, req, outputs, s, BinaryCompute<xpu, OP>);
+  // If any input is dense, fallback to FCompute
+  if (common::HasDefaultStorage(inputs)) {
+    FComputeExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
     return;
   }
   // Call RsRs function

@@ -704,7 +704,6 @@ void GraphExecutor::InitCachedOps() {
               std::inserter(all_vars, all_vars.end()));
     // setup exec vars
     Engine::Get()->PushSync([exec](RunContext rctx) {
-        // LOG(INFO) << "Setup.. ";
         exec->Setup();
       }, Context::CPU(), {}, all_vars, FnProperty::kNormal, 0,
       PROFILER_MESSAGE("SetupExec"));
@@ -714,7 +713,7 @@ void GraphExecutor::InitCachedOps() {
       if (is_async) {
         exec->op_ctx.async_on_complete = on_complete;
       }
-      exec->Run(ctx);
+      exec->Run(ctx, is_gpu);
       // call on complete only if it is async op
       if (!is_async) {
         if (is_gpu) {
@@ -946,7 +945,7 @@ GraphExecutor::CachedSegOpr GraphExecutor::CreateCachedSegOpr(size_t topo_start,
       RunContext ctx, Engine::CallbackOnComplete on_complete) {
     // Run all opr in the sub-graph
     for (auto &exec : exec_list) {
-      exec->Run(ctx);
+      exec->Run(ctx, is_gpu);
     }
     if (is_gpu) {
 #if MXNET_USE_CUDA
