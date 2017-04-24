@@ -9,6 +9,7 @@
 namespace mxnet {
 namespace op {
 DMLC_REGISTER_PARAMETER(CastParam);
+DMLC_REGISTER_PARAMETER(CastStorageParam);
 
 // copy
 MXNET_OPERATOR_REGISTER_UNARY(_copy)
@@ -101,6 +102,17 @@ Example::
 NNVM_REGISTER_OP(_backward_cast)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
 .set_attr<FCompute>("FCompute<cpu>", CastCompute<cpu>);
+
+// TODO(haibin) declare backward op for cast storage. Also add FCompute(identity compute)
+NNVM_REGISTER_OP(cast_storage)
+.describe(R"code(Casts tensor storage type to the new type.
+)code" ADD_FILELINE)
+.set_attr_parser(ParamParser<CastStorageParam>)
+.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)
+.set_attr<FComputeEx>("FCompute<cpu, row_sparse>", CastStorageComputeEx<cpu>)
+.add_argument("data", "NDArray-or-Symbol", "The input.")
+.add_arguments(CastStorageParam::__FIELDS__());
+
 
 // negative
 MXNET_OPERATOR_REGISTER_UNARY(negative)

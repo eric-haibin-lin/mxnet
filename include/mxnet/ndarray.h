@@ -489,9 +489,11 @@ class NDArray {
  private:
   friend class autograd::AutogradRuntime;
   // Make a copy of the ndarray in dense format
+ public:
   template<typename xpu>
-  NDArray ToDefault(mshadow::Stream<xpu>* s) const {
+  NDArray ToDefault(mshadow::Stream<xpu>* s, const NDArray *dst = nullptr) const {
     NDArray result(shape_, ptr_->ctx, false, dtype());
+    if (dst != nullptr) result = *dst;
     this->WaitToRead();
     if (storage_type() == kDefaultStorage) {
       MSHADOW_TYPE_SWITCH(dtype(), DType, {
@@ -520,7 +522,7 @@ class NDArray {
     });
     return result;
   }
-
+  private:
   /*! \brief the real data chunk that backs NDArray */
   // shandle is used to store the actual values in the NDArray
   // aux_handles store the aux data(such as indices) if it's needed by non-default storage.

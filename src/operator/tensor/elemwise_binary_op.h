@@ -121,7 +121,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
     FComputeExFallback(attrs, ctx, inputs, req, outputs, s, BinaryCompute<xpu, OP>);
     return;
   }
-  // Call SpSp function
+  // Call RsRs function
   CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
   BinaryComputeExRsRs<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }

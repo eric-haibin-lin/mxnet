@@ -9,6 +9,7 @@
 #include <mxnet/ndarray.h>
 #include "../src/executor/graph_executor.h"
 #include "../src/operator/tensor/elemwise_binary_op.h"
+#include "../src/operator/tensor/elemwise_unary_op.h"
 
 #define TEST_DTYPE float
 #define TEST_AUX_TYPE int32_t
@@ -100,7 +101,7 @@ void SetValueTest() {
   CheckDataRegion(nd0.data(), nd1.data());
 }
 
-void BinarySpSpTest() {
+void BinaryRsRsTest() {
   Context ctx = Context::CPU();
 
   TShape index_shape({2});
@@ -122,18 +123,17 @@ void BinarySpSpTest() {
   const_vars.push_back(input_nd0.var());
   const_vars.push_back(input_nd1.var());
 
-      Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
-          nnvm::NodeAttrs attrs;
-          OpContext op_ctx;
-          std::vector<NDArray> inputs, outputs;
-          std::vector<OpReqType> req;
-          inputs.push_back(input_nd0);
-          inputs.push_back(input_nd1);
-          outputs.push_back(output);
-          op::BinaryComputeExSpSp<cpu, cpu>(attrs, op_ctx, inputs, req, outputs);
-        }, input_nd0.ctx(), const_vars, {output.var()},
-        FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
-
+  Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
+      OpContext op_ctx;
+      std::vector<NDArray> inputs, outputs;
+      std::vector<OpReqType> req;
+      inputs.push_back(input_nd0);
+      inputs.push_back(input_nd1);
+      outputs.push_back(output);
+      op::BinaryComputeExRsRs<cpu, cpu>({}, op_ctx, inputs, req, outputs);
+    }, input_nd0.ctx(), const_vars, {output.var()},
+    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+  
   // Check the data region of output ndarray
   NDArray dense_output = GetDenseND(output_shape, ctx, {15, 15, 10, 10, 5, 5, 0, 0});
   NDArray copy = output.ConvertTo<cpu>(kDefaultStorage, nullptr);
@@ -156,7 +156,7 @@ void InferElemwiseStorageTest() {
 
 TEST(NDArray, basics) {
   BasicTest();
-  BinarySpSpTest();
+  BinaryRsRsTest();
   //Wait for all operations to finish
   Engine::Get()->WaitForAll();
   InferElemwiseStorageTest();
@@ -166,7 +166,7 @@ TEST(NDArray, basics) {
 void TestDenseToDenseConversion() {
   Context ctx;
   TShape shape({2, 2});
-  NDArray nd = GetDenseND(shape, ctx, {1, 2, 3, 4});
+  NDArray nd = GetDenseND(shape, ctx, {1, 2, 3, 10});
   auto nd_copy = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
   CheckDataRegion(nd_copy.data(), nd.data());
 }
@@ -184,10 +184,16 @@ void TestSparseToDenseConversion() {
 
   // Dense ndarray
   NDArray dense_nd = GetDenseND(shape, ctx, {1, 1, 0, 0});
-
-  auto converted_nd = nd.ConvertTo<cpu>(kDefaultStorage, nullptr);
-  auto converted_data = converted_nd.data();
-  CheckDataRegion(converted_data, dense_nd.data());
+  NDArray converted(shape, ctx, false);
+  Engine::Get()->PushSync([nd, converted](RunContext ctx) {
+      OpContext op_ctx;
+      op_ctx.run_ctx = ctx;
+      std::vector<NDArray> inputs({nd}), outputs({converted});
+      op::CastStorageComputeEx<cpu>({}, op_ctx, inputs, {}, outputs);
+    }, nd.ctx(), {nd.var()}, {converted.var()},
+    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+  converted.WaitToRead();
+  CheckDataRegion(converted.data(), dense_nd.data());
 }
 
 TEST(NDArray, conversion) {
