@@ -312,20 +312,21 @@ inline void ParamParser(nnvm::NodeAttrs* attrs) {
   attrs->parsed = std::move(param);
 }
 
-template<typename xpu>
+// TODO move to op_util.h
+template <typename xpu>
 void FComputeExFallback(const nnvm::NodeAttrs& attrs,
                         const OpContext& ctx,
                         const std::vector<NDArray>& inputs,
                         const std::vector<OpReqType>& req,
                         const std::vector<NDArray>& outputs,
-                        mshadow::Stream<xpu>* s,
                         FCompute fcompute) {
   std::vector<TBlob> input_blobs, output_blobs;
   std::vector<NDArray> tmp_nds;
-  common::PrepDefaultBlobs<xpu>(inputs, outputs, &input_blobs, &output_blobs,
-                                &tmp_nds, false, s);
+  common::PrepDefaultBlobs<xpu>(inputs, outputs, &input_blobs,
+                                &output_blobs, &tmp_nds, false, ctx);
   fcompute(attrs, ctx, input_blobs, req, output_blobs);
 }
+
 
 }  // namespace op
 }  // namespace mxnet

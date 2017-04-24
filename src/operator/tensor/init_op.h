@@ -124,12 +124,9 @@ void FillComputeEx(const nnvm::NodeAttrs& attrs,
   if (value == 0 && outputs[0].storage_type() != kDefaultStorage) {
     return;
   }
-  // TODO(haibin) Fallback
-  /*
-  MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-    Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);
-    ASSIGN_DISPATCH(out, req[0], scalar<DType>(value));
-  });*/
+  CHECK_EQ(value, 0) << "Not implemented yet";
+  CHECK_EQ(inputs.size(), 0);
+  CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
 }
 
 template<typename xpu, int value>

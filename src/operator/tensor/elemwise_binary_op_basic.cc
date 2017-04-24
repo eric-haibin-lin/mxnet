@@ -32,7 +32,7 @@ NNVM_REGISTER_OP(_backward_add)
                                                                 mshadow_op::identity>)
 .set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>",
                       BinaryBackwardUseNoneEx<cpu, mshadow_op::identity, mshadow_op::identity>)
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_sub)
 .add_alias("_minus").add_alias("_Minus")
@@ -63,6 +63,7 @@ NNVM_REGISTER_OP(_backward_mul)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
+//.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseSameStorageType<1, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseIn<cpu, mshadow_op::right,
                                                               mshadow_op::left>);
 

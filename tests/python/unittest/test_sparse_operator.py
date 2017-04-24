@@ -69,7 +69,41 @@ def test_elemwise_add_sparse_sparse():
     exec_test.backward(out_grads = exec_test.outputs)
     assert_almost_equal(arr_grad1.asnumpy(), arr_grad2.asnumpy())
 
+def test_elemwise_add_multiple_stages():
+    # prep data
+    shape = (4, 2)
+    ds_np = np.array([[1,2],[3,4],[5,6],[7,8]])
+    sp_np1 = np.array([[5,10],[0,0],[0,0],[0,0]])
+    sp_np2 = np.array([[0,0],[5,10],[0,0],[0,0]])
+
+    val1 = mx.nd.array([5, 10]);
+    val2 = mx.nd.array([5, 10]);
+    idx1 = mx.nd.array([0], dtype=np.int32);
+    idx2 = mx.nd.array([1], dtype=np.int32);
+    sp_nd1 = mx.sparse_nd.row_sparse(val1, idx1, shape)
+    sp_nd2 = mx.sparse_nd.row_sparse(val2, idx2, shape)
+    ds_nd = mx.nd.array(ds_np)
+
+    # sparse + sparse = sparse
+    sp_data1 = mx.symbol.Variable('sp_data1', storage_type='row_sparse')
+    sp_data2 = mx.symbol.Variable('sp_data2', storage_type='row_sparse')
+    ds_data = mx.symbol.Variable('ds_data')
+    plus  = mx.symbol.elemwise_add(sp_data1, sp_data2, name='plus')
+    # sparse + dense = dense
+    test  = mx.symbol.elemwise_add(plus, ds_data)
+    check_symbolic_forward(test, {'sp_data1':sp_nd1, 'sp_data2':sp_nd2,
+                          'ds_data':ds_nd}, [sp_np1 + sp_np2 + ds_np])
+
+    arr_grads = [mx.nd.zeros(shape) for i in xrange(3)]
+    exec_test = test.bind(default_context(), args={'sp_data1':sp_nd1, 'sp_data2':sp_nd2,
+                          'ds_data':ds_nd}, args_grad=arr_grads)
+    exec_test.forward(is_train=True)
+    assert_almost_equal(exec_test.outputs[0].asnumpy(), sp_np1 + sp_np2 + ds_np)
+    exec_test.backward(out_grads = exec_test.outputs)
+    assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
+
 if __name__ == '__main__':
     test_elemwise_add_dense()
     test_elemwise_add_dense_sparse()
     test_elemwise_add_sparse_sparse()
+    test_elemwise_add_multiple_stages()

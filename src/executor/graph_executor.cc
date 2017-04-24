@@ -662,20 +662,15 @@ void GraphExecutor::InitCachedOps() {
     for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
       uint32_t eid = idx.entry_id(nid, index);
       exec->out_array.push_back(data_entry_[eid]);
-      if (vstorage_type[eid] != kDefaultStorage) {
-        // FIXME temporarily disable inplace for sparse ndarrays
-        exec->req.push_back(kWriteTo);
+      if (addto_entry.at(eid) != 0) {
+        exec->req.push_back(kAddTo);
+      } else if (vstorage_inplace[eid] >= 0) {
+        exec->req.push_back(kWriteInplace);
+      } else if (vstorage_inplace[eid] == -2) {
+        // -2 indicate that the entry is never referenced.
+       exec->req.push_back(kNullOp);
       } else {
-        if (addto_entry.at(eid) != 0) {
-          exec->req.push_back(kAddTo);
-        } else if (vstorage_inplace[eid] >= 0) {
-          exec->req.push_back(kWriteInplace);
-        } else if (vstorage_inplace[eid] == -2) {
-          // -2 indicate that the entry is never referenced.
-         exec->req.push_back(kNullOp);
-        } else {
-          exec->req.push_back(kWriteTo);
-        }
+        exec->req.push_back(kWriteTo);
       }
     }
   }
@@ -713,7 +708,6 @@ void GraphExecutor::InitCachedOps() {
               std::inserter(all_vars, all_vars.end()));
     // setup exec vars
     Engine::Get()->PushSync([exec](RunContext rctx) {
-        // LOG(INFO) << "Setup.. ";
         exec->Setup();
       }, Context::CPU(), {}, all_vars, FnProperty::kNormal, 0,
       PROFILER_MESSAGE("SetupExec"));
@@ -723,7 +717,7 @@ void GraphExecutor::InitCachedOps() {
       if (is_async) {
         exec->op_ctx.async_on_complete = on_complete;
       }
-      exec->Run(ctx);
+      exec->Run(ctx, is_gpu);
       // call on complete only if it is async op
       if (!is_async) {
         if (is_gpu) {
@@ -955,7 +949,7 @@ GraphExecutor::CachedSegOpr GraphExecutor::CreateCachedSegOpr(size_t topo_start,
       RunContext ctx, Engine::CallbackOnComplete on_complete) {
     // Run all opr in the sub-graph
     for (auto &exec : exec_list) {
-      exec->Run(ctx);
+      exec->Run(ctx, is_gpu);
     }
     if (is_gpu) {
 #if MXNET_USE_CUDA

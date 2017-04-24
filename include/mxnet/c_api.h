@@ -272,11 +272,6 @@ MXNET_DLL int MXNDArrayCreateSparseEx(int storage_type,
                     int *aux_types,
                     NDArrayHandle *out);
 
-// TEMPORARY API FOR TESTING PURPOSE. Conversion should be an op instead
-MXNET_DLL int MXNDArrayConvert(NDArrayHandle in,
-                               int storage_type,
-                               NDArrayHandle *out);
-
 /*!
  * \brief create a NDArray handle that is loaded from raw bytes.
  * \param buf the head of the raw bytes

@@ -131,6 +131,7 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
+// TODO remove this API
 int MXNDArrayCreateSparse(NDArrayHandle data,
                     mx_uint num_aux,
                     NDArrayHandle *aux_vec,
@@ -152,16 +153,6 @@ int MXNDArrayCreateSparse(NDArrayHandle data,
   }
   NDArrayStorageType stype = (NDArrayStorageType) storage_type;
   *out = new NDArray(*data_ptr, aux_ndarrays, ctx, stype, TShape(shape, shape + ndim));
-  API_END();
-}
-
-// TODO(haibin) Should also consider context
-int MXNDArrayConvert(NDArrayHandle in,
-                     int storage_type,
-                     NDArrayHandle *out) {
-  API_BEGIN();
-  NDArray* nd = reinterpret_cast<NDArray*>(in);
-  *out = new NDArray(nd->ConvertTo<cpu>(static_cast<NDArrayStorageType>(storage_type), nullptr));
   API_END();
 }
 
@@ -363,7 +354,6 @@ int MXNDArrayGetStorageType(NDArrayHandle handle,
                      int *out_storage_type) {
   API_BEGIN();
   NDArray *arr = static_cast<NDArray*>(handle);
-  // Check is_none?
   if (!arr->is_none()) {
     *out_storage_type = arr->storage_type();
   } else {

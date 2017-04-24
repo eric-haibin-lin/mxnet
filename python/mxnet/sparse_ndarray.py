@@ -92,11 +92,7 @@ class SparseNDArray(NDArray):
     ''' sparse ndarray '''
     __slots__ = []
 
-    def __repr__(self):
-        """Return a string representation of the array"""
-        # TODO(haibin) also print shape info
-        #shape_info = 'x'.join(['%d' % x for x in self.shape])
-        return '<%s>' % (self.__class__.__name__)
+    #def __repr__(self):
     def __reduce__(self):
         return (SparseNDArray, (None,), self.__getstate__())
     def __add__(self, other):
@@ -160,26 +156,22 @@ class SparseNDArray(NDArray):
     def _slice(self, start, stop):
         raise Exception('Not implemented for SparseND yet!')
     def _at(self, idx):
-        raise Exception('Not implemented for SparseND yet!')
+        raise Exception('at operator for SparseND is not supported.')
     def reshape(self, shape):
         raise Exception('Not implemented for SparseND yet!')
     def broadcast_to(self, shape):
         raise Exception('Not implemented for SparseND yet!')
     #def wait_to_read(self):
-    #inherited from parent
     #@property
     #def shape(self):
-    #inherited from parent
 
     @property
     def size(self):
         raise Exception('Not implemented for SparseND yet!')
-    @property
-    def context(self):
-        raise Exception('Not implemented for SparseND yet!')
-    @property
-    def dtype(self):
-        raise Exception('Not implemented for SparseND yet!')
+    #@property
+    #def context(self):
+    #@property
+    #def dtype(self):
     @property
     # pylint: disable= invalid-name, undefined-variable
     def T(self):
@@ -202,9 +194,8 @@ class SparseNDArray(NDArray):
     def to_dense(self):
         return to_dense(self)
 
-#TODO(haibin) also add aux_types. Not tested yet.
-#We need a to_dense method to test it
-def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t):
+#TODO We need a to_dense method to test it
+def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t, aux_types=None):
     ''' constructor '''
     hdl = NDArrayHandle()
     #TODO currently only supports NDArray input
@@ -212,6 +203,7 @@ def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t):
     assert(isinstance(index, NDArray))
     indices = c_array(NDArrayHandle, [idx.handle, indptr.handle])
     num_aux = mx_uint(2)
+    # TODO create an empty handle with specified types, then assign values
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, num_aux, indices,
         c_array(mx_uint, shape),
@@ -226,13 +218,14 @@ def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t):
 
 # pylint: enable= no-member
 #TODO(haibin) also specify aux_types
-def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
+def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, aux_types=None):
     ''' constructor '''
     hdl = NDArrayHandle()
     assert(isinstance(values, NDArray))
     assert(isinstance(index, NDArray))
     indices = c_array(NDArrayHandle, [index.handle])
     num_aux = mx_uint(1)
+    # TODO create an empty handle with specified types, then assign values
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, num_aux, indices,
         c_array(mx_uint, shape),
@@ -245,7 +238,7 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t):
         ctypes.byref(hdl)))
     return SparseNDArray(hdl)
 
-def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t):
+def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
     # TODO check input array types. Assume NDArray class for now
     # TODO support other types
     assert(storage_type == 'row_sparse')
@@ -253,18 +246,19 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t):
         shape = (shape, )
     if ctx is None:
         ctx = Context.default_ctx
-    arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype)
+    arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype, aux_types=aux_types)
     return arr
 
 # Temporary function for testing purpose
 def to_dense(source):
-    hdl = NDArrayHandle()
+    return ndarray.cast_storage(source, storage_type=1)
+    '''hdl = NDArrayHandle()
     check_call(_LIB.MXNDArrayConvert(
         source.handle, _STORAGE_TYPE_STR_TO_ID['default'],
         ctypes.byref(hdl)))
-    return ndarray.NDArray(handle=hdl, writable=True)
+    return ndarray.NDArray(handle=hdl, writable=True)'''
 
-def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
+def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     """Return a new array of given shape and type, filled with zeros.
 
     Parameters
@@ -294,12 +288,13 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t):
     """
     if ctx is None:
         ctx = Context.default_ctx
-    if storage_type == 'row_sparse':
-        # pylint: disable= no-member, protected-access
-        out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx,
-                                              aux_types=_STORAGE_AUX_TYPES['row_sparse']))
-        return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
-    return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
+    assert(storage_type == 'row_sparse')
+    if aux_types == None:
+        aux_types = _STORAGE_AUX_TYPES['row_sparse']
+    # pylint: disable= no-member, protected-access
+    out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx,
+                                          aux_types=aux_types))
+    return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
     # pylint: enable= no-member, protected-access
 
 _STORAGE_TYPE_TO_ND_CLASS = {
