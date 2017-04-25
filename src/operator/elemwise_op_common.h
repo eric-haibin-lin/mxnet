@@ -119,17 +119,6 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
     attrs, in_attrs, out_attrs, -1);
 }
 
-// Useful for binary multiplication / division
-template<int n_in, int n_out>
-inline bool ElemwiseSameStorageType(const nnvm::NodeAttrs& attrs,
-                         std::vector<int> *in_attrs,
-                         std::vector<int> *out_attrs) {
-  CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
-  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  return ElemwiseStorageAttr<int, type_is_none, type_assign, false, false>(
-    attrs, in_attrs, out_attrs, -1);
-}
-
 inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *in_attrs,
                          std::vector<int> *out_attrs) {

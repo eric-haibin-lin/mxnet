@@ -29,6 +29,7 @@
 
 namespace mxnet {
 // forward declaration
+class NDArray;
 namespace autograd {
 class AGNode;
 
@@ -51,10 +52,11 @@ class AGNodeEntry {
 class AutogradRuntime;
 }  // namespace autograd
 
-// FIXME int64_t is not available mshadow
+// enum for storage types
 #define CSR_IND_PTR_TYPE mshadow::kInt32
 #define CSR_IDX_DTYPE mshadow::kInt32
 #define ROW_SPARSE_IDX_TYPE mshadow::kInt32
+// FIXME int64_t is not available mshadow
 namespace csr {
 enum CSRAuxType {kIndPtr, kIdx};
 }
@@ -69,6 +71,20 @@ enum NDArrayStorageType {
   kRowSparseStorage,  // row sparse
   kCSRStorage,        // csr
 };
+
+/*!
+ * \brief issue an copy operation from one NDArray to another
+ *  the two ndarray can sit on different devices
+ *  this operation will be scheduled by the engine
+ *
+ * \param from the ndarray we want to copy data from
+ * \param to the target ndarray
+ * \param priority Priority of the action.
+ * \param alloc_output whether to allocate memory for the output ndarray
+ * \note The function name explicitly marks the order of from and to
+ *     due to different possible convention carried by copy function.
+ */
+void CopyFromTo(const NDArray &from, NDArray *to, int priority = 0, bool alloc_output = true);
 
 /*!
  * \brief ndarray interface
@@ -120,9 +136,11 @@ class NDArray {
    *  make sure the memory region is available through out the life of NDArray
    * \param data the memory content of static data
    * \param dev_id the device id this tensor sits at
+   * \param shared_var the same var handle shared with others.
+            It will not be deleted during destruction.
    */
-  NDArray(const TBlob &data, int dev_id)
-      : ptr_(std::make_shared<Chunk>(data, dev_id)), shape_(data.shape_), offset_(0),
+  NDArray(const TBlob &data, int dev_id, Engine::VarHandle shared_var = nullptr)
+      : ptr_(std::make_shared<Chunk>(data, dev_id, shared_var)), shape_(data.shape_), offset_(0),
         dtype_(data.type_flag_), entry_({nullptr, 0, 0}) {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
@@ -516,6 +534,8 @@ class NDArray {
     TShape storage_shape;
     // The shape of aux data. The default value for the shape is 0.
     std::vector<TShape> aux_shapes;
+    // \brief skip the deletion of var handle. Usually set when shared_var is present.
+    bool skip_delete_var = false;
 
     /*! \brief construct a new chunk */
     Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
@@ -542,12 +562,12 @@ class NDArray {
       // Copy data
       // Single threaded copy may not saturate memory bandwidth
       CHECK_EQ(nd.storage_type(), kDefaultStorage);
-      auto copy = TBlob(shandle.dptr, storage_shape, shandle.ctx.dev_mask(), data.type_flag_);
-      CopyBlobs(nd, &copy, 0);
+      auto data_blob = TBlob(shandle.dptr, storage_shape, shandle.ctx.dev_mask(), data.type_flag_);
+      NDArray data_wrapper(data_blob, ctx.dev_id, var);
+      CopyFromTo(nd, &data_wrapper, 0, false);
 
       // Aux shapes, types and storage
       CHECK_GT(storage_shape.ndim(), 0);
-      std::vector<TBlob> tmp_blobs;
       for (size_t i = 0; i < nd_aux.size(); i++) {
         const auto &aux_d = nd_aux[i].data();
         aux_shapes.emplace_back(aux_d.shape_);
@@ -559,17 +579,21 @@ class NDArray {
         aux_handles.emplace_back(aux_handle);
         // Copy aux data
         CHECK_EQ(nd_aux[i].storage_type(), kDefaultStorage);
-        tmp_blobs.emplace_back(aux_handle.dptr, aux_shapes[i], ctx.dev_mask(), aux_types[i]);
-        CopyBlobs(nd_aux[i], &tmp_blobs[i], 0);
+        TBlob aux_blob(aux_handle.dptr, aux_shapes[i], ctx.dev_mask(), aux_types[i]);
+        NDArray aux_wrapper(aux_blob, ctx.dev_id, var);
+        CopyFromTo(nd_aux[i], &aux_wrapper, 0, false);
       }
-      Engine::Get()->WaitForVar(var);
     }
 
-    Chunk(const TBlob &data, int dev_id)
-        : static_data(true),
-          delay_alloc(false) {
+    Chunk(const TBlob &data, int dev_id, Engine::VarHandle shared_var)
+        : static_data(true), delay_alloc(false) {
       CHECK(storage_type == kDefaultStorage);
-      var = Engine::Get()->NewVariable();
+      if (shared_var == nullptr) {
+        var = Engine::Get()->NewVariable();
+      } else {
+        skip_delete_var = true;
+        var = shared_var;
+      }
       if (data.dev_mask_ == cpu::kDevMask) {
         shandle.ctx = Context::CPU();
       } else {
@@ -623,9 +647,9 @@ class NDArray {
         storage_shape[0] = num_rows;
       }
     }
-    void CopyBlobs(const NDArray &from, TBlob *ret, int priority);
     /*! \brief destructor */
     ~Chunk() {
+      if (skip_delete_var) return;
       bool skip_free = static_data || delay_alloc;
       Storage::Handle h = this->shandle;
       std::vector<Storage::Handle> aux_h = this->aux_handles;
@@ -655,18 +679,6 @@ class NDArray {
   autograd::AGNodeEntry entry_;
 };
 
-/*!
- * \brief issue an copy operation from one NDArray to another
- *  the two ndarray can sit on different devices
- *  this operation will be scheduled by the engine
- *
- * \param from the ndarray we want to copy data from
- * \param to the target ndarray
- * \param priority Priority of the action.
- * \note The function name explicitly marks the order of from and to
- *     due to different possible convention carried by copy function.
- */
-void CopyFromTo(const NDArray &from, NDArray *to, int priority = 0);
 
 /*!
  * \brief Perform elementwise sum over each data from source, store result into out.

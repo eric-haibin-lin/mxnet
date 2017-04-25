@@ -162,7 +162,8 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(outputs.size(), 1);
   auto out = outputs[0];
   auto in = inputs[0];
-  CHECK(in.storage_type() == kRowSparseStorage);
+  auto stype = in.storage_type();
+  CHECK(stype == kRowSparseStorage);
   MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
     MSHADOW_TYPE_SWITCH(in.aux_type(rowsparse::kIdx), AuxType, {
       // Fill in zeros. SLOW

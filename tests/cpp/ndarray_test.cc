@@ -52,19 +52,19 @@ NDArray Convert(NDArrayStorageType type, NDArray src) {
       // TODO provide type in attrs, which is empty now
       OpContext op_ctx;
       op_ctx.run_ctx = ctx;
-      std::vector<NDArray> inputs({src}), outputs({converted});
-      op::CastStorageComputeEx<cpu>({}, op_ctx, inputs, {}, outputs);
+      if (src.storage_type() == kRowSparseStorage) {
+        std::vector<NDArray> inputs({src}), outputs({converted});
+        op::CastStorageComputeEx<cpu>({}, op_ctx, inputs, {}, outputs);
+      } else if (src.storage_type() == kDefaultStorage) {
+        std::vector<TBlob> inputs({src.data()}), outputs({converted.data()});
+        op::IdentityCompute<cpu>({}, op_ctx, inputs, {kWriteTo}, outputs);
+      } else {
+        LOG(FATAL) << "unsupported storage type";
+      }
     }, src.ctx(), {src.var()}, {converted.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   converted.WaitToRead();
   return converted;
-}
-
-void BasicTest() {
-  Context ctx;
-  TShape shape({1, 2});
-  NDArray nd(shape, ctx, false);
-  EXPECT_NE(nd.data().dptr_, nullptr);
 }
 
 void BinaryDenseSparseTest() {
@@ -126,8 +126,6 @@ void BinaryRsRsTest() {
 
   NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseStorage, data_shape);
   NDArray input_nd1(raw_data1, {index1}, ctx, kRowSparseStorage, data_shape);
-  CheckDataRegion(input_nd0.data(), raw_data0.data());
-  CheckDataRegion(input_nd1.data(), raw_data1.data());
 
   TShape output_shape({4, 2});
   NDArray output(kRowSparseStorage, output_shape, ctx);
@@ -146,9 +144,12 @@ void BinaryRsRsTest() {
     }, input_nd0.ctx(), const_vars, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 
+
   // Check the data region of output ndarray
   NDArray dense_output = GetDenseND(output_shape, ctx, {15, 15, 10, 10, 5, 5, 0, 0});
   NDArray copy = Convert(kDefaultStorage, output);
+  CheckDataRegion(input_nd0.data(), raw_data0.data());
+  CheckDataRegion(input_nd1.data(), raw_data1.data());
   CheckDataRegion(dense_output.data(), copy.data());
 }
 
@@ -167,7 +168,6 @@ void InferElemwiseStorageTest() {
 }
 
 TEST(NDArray, basics) {
-  BasicTest();
   BinaryRsRsTest();
   //Wait for all operations to finish
   Engine::Get()->WaitForAll();
@@ -179,9 +179,8 @@ void TestDenseToDenseConversion() {
   Context ctx;
   TShape shape({2, 2});
   NDArray nd = GetDenseND(shape, ctx, {1, 2, 3, 10});
-  // TODO dense to dense conversion is not implemented yet
-  //auto nd_copy = Convert(kDefaultStorage, nd);
-  //CheckDataRegion(nd_copy.data(), nd.data());
+  auto nd_copy = Convert(kDefaultStorage, nd);
+  CheckDataRegion(nd_copy.data(), nd.data());
 }
 
 // sparse to dense conversion
