@@ -231,13 +231,12 @@ void ScalarOp(const NDArray &lhs,
     default: LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
   }
 }
-// FIXME NDArray storage types may be differnet
 void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
   if (from.var() == to->var()) {
     // skip to copy to itself
     return;
   }
-  CHECK(from.storage_type() == to->storage_type());
+  CHECK(from.storage_type() == to->storage_type()) << "Copying with different storage type";
   CHECK(from.shape() == to->shape())
       << "operands shape mismatch"
       << "from.shape = " << from.shape() << " to.shape=" << to->shape();

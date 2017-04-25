@@ -70,16 +70,16 @@ inline void PrepVars(const std::vector<NDArray> &nds,
 }
 
 // Only dispatch based on input storage type for now.
-inline NDArrayStorageType GetDispatchStorageType(const nnvm::StorageTypeVector& vstorage_type) {
-  NDArrayStorageType dispatch_storage_type = kDefaultStorage;
-  for (auto& i : vstorage_type) {
+inline NDArrayStorageType GetDispatchStorageType(const nnvm::StorageTypeVector& vstorage) {
+  NDArrayStorageType storage_type = kDefaultStorage;
+  for (auto& i : vstorage) {
     if (i != kDefaultStorage) {
       CHECK_NE(i, -1);
-      dispatch_storage_type = NDArrayStorageType(i);
+      storage_type = NDArrayStorageType(i);
       break;
     }
   }
-  return dispatch_storage_type;
+  return storage_type;
 }
 
 inline FCompute GetFCompute(const Op* op, Context ctx) {
