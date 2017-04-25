@@ -527,34 +527,27 @@ class NDArray {
       shandle.ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
     }
-    Chunk(const NDArray &nd_data, const std::vector<NDArray> &nd_aux, Context ctx_,
+    Chunk(const NDArray &nd, const std::vector<NDArray> &nd_aux, Context ctx_,
           NDArrayStorageType storage_type_)
         : static_data(false), delay_alloc(false), storage_type(storage_type_), ctx(ctx_) {
       // Vars
       var = Engine::Get()->NewVariable();
       // Data Storage
-      const auto &data = nd_data.data();
+      const auto &data = nd.data();
       storage_shape = data.shape_;
       shandle.ctx = ctx;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
       shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
 
       // Copy data
-      // TODO(haibin) refactor. Single threaded copy is slow.
-      nd_data.WaitToRead();
-      CHECK_EQ(nd_data.storage_type(), kDefaultStorage);
-      CHECK_EQ(nd_data.dtype(), data.type_flag_);
-      CHECK_EQ(shandle.ctx.dev_mask(), cpu::kDevMask)
-               << "Sparse NDArray on GPU not yet supported";
-      MSHADOW_TYPE_SWITCH(nd_data.dtype(), DType, {
-        auto copy = TBlob(static_cast<DType*>(shandle.dptr), storage_shape,
-                          shandle.ctx.dev_mask(), data.type_flag_);
-        mshadow::Copy(copy.FlatTo1D<cpu, DType>(), data.FlatTo1D<cpu, DType>());
-      });
+      // Single threaded copy may not saturate memory bandwidth
+      CHECK_EQ(nd.storage_type(), kDefaultStorage);
+      auto copy = TBlob(shandle.dptr, storage_shape, shandle.ctx.dev_mask(), data.type_flag_);
+      CopyBlobs(nd, &copy, 0);
 
       // Aux shapes, types and storage
-      storage_shape = data.shape_;
       CHECK_GT(storage_shape.ndim(), 0);
+      std::vector<TBlob> tmp_blobs;
       for (size_t i = 0; i < nd_aux.size(); i++) {
         const auto &aux_d = nd_aux[i].data();
         aux_shapes.emplace_back(aux_d.shape_);
@@ -564,19 +557,12 @@ class NDArray {
         aux_handle.size = aux_shapes[i].Size() * mshadow::mshadow_sizeof(aux_types[i]);
         aux_handle = Storage::Get()->Alloc(aux_handle.size, aux_handle.ctx);
         aux_handles.emplace_back(aux_handle);
-
         // Copy aux data
-        nd_aux[i].WaitToRead();
         CHECK_EQ(nd_aux[i].storage_type(), kDefaultStorage);
-        CHECK_EQ(nd_aux[i].dtype(), aux_types[i]);
-        CHECK_EQ(aux_handle.ctx.dev_mask(), cpu::kDevMask)
-                 << "Sparse NDArray on GPU not yet supported";
-        MSHADOW_TYPE_SWITCH(nd_aux[i].dtype(), DType, {
-          auto copy = TBlob((aux_handle.dptr), aux_shapes[i],
-                            ctx.dev_mask(), aux_types[i]);
-          mshadow::Copy(copy.FlatTo1D<cpu, DType>(), aux_d.FlatTo1D<cpu, DType>());
-        });
+        tmp_blobs.emplace_back(aux_handle.dptr, aux_shapes[i], ctx.dev_mask(), aux_types[i]);
+        CopyBlobs(nd_aux[i], &tmp_blobs[i], 0);
       }
+      Engine::Get()->WaitForVar(var);
     }
 
     Chunk(const TBlob &data, int dev_id)
@@ -637,6 +623,7 @@ class NDArray {
         storage_shape[0] = num_rows;
       }
     }
+    void CopyBlobs(const NDArray &from, TBlob *ret, int priority);
     /*! \brief destructor */
     ~Chunk() {
       bool skip_free = static_data || delay_alloc;
@@ -680,7 +667,6 @@ class NDArray {
  *     due to different possible convention carried by copy function.
  */
 void CopyFromTo(const NDArray &from, NDArray *to, int priority = 0);
-
 
 /*!
  * \brief Perform elementwise sum over each data from source, store result into out.

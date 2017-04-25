@@ -231,6 +231,7 @@ void ScalarOp(const NDArray &lhs,
     default: LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
   }
 }
+
 void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
   if (from.var() == to->var()) {
     // skip to copy to itself
@@ -319,6 +320,40 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority) {
     LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
   }
+}
+// Copy the data of an NDArray to a TBlob
+void NDArray::Chunk::CopyBlobs(const NDArray &from, TBlob *ret, int priority) {
+  auto ret_ctx = ctx;
+  auto a = from.ctx().dev_mask();
+  auto b = ctx.dev_mask();
+  if (a == cpu::kDevMask && b == cpu::kDevMask) {
+    Engine::Get()->PushSync([from, ret, ret_ctx](RunContext rctx) {
+        TBlob ret_blob = *ret;
+        ndarray::Copy<cpu, cpu>(from.data(), &ret_blob,
+                                from.ctx(), ret_ctx, rctx);
+      }, from.ctx(), {from.var()}, {var},
+      FnProperty::kNormal, priority, PROFILER_MESSAGE("CopyBlobCPU2CPU"));
+  } else {
+#if MXNET_USE_CUDA
+    if (a == cpu::kDevMask && b == gpu::kDevMask) {
+      Engine::Get()->PushSync([from, ret, ret_ctx](RunContext rctx) {
+          TBlob ret_blob = *ret;
+          ndarray::Copy<cpu, gpu>(from.data(), &ret_blob,
+                                  from.ctx(), ret_ctx, rctx);
+          rctx.get_stream<gpu>()->Wait();
+        }, ctx, {from.var()}, {var},
+        FnProperty::kCopyToGPU, priority, PROFILER_MESSAGE("CopyBlobCPU2GPU"));
+    } else if (a == gpu::kDevMask && b == cpu::kDevMask) {
+      LOG(FATAL) << "gpu - cpu blob copy not supported yet";
+    } else if (a == gpu::kDevMask && b == gpu::kDevMask) {
+      LOG(FATAL) << "gpu - gpu blob copy not supported yet";
+    } else {
+      LOG(FATAL) << "unknown device mask";
+    }
+#else
+   LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
+#endif
+   }
 }
 
 void ElementwiseSum(const std::vector<NDArray> &source, NDArray *out, int priority) {
