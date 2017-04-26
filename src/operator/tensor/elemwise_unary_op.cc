@@ -116,7 +116,7 @@ NNVM_REGISTER_OP(cast_storage)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 // _backward pass
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"})
+// .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"})
 .set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>", CastStorageComputeEx<cpu>)
 .add_argument("data", "NDArray-or-Symbol", "The input.")
 .add_arguments(CastStorageParam::__FIELDS__());
