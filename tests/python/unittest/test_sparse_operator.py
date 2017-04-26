@@ -102,8 +102,21 @@ def test_elemwise_add_multiple_stages():
     exec_test.backward(out_grads = exec_test.outputs)
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
+def test_cast_storage():
+    dns_np = np.array([[0, 0], [5, 10], [0, 0], [0, 0], [0, 0]])
+
+    val = np.array([5, 10])
+    idx = np.array([1])
+    b = mx.nd.array(idx, dtype=np.int32)
+    sp_nd = mx.sparse_nd.array(val, [b], 'row_sparse', (5,2))
+    var = mx.symbol.Variable('sp_data', storage_type='row_sparse')
+    # 1 for row_storage type
+    test = mx.symbol.cast_storage(var, storage_type=1)
+    check_symbolic_forward(test, {'sp_data':sp_nd}, [dns_np])
+
 if __name__ == '__main__':
     test_elemwise_add_dense()
     test_elemwise_add_dense_sparse()
     test_elemwise_add_sparse_sparse()
     test_elemwise_add_multiple_stages()
+    test_cast_storage()

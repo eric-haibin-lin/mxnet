@@ -165,7 +165,7 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   auto stype = in.storage_type();
   CHECK(stype == kRowSparseStorage);
   MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(in.aux_type(rowsparse::kIdx), AuxType, {
+    MSHADOW_TYPE_SWITCH(in.aux_type(rowsparse::kIdx), IType, {
       // Fill in zeros. SLOW
       out.data().FlatTo1D<xpu, DType>(s) = 0;
       // data() is not empty
@@ -174,7 +174,7 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
         auto in_data = in.data().FlatTo2D<xpu, DType>(s);
         auto out_data = out.data().FlatTo2D<xpu, DType>(s);
         auto num_rows = in.aux_shape(rowsparse::kIdx)[0];
-        auto in_idx = in.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+        auto in_idx = in.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
         for (size_t i = 0; i < num_rows; i += 1) {
           mshadow::Copy(out_data[in_idx[i]], in_data[i], s);
         }
