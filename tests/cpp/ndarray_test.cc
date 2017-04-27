@@ -140,7 +140,7 @@ void BinaryRsRsTest() {
       inputs.push_back(input_nd0);
       inputs.push_back(input_nd1);
       outputs.push_back(output);
-      op::BinaryComputeRsRs<cpu, cpu>({}, op_ctx, inputs, req, outputs);
+      op::BinaryComputeRspRsp<cpu, cpu>({}, op_ctx, inputs, req, outputs);
     }, input_nd0.ctx(), const_vars, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 
@@ -157,12 +157,12 @@ void InferElemwiseStorageTest() {
   nnvm::NodeAttrs attrs;
   attrs.name = "Test op";
   std::vector<int> in_attrs({kRowSparseStorage, kDefaultStorage});
-  std::vector<int> out_attrs({-1});
+  std::vector<int> out_attrs({kUndefinedStorage});
 
   op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
   EXPECT_EQ(out_attrs[0], kDefaultStorage);
   in_attrs = {kDefaultStorage, kRowSparseStorage};
-  out_attrs = {-1};
+  out_attrs = {kUndefinedStorage};
   op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
   EXPECT_EQ(out_attrs[0], kDefaultStorage);
 }

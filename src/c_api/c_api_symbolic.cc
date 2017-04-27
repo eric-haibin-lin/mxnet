@@ -513,7 +513,7 @@ int MXSymbolInferStorageType(SymbolHandle sym,
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   API_BEGIN();
   nnvm::Graph g = Symbol2Graph(*s);
-  nnvm::StorageTypeVector arg_storage_types(g.indexed_graph().input_nodes().size(), -1);
+  nnvm::StorageTypeVector arg_storage_types(g.indexed_graph().input_nodes().size());
   if (keys == nullptr && num_args != 0) {
     std::vector<uint32_t> read_only_args = mxnet::ReadOnlyArgIndices(g.indexed_graph());
     CHECK_LE(num_args, read_only_args.size());

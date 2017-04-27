@@ -56,22 +56,22 @@ template<typename AttrType, bool (*is_none)(const AttrType&),
          bool enable_fallback>
 inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
                          std::vector<AttrType> *in_attrs,
-                         std::vector<AttrType> *out_attrs,
-                         const AttrType& none) {
+                         std::vector<AttrType> *out_attrs) {
   // LOG(INFO) << "ElemwiseStorageAttr for " << attrs.name;
   auto deduce = [&](std::vector<AttrType> *vec, const char *name, AttrType& result,
                     bool fallback) {
+      auto &v = *vec;
       for (size_t i = 0; i < vec->size(); ++i) {
         // LOG(INFO) << "deduce " << (*vec)[i];
-        CHECK_NE((*vec)[i], -1) << "ElemwiseStorageAttr assumes all input storage types are known";
-        if (assign(&result, (*vec)[i]) == false && fallback) {
+        if (v[i] == kUndefinedStorage) {
+          // if input type is unknown, assume it's default storage
+          CHECK(assign(&v[i], kDefaultStorage));
+        } else if (assign(&result, v[i]) == false && fallback) {
           result = kDefaultStorage;
-          // LOG(INFO) << "ElemwiseStorageAttr Fallback";
-          return;
         }
       }
     };
-  AttrType dattr = none;
+  AttrType dattr = kUndefinedStorage;
   deduce(in_attrs, "input", dattr, enable_fallback);
   if (reverse_infer) {
     LOG(FATAL) << "not implemented yet";
@@ -83,8 +83,8 @@ inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
           << name << ": " << "expected " << dattr << ", got " << (*vec)[i];
       }
     };
+  if (is_none(dattr)) dattr = kDefaultStorage;
   write(out_attrs, "output");
-  if (is_none(dattr)) return false;
   return true;
 }
 
@@ -114,8 +114,8 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  return ElemwiseStorageAttr<int, type_is_none, type_assign, false, true>(
-    attrs, in_attrs, out_attrs, -1);
+  return ElemwiseStorageAttr<int, storage_type_is_none, storage_type_assign, false, true>(
+    attrs, in_attrs, out_attrs);
 }
 
 inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
@@ -123,8 +123,8 @@ inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(2)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(1)) << " in operator " << attrs.name;
-  return ElemwiseAttr<int, type_is_none, type_assign, false>(
-    attrs, in_attrs, out_attrs, -1);
+  return ElemwiseStorageAttr<int, storage_type_is_none, storage_type_assign, false, false>(
+    attrs, in_attrs, out_attrs);
 }
 
 // Transfer gradient and input to FGradient function

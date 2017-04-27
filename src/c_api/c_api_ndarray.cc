@@ -119,15 +119,14 @@ void SetContext(Context* p_ctx,
     ctx = Context::CPU();
   }
 }
-// Also set the chunk type
+// Set the shape, dtype and storage type
 void SetShapeType(const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
                   const Context& ctx,
                   const std::vector<NDArray>& ndinputs,
                   const int& infered_num_outputs,
                   std::vector<NDArray>* p_ndoutputs,
-                  NDArrayStorageType* contains_storage_type) {
-  *contains_storage_type = kDefaultStorage;
+                  int* dispatch_stype) {
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
@@ -177,11 +176,7 @@ void SetShapeType(const nnvm::Op* op,
     in_storage_types.push_back(i.storage_type());
   }
   for (auto& i : ndoutputs) {
-    int storage_type = i.storage_type();
-    if (storage_type == kUndefinedStorage) {
-      storage_type = -1;
-    }
-    out_storage_types.push_back(storage_type);
+    out_storage_types.push_back(i.storage_type());
   }
   if (inferstorage.count(op)) {
     CHECK(inferstorage[op](attrs, &in_storage_types, &out_storage_types));
@@ -190,26 +185,16 @@ void SetShapeType(const nnvm::Op* op,
     // LOG(INFO) << "FInferStorageType not present.";
   }
 
-  // TODO(haibin) replace with common::
-  for (auto &i : in_storage_types) {
-    CHECK_NE(i, -1);
-    if (i != kDefaultStorage) {
-      *contains_storage_type = static_cast<NDArrayStorageType>(i);
-      break;
-    }
-  }
-  for (auto &i : out_storage_types) {
-    if (i != kDefaultStorage && i != -1) {
-      *contains_storage_type = static_cast<NDArrayStorageType>(i);
-      break;
-    }
-  }
+  bool contains_non_default = common::ContainsNonDefaultStorage(in_storage_types);
+  contains_non_default |= common::ContainsNonDefaultStorage(out_storage_types);
+  int kNonDefaultStorage = -2;
+  *dispatch_stype = contains_non_default ? kNonDefaultStorage : kDefaultStorage;
 
   for (int i = 0; i < infered_num_outputs; ++i) {
     NDArrayStorageType storage_type = static_cast<NDArrayStorageType>(out_storage_types[i]);
     if (ndoutputs[i].is_none()) {
       // If failed to infer the storage type, assume the output storage is dense
-      if (storage_type == kDefaultStorage || out_storage_types[i] == -1) {
+      if (storage_type == kDefaultStorage || out_storage_types[i] == kUndefinedStorage) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
         ndoutputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i]);
@@ -265,7 +250,6 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
   if (mutate.count(op)) {
     auxidx = mutate[op](attrs);
     std::sort(auxidx.begin(), auxidx.end());
-    // TODO(haibin) replace with common::PrepVars
     for (auto& i : auxidx) {
       auto var = ndinputs[i].var();
       write_vars.push_back(var);
@@ -435,7 +419,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
   } else {
     // TODO(piiswrong): infer ctx
     Context ctx;
-    NDArrayStorageType storage_type;
+    int storage_type;
     SetContext(&ctx, attrs, num_inputs, ndinputs, infered_num_outputs, ndoutputs);
     SetShapeType(op, attrs, ctx, ndinputs, infered_num_outputs, &ndoutputs, &storage_type);
 

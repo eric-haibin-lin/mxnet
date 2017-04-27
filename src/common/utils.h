@@ -36,7 +36,6 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
 namespace common {
 
 #if DMLC_USE_CXX11
-// TODO move to op_utils.h
 template <typename xpu>
 inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
                              const std::vector<NDArray>& ndoutputs,
@@ -64,22 +63,25 @@ inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
 inline void PrepVars(const std::vector<NDArray> &nds,
                      std::vector<Engine::VarHandle> *vars) {
   for (auto& i : nds) {
-    auto v = i.var();
-    vars->push_back(v);
+    vars->push_back(i.var());
   }
 }
 
-// Only dispatch based on input storage type for now.
-inline NDArrayStorageType GetDispatchStorageType(const nnvm::StorageTypeVector& vstorage) {
-  NDArrayStorageType storage_type = kDefaultStorage;
+// Check if any storage type is not default storage
+inline bool ContainsNonDefaultStorage(const nnvm::StorageTypeVector& vstorage) {
   for (auto& i : vstorage) {
-    if (i != kDefaultStorage) {
-      CHECK_NE(i, -1);
-      storage_type = NDArrayStorageType(i);
-      break;
+    if (i != kUndefinedStorage && i != kDefaultStorage) return true;
+  }
+  return false;
+}
+
+inline bool ContainsDefaultStorage(const std::vector<NDArray>& ndarrays) {
+  for (auto &nd : ndarrays) {
+    if (nd.storage_type() == kDefaultStorage) {
+      return true;
     }
   }
-  return storage_type;
+  return false;
 }
 
 inline FCompute GetFCompute(const Op* op, Context ctx) {
@@ -94,31 +96,19 @@ inline FCompute GetFCompute(const Op* op, Context ctx) {
   return nullptr;
 }
 
-inline FComputeEx GetFComputeEx(const Op* op, Context ctx,
-                                NDArrayStorageType storage_type) {
-  static auto& fcpu_non_default = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_CPU_NON_DEFAULT);
-  static auto& fgpu_non_default = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_GPU_NON_DEFAULT);
-  static auto& fcpu = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_CPU_DEFAULT);
-  static auto& fgpu = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_GPU_DEFAULT);
+inline FComputeEx GetFComputeEx(const Op* op, Context ctx, int stype) {
+  static auto& fcpu = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_CPU);
+  static auto& fgpu = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_GPU);
+  if (stype == kDefaultStorage) return nullptr;
   if (ctx.dev_mask() == cpu::kDevMask) {
-    if (storage_type == kDefaultStorage) return fcpu.get(op, nullptr);
-    return fcpu_non_default.get(op, nullptr);
+    return fcpu.get(op, nullptr);
   } else if (ctx.dev_mask() == gpu::kDevMask) {
-    if (storage_type == kDefaultStorage) return fgpu.get(op, nullptr);
-    return fgpu_non_default.get(op, nullptr);
+    return fgpu.get(op, nullptr);
   }
   LOG(FATAL) << "Unknown device mask";
   return nullptr;
 }
 
-inline bool HasDefaultStorage(const std::vector<NDArray>& ndarrays) {
-  for (auto &nd : ndarrays) {
-    if (nd.storage_type() == kDefaultStorage) {
-      return true;
-    }
-  }
-  return false;
-}
 
 // heuristic to dermine number of threads per GPU
 inline int GetNumThreadPerGPU() {

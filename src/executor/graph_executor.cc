@@ -427,7 +427,7 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   }
   arg_shapes.resize(idx.input_nodes().size(), TShape());
   arg_types.resize(idx.input_nodes().size(), -1);
-  arg_storage_types.resize(idx.input_nodes().size(), -1);
+  arg_storage_types.resize(idx.input_nodes().size(), kUndefinedStorage);
   // other initializations
   g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
   g = nnvm::pass::InferType(g, arg_types, "__dtype__");
@@ -435,7 +435,7 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   // dispatch on a per op basis
-  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes(), -1);
+  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes());
   for (size_t nid = 0; nid < idx.num_nodes(); nid++) {
       const auto& inode = idx[nid];
       auto num_outputs = inode.source->num_outputs();
@@ -444,14 +444,14 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
       for (size_t i = 0; i < num_inputs; i++) {
         auto e = inode.inputs[i];
         vs[i] = vstorage_type[idx.entry_id(e)];
-        CHECK_NE(vs[i], -1);
+        CHECK_NE(vs[i], kUndefinedStorage);
       }
       for (uint32_t i = 0; i < num_outputs; ++i) {
         uint32_t eid = idx.entry_id(nid, i);
         vs[i + num_inputs] = vstorage_type[eid];
       }
-      int dispatch_storage_type = common::GetDispatchStorageType(vs);
-      dispatch_stypes[nid] = dispatch_storage_type;
+      bool contains_non_default = common::ContainsNonDefaultStorage(vs);
+      dispatch_stypes[nid] = contains_non_default ? kNonDefaultStorage : kDefaultStorage;
   }
   g.attrs["dispatch_storage_types"] = std::make_shared<dmlc::any>(std::move(dispatch_stypes));
 

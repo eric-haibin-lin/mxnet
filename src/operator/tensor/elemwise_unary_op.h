@@ -160,7 +160,7 @@ struct CastStorageParam : public dmlc::Parameter<CastStorageParam> {
 };
 
 template<typename xpu>
-void CastStorageComputeRspDsn(const nnvm::NodeAttrs& attrs,
+void CastStorageComputeRspDns(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
                  const std::vector<NDArray>& inputs,
                  const std::vector<OpReqType>& req,
@@ -207,7 +207,7 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(outputs.size(), 1);
   auto stype = inputs[0].storage_type();
   if (stype == kRowSparseStorage) {
-    CastStorageComputeRspDsn<xpu>(attrs, ctx, inputs, req, outputs);
+    CastStorageComputeRspDns<xpu>(attrs, ctx, inputs, req, outputs);
   } else {
     LOG(FATAL) << "Not implemented";
   }

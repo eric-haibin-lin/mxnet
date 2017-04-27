@@ -80,6 +80,10 @@ inline bool type_is_none(const int& x) {
   return x == -1;
 }
 
+/*! \brief check if storage type is none (-1) */
+inline bool storage_type_is_none(const int& x) {
+  return x == kUndefinedStorage;
+}
 /*!
  * \brief Assign x to y. Checks for compatiblity when y is not empty.
  *  Allow missing dim in both x and y (as 0).
@@ -121,6 +125,21 @@ inline bool type_assign(int *y, const int& x) {
   return true;
 }
 
+/*!
+ * \brief Assign x to y. Checks for compatiblity when y is not -1.
+ * \param y target type.
+ * \param x source type.
+ * \return whether x and y are compatible.
+ */
+inline bool storage_type_assign(int *y, const int& x) {
+  if (*y == kUndefinedStorage) {
+    *y = x;
+    return true;
+  } else if (*y != x && x != kUndefinedStorage) {
+    return false;
+  }
+  return true;
+}
 /*!
  * \brief macro assign shape to out if out is unknown otherwise check consistency
  *  Use macro so we can see the error file more clearly

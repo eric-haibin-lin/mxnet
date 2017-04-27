@@ -33,7 +33,7 @@ NNVM_REGISTER_OP(_backward_cast)
 
 NNVM_REGISTER_OP(cast_storage)
 .set_attr<FCompute>("FCompute<gpu>", IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_GPU_NON_DEFAULT, CastStorageComputeEx<gpu>);
+.set_attr<FComputeEx>(FCOMP_EX_GPU, CastStorageComputeEx<gpu>);
 
 // negative
 NNVM_REGISTER_OP(negative)

@@ -15,6 +15,7 @@
 #endif
 #include "../common/utils.h"
 
+#define EXEC_DISPATCH_DEBUG 0
 namespace mxnet {
 
 namespace op {
@@ -232,10 +233,12 @@ Graph AttachOpExecs(Graph g) {
     if (fmutate_inputs.count(inode.source->op())) {
       mutate_index = fmutate_inputs[inode.source->op()](inode.source->attrs);
     }
-    NDArrayStorageType dispatch_stype = static_cast<NDArrayStorageType>(dispatch_stypes[i]);
     FCompute fcompute = common::GetFCompute(inode.source->op(), vctx[i]);
     FComputeEx fcompute_ex =
-      common::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stype);
+      common::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stypes[i]);
+#if EXEC_DISPATCH_DEBUG
+    LOG(INFO) << "dispatch type = " << dispatch_stypes[i];
+#endif
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;
       std::vector<int> itype;
@@ -261,12 +264,12 @@ Graph AttachOpExecs(Graph g) {
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
     } else if (fcompute_ex != nullptr) {
-#if EXECUTOR_DEBUG
+#if EXEC_DISPATCH_DEBUG
       LOG(INFO) << "FComputeEx for op " << inode.source->op()->name;
 #endif
       ret[i] = std::make_shared<FComputeExExecutor>(fcompute_ex, inode.source->attrs);
     } else if (fcompute != nullptr) {
-#if EXECUTOR_DEBUG
+#if EXEC_DISPATCH_DEBUG
       LOG(INFO) << "FCompute for op " << inode.source->op()->name;
 #endif
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);

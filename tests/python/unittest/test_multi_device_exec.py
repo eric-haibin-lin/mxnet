@@ -49,17 +49,11 @@ def check_ctx_group_sparse(mode='dense_sparse'):
       data2 = mx.symbol.Variable('data2')
     elif mode == 'dense_sparse':
       data1 = mx.symbol.Variable('data1')
-      #data1 = mx.symbol.Variable('data1', storage_type='row_sparse')
       data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
 
     mlp  = mx.symbol.elemwise_add(data1, data2, name='plus')
     texec = mlp.simple_bind(mx.cpu(0), data1=(3,2), data2=(3,2))
-    print("Done simple_bind")
     output = texec.forward()
-
-    print(output[0].asnumpy())
-    for arr, name in zip(texec.arg_arrays, mlp.list_arguments()):
-         pass
 
 '''
 This tests the simple bind function

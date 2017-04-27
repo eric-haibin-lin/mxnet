@@ -36,7 +36,7 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
 // TODO(haibin) This is an inefficient temporary implementation
 // Binary Compute between two row-sparse ndarray
 template<typename xpu, typename OP>
-void BinaryComputeRsRs(const nnvm::NodeAttrs& attrs,
+void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
@@ -119,14 +119,13 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(outputs.size(), 1);
   if (typeid(OP) == typeid(mshadow::op::plus)) {
     // If any input is dense, fallback to FCompute
-    if (common::HasDefaultStorage(inputs)) {
+    if (common::ContainsDefaultStorage(inputs)) {
       FComputeExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
       return;
     }
     CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
     CHECK_EQ(inputs[1].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
-    // Call RsRs function
-    BinaryComputeRsRs<xpu, Op>(attrs, ctx, inputs, req, outputs);
+    BinaryComputeRspRsp<xpu, Op>(attrs, ctx, inputs, req, outputs);
     return;
   } else {
     LOG(FATAL) << "Not implemented";
