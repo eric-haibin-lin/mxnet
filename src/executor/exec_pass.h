@@ -23,6 +23,8 @@ const int kBadStorageID = -1;
 const int kExternalStorageID = -2;
 const int kDynamicStorageID = -3;
 
+const int kNonDefaultStorage = -2;
+
 /*!
  * \brief executor to execute an operator
  * This is a graph executor dependent interface

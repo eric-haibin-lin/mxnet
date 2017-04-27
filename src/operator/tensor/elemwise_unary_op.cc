@@ -83,7 +83,7 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 .set_attr<nnvm::FIgnoreInputs>("FIgnoreInputs",
     [](const NodeAttrs& attrs) { return std::vector<uint32_t>(1, 1); })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
-.set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>", IdentityComputeEx<cpu>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, IdentityComputeEx<cpu>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", IdentityAttrLikeRhsStorageType)
 .set_attr<nnvm::FGradient>(
@@ -127,7 +127,9 @@ NNVM_REGISTER_OP(_backward_cast)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
 .set_attr<FCompute>("FCompute<cpu>", CastCompute<cpu>);
 
-// TODO(haibin) declare backward op for cast storage. Also add FCompute(identity compute)
+// TODO(haibin) declare backward op for cast storage
+// Only support cast to default storage now
+// Other types require add infer_storage type pass
 NNVM_REGISTER_OP(cast_storage)
 .describe(R"code(Casts tensor storage type to the new type.
 )code" ADD_FILELINE)
@@ -136,7 +138,10 @@ NNVM_REGISTER_OP(cast_storage)
 .set_attr_parser(ParamParser<CastStorageParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
-.set_attr<FComputeEx>("FComputeEx<cpu, row_sparse>", CastStorageComputeEx<cpu>)
+.set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
+// _backward pass
+// .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"})
+.set_attr<FComputeEx>(FCOMP_EX_CPU, CastStorageComputeEx<cpu>)
 .add_argument("data", "NDArray-or-Symbol", "The input.")
 .add_arguments(CastStorageParam::__FIELDS__());
 

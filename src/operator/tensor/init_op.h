@@ -111,24 +111,6 @@ inline bool InitType(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
-
-template<typename xpu, int value>
-void FillComputeEx(const nnvm::NodeAttrs& attrs,
-                 const OpContext& ctx,
-                 const std::vector<NDArray>& inputs,
-                 const std::vector<OpReqType>& req,
-                 const std::vector<NDArray>& outputs) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (value == 0 && outputs[0].storage_type() != kDefaultStorage) {
-    return;
-  }
-  CHECK_EQ(value, 0) << "Not implemented yet";
-  CHECK_EQ(inputs.size(), 0);
-  CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
-}
-
 template<typename xpu, int value>
 void FillCompute(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
@@ -144,6 +126,20 @@ void FillCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
+template<typename xpu, int value>
+void FillComputeEx(const nnvm::NodeAttrs& attrs,
+                 const OpContext& ctx,
+                 const std::vector<NDArray>& inputs,
+                 const std::vector<OpReqType>& req,
+                 const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  CHECK_EQ(outputs.size(), 1);
+  CHECK_EQ(inputs.size(), 0);
+  auto stype = outputs[0].storage_type();
+  CHECK_EQ(value, 0) << "Not implemented yet";
+}
 
 template<typename xpu>
 void RangeCompute(const nnvm::NodeAttrs& attrs,

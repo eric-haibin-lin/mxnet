@@ -429,7 +429,7 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   }
   arg_shapes.resize(idx.input_nodes().size(), TShape());
   arg_types.resize(idx.input_nodes().size(), -1);
-  arg_storage_types.resize(idx.input_nodes().size(), -1);
+  arg_storage_types.resize(idx.input_nodes().size(), kUndefinedStorage);
   // other initializations
   g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
   g = nnvm::pass::InferType(g, arg_types, "__dtype__");
@@ -437,15 +437,23 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   // dispatch on a per op basis
-  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes(), -1);
+  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes());
   for (size_t nid = 0; nid < idx.num_nodes(); nid++) {
       const auto& inode = idx[nid];
-      nnvm::StorageTypeVector vs;
-      for (const auto& e : inode.inputs) {
-        vs.emplace_back(vstorage_type[idx.entry_id(e)]);
+      auto num_outputs = inode.source->num_outputs();
+      auto num_inputs = inode.inputs.size();
+      nnvm::StorageTypeVector vs(num_inputs + num_outputs);
+      for (size_t i = 0; i < num_inputs; i++) {
+        auto e = inode.inputs[i];
+        vs[i] = vstorage_type[idx.entry_id(e)];
+        CHECK_NE(vs[i], kUndefinedStorage);
       }
-      int dispatch_storage_type = common::GetDispatchStorageType(vs);
-      dispatch_stypes[nid] = dispatch_storage_type;
+      for (uint32_t i = 0; i < num_outputs; ++i) {
+        uint32_t eid = idx.entry_id(nid, i);
+        vs[i + num_inputs] = vstorage_type[eid];
+      }
+      bool contains_non_default = common::ContainsNonDefaultStorage(vs);
+      dispatch_stypes[nid] = contains_non_default ? kNonDefaultStorage : kDefaultStorage;
   }
   g.attrs["dispatch_storage_types"] = std::make_shared<dmlc::any>(std::move(dispatch_stypes));
 
@@ -512,13 +520,11 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     NDArrayStorageType storage_type = (NDArrayStorageType) vstorage_type[eid];
     CHECK_NE(vshape[eid].ndim(), 0U);
     CHECK_NE(vdtype[eid], -1);
-    // enable sparse gradient update, init NDArray based on storage_type
+    // init NDArray based on storage_type
     if (storage_type != kDefaultStorage) {
-      // std::cout << "Sparse NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       data_entry_[idx.entry_id(nid, 0)] =
         NDArray(storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
     } else {
-      // std::cout << "Dense  NDArray for head gradient " << idx.entry_id(nid, 0) << std::endl;
       data_entry_[idx.entry_id(nid, 0)] =
         NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
@@ -602,10 +608,8 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       CHECK_GE(storage_id, 0) << "Do not support runtime shape op yet";
       const NDArray& src = data_pool_.at(storage_id);
       data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
-      // std::cout << "Dense AsNDArray " << i << "\n";
     } else {
       data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
-      // std::cout << "Sparse NDArray " << i << "\n";
     }
   }
 }

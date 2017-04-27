@@ -146,6 +146,21 @@ inline bool type_assign(int *y, const int& x) {
 }
 
 /*!
+ * \brief Assign x to y. Checks for compatiblity when y is not -1.
+ * \param y target type.
+ * \param x source type.
+ * \return whether x and y are compatible.
+ */
+inline bool storage_type_assign(int *y, const int& x) {
+  if (*y == kUndefinedStorage) {
+    *y = x;
+    return true;
+  } else if (*y != x && x != kUndefinedStorage) {
+    return false;
+  }
+  return true;
+}
+/*!
  * \brief macro assign shape to out if out is unknown otherwise check consistency
  *  Use macro so we can see the error file more clearly
  * \param shape_array the shape array to store the result

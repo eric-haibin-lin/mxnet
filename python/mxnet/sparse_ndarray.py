@@ -241,7 +241,13 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, a
 def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
     # TODO check input array types. Assume NDArray class for now
     # TODO support other types
+    # TODO also specify auxtypes
     assert(storage_type == 'row_sparse')
+    if not isinstance(values, NDArray):
+       values = ndarray.array(values)
+    for i, index in enumerate(index_list):
+       if not isinstance(index, NDArray):
+           index_list[i] = ndarray.array(index)
     if isinstance(shape, int):
         shape = (shape, )
     if ctx is None:
@@ -249,14 +255,8 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
     arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype, aux_types=aux_types)
     return arr
 
-# Temporary function for testing purpose
 def to_dense(source):
-    return ndarray.cast_storage(source, storage_type=1)
-    '''hdl = NDArrayHandle()
-    check_call(_LIB.MXNDArrayConvert(
-        source.handle, _STORAGE_TYPE_STR_TO_ID['default'],
-        ctypes.byref(hdl)))
-    return ndarray.NDArray(handle=hdl, writable=True)'''
+    return ndarray.cast_storage(source, storage_type=_STORAGE_TYPE_STR_TO_ID['default'])
 
 def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     """Return a new array of given shape and type, filled with zeros.
