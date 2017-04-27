@@ -7,7 +7,6 @@
 #ifndef MXNET_OP_ATTR_TYPES_H_
 #define MXNET_OP_ATTR_TYPES_H_
 
-
 #include <mshadow/tensor.h>
 #include <nnvm/op_attr_types.h>
 
@@ -17,6 +16,11 @@
 #include "./base.h"
 #include "./operator.h"
 #include "./ndarray.h"
+
+#define FCOMP_EX_CPU_DEFAULT "FComputeEx<cpu, default>"
+#define FCOMP_EX_GPU_DEFAULT "FComputeEx<gpu, default>"
+#define FCOMP_EX_CPU_NON_DEFAULT "FComputeEx<cpu, non-default>"
+#define FCOMP_EX_GPU_NON_DEFAULT "FComputeEx<gpu, non-default>"
 
 namespace mxnet {
 
@@ -64,8 +68,9 @@ using FCompute = std::function<void (const nnvm::NodeAttrs& attrs,
 /*!
  * \brief Resiger an NDArray compute function for simple stateless forward only operator
  *
- * \note Register under "FComputeEx<cpu, `storage_type`>" and "FComputeEx<gpu, `storage_type`>" 
- * e.g FComputeEx<cpu, row_sparse>
+ * \note Register under "FComputeEx<xpu, default>" and "FComputeEx<xpu, non-default>" 
+ *       FComputeEx<xpu, default> is dispatched only for operators with default storage inputs & outputs
+ *       FComputeEx<xpu, non-default> otherwise
  */
 using FComputeEx = std::function<void (const nnvm::NodeAttrs& attrs,
                                      const OpContext& ctx,

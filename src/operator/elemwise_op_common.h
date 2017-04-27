@@ -114,7 +114,6 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  // TODO(haibin) not doing inverse infer yet
   return ElemwiseStorageAttr<int, type_is_none, type_assign, false, true>(
     attrs, in_attrs, out_attrs, -1);
 }

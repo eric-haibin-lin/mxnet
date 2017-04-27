@@ -138,7 +138,6 @@ class BackwardOpExecutor : public OpExecutor {
 class FComputeExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
-    // std::cout << "FCompute::Run" << std::endl;
     op_ctx.run_ctx = rctx;
     if (!initialized) {
       if (is_gpu) {
@@ -159,7 +158,6 @@ class FComputeExecutor : public OpExecutor {
     mkl_tblobs_prv_to_cpu(in_data_);
     mkl_tblobs_prv_to_cpu(out_data_);
 #endif
-    // std::cout << "FCompute::Done" << std::endl;
   }
   void Setup() override {
     in_array_ = in_array;
@@ -184,10 +182,8 @@ class FComputeExecutor : public OpExecutor {
 class FComputeExExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
-    // std::cout << "FComputeExExecutor::Run" << std::endl;
     op_ctx.run_ctx = rctx;
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
-    // std::cout << "FComputeExExecutor::Done" << std::endl;
   }
   void Setup() override {
     in_data_ = in_array;

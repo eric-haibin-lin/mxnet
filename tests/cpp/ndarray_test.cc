@@ -140,7 +140,7 @@ void BinaryRsRsTest() {
       inputs.push_back(input_nd0);
       inputs.push_back(input_nd1);
       outputs.push_back(output);
-      op::BinaryComputeExRsRs<cpu, cpu>({}, op_ctx, inputs, req, outputs);
+      op::BinaryComputeRsRs<cpu, cpu>({}, op_ctx, inputs, req, outputs);
     }, input_nd0.ctx(), const_vars, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 

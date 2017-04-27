@@ -10,6 +10,7 @@
 #include <vector>
 #include <string>
 #include <utility>
+#include <typeinfo>
 #include "../mshadow_op.h"
 #include "../elemwise_op_common.h"
 
@@ -35,7 +36,7 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
 // TODO(haibin) This is an inefficient temporary implementation
 // Binary Compute between two row-sparse ndarray
 template<typename xpu, typename OP>
-void BinaryComputeExRsRs(const nnvm::NodeAttrs& attrs,
+void BinaryComputeRsRs(const nnvm::NodeAttrs& attrs,
                          const OpContext& ctx,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
@@ -52,7 +53,6 @@ void BinaryComputeExRsRs(const nnvm::NodeAttrs& attrs,
   auto num_rows_r = nd_r.aux_shape(rowsparse::kIdx)[0];
   // This is (roughly) the number of result rows
   output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
-  // LOG(INFO) << "BinaryComputeExRsRs" << output.aux_shape(rowsparse::kIdx)[0];
   // Indices
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
@@ -115,14 +115,22 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  // If any input is dense, fallback to FCompute
-  if (common::HasDefaultStorage(inputs)) {
-    FComputeExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
+  CHECK_EQ(inputs.size(), 2);
+  CHECK_EQ(outputs.size(), 1);
+  if (typeid(OP) == typeid(mshadow::op::plus)) {
+    // If any input is dense, fallback to FCompute
+    if (common::HasDefaultStorage(inputs)) {
+      FComputeExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
+      return;
+    }
+    CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
+    CHECK_EQ(inputs[1].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
+    // Call RsRs function
+    BinaryComputeRsRs<xpu, Op>(attrs, ctx, inputs, req, outputs);
     return;
+  } else {
+    LOG(FATAL) << "Not implemented";
   }
-  // Call RsRs function
-  CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
-  BinaryComputeExRsRs<xpu, Op>(attrs, ctx, inputs, req, outputs);
 }
 
 template<typename xpu, typename LOP, typename ROP>
@@ -145,7 +153,7 @@ void BinaryBackwardUseNone(const nnvm::NodeAttrs& attrs,
 
 // Only implemented for _backward_add for now
 template<typename xpu, typename LOP, typename ROP>
-void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
+void BinaryBackwardUseNoneRsp(const nnvm::NodeAttrs& attrs,
                            const OpContext& ctx,
                            const std::vector<NDArray>& inputs,
                            const std::vector<OpReqType>& req,
@@ -153,12 +161,9 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (inputs[0].storage_type() == kDefaultStorage) {
-    LOG(FATAL) << "BinaryBackwardUseNoneEx fallback not implemented yet";
-  }
-  // LOG(INFO) << "BinaryBackwardUseNoneEx";
-  // The following code assumes LOP == mshadow_op::identity == ROP
   CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
+  CHECK(typeid(LOP) == typeid(mshadow_op::identity));
+  CHECK(typeid(ROP) == typeid(mshadow_op::identity));
   TShape shape = inputs[0].aux_shape(rowsparse::kIdx);
   outputs[0].CheckAndAlloc({shape});
   outputs[1].CheckAndAlloc({shape});
@@ -176,6 +181,20 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
       ASSIGN_DISPATCH(rgrad_idx, req[1], F<ROP>(ograd_idx));
     });
   });
+}
+// Only implemented for _backward_add for now
+template<typename xpu, typename LOP, typename ROP>
+void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
+                           const OpContext& ctx,
+                           const std::vector<NDArray>& inputs,
+                           const std::vector<OpReqType>& req,
+                           const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  auto stype = inputs[0].storage_type();
+  CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
+  BinaryBackwardUseNoneRsp<xpu, LOP, ROP>(attrs, ctx, inputs, req, outputs);
 }
 
 template<typename xpu, typename LOP, typename ROP>

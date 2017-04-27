@@ -48,7 +48,6 @@ void IdentityCompute(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  // LOG(INFO) << "IdentityCompute";
   if (req[0] == kNullOp) return;
   if (req[0] == kWriteInplace) {
     CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
@@ -59,10 +58,8 @@ void IdentityCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
-// FIXME the index is hard coded for _identity_with_attr_like_rhs op
-// Only implemented for row_sparse for now
 template<typename xpu>
-void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
+void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
                      const OpContext& ctx,
                      const std::vector<NDArray>& inputs,
                      const std::vector<OpReqType>& req,
@@ -70,17 +67,13 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  // LOG(INFO) << "IdentityComputeEx";
   NDArrayStorageType storage_type = inputs[1].storage_type();
-  CHECK_EQ(storage_type, kRowSparseStorage)
-     << "storage type " << storage_type << " not supported yet";
+  CHECK_EQ(storage_type, kRowSparseStorage);
   if (req[0] == kNullOp) {
     LOG(FATAL) << "kNullOp in IdentityComputeEx not supported yet";
-    return;
   }
   if (req[0] == kWriteInplace) {
     LOG(FATAL) << "kWriteInplace for sparse storage not supported yet";
-    // CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
   }
   TShape shape = inputs[1].aux_shape(rowsparse::kIdx);
   if (shape.ndim() == 0) return;
@@ -95,6 +88,23 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
       ASSIGN_DISPATCH(out_aux, req[0], F<mshadow_op::identity>(in_aux));
     });
   });
+}
+
+// FIXME the index is hard coded for _identity_with_attr_like_rhs op
+template<typename xpu>
+void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
+                     const OpContext& ctx,
+                     const std::vector<NDArray>& inputs,
+                     const std::vector<OpReqType>& req,
+                     const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  CHECK_EQ(inputs.size(), 2);
+  CHECK_EQ(outputs.size(), 1);
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  NDArrayStorageType stype = inputs[1].storage_type();
+  CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
+  IdentityComputeRsp<xpu>(attrs, ctx, inputs, req, outputs);
 }
 
 struct CastParam : public dmlc::Parameter<CastParam> {
@@ -150,7 +160,7 @@ struct CastStorageParam : public dmlc::Parameter<CastStorageParam> {
 };
 
 template<typename xpu>
-void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
+void CastStorageComputeRspDsn(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
                  const std::vector<NDArray>& inputs,
                  const std::vector<OpReqType>& req,
@@ -163,7 +173,8 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   auto out = outputs[0];
   auto in = inputs[0];
   auto stype = in.storage_type();
-  CHECK(stype == kRowSparseStorage);
+  CHECK_EQ(stype, kRowSparseStorage);
+  CHECK_EQ(out.storage_type(), kDefaultStorage);
   MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
     MSHADOW_TYPE_SWITCH(in.aux_type(rowsparse::kIdx), IType, {
       // Fill in zeros. SLOW
@@ -181,6 +192,25 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
       }
     });
   });
+}
+
+template<typename xpu>
+void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
+                 const OpContext& ctx,
+                 const std::vector<NDArray>& inputs,
+                 const std::vector<OpReqType>& req,
+                 const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  CHECK_EQ(inputs.size(), 1);
+  CHECK_EQ(outputs.size(), 1);
+  auto stype = inputs[0].storage_type();
+  if (stype == kRowSparseStorage) {
+    CastStorageComputeRspDsn<xpu>(attrs, ctx, inputs, req, outputs);
+  } else {
+    LOG(FATAL) << "Not implemented";
+  }
 }
 
 #define MXNET_OPERATOR_REGISTER_UNARY(name)                         \

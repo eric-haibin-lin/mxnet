@@ -96,17 +96,16 @@ inline FCompute GetFCompute(const Op* op, Context ctx) {
 
 inline FComputeEx GetFComputeEx(const Op* op, Context ctx,
                                 NDArrayStorageType storage_type) {
-  static auto& fcpu_rs = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu, row_sparse>");
-  static auto& fgpu_rs = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<gpu, row_sparse>");
-  static auto& fcpu_csr = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu, csr>");
-  static auto& fgpu_csr = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<gpu, csr>");
-  if (storage_type == kDefaultStorage) return nullptr;
+  static auto& fcpu_non_default = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_CPU_NON_DEFAULT);
+  static auto& fgpu_non_default = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_GPU_NON_DEFAULT);
+  static auto& fcpu = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_CPU_DEFAULT);
+  static auto& fgpu = nnvm::Op::GetAttr<FComputeEx>(FCOMP_EX_GPU_DEFAULT);
   if (ctx.dev_mask() == cpu::kDevMask) {
-    if (storage_type == kRowSparseStorage) return fcpu_rs.get(op, nullptr);
-    if (storage_type == kCSRStorage) return fcpu_csr.get(op, nullptr);
+    if (storage_type == kDefaultStorage) return fcpu.get(op, nullptr);
+    return fcpu_non_default.get(op, nullptr);
   } else if (ctx.dev_mask() == gpu::kDevMask) {
-    if (storage_type == kRowSparseStorage) return fgpu_rs.get(op, nullptr);
-    if (storage_type == kCSRStorage) return fgpu_csr.get(op, nullptr);
+    if (storage_type == kDefaultStorage) return fgpu.get(op, nullptr);
+    return fgpu_non_default.get(op, nullptr);
   }
   LOG(FATAL) << "Unknown device mask";
   return nullptr;

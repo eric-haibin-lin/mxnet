@@ -469,6 +469,7 @@ class NDArray {
    * This is an internal function used by system that normal user should not use
    */
   inline void CheckAndAlloc() const {
+    CHECK_EQ(storage_type(), kDefaultStorage);
     ptr_->CheckAndAlloc();
   }
   /* !
@@ -476,9 +477,17 @@ class NDArray {
    * aux_shape is only known at run time
    */
   inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes) const {
+    CHECK_NE(storage_type(), kDefaultStorage);
     ptr_->CheckAndAlloc(shape_, aux_shapes, dtype_);
   }
-
+  inline void CheckAndAllocData(const TShape &storage_shape) const {
+    CHECK_NE(storage_type(), kDefaultStorage);
+    ptr_->CheckAndAllocData(storage_shape, dtype_);
+  }
+  inline void CheckAndAllocAuxData(size_t i, const TShape &aux_shape) const {
+    CHECK_NE(storage_type(), kDefaultStorage);
+    ptr_->CheckAndAllocAuxData(i, aux_shape);
+  }
   /*!
    * \brief Save list of narray into the Stream.x
    * \param fo The stream of output.
@@ -504,7 +513,6 @@ class NDArray {
   // shandle is used to store the actual values in the NDArray
   // aux_handles store the aux data(such as indices) if it's needed by non-default storage.
   struct Chunk {
-    // every time a new element is added to a non default storage
     /*! \brief storage handle from storage engine.
                for non-default storage, shandle stores the data(value) array.
      */
@@ -521,7 +529,7 @@ class NDArray {
      * from Storage, and do not need to be freed
      */
     bool static_data;
-    /*! \brief whether allocation is delayed */
+    /*! \brief whether allocation is delayed. */
     bool delay_alloc;
     /*! \brief construct from static data */
     NDArrayStorageType storage_type = kDefaultStorage;
@@ -618,34 +626,49 @@ class NDArray {
     }
     /*! \brief check if delay alloc is on, do alloc if not yet done */
     inline void CheckAndAlloc(void) {
-      // Should only be used for kDefaultStorage
-      if (storage_type != kDefaultStorage) {
-        LOG(FATAL) << "CheckAndAlloc with " << storage_type;
-      }
       if (delay_alloc) {
         shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
         delay_alloc = false;
       }
     }
-    inline void CheckAndAlloc(TShape shape, const std::vector<TShape> &aux_shapes, int dtype) {
-      CHECK_EQ(storage_type, kRowSparseStorage) << "Not yet implemented";
+    inline void CheckAndAlloc(const TShape &shape, const std::vector<TShape> &aux_shapes, int dtype) {
       // calculate size, perform allocation
       if (delay_alloc) {
-        // For row sparse storage, aux_shape indicates the number of rows to allocate
+        CHECK_EQ(storage_type, kRowSparseStorage) << "Not yet implemented";
+        // For row sparse, aux_shape indicates the number of rows to allocate
         auto aux_shape = aux_shapes[0];
-        CHECK_EQ(aux_shape.ndim(), 1);
-        auto num_rows = aux_shape[0];
         CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
-        auto dbytes = num_rows * shape[1] * mshadow::mshadow_sizeof(dtype);
-        auto aux_bytes = num_rows * mshadow::mshadow_sizeof(aux_types[0]);
-        shandle = Storage::Get()->Alloc(dbytes, ctx);
-        aux_handles.push_back(Storage::Get()->Alloc(aux_bytes, ctx));
-        delay_alloc = false;
-        // Initialize shapes
-        this->aux_shapes = aux_shapes;
-        storage_shape = shape;
-        storage_shape[0] = num_rows;
+        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
+        TShape storage_shape(shape);
+        storage_shape[0] = aux_shape[0];
+        CheckAndAllocData(storage_shape, dtype);
       }
+    }
+    inline void CheckAndAllocData(const TShape &shape, int dtype) {
+      CHECK_NE(aux_shapes.size(), 0) << "data is expected to be allocated after aux_data";
+      storage_shape = shape;
+      auto dbytes = shape.Size() * mshadow::mshadow_sizeof(dtype);
+      shandle = Storage::Get()->Alloc(dbytes, ctx);
+      // delay_alloc is only set when data storage handle is present
+      delay_alloc = false;
+    }
+    inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
+      CHECK_EQ(aux_shapes.size(), aux_handles.size());
+      if (aux_shapes.size() <= i) {
+        aux_shapes.resize(i + 1);
+        aux_handles.resize(i + 1);
+      }
+      // Initialize shape
+      aux_shapes[i] = shape;
+      // Init aux storage
+      Storage::Handle aux_handle;
+      if (storage_type == kRowSparseStorage) {
+        auto aux_bytes = shape[0] * mshadow::mshadow_sizeof(aux_types[i]);
+        aux_handle = Storage::Get()->Alloc(aux_bytes, ctx);
+      } else if (storage_type == kCSRStorage) {
+        LOG(FATAL) << "Not implemented";
+      }
+      aux_handles[i] = aux_handle;
     }
     /*! \brief destructor */
     ~Chunk() {
