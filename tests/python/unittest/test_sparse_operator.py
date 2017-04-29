@@ -119,4 +119,3 @@ if __name__ == '__main__':
     test_elemwise_add_dense_sparse()
     test_elemwise_add_sparse_sparse()
     test_elemwise_add_multiple_stages()
-    test_cast_storage()

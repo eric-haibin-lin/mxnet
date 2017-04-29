@@ -63,7 +63,6 @@ NNVM_REGISTER_OP(_backward_mul)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
-//.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseSameStorageType<1, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseIn<cpu, mshadow_op::right,
                                                               mshadow_op::left>);
 
