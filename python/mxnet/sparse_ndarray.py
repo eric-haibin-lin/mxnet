@@ -43,17 +43,17 @@ except ImportError:
 
 # pylint: enable= no-member
 _STORAGE_TYPE_ID_TO_STR = {
-    0 : 'undefined',
-    1 : 'default',
-    2 : 'row_sparse',
-    3 : 'csr',
+    -1 : 'undefined',
+    0  : 'default',
+    1  : 'row_sparse',
+    2  : 'csr',
 }
 
 _STORAGE_TYPE_STR_TO_ID = {
-    'undefined' : 0,
-    'default' : 1,
-    'row_sparse' : 2,
-    'csr' : 3,
+    'undefined'  : -1,
+    'default'    : 0,
+    'row_sparse' : 1,
+    'csr'        : 2,
 }
 
 _STORAGE_AUX_TYPES = {
@@ -244,7 +244,7 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
     # TODO also specify auxtypes
     assert(storage_type == 'row_sparse')
     if not isinstance(values, NDArray):
-       values = ndarray.array(values)
+        values = ndarray.array(values)
     for i, index in enumerate(index_list):
        if not isinstance(index, NDArray):
            index_list[i] = ndarray.array(index)
@@ -298,8 +298,8 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     # pylint: enable= no-member, protected-access
 
 _STORAGE_TYPE_TO_ND_CLASS = {
-    1 : ndarray.NDArray,
-    2 : SparseNDArray,
-    3 : SparseNDArray
+    _STORAGE_TYPE_STR_TO_ID['default']  : ndarray.NDArray,
+    _STORAGE_TYPE_STR_TO_ID['row_sparse'] : SparseNDArray,
+    _STORAGE_TYPE_STR_TO_ID['csr']        : SparseNDArray,
 }
 _init_ndarray_module(_STORAGE_TYPE_TO_ND_CLASS, "mxnet")

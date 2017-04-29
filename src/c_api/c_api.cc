@@ -131,7 +131,7 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
-// TODO remove this API
+// TODO(haibin) remove this API
 int MXNDArrayCreateSparse(NDArrayHandle data,
                     mx_uint num_aux,
                     NDArrayHandle *aux_vec,
@@ -357,7 +357,7 @@ int MXNDArrayGetStorageType(NDArrayHandle handle,
   if (!arr->is_none()) {
     *out_storage_type = arr->storage_type();
   } else {
-    *out_storage_type = -1;
+    *out_storage_type = kUndefinedStorage;
   }
   API_END();
 }

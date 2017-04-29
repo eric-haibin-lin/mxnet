@@ -435,12 +435,12 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
 
   // dispatch on a per op basis
-  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes());
+  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes(), kUndefinedStorage);
   for (size_t nid = 0; nid < idx.num_nodes(); nid++) {
       const auto& inode = idx[nid];
       auto num_outputs = inode.source->num_outputs();
       auto num_inputs = inode.inputs.size();
-      nnvm::StorageTypeVector vs(num_inputs + num_outputs);
+      nnvm::StorageTypeVector vs(num_inputs + num_outputs, kUndefinedStorage);
       for (size_t i = 0; i < num_inputs; i++) {
         auto e = inode.inputs[i];
         vs[i] = vstorage_type[idx.entry_id(e)];
@@ -492,11 +492,11 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   CHECK_EQ(idx.num_node_entries(), vstorage.size());
   CHECK_EQ(data_entry_.size(), vshape.size());
   std::vector<Context> data_context(idx.num_node_entries());
-  std::vector<NDArrayStorageType> data_storage_type(idx.num_node_entries());
+  std::vector<NDArrayStorageType> data_storage_type(idx.num_node_entries(), kUndefinedStorage);
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     for (uint32_t i = 0; i < idx[nid].source->num_outputs(); ++i) {
       data_context[idx.entry_id(nid, i)] = vctx[nid];
-      CHECK_NE(vstorage_type[nid], -1);
+      CHECK_NE(vstorage_type[nid], kUndefinedStorage);
       data_storage_type[idx.entry_id(nid, i)] = (NDArrayStorageType) vstorage_type[nid];
     }
   }
@@ -863,7 +863,9 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
 #else
       bool profiling = false;
 #endif
-      // LOG(INFO) << "Running " << nid;
+#if EXECUTOR_DEBUG
+      LOG(INFO) << "Running node " << nid << " - " << seg_op.topo_end - 1;
+#endif
       Engine::Get()->Push(seg_op.opr, seg_op.ctx, 0, profiling);
       nid = seg_op.topo_end - 1;
       continue;
@@ -874,7 +876,9 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
     OpNode& opnode = op_nodes_[nid];
     if (op_nodes_[nid].skip_exec_node) continue;
     opnode.exec->op_ctx.is_train = is_train;
-    // LOG(INFO) << "Running " << nid;
+#if EXECUTOR_DEBUG
+      LOG(INFO) << "Running node " << nid;
+#endif
     if (opnode.exec->exec_type() == Operator::kCrossDeviceCopy) {
       CHECK_EQ(inode.inputs.size(), 1U);
       CHECK_EQ(opnode.exec->in_array.size(), 1U);

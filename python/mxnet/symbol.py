@@ -508,7 +508,7 @@ class Symbol(SymbolBase):
     def infer_storage_type(self, *args, **kwargs):
         # TODO(haibin) refactor with dtype
         # FIXME update doc
-        """Infer the chunk type of outputs and arguments of given known types of arguments.
+        """Infer the storage type of outputs and arguments of given known types of arguments.
 
         User can either pass in the known types in positional way or keyword argument way.
         Tuple of Nones is returned if there is not enough information passed in.
@@ -548,8 +548,7 @@ class Symbol(SymbolBase):
                         raise TypeError('Argument need to be one of '+str(_STORAGE_TYPE_STR_TO_ID))
                     sdata.append(_STORAGE_TYPE_STR_TO_ID[s])
                 else:
-                    #FIXME -1 or 0 for unknown / error chunk type?
-                    sdata.append(-1)
+                    sdata.append(_STORAGE_TYPE_STR_TO_ID['undefined'])
         else:
             keys = []
             for k, v in kwargs.items():

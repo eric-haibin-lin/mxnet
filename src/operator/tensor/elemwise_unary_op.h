@@ -206,7 +206,8 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(inputs.size(), 1);
   CHECK_EQ(outputs.size(), 1);
   auto stype = inputs[0].storage_type();
-  if (stype == kRowSparseStorage) {
+  auto out_stype = outputs[0].storage_type();
+  if (stype == kRowSparseStorage && out_stype == kDefaultStorage) {
     CastStorageComputeRspDns<xpu>(attrs, ctx, inputs, req, outputs);
   } else {
     LOG(FATAL) << "Not implemented";

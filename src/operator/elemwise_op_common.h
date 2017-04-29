@@ -114,7 +114,7 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  return ElemwiseStorageAttr<int, storage_type_is_none, storage_type_assign, false, true>(
+  return ElemwiseStorageAttr<int, type_is_none, type_assign, false, true>(
     attrs, in_attrs, out_attrs);
 }
 
@@ -123,7 +123,7 @@ inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(2)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(1)) << " in operator " << attrs.name;
-  return ElemwiseStorageAttr<int, storage_type_is_none, storage_type_assign, false, false>(
+  return ElemwiseStorageAttr<int, type_is_none, type_assign, false, false>(
     attrs, in_attrs, out_attrs);
 }
 

@@ -66,10 +66,10 @@ enum RowSparseAuxType {kIdx};
 }
 
 enum NDArrayStorageType {
-  kUndefinedStorage,  // undefined storage
-  kDefaultStorage,    // dense
-  kRowSparseStorage,  // row sparse
-  kCSRStorage,        // csr
+  kUndefinedStorage = -1,  // undefined storage
+  kDefaultStorage,         // dense
+  kRowSparseStorage,       // row sparse
+  kCSRStorage,             // csr
 };
 
 /*!
@@ -120,9 +120,13 @@ class NDArray {
       : shape_(shape), offset_(0), dtype_(dtype), entry_({nullptr, 0, 0}) {
       // Assign default aux types if not given
       if (aux_types.size() == 0) {
-        if (storage_type == kRowSparseStorage) aux_types = {ROW_SPARSE_IDX_TYPE};
-        else if (storage_type == kCSRStorage) aux_types = {CSR_IND_PTR_TYPE, CSR_IDX_DTYPE};
-        else LOG(FATAL) << "Unknown storage type";
+        if (storage_type == kRowSparseStorage) {
+          aux_types = {ROW_SPARSE_IDX_TYPE};
+        } else if (storage_type == kCSRStorage) {
+          aux_types = {CSR_IND_PTR_TYPE, CSR_IDX_DTYPE};
+        } else {
+          LOG(FATAL) << "Unknown storage type";
+        }
       }
       ptr_ = std::make_shared<Chunk>(ctx, delay_alloc, aux_types, storage_type);
 #if MKL_EXPERIMENTAL == 1
@@ -631,7 +635,8 @@ class NDArray {
         delay_alloc = false;
       }
     }
-    inline void CheckAndAlloc(const TShape &shape, const std::vector<TShape> &aux_shapes, int dtype) {
+    inline void CheckAndAlloc(const TShape &shape, const std::vector<TShape> &aux_shapes,
+                              int dtype) {
       // calculate size, perform allocation
       if (delay_alloc) {
         CHECK_EQ(storage_type, kRowSparseStorage) << "Not yet implemented";
