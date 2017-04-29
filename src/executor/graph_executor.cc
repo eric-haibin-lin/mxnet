@@ -468,10 +468,9 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
       data_entry_[eid] = kv.second;
       arg_storage_id[eid] = kExternalStorageID;
     }
-    /*
     for (size_t i = 0; i < idx.num_node_entries(); i++) {
       if (vstorage_type[i] != kDefaultStorage) arg_storage_id[i] = kDynamicStorageID;
-    }*/
+    }
     g.attrs["storage"] = std::make_shared<dmlc::any>(std::move(arg_storage_id));
     g = nnvm::ApplyPass(g, "PlanMemory");
   }

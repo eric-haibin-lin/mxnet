@@ -435,7 +435,7 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     FComputeEx fcomp_ex = common::GetFComputeEx(op, ctx, storage_type);
     if (fcomp_ex) {
       PushFComputeEx(fcomp_ex, op, attrs, ctx, read_vars, write_vars, requested,
-                     &ndinputs, &ndoutputs);
+                     ndinputs, ndoutputs);
     } else if (fn) {
       if (AutogradRuntime::Get()->IsTraining()) {
         AutogradRuntime::Get()->RecordImperativeFCompute(fn, op,

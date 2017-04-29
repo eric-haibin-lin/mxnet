@@ -172,11 +172,14 @@ def %s(%s):
         c_array(ctypes.c_char_p, [c_str(val) for val in vals])))
     if original_output is not None:
         return original_output
-    if num_output.value == 1:
-        return _ndarray_cls(ctypes.cast(output_vars[0], NDArrayHandle))
-    else:
-        return [_ndarray_cls(ctypes.cast(output_vars[i], NDArrayHandle))
-                for i in range(num_output.value)]
+    ret_list = []
+    for i in xrange(num_output.value):
+        storage_type = ctypes.c_int(0)
+        check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(output_vars[i], NDArrayHandle),
+                                                ctypes.byref(storage_type)))
+        ret_list.append(_ndarray_cls_map[storage_type.value](ctypes.cast(output_vars[i], \
+                                                             NDArrayHandle)))
+    return ret_list if num_output.value > 1 else ret_list[0]
 """%handle.value)
 
     local = {}

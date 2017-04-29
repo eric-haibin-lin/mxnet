@@ -204,6 +204,7 @@ def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t, au
     indices = c_array(NDArrayHandle, [idx.handle, indptr.handle])
     num_aux = mx_uint(2)
     # TODO create an empty handle with specified types, then assign values
+    assert(aux_types is None)
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, num_aux, indices,
         c_array(mx_uint, shape),
@@ -217,7 +218,6 @@ def csr(values, indptr, idx, shape, ctx=Context.default_ctx, dtype=mx_real_t, au
     return SparseNDArray(hdl)
 
 # pylint: enable= no-member
-#TODO(haibin) also specify aux_types
 def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, aux_types=None):
     ''' constructor '''
     hdl = NDArrayHandle()
@@ -225,6 +225,8 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, a
     assert(isinstance(index, NDArray))
     indices = c_array(NDArrayHandle, [index.handle])
     num_aux = mx_uint(1)
+    assert(aux_types is None)
+    #TODO(haibin) also specify aux_types
     # TODO create an empty handle with specified types, then assign values
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, num_aux, indices,
@@ -239,6 +241,7 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, a
     return SparseNDArray(hdl)
 
 def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
+    ''' constructor '''
     # TODO check input array types. Assume NDArray class for now
     # TODO support other types
     # TODO also specify auxtypes
@@ -246,8 +249,8 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
     if not isinstance(values, NDArray):
         values = ndarray.array(values)
     for i, index in enumerate(index_list):
-       if not isinstance(index, NDArray):
-           index_list[i] = ndarray.array(index)
+        if not isinstance(index, NDArray):
+            index_list[i] = ndarray.array(index)
     if isinstance(shape, int):
         shape = (shape, )
     if ctx is None:
@@ -289,7 +292,7 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     if ctx is None:
         ctx = Context.default_ctx
     assert(storage_type == 'row_sparse')
-    if aux_types == None:
+    if aux_types is None:
         aux_types = _STORAGE_AUX_TYPES['row_sparse']
     # pylint: disable= no-member, protected-access
     out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx,
