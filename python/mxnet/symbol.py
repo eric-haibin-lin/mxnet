@@ -1123,11 +1123,8 @@ class Symbol(SymbolBase):
                 else attrs[k]['__storage_type__'] for k in self.list_arguments()}
         arg_shapes, _, aux_shapes = self.infer_shape(**kwargs)
         arg_types, _, aux_types = self.infer_type(**type_dict)
-        # print(storage_type_dict)
         arg_storage_types, _, _ = \
             self.infer_storage_type(**storage_type_dict)
-        # print("arg_storage_types", arg_storage_types)
-        # print("out_storage_types", out_storage_types)
 
         if arg_shapes is None or arg_types is None:
             raise ValueError("Input node is not complete")
@@ -1147,7 +1144,7 @@ class Symbol(SymbolBase):
         # alloc space
         arg_ndarrays = [
             # avoid allocating dense ndarrays for sparse inputs
-            _nd_zeros(shape, dev, dtype=dtype) if storage_type != 'row_sparse'
+            _nd_zeros(shape, dev, dtype=dtype) if storage_type == 'default'
             else _sparse_nd_zeros(storage_type, shape, dev, dtype=dtype)
             for dtype, dev, shape, storage_type in \
                 zip(arg_types, arg_ctx, arg_shapes, arg_storage_types)]
@@ -1156,7 +1153,12 @@ class Symbol(SymbolBase):
             for name, shape, dev, dtype in zip(
                     self.list_arguments(), arg_shapes, arg_ctx, arg_types):
                 if not isinstance(grad_req, dict) or grad_req[name] != 'null':
-                    grad_ndarrays[name] = _nd_zeros(shape, dev, dtype=dtype)
+                    # TODO(haibin) temporarily set gradient stype for embedding op
+                    if name != 'embed_weight':
+                        grad_ndarrays[name] = _nd_zeros(shape, dev, dtype=dtype)
+                    else:
+                        grad_ndarrays[name] = _sparse_nd_zeros('row_sparse', shape,
+                                                               dev, dtype=dtype)
         else:
             grad_ndarrays = None
 

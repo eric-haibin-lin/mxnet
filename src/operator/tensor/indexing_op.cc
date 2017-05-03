@@ -86,6 +86,40 @@ NNVM_REGISTER_OP(_backward_Embedding)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
 .set_attr<FCompute>("FCompute<cpu>", EmbeddingOpBackward<cpu>);
 
+NNVM_REGISTER_OP(SparseEmbedding)
+.describe(R"code(Maps integer indices to vector representations (embeddings) with sparse weight update
+)code" ADD_FILELINE)
+.set_num_inputs(2)
+.set_num_outputs(1)
+.set_attr_parser(ParamParser<EmbeddingParam>)
+.set_attr<nnvm::FListInputNames>("FListInputNames",
+  [](const NodeAttrs& attrs) {
+    return std::vector<std::string>{"data", "weight"};
+  })
+.set_attr<nnvm::FInferShape>("FInferShape", EmbeddingOpShape)
+.set_attr<nnvm::FInferType>("FInferType", EmbeddingOpType)
+.set_attr<FResourceRequest>("FResourceRequest",
+  [](const NodeAttrs& attrs) {
+    return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+  })
+.set_attr<FCompute>("FCompute<cpu>", EmbeddingOpForward<cpu>)
+.set_attr<nnvm::FGradient>("FGradient",
+  [](const nnvm::NodePtr& n, const std::vector<nnvm::NodeEntry>& ograds) {
+    return MakeNonlossGradNode("_backward_SparseEmbedding", n, ograds,
+                               {n->inputs[0]}, n->attrs.dict);
+  })
+.add_argument("data", "NDArray-or-Symbol", "The input array to the embedding operator.")
+.add_argument("weight", "NDArray-or-Symbol", "The embedding weight matrix.")
+.add_arguments(EmbeddingParam::__FIELDS__());
+
+NNVM_REGISTER_OP(_backward_SparseEmbedding)
+.set_num_inputs(2)
+.set_num_outputs(2)
+.set_attr<nnvm::TIsBackward>("TIsBackward", true)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseEmbeddingBackwardStorageType)
+.set_attr<FComputeEx>("FComputeEx<cpu>", SparseEmbeddingOpBackwardEx<cpu>);
+// TODO(haibin) handle dense case
+// .set_attr<FCompute>("FCompute<cpu>", EmbeddingOpBackward<cpu>);
 
 NNVM_REGISTER_OP(take)
 .describe(R"code(Takes elements from an input array along the given axis.

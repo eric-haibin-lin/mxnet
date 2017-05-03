@@ -82,7 +82,7 @@ def rand_sparse_ndarray(shape, storage_type, sparsity=None, allow_zeros=False):
             if indices.shape[0] > 0:
                 break
             if allow_zeros:
-                return mx.sparse_nd.zeros('row_sparse', shape), mx.nd.array([]), mx.nd.array([], dtype='int32')
+                return mx.sparse_nd.zeros('row_sparse', shape), np.array([]), np.array([], dtype='int32')
         # generate random values
         val = rnd.rand(indices.shape[0], num_cols)
         arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int32), val, indices

@@ -77,7 +77,7 @@ NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYP
   NDArray nd_aux = nd.AuxNDArray(0);
   NDArray nd_data = nd.DataNDArray();
   CopyFromTo(index, &nd_aux);
-  CopyFromTo(raw_data, &nd_data);
+  CopyFromTo(data, &nd_data);
   return nd;
 }
 
