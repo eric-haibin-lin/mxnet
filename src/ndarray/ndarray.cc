@@ -124,24 +124,24 @@ void BinaryOp(const NDArray &lhs,
   // redirect everything to mshadow operations
   switch (lhs.ctx().dev_mask()) {
     case cpu::kDevMask: {
-      Engine::Get()->PushSync([lhs, rhs, ret](RunContext ctx) {
-          ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Eval<cpu, OP>(lhs.data(), rhs.data(), &tmp, ctx);
-        }, lhs.ctx(), const_vars, {ret.var()},
-        FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+        Engine::Get()->PushSync([lhs, rhs, ret](RunContext ctx) {
+            ret.CheckAndAlloc();
+            TBlob tmp = ret.data();
+            ndarray::Eval<cpu, OP>(lhs.data(), rhs.data(), &tmp, ctx);
+          }, lhs.ctx(), const_vars, {ret.var()},
+          FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
       break;
     }
 #if MXNET_USE_CUDA
     case gpu::kDevMask: {
-      Engine::Get()->PushSync([lhs, rhs, ret](RunContext ctx) {
-          ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Eval<gpu, OP>(lhs.data(), rhs.data(), &tmp, ctx);
-          // Wait GPU kernel to complete
-          ctx.get_stream<gpu>()->Wait();
-        }, lhs.ctx(), const_vars, {ret.var()},
-        FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+        Engine::Get()->PushSync([lhs, rhs, ret](RunContext ctx) {
+            ret.CheckAndAlloc();
+            TBlob tmp = ret.data();
+            ndarray::Eval<gpu, OP>(lhs.data(), rhs.data(), &tmp, ctx);
+            // Wait GPU kernel to complete
+            ctx.get_stream<gpu>()->Wait();
+          }, lhs.ctx(), const_vars, {ret.var()},
+          FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
       break;
     }
 #endif

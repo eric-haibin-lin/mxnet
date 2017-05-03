@@ -138,6 +138,7 @@ NNVM_REGISTER_OP(cast_storage)
 .set_attr_parser(ParamParser<CastStorageParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", CastStorageInferStorageType)
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 // _backward pass
 // .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"})

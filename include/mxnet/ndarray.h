@@ -132,7 +132,6 @@ class NDArray {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
-      CHECK(storage_type == kRowSparseStorage) << "Only kRowSparseStorage is supported";
   }
   /*!
    * \brief constructing a static NDArray that shares data with TBlob
@@ -157,7 +156,6 @@ class NDArray {
 #if MKL_EXPERIMENTAL == 1
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
-      CHECK(aux_data.size() == 1) << "Multiple aux_data not supported yet";
   }
 
   /*!
@@ -175,6 +173,22 @@ class NDArray {
     CHECK(ptr_ != nullptr);
     return ptr_->storage_shape;
   }
+
+  /*!
+   * \brief For sparse operations, the storage shape is an estimated value
+   * in the beginning for allocating enough capacity for the final result.
+   * After the operation is done, the exact size of the shape is known
+   * and need to be reset using this function. For example, adding
+   * two CSRs with nnz1 and nnz2 as their numbers of non-zero values, respectively,
+   * would allocate the array of size nnz1+nnz2 first and get the final
+   * nnz that is smaller than nnz1+nnz2. Therefore, the storage shape's size
+   * needs to be shrunk from nnz1+nnz2 to nnz.
+   */
+  inline void SetStorageShape(const TShape& sshape) {
+    CHECK(storage_type() != kDefaultStorage);
+    ptr_->storage_shape = sshape;
+  }
+
   /*!
    * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
    */
@@ -184,9 +198,18 @@ class NDArray {
     if (i >= ptr_->aux_shapes.size()) return TShape();
     return ptr_->aux_shapes[i];
   }
+
+  /*!
+   * \brief For a sparse operation on a csr matrix for example,
+   * the size of the column index array
+   * is an estimated value in the beginning for allocating enough capacity
+   * for the final result. After the operation is done, the exact size of
+   * the shape is known and need to be reset using this function.
+   */
   inline void SetAuxShape(size_t i, const TShape& shape) const {
     ptr_->aux_shapes[i] = shape;
   }
+
   /*!
    * \return the data TBlob
    */
@@ -639,14 +662,21 @@ class NDArray {
                               int dtype) {
       // calculate size, perform allocation
       if (delay_alloc) {
-        CHECK_EQ(storage_type, kRowSparseStorage) << "Not yet implemented";
-        // For row sparse, aux_shape indicates the number of rows to allocate
-        auto aux_shape = aux_shapes[0];
-        CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
-        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
-        TShape storage_shape(shape);
-        storage_shape[0] = aux_shape[0];
-        CheckAndAllocData(storage_shape, dtype);
+        if (kRowSparseStorage == storage_type) {
+          // For row sparse, aux_shape indicates the number of rows to allocate
+          auto aux_shape = aux_shapes[rowsparse::kIdx];
+          CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
+          CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
+          TShape storage_shape(shape);
+          storage_shape[0] = aux_shape[0];
+          CheckAndAllocData(storage_shape, dtype);
+        } else if (kCSRStorage == storage_type) {
+          CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]);
+          CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]);
+          CheckAndAllocData(aux_shapes[csr::kIdx], dtype);
+        } else {
+          LOG(FATAL) << "Storage type " << storage_type << " not implemented for CheckAndAlloc";
+        }
       }
     }
     inline void CheckAndAllocData(const TShape &shape, int dtype) {
@@ -658,7 +688,14 @@ class NDArray {
       delay_alloc = false;
     }
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
+      CHECK_GT(shape.Size(), 0) << "shape cannot be empty in CheckAndAllocAuxData";
+      CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
       CHECK_EQ(aux_shapes.size(), aux_handles.size());
+      CHECK_NE(storage_type, kUndefinedStorage)
+        << "storage type cannot be kUndefinedStorage in CheckAndAllocAuxData";
+      CHECK_NE(storage_type, kDefaultStorage)
+        << "storage type cannot be kDefaultStorage in CheckAndAllocAuxData";
+
       if (aux_shapes.size() <= i) {
         aux_shapes.resize(i + 1);
         aux_handles.resize(i + 1);
@@ -666,14 +703,8 @@ class NDArray {
       // Initialize shape
       aux_shapes[i] = shape;
       // Init aux storage
-      Storage::Handle aux_handle;
-      if (storage_type == kRowSparseStorage) {
-        auto aux_bytes = shape[0] * mshadow::mshadow_sizeof(aux_types[i]);
-        aux_handle = Storage::Get()->Alloc(aux_bytes, ctx);
-      } else if (storage_type == kCSRStorage) {
-        LOG(FATAL) << "Not implemented";
-      }
-      aux_handles[i] = aux_handle;
+      size_t aux_bytes = shape.Size() * mshadow::mshadow_sizeof(aux_types[i]);
+      aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx);
     }
     /*! \brief destructor */
     ~Chunk() {
@@ -1035,6 +1066,24 @@ struct NDArrayFunctionReg
  */
 #define MXNET_REGISTER_NDARRAY_FUN(name)                                 \
   DMLC_REGISTRY_REGISTER(::mxnet::NDArrayFunctionReg, NDArrayFunctionReg, name)
+
+#define NDARRAY_IDX_TYPE_SWITCH(type, DType, ...)   \
+  switch (type) {                                   \
+  case mshadow::kUint8:                             \
+    {                                               \
+      typedef uint8_t DType;                        \
+      {__VA_ARGS__}                                 \
+    }                                               \
+    break;                                          \
+  case mshadow::kInt32:                             \
+    {                                               \
+      typedef int32_t DType;                        \
+      {__VA_ARGS__}                                 \
+    }                                               \
+    break;                                          \
+  default:                                          \
+    LOG(FATAL) << "Unknown idx type enum " << type; \
+  }
 
 }  // namespace mxnet
 
