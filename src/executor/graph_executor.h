@@ -56,47 +56,42 @@ class GraphExecutor : public Executor {
   void FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor* shared_exec = nullptr);
 
   // initialized the executor
+  void InitV1(nnvm::Symbol symbol,
+              const Context& default_ctx,
+              const std::map<std::string, Context>& ctx_map,
+              const std::vector<NDArray>& in_args,
+              const std::vector<NDArray>& arg_grad_store,
+              const std::vector<OpReqType>& grad_req_type,
+              const std::vector<NDArray>& aux_states,
+              Executor* shared_exec = nullptr);
+  // initialize executor for bind
   void Init(nnvm::Symbol symbol,
             const Context& default_ctx,
             const std::map<std::string, Context>& ctx_map,
             const std::vector<NDArray>& in_args,
             const std::vector<NDArray>& arg_grad_store,
-            const std::vector<OpReqType>& grad_req_type,
+            const std::vector<OpReqType>& grad_req_types,
             const std::vector<NDArray>& aux_states,
-            Executor* shared_exec = nullptr,
-            const nnvm::NodeEntryMap<NDArray>& feed_dict
-              = nnvm::NodeEntryMap<NDArray>());
-  // Initialize the rest of attributes
-  // after setting up arguments.
-  void FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor* shared_exec = nullptr);
-  // initialize executor for bind
-  void Init2(nnvm::Symbol symbol,
-             const Context& default_ctx,
-             const std::map<std::string, Context>& ctx_map,
-             const std::vector<NDArray>& in_args,
-             const std::vector<NDArray>& arg_grad_store,
-             const std::vector<OpReqType>& grad_req_types,
-             const std::vector<NDArray>& aux_states,
-             Executor* shared_exec);
+            Executor* shared_exec = nullptr);
   // initialize executor for simple bind
-  void Init2(nnvm::Symbol symbol,
-             const Context& default_ctx,
-             const std::map<std::string, Context>& ctx_map,
-             const std::vector<Context>& in_arg_ctxes,
-             const std::vector<Context>& arg_grad_ctxes,
-             const std::vector<Context>& aux_state_ctxes,
-             const std::unordered_map<std::string, TShape>& arg_shape_map,
-             const std::unordered_map<std::string, int>& arg_dtype_map,
-             const std::vector<OpReqType>& grad_req_types,
-             const std::unordered_set<std::string>& param_names,
-             const std::vector<NDArray>& shared_exec_in_args,
-             const std::vector<NDArray>& shared_exec_arg_grads,
-             const std::vector<NDArray>& shared_exec_aux_states,
-             std::vector<NDArray>* in_arg_vec,
-             std::vector<NDArray>* arg_grad_vec,
-             std::vector<NDArray>* aux_state_vec,
-             std::unordered_map<std::string, NDArray>* shared_data_arrays = nullptr,
-             Executor* shared_exec = nullptr);
+  void Init(nnvm::Symbol symbol,
+            const Context& default_ctx,
+            const std::map<std::string, Context>& ctx_map,
+            const std::vector<Context>& in_arg_ctxes,
+            const std::vector<Context>& arg_grad_ctxes,
+            const std::vector<Context>& aux_state_ctxes,
+            const std::unordered_map<std::string, TShape>& arg_shape_map,
+            const std::unordered_map<std::string, int>& arg_dtype_map,
+            const std::vector<OpReqType>& grad_req_types,
+            const std::unordered_set<std::string>& param_names,
+            const std::vector<NDArray>& shared_exec_in_args,
+            const std::vector<NDArray>& shared_exec_arg_grads,
+            const std::vector<NDArray>& shared_exec_aux_states,
+            std::vector<NDArray>* in_arg_vec,
+            std::vector<NDArray>* arg_grad_vec,
+            std::vector<NDArray>* aux_state_vec,
+            std::unordered_map<std::string, NDArray>* shared_data_arrays = nullptr,
+            Executor* shared_exec = nullptr);
 
  protected:
   // Information about operational node
@@ -159,32 +154,28 @@ class GraphExecutor : public Executor {
                      std::vector<NDArray>* arg_grad_vec,
                      std::vector<NDArray>* aux_state_vec);
   // internal initialization of the graph.
+  Graph InitGraphV1(nnvm::Symbol symbol,
+                    const Context& default_ctx,
+                    const std::map<std::string, Context>& ctx_map,
+                    const std::vector<NDArray>& in_args,
+                    const std::vector<NDArray>& arg_grad_store,
+                    const std::vector<OpReqType>& grad_req_type,
+                    const std::vector<NDArray>& aux_states);
+  // internal initialization of the graph for simple bind
   Graph InitGraph(nnvm::Symbol symbol,
                   const Context& default_ctx,
                   const std::map<std::string, Context>& ctx_map,
-                  const std::vector<NDArray>& in_args,
-                  const std::vector<NDArray>& arg_grad_store,
-                  const std::vector<OpReqType>& grad_req_type,
-                  const std::vector<NDArray>& aux_states,
-                  const nnvm::NodeEntryMap<NDArray>& feed_dict
-                    = nnvm::NodeEntryMap<NDArray>());
-  // internal initialization of the graph for simple bind
-  Graph InitGraph2(nnvm::Symbol symbol,
-                   const Context& default_ctx,
-                   const std::map<std::string, Context>& ctx_map,
-                   const std::vector<Context>& in_arg_ctxes,
-                   const std::vector<Context>& arg_grad_ctxes,
-                   const std::vector<Context>& aux_state_ctxes,
-                   //std::vector<TShape>* arg_shapes,
-                   //std::vector<int>* arg_dtypes,
-                   const std::vector<OpReqType>& grad_req_types);
+                  const std::vector<Context>& in_arg_ctxes,
+                  const std::vector<Context>& arg_grad_ctxes,
+                  const std::vector<Context>& aux_state_ctxes,
+                  const std::vector<OpReqType>& grad_req_types);
   // initialize the full graph, including gradient.
-  Graph InitFullGraph(nnvm::Symbol symbol,
-                      const std::vector<OpReqType>& grad_req_type,
-                      const std::vector<NDArray>& arg_grad_store);
+  Graph InitFullGraphV1(nnvm::Symbol symbol,
+                        const std::vector<OpReqType>& grad_req_type,
+                        const std::vector<NDArray>& arg_grad_store);
   // intialize the full graph for simple bind, including gradient
-  Graph InitFullGraph2(nnvm::Symbol symbol,
-                       const std::vector<OpReqType>& grad_req_types);
+  Graph InitFullGraph(nnvm::Symbol symbol,
+                      const std::vector<OpReqType>& grad_req_types);
   // initialize the cached operator
   void InitCachedOps();
   // initialize the opr segments for bulk exec
