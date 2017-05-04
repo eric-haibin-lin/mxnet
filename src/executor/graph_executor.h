@@ -53,7 +53,10 @@ class GraphExecutor : public Executor {
   void SetMonitorCallback(const MonitorCallback& callback) override;
   // Initialize the rest of attributes
   // after setting up arguments.
-  void FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor* shared_exec = nullptr);
+  void FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g,
+                       Executor* shared_exec = nullptr,
+                       const nnvm::NodeEntryMap<NDArray>& feed_dict
+                         = nnvm::NodeEntryMap<NDArray>());
 
   // initialized the executor
   void InitV1(nnvm::Symbol symbol,
@@ -63,7 +66,9 @@ class GraphExecutor : public Executor {
               const std::vector<NDArray>& arg_grad_store,
               const std::vector<OpReqType>& grad_req_type,
               const std::vector<NDArray>& aux_states,
-              Executor* shared_exec = nullptr);
+              Executor* shared_exec = nullptr,
+              const nnvm::NodeEntryMap<NDArray>& feed_dict
+                = nnvm::NodeEntryMap<NDArray>());
   // initialize executor for bind
   void Init(nnvm::Symbol symbol,
             const Context& default_ctx,
@@ -72,7 +77,9 @@ class GraphExecutor : public Executor {
             const std::vector<NDArray>& arg_grad_store,
             const std::vector<OpReqType>& grad_req_types,
             const std::vector<NDArray>& aux_states,
-            Executor* shared_exec = nullptr);
+            Executor* shared_exec = nullptr,
+            const nnvm::NodeEntryMap<NDArray>& feed_dict
+              = nnvm::NodeEntryMap<NDArray>());
   // initialize executor for simple bind
   void Init(nnvm::Symbol symbol,
             const Context& default_ctx,
@@ -91,7 +98,9 @@ class GraphExecutor : public Executor {
             std::vector<NDArray>* arg_grad_vec,
             std::vector<NDArray>* aux_state_vec,
             std::unordered_map<std::string, NDArray>* shared_data_arrays = nullptr,
-            Executor* shared_exec = nullptr);
+            Executor* shared_exec = nullptr,
+            const nnvm::NodeEntryMap<NDArray>& feed_dict
+              = nnvm::NodeEntryMap<NDArray>());
 
  protected:
   // Information about operational node
@@ -160,7 +169,9 @@ class GraphExecutor : public Executor {
                     const std::vector<NDArray>& in_args,
                     const std::vector<NDArray>& arg_grad_store,
                     const std::vector<OpReqType>& grad_req_type,
-                    const std::vector<NDArray>& aux_states);
+                    const std::vector<NDArray>& aux_states,
+                    const nnvm::NodeEntryMap<NDArray>& feed_dict
+                      = nnvm::NodeEntryMap<NDArray>());
   // internal initialization of the graph for simple bind
   Graph InitGraph(nnvm::Symbol symbol,
                   const Context& default_ctx,

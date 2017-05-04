@@ -513,7 +513,8 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                          const std::vector<NDArray>& arg_grad_store,
                          const std::vector<OpReqType>& grad_req_types,
                          const std::vector<NDArray>& aux_states,
-                         Executor* shared_exec) {
+                         Executor* shared_exec,
+                         const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   // create in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes
   auto get_ctx1 = [](const NDArray& nd) { return nd.ctx(); };
   auto get_ctx2 = [default_ctx](const NDArray& nd) {
@@ -567,7 +568,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   // Initialize the rest attributes of the graph.
   // This function can be called by regular bind
   // operation flow as well.
-  FinishInitGraph(symbol, g, shared_exec);
+  FinishInitGraph(symbol, g, shared_exec, feed_dict);
 }
 
 void GraphExecutor::InitV1(nnvm::Symbol symbol,
@@ -785,7 +786,10 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
  * \brief Finish graph initialization after shape and dtype inferences.
  * This function is used by both simple_bind and bind flows.
  */
-void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor* shared_exec) {
+void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol,
+                                    nnvm::Graph g,
+                                    Executor* shared_exec,
+                                    const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   const auto& idx = g.indexed_graph();
   for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
     data_entry_[idx.entry_id(idx.outputs()[j])] = grad_store_[j - num_forward_outputs_].second;
@@ -798,6 +802,11 @@ void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol, nnvm::Graph g, Executor
     nnvm::StorageVector arg_storage_id(idx.num_node_entries(), kBadStorageID);
     for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
       arg_storage_id[idx.entry_id(idx.outputs()[j])] = kExternalStorageID;
+    }
+    for (const auto& kv : feed_dict) {
+      uint32_t eid = idx.entry_id(kv.first);
+      data_entry_[eid] = kv.second;
+      arg_storage_id[eid] = kExternalStorageID;
     }
     g.attrs["storage"] = std::make_shared<dmlc::any>(std::move(arg_storage_id));
     g = nnvm::ApplyPass(g, "PlanMemory");
@@ -865,7 +874,8 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                          std::vector<NDArray>* arg_grad_vec,
                          std::vector<NDArray>* aux_state_vec,
                          std::unordered_map<std::string, NDArray>* shared_data_arrays,
-                         Executor* shared_exec) {
+                         Executor* shared_exec,
+                         const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
                             aux_state_ctxes, grad_req_types);
   
@@ -915,7 +925,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   // Initialize the rest attributes of the graph.
   // This function can be called by regular bind
   // operation flow as well.
-  FinishInitGraph(symbol, g, shared_exec);
+  FinishInitGraph(symbol, g, shared_exec, feed_dict);
 }
 
 Graph GraphExecutor::InitGraphV1(nnvm::Symbol symbol,
