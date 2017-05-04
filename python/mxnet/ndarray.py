@@ -54,6 +54,18 @@ _DTYPE_MX_TO_NP = {
     3 : np.uint8,
     4 : np.int32
 }
+_STORAGE_TYPE_ID_TO_STR = {
+    -1 : 'undefined',
+    0  : 'default',
+    1  : 'row_sparse',
+    2  : 'csr',
+}
+_STORAGE_TYPE_STR_TO_ID = {
+    'undefined'  : -1,
+    'default'    : 0,
+    'row_sparse' : 1,
+    'csr'        : 2,
+}
 
 def _new_empty_handle():
     """Returns a new empty handle.
@@ -689,6 +701,12 @@ fixed-size items.
         check_call(_LIB.MXNDArrayGetDType(
             self.handle, ctypes.byref(mx_dtype)))
         return _DTYPE_MX_TO_NP[mx_dtype.value]
+
+    @property
+    def storage_type(self):
+        storage_type = ctypes.c_int(0)
+        check_call(_LIB.MXNDArrayGetStorageType(self.handle, ctypes.byref(storage_type)))
+        return _STORAGE_TYPE_ID_TO_STR[storage_type.value]
 
     @property
     # pylint: disable= invalid-name, undefined-variable

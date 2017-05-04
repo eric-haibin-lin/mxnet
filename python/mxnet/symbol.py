@@ -18,8 +18,8 @@ from .base import NDArrayHandle, ExecutorHandle, SymbolHandle
 from .base import check_call, MXNetError
 from .context import Context, cpu
 from .ndarray import NDArray, zeros as _nd_zeros, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
+from .ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
 from .sparse_ndarray import zeros as _sparse_nd_zeros
-from .sparse_ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope

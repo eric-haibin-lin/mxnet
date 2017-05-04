@@ -1,6 +1,6 @@
 /*!
  *  Copyright (c) 2016 by Contributors
- * \file c_api_symbolic.cc
+ * \file c_api_ndarray.cc
  * \brief C API of mxnet
  */
 
@@ -15,6 +15,8 @@
 #include "./c_api_common.h"
 #include "../common/utils.h"
 #include "../ndarray/autograd.h"
+
+#define IMPERATIVE_EXEC_DEBUG 0
 
 using namespace mxnet;
 using mxnet::autograd::AutogradRuntime;
@@ -182,7 +184,9 @@ void SetShapeType(const nnvm::Op* op,
     CHECK(inferstorage[op](attrs, &in_storage_types, &out_storage_types));
     CHECK_EQ(out_storage_types.size(), static_cast<size_t>(infered_num_outputs));
   } else {
-    // LOG(INFO) << "FInferStorageType not present.";
+#if IMPERATIVE_EXEC_DEBUG
+    LOG(INFO) << "FInferStorageType not present.";
+#endif
   }
 
   bool contains_non_default = common::ContainsNonDefaultStorage(in_storage_types);
@@ -418,6 +422,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
 
   if (ndfunc.count(op)) {
     ndfunc[op](attrs, ndinputs, &ndoutputs);
+#if IMPERATIVE_EXEC_DEBUG
+    LOG(INFO) << "NDArray function executed.";
+#endif
   } else {
     // TODO(piiswrong): infer ctx
     Context ctx;
@@ -436,6 +443,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
     if (fcomp_ex) {
       PushFComputeEx(fcomp_ex, op, attrs, ctx, read_vars, write_vars, requested,
                      ndinputs, ndoutputs);
+#if IMPERATIVE_EXEC_DEBUG
+      LOG(INFO) << "FComputeEx executed.";
+#endif
     } else if (fn) {
       if (AutogradRuntime::Get()->IsTraining()) {
         AutogradRuntime::Get()->RecordImperativeFCompute(fn, op,
@@ -443,6 +453,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
       }
       PushFCompute(fn, op, attrs, ctx, read_vars, write_vars,
           requested, ndinputs, ndoutputs);
+#if IMPERATIVE_EXEC_DEBUG
+      LOG(INFO) << "FCompute executed.";
+#endif
     } else if (createop.count(op)) {
       std::shared_ptr<Operator> opr(
           createop[op](attrs, ctx, ret->arg_shapes, ret->arg_types));
@@ -452,6 +465,9 @@ int MXImperativeInvoke(AtomicSymbolCreator creator,
       }
       PushOperator(opr, op, attrs, ctx, read_vars, write_vars,
           requested, auxidx, ndinputs, ndoutputs);
+#if IMPERATIVE_EXEC_DEBUG
+      LOG(INFO) << "CreateOp executed.";
+#endif
     } else {
       LOG(FATAL)
         << "Operator " << op->name

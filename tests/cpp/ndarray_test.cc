@@ -1,4 +1,3 @@
-//#include <time.h>
 #include <unistd.h>
 #include <dmlc/logging.h>
 #include <cstdio>
@@ -10,17 +9,20 @@
 #include "../src/executor/graph_executor.h"
 #include "../src/operator/tensor/elemwise_binary_op.h"
 #include "../src/operator/tensor/elemwise_unary_op.h"
+#include "../src/operator/optimizer_op-inl.h"
 
 #define TEST_DTYPE float
-#define TEST_AUX_TYPE int32_t
+#define TEST_ITYPE int32_t
 using namespace mxnet;
+
+// TODO(haibin) these functions should be put in test_util.h
 void CheckDataRegion(const TBlob &src, const TBlob &dst) {
   auto size = src.shape_.Size() * mshadow::mshadow_sizeof(src.type_flag_);
   auto equals = memcmp(src.dptr_, dst.dptr_, size);
   EXPECT_EQ(equals, 0);
 }
 
-NDArray GetIndexND(const TShape shape, const Context ctx, const std::vector<TEST_AUX_TYPE> &values) {
+NDArray GetIndexND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> &values) {
   NDArray nd(shape, ctx, false, ROW_SPARSE_IDX_TYPE);
   size_t num_val = values.size();
   MSHADOW_TYPE_SWITCH(nd.dtype(), DType, {
@@ -42,6 +44,17 @@ NDArray GetDenseND(const TShape shape, const Context ctx, const std::vector<TEST
       tensor[i] = values[i];
     }
   });
+  return nd;
+}
+
+NDArray GetRspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> idx,
+                 const std::vector<TEST_DTYPE> vals) {
+  index_t num_rows = idx.size();
+  index_t num_cols = vals.size() / idx.size();
+  NDArray index = GetIndexND(TShape({num_rows}), ctx, idx);
+  CHECK_EQ(vals.size() % idx.size(), 0);
+  NDArray raw_data = GetDenseND(TShape({num_rows, num_cols}), ctx, vals);
+  NDArray nd(raw_data, {index}, ctx, kRowSparseStorage, shape);
   return nd;
 }
 
@@ -67,24 +80,18 @@ NDArray Convert(NDArrayStorageType type, NDArray src) {
   return converted;
 }
 
+// Operators
 void BinaryDenseSparseTest() {
   Context ctx = Context::CPU();
 
-  TShape index_shape({2});
-  NDArray index0 = GetIndexND(index_shape, ctx, {0, 1});
-
-  TShape data_shape({2, 2});
-  NDArray raw_data0 = GetDenseND(data_shape, ctx, {10, 10, 10, 10});
-
   TShape output_shape({3, 2});
-  NDArray input_nd0(raw_data0, {index0}, ctx, kRowSparseStorage, data_shape);
+  NDArray input_nd0 = GetRspND(output_shape, ctx, {0, 1}, {10, 10, 10, 10});
   NDArray input_nd1 = GetDenseND(output_shape, ctx, {1, 2, 3, 4, 5, 6});
-  Engine::Get()->WaitForAll();
-
   NDArray output(kRowSparseStorage, output_shape, ctx);
+
   std::vector<Engine::VarHandle> const_vars;
-  const_vars.push_back(raw_data0.var());
-  const_vars.push_back(index0.var());
+  const_vars.push_back(input_nd0.var());
+  const_vars.push_back(input_nd1.var());
   Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
       nnvm::NodeAttrs attrs;
       OpContext op_ctx;
@@ -101,16 +108,6 @@ void BinaryDenseSparseTest() {
   Engine::Get()->WaitForAll();
   CheckDataRegion(out_data.data(), output.data());
   // TODO(haibin) also check with zeros..
-}
-
-void SetValueTest() {
-  Context ctx = Context::CPU();
-  TShape data_shape({2, 2});
-  NDArray nd0 = GetDenseND(data_shape, ctx, {10, 10, 10, 10});
-  NDArray nd1(data_shape, ctx, false);
-  nd1 = 10;
-  nd1.WaitToRead();
-  CheckDataRegion(nd0.data(), nd1.data());
 }
 
 void BinaryRsRsTest() {
@@ -153,6 +150,38 @@ void BinaryRsRsTest() {
   CheckDataRegion(dense_output.data(), copy.data());
 }
 
+// Conversion
+void DenseToDenseConversionTest() {
+  Context ctx;
+  TShape shape({2, 2});
+  NDArray nd = GetDenseND(shape, ctx, {1, 2, 3, 10});
+  auto nd_copy = Convert(kDefaultStorage, nd);
+  CheckDataRegion(nd_copy.data(), nd.data());
+}
+
+void SparseToDenseConversionTest() {
+  Context ctx;
+  // Sparse ndarray
+  TShape shape({2, 2});
+  NDArray nd = GetRspND(shape, ctx, {0}, {1, 1});
+  // Dense ndarray
+  NDArray dense_nd = GetDenseND(shape, ctx, {1, 1, 0, 0});
+  NDArray converted = Convert(kDefaultStorage, nd);
+  CheckDataRegion(converted.data(), dense_nd.data());
+}
+
+// NDArray Function
+void SetValueTest() {
+  Context ctx = Context::CPU();
+  TShape data_shape({2, 2});
+  NDArray nd0 = GetDenseND(data_shape, ctx, {10, 10, 10, 10});
+  NDArray nd1(data_shape, ctx, false);
+  nd1 = 10;
+  nd1.WaitToRead();
+  CheckDataRegion(nd0.data(), nd1.data());
+}
+
+// InferStorage
 void InferElemwiseStorageTest() {
   nnvm::NodeAttrs attrs;
   attrs.name = "Test op";
@@ -167,6 +196,47 @@ void InferElemwiseStorageTest() {
   EXPECT_EQ(out_attrs[0], kDefaultStorage);
 }
 
+// Optimizer
+void SGDDnsRspTest() {
+  TShape shape({4, 2});
+  Context ctx = Context::CPU();
+  NDArray weight = GetDenseND(shape, ctx, {1, 2, 3, 4, 5, 6, 7, 8});
+  NDArray rsp_grad = GetRspND(shape, ctx, {0, 3}, {1, 2, 3, 4});
+  NDArray output = weight;
+  float lr = 0.1;
+  float wd = 0.95;
+  float rescale = 2;
+  op::SGDParam param;
+  param.lr = lr;
+  param.wd = wd;
+  param.rescale_grad = rescale;
+  param.clip_gradient = -1.0f;
+  Engine::Get()->PushSync([weight, rsp_grad, output, param](RunContext ctx) {
+      std::vector<NDArray> inputs{weight, rsp_grad}, outputs{output};
+      std::vector<OpReqType> req({kAddTo});
+      op::SGDUpdateDnsRspImpl<cpu>(param, {}, inputs, req, outputs);
+    }, weight.ctx(), {rsp_grad.var()}, {output.var()},
+    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
+  auto sgd = [lr, wd, rescale] (TEST_DTYPE weight, TEST_DTYPE grad) {
+     return (1.f-lr*wd)*weight - (lr*rescale)*grad;
+    };
+
+  NDArray expected = GetDenseND(shape, ctx,
+                                {1 + sgd(1, 1), 2 + sgd(2, 2), 3, 4, 5, 6,
+                                 7 + sgd(7, 3), 8 + sgd(8, 4)});
+  output.WaitToRead();
+  CheckDataRegion(output.data(), expected.data());
+}
+
+TEST(NDArray, conversion) {
+  DenseToDenseConversionTest();
+  SparseToDenseConversionTest();
+}
+
+TEST(NDArray, functions) {
+  SetValueTest();
+}
+
 TEST(NDArray, basics) {
   BinaryRsRsTest();
   //Wait for all operations to finish
@@ -174,38 +244,7 @@ TEST(NDArray, basics) {
   InferElemwiseStorageTest();
 }
 
-// dense to dense conversion
-void TestDenseToDenseConversion() {
-  Context ctx;
-  TShape shape({2, 2});
-  NDArray nd = GetDenseND(shape, ctx, {1, 2, 3, 10});
-  auto nd_copy = Convert(kDefaultStorage, nd);
-  CheckDataRegion(nd_copy.data(), nd.data());
+TEST(NDArray, optimizer) {
+  SGDDnsRspTest();
 }
 
-// sparse to dense conversion
-void TestSparseToDenseConversion() {
-  Context ctx;
-  // Raw Data
-  NDArray raw_data0 = GetDenseND(TShape({1, 2}), ctx, {1, 1});
-  // Index
-  NDArray index0 = GetIndexND(TShape({1}), ctx, {0});
-  // Sparse ndarray
-  TShape shape({2, 2});
-  NDArray nd(raw_data0, {index0}, ctx, kRowSparseStorage, shape);
-
-  // Dense ndarray
-  NDArray dense_nd = GetDenseND(shape, ctx, {1, 1, 0, 0});
-  NDArray converted = Convert(kDefaultStorage, nd);
-  CheckDataRegion(converted.data(), dense_nd.data());
-}
-
-TEST(NDArray, conversion) {
-  TestDenseToDenseConversion();
-  TestSparseToDenseConversion();
-  Engine::Get()->WaitForAll();
-}
-
-TEST(NDArray, setvalue) {
-  SetValueTest();
-}

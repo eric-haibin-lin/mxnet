@@ -33,7 +33,7 @@ void BinaryCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
-// TODO(haibin) This is an inefficient temporary implementation
+// TODO(haibin) This is a single-thread inefficient implementation
 // Binary Compute between two row-sparse ndarray
 template<typename xpu, typename OP>
 void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
@@ -49,17 +49,31 @@ void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
 
   CHECK_EQ(nd_l.storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
   // Memory Estimation
-  auto num_rows_l = nd_l.aux_shape(rowsparse::kIdx)[0];
-  auto num_rows_r = nd_r.aux_shape(rowsparse::kIdx)[0];
+  unsigned int num_rows_l = nd_l.aux_shape(rowsparse::kIdx).Size();
+  unsigned int num_rows_r = nd_r.aux_shape(rowsparse::kIdx).Size();
+  // TODO(haibin) both zero?
+  if (num_rows_l + num_rows_r == 0) {
+    return;
+  }
   // This is (roughly) the number of result rows
   output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
-  // Indices
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
+  if (num_rows_l == 0) {
+    NDArray out(output);
+    CopyFromTo(nd_r, &out);
+    return;
+  }
+  if (num_rows_r == 0) {
+    NDArray out(output);
+    CopyFromTo(nd_l, &out);
+    return;
+  }
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(nd_l.aux_type(rowsparse::kIdx), AuxType, {
-      auto indices_l = nd_l.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      auto indices_r = nd_r.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+    MSHADOW_TYPE_SWITCH(nd_l.aux_type(rowsparse::kIdx), IType, {
+      // Indices
+      auto indices_l = nd_l.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto indices_r = nd_r.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
       // Data
       auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
       auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
@@ -167,10 +181,10 @@ void BinaryBackwardUseNoneRsp(const nnvm::NodeAttrs& attrs,
   outputs[0].CheckAndAlloc({shape});
   outputs[1].CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
-      auto lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      auto rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      auto ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), IType, {
+      auto lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
       auto lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, DType> rgrad = outputs[1].data().FlatTo1D<xpu, DType>(s);
       Tensor<xpu, 1, DType> ograd = inputs[0].data().FlatTo1D<xpu, DType>(s);

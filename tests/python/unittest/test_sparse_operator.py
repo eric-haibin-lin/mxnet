@@ -1,7 +1,6 @@
 # pylint: skip-file
 import numpy as np
 import mxnet as mx
-import random
 from numpy.testing import assert_allclose
 from mxnet.test_utils import *
 

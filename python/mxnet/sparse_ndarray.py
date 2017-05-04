@@ -24,7 +24,8 @@ from .base import mx_uint, NDArrayHandle, check_call
 from .context import Context
 from . import _ndarray_internal as _internal
 from . import ndarray
-from .ndarray import _DTYPE_NP_TO_MX  # , _DTYPE_MX_TO_NP
+from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
+from .ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
 from .ndarray import NDArray
 
 # Use different verison of SymbolBase
@@ -40,21 +41,6 @@ except ImportError:
     if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
     from ._ctypes.ndarray import _init_ndarray_module
-
-# pylint: enable= no-member
-_STORAGE_TYPE_ID_TO_STR = {
-    -1: 'undefined',
-    0: 'default',
-    1: 'row_sparse',
-    2: 'csr',
-}
-
-_STORAGE_TYPE_STR_TO_ID = {
-    'undefined': -1,
-    'default': 0,
-    'row_sparse': 1,
-    'csr': 2,
-}
 
 _STORAGE_AUX_TYPES = {
     'row_sparse': [np.int32],
@@ -200,6 +186,11 @@ class SparseNDArray(NDArray):
     # def wait_to_read(self):
     # @property
     # def shape(self):
+    def aux_type(self, i):
+        aux_type = ctypes.c_int()
+        check_call(_LIB.MXNDArrayGetAuxType(
+                   self.handle, i, ctypes.byref(aux_type)))
+        return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
     def size(self):
@@ -210,9 +201,21 @@ class SparseNDArray(NDArray):
     # @property
     # def dtype(self):
     @property
+    def num_aux(self):
+        num_aux = mx_uint()
+        check_call(_LIB.MXNDArrayGetNumAux(self.handle, ctypes.byref(num_aux)))
+        return num_aux.value
+    @property
     # pylint: disable= invalid-name, undefined-variable
     def T(self):
         raise Exception('Not implemented for SparseND yet!')
+    # TODO(haibin) Should this be a property?
+    def aux_types(self):
+        aux_types = []
+        num_aux = self.num_aux
+        for i in xrange(num_aux):
+            aux_types.append(self.aux_type(i))
+        return aux_types
 
     def asnumpy(self):
         """Return a dense ``numpy.ndarray`` object with value copied from this array
@@ -227,7 +230,16 @@ class SparseNDArray(NDArray):
         raise Exception('Not implemented for SparseND yet!')
 
     def copyto(self, other):
-        raise Exception('Not implemented for SparseND yet!')
+        if isinstance(other, NDArray):
+            if other.handle is self.handle:
+                warnings.warn('You are attempting to copy an array to itself', RuntimeWarning)
+                return
+            return _internal._copyto(self, out=other)
+        elif isinstance(other, Context):
+            hret = SparseNDArray(_new_alloc_handle(self.storage_type, self.shape, other, True, self.dtype, self.aux_types()))
+            return _internal._copyto(self, out=hret)
+        else:
+            raise TypeError('copyto does not support type ' + str(type(other)))
 
     def copy(self):
         raise Exception('Not implemented for SparseND yet!')
@@ -250,8 +262,6 @@ def csr(values, idx, indptr, shape, ctx=Context.default_ctx, dtype=mx_real_t, au
     assert (isinstance(shape, tuple))
     indices = c_array(NDArrayHandle, [indptr.handle, idx.handle])
     num_aux = mx_uint(2)
-    # TODO create an empty handle with specified types, then assign values
-    #assert(aux_types is None)
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, num_aux, indices,
         c_array(mx_uint, shape),
@@ -268,15 +278,12 @@ def csr(values, idx, indptr, shape, ctx=Context.default_ctx, dtype=mx_real_t, au
 # pylint: enable= no-member
 # TODO(haibin) also specify aux_types
 def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, aux_types=None):
-    """ constructor """
+    ''' rsp constructor which only accepts NDArray as input '''
     hdl = NDArrayHandle()
     assert (isinstance(values, NDArray))
     assert (isinstance(index, NDArray))
     indices = c_array(NDArrayHandle, [index.handle])
     num_aux = mx_uint(1)
-    assert(aux_types is None)
-    #TODO(haibin) also specify aux_types
-    # TODO create an empty handle with specified types, then assign values
     check_call(_LIB.MXNDArrayCreateSparse(
         values.handle, num_aux, indices,
         c_array(mx_uint, shape),
@@ -304,6 +311,7 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
     for i, index in enumerate(index_list):
         if not isinstance(index, NDArray):
             index_list[i] = ndarray.array(index, dtype=aux_types[i] if aux_types is not None else None)
+
     if isinstance(shape, int):
         shape = (shape,)
     if ctx is None:
@@ -312,6 +320,8 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
         arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype, aux_types=aux_types)
     elif storage_type == 'csr':
         arr = csr(values, index_list[0], index_list[1], shape, ctx, dtype, aux_types)
+    else:
+        raise Exception('Not implemented for SparseND yet!')
     return arr
 
 
@@ -327,11 +337,13 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     shape : int or tuple of int
         The shape of the empty array
     storage_type:
-
+        'row_sparse', etc
     ctx : Context, optional
         An optional device context (default is the current default context)
     dtype : str or numpy.dtype, optional
         An optional value type (default is `float32`)
+    aux_types:
+        [np.int32], etc
 
     Returns
     -------

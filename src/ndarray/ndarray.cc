@@ -261,10 +261,7 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority, bool alloc_outpu
                                   from.ctx(), ret.ctx(), ctx);
         } else if (storage_type == kRowSparseStorage) {
           auto aux_shape = from.aux_shape(0);
-          if (aux_shape.ndim() == 0) {
-            // All zeros
-            return;
-          }
+          if (aux_shape.Size() == 0) return;
           if (alloc) ret.CheckAndAlloc({aux_shape});
           TBlob val = ret.data();
           TBlob idx = ret.aux_data(rowsparse::kIdx);

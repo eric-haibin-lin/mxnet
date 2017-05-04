@@ -237,9 +237,10 @@ class NDArray {
   inline TBlob aux_data(size_t i) const {
     CHECK(storage_type() != kDefaultStorage);
     TBlob res;
+    CHECK(i < ptr_->aux_handles.size());
     MSHADOW_TYPE_SWITCH(aux_type(i), DType, {
       res = TBlob(static_cast<DType*>(ptr_->aux_handles[i].dptr), aux_shape(i),
-                 ptr_->aux_handles[i].ctx.dev_mask(), aux_type(i));
+                  ptr_->aux_handles[i].ctx.dev_mask(), aux_type(i));
     });
 #if MKL_EXPERIMENTAL == 1
     res.Mkl_mem_ = Mkl_mem_;
@@ -276,12 +277,16 @@ class NDArray {
     return dtype_;
   }
   inline int aux_type(size_t i) const {
-    CHECK(ptr_ != nullptr);
+    CHECK(!is_none());
     return ptr_->aux_types[i];
   }
   inline NDArrayStorageType storage_type() const {
     if (is_none()) return kUndefinedStorage;
     return ptr_->storage_type;
+  }
+  inline size_t num_aux() const {
+    if (is_none()) return 0;
+    return ptr_->aux_handles.size();
   }
   /*! \return whether this ndarray is not initialized */
   inline bool is_none() const {
@@ -555,10 +560,12 @@ class NDArray {
      * \brief if this is true, this means the data do not come
      * from Storage, and do not need to be freed
      */
+    /*! \brief construct from static data */
     bool static_data;
     /*! \brief whether allocation is delayed. */
     bool delay_alloc;
-    /*! \brief construct from static data */
+    // the type of the storage. The storage_type is never kUndefinedStorage once the chunk
+    // is constructed.
     NDArrayStorageType storage_type = kDefaultStorage;
     /*! \brief type of aux */
     std::vector<int> aux_types;
@@ -582,6 +589,7 @@ class NDArray {
       shandle.ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
     }
+    // construct a chunk by copying over data
     Chunk(const NDArray &nd, const std::vector<NDArray> &nd_aux, Context ctx_,
           NDArrayStorageType storage_type_)
         : static_data(false), delay_alloc(false), storage_type(storage_type_), ctx(ctx_) {
@@ -623,22 +631,25 @@ class NDArray {
     Chunk(const TBlob &data, int dev_id, Engine::VarHandle shared_var)
         : static_data(true), delay_alloc(false) {
       CHECK(storage_type == kDefaultStorage);
+      // init var
       if (shared_var == nullptr) {
         var = Engine::Get()->NewVariable();
       } else {
         skip_delete_var = true;
         var = shared_var;
       }
+      // init ctx
       if (data.dev_mask_ == cpu::kDevMask) {
-        shandle.ctx = Context::CPU();
+        ctx = Context::CPU();
       } else {
         CHECK_EQ(data.dev_mask_, gpu::kDevMask);
-        shandle.ctx = Context::GPU(dev_id);
+        ctx = Context::GPU(dev_id);
       }
+      // init shandle
+      shandle.ctx = ctx;
       shandle.dptr = data.dptr_;
       shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
       storage_shape = data.shape_;
-      CHECK_GE(storage_shape.ndim(), 0);
     }
     Chunk(Context ctx_, bool delay_alloc_, std::vector<int> aux_types_,
           NDArrayStorageType storage_type_)
@@ -679,14 +690,20 @@ class NDArray {
         }
       }
     }
+    // create storage handle for data based on shape and dtype, assuming ctx is set
+    // shandle and storage shape are updated
     inline void CheckAndAllocData(const TShape &shape, int dtype) {
       CHECK_NE(aux_shapes.size(), 0) << "data is expected to be allocated after aux_data";
+      // init shape
       storage_shape = shape;
+      // init storage
       auto dbytes = shape.Size() * mshadow::mshadow_sizeof(dtype);
       shandle = Storage::Get()->Alloc(dbytes, ctx);
       // delay_alloc is only set when data storage handle is present
       delay_alloc = false;
     }
+    // create storage handle for aux data based on shape, assuming ctx and aux type are set
+    // aux_handle and aux shape are updated
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
       CHECK_GT(shape.Size(), 0) << "shape cannot be empty in CheckAndAllocAuxData";
       CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
@@ -695,12 +712,11 @@ class NDArray {
         << "storage type cannot be kUndefinedStorage in CheckAndAllocAuxData";
       CHECK_NE(storage_type, kDefaultStorage)
         << "storage type cannot be kDefaultStorage in CheckAndAllocAuxData";
-
       if (aux_shapes.size() <= i) {
         aux_shapes.resize(i + 1);
         aux_handles.resize(i + 1);
       }
-      // Initialize shape
+      // init shape
       aux_shapes[i] = shape;
       // Init aux storage
       size_t aux_bytes = shape.Size() * mshadow::mshadow_sizeof(aux_types[i]);

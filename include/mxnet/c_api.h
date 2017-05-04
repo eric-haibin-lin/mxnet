@@ -439,6 +439,13 @@ MXNET_DLL int MXNDArrayGetData(NDArrayHandle handle,
  */
 MXNET_DLL int MXNDArrayGetDType(NDArrayHandle handle,
                                int *out_dtype);
+// Get the aux type for ith aux data
+MXNET_DLL int MXNDArrayGetAuxType(NDArrayHandle handle,
+                                  mx_uint i,
+                                  int *out_aux_type);
+// Get the num of aux data to help store sparse NDArray
+MXNET_DLL int MXNDArrayGetNumAux(NDArrayHandle handle,
+                                 mx_uint *out_num_aux);
 /*!
  * \brief get the context of the NDArray
  * \param handle the handle to the narray
