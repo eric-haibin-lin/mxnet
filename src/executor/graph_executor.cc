@@ -178,69 +178,6 @@ inline ValueType get_node_attr(
   }
 }
 
-nnvm::Graph GraphExecutor::InitFullGraphV1(
-    nnvm::Symbol symbol,
-    const std::vector<OpReqType>& grad_req_type,
-    const std::vector<NDArray>& arg_grad_store) {
-  using nnvm::NodePtr;
-  using nnvm::NodeEntry;
-  // initial information
-  num_forward_outputs_ = symbol.outputs.size();
-  num_forward_inputs_ = symbol.ListInputs(nnvm::Symbol::kAll).size();
-
-  nnvm::Graph g;
-  g.outputs = symbol.outputs;
-  bool need_grad = false;
-  for (OpReqType req : grad_req_type) {
-    if (req != kNullOp) need_grad = true;
-  }
-  if (!need_grad) return g;
-  for (size_t i = 0; i < g.outputs.size(); ++i) {
-    NodeEntry ngrad{nnvm::Node::Create(), 0, 0};
-    head_grad_entry_.emplace_back(AttrHint(ngrad, g.outputs[i]));
-    head_grad_map_[ngrad.node.get()] = i;
-  }
-  std::vector<NodePtr> args = symbol.ListInputs(nnvm::Symbol::kReadOnlyArgs);
-  std::vector<NodeEntry> xs;
-  for (size_t i = 0; i < grad_req_type.size(); ++i) {
-    if (grad_req_type[i] != kNullOp) {
-      grad_store_.emplace_back(
-          std::make_pair(grad_req_type[i], arg_grad_store[i]));
-      xs.emplace_back(NodeEntry{args[i], 0, 0});
-    }
-  }
-
-  int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
-  auto need_mirror = [do_mirror](const nnvm::Node& node) -> int {
-    if (node.is_variable()) return 0;
-    const std::string& type = node.attrs.op->name;
-    if (type == "Dropout") return false;
-    if (get_node_attr(node, "__force_mirroring__", false)) return true;
-    if (do_mirror == 0) return false;
-    if (type == "Convolution") return false;
-    if (type == "FullyConnected") return false;
-    if (type == "Concat") return false;
-    if (type == "SoftmaxOutput") return false;
-    if (type == "CuDNNBatchNorm") return false;
-    return true;
-  };
-
-  std::vector<const nnvm::Op*> zero_ops;
-  zero_ops.push_back(nnvm::Op::Get("zeros_like"));
-  zero_ops.push_back(nnvm::Op::Get("_zeros"));
-
-  // take gradient
-  nnvm::Graph g_grad = nnvm::pass::Gradient(
-      g, symbol.outputs, xs, head_grad_entry_,
-      AggregateGradient, need_mirror, nullptr,
-      zero_ops);
-  CHECK_EQ(g_grad.outputs.size(), xs.size());
-  for (const auto &e : g_grad.outputs) {
-    g.outputs.push_back(e);
-  }
-  return g;
-}
-
 /*!
  * \brief Create the graph for backward pass.
  * This is triggered by both simple_bind and bind flows.
@@ -304,95 +241,66 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   return g;
 }
 
-// pass to assign context to the graph
-Graph AssignContextV1(Graph g,
-                      const Context& default_ctx,
-                      const std::map<std::string, Context>& ctx_map,
-                      const std::vector<NDArray>& in_args,
-                      const std::vector<std::pair<OpReqType, NDArray> >& grad_store,
-                      const std::vector<NDArray>& aux_states,
-                      size_t num_forward_inputs,
-                      size_t num_forward_outputs) {
-  const auto& idx = g.indexed_graph();
-  const auto& mutable_nodes = idx.mutable_input_nodes();
-  // default use default context.
-  if (ctx_map.size() == 0) {
-    g.attrs["context"] = std::make_shared<nnvm::any>(
-        ContextVector(idx.num_nodes(), default_ctx));
-    for (const auto& x : in_args) {
-      CHECK(x.ctx() == default_ctx)
-        << "Input array is in " << x.ctx() << " while binding with ctx=" << default_ctx
-        << ". All arguments must be in global context (" << default_ctx
-        << ") unless group2ctx is specified for cross-device graph.";
-    }
-    for (const auto& x : grad_store) {
-      CHECK(x.second.ctx() == default_ctx)
-        << "Gradient array is in " << x.second.ctx() << " while binding with ctx="
-        << default_ctx << ". All gradients must be in global context (" << default_ctx
-        << ") unless group2ctx is specified for cross-device graph.";
-    }
-    return g;
-  }
-  // otherwise, use context assignment.
-  std::map<Context, int> ctx2id;
-  std::vector<Context> ctx_list;
-  nnvm::DeviceVector device(idx.num_nodes(), -1);
-  nnvm::DeviceAssignMap device_map;
+nnvm::Graph GraphExecutor::InitFullGraphV1(
+    nnvm::Symbol symbol,
+    const std::vector<OpReqType>& grad_req_type,
+    const std::vector<NDArray>& arg_grad_store) {
+  using nnvm::NodePtr;
+  using nnvm::NodeEntry;
+  // initial information
+  num_forward_outputs_ = symbol.outputs.size();
+  num_forward_inputs_ = symbol.ListInputs(nnvm::Symbol::kAll).size();
 
-  for (auto &kv : ctx_map) {
-    if (ctx2id.count(kv.second) == 0) {
-      ctx2id[kv.second] = static_cast<int>(ctx_list.size());
-      ctx_list.push_back(kv.second);
+  nnvm::Graph g;
+  g.outputs = symbol.outputs;
+  bool need_grad = false;
+  for (OpReqType req : grad_req_type) {
+    if (req != kNullOp) need_grad = true;
+  }
+  if (!need_grad) return g;
+  for (size_t i = 0; i < g.outputs.size(); ++i) {
+    NodeEntry ngrad{nnvm::Node::Create(), 0, 0};
+    head_grad_entry_.emplace_back(AttrHint(ngrad, g.outputs[i]));
+    head_grad_map_[ngrad.node.get()] = i;
+  }
+  std::vector<NodePtr> args = symbol.ListInputs(nnvm::Symbol::kReadOnlyArgs);
+  std::vector<NodeEntry> xs;
+  for (size_t i = 0; i < grad_req_type.size(); ++i) {
+    if (grad_req_type[i] != kNullOp) {
+      grad_store_.emplace_back(
+          std::make_pair(grad_req_type[i], arg_grad_store[i]));
+      xs.emplace_back(NodeEntry{args[i], 0, 0});
     }
-    device_map[kv.first] = ctx2id.at(kv.second);
   }
 
-  size_t arg_top = 0, aux_top = 0;
-  for (size_t i = 0; i < num_forward_inputs; ++i) {
-    const uint32_t nid = idx.input_nodes().at(i);
-    Context ctx;
-    if (mutable_nodes.count(nid)) {
-      CHECK_LT(aux_top, aux_states.size());
-      ctx = aux_states[aux_top].ctx();
-      ++aux_top;
-    } else {
-      CHECK_LT(arg_top, in_args.size());
-      ctx = in_args[arg_top].ctx();
-      ++arg_top;
-    }
-    if (ctx2id.count(ctx) == 0) {
-      ctx2id[ctx] = static_cast<int>(ctx_list.size());
-      ctx_list.push_back(ctx);
-    }
-    device[nid] = ctx2id.at(ctx);
-  }
-  for (size_t i = num_forward_outputs; i < g.outputs.size(); ++i) {
-    const uint32_t nid = idx.outputs()[i].node_id;
-    Context ctx = grad_store[i - num_forward_outputs].second.ctx();
-    if (ctx2id.count(ctx) == 0) {
-      ctx2id[ctx] = static_cast<int>(ctx_list.size());
-      ctx_list.push_back(ctx);
-    }
-    int devid = ctx2id.at(ctx);
-    if (device[nid] != -1) {
-      CHECK_EQ(device[nid], devid) << "device of same output not equal to each other";
-    } else {
-      device[nid] = devid;
-    }
-  }
-  g.attrs["device"] = std::make_shared<dmlc::any>(std::move(device));
-  g = nnvm::pass::PlaceDevice(g, "__ctx_group__", device_map, "_CrossDeviceCopy");
-  const auto& assigned_device = g.GetAttr<nnvm::DeviceVector>("device");
+  int do_mirror = dmlc::GetEnv("MXNET_BACKWARD_DO_MIRROR", 0);
+  auto need_mirror = [do_mirror](const nnvm::Node& node) -> int {
+    if (node.is_variable()) return 0;
+    const std::string& type = node.attrs.op->name;
+    if (type == "Dropout") return false;
+    if (get_node_attr(node, "__force_mirroring__", false)) return true;
+    if (do_mirror == 0) return false;
+    if (type == "Convolution") return false;
+    if (type == "FullyConnected") return false;
+    if (type == "Concat") return false;
+    if (type == "SoftmaxOutput") return false;
+    if (type == "CuDNNBatchNorm") return false;
+    return true;
+  };
 
-  ContextVector vcontext;
-  for (size_t i = 0; i < assigned_device.size(); ++i) {
-    if (assigned_device[i] == -1) {
-      vcontext.push_back(default_ctx);
-    } else {
-      vcontext.push_back(ctx_list[assigned_device[i]]);
-    }
+  std::vector<const nnvm::Op*> zero_ops;
+  zero_ops.push_back(nnvm::Op::Get("zeros_like"));
+  zero_ops.push_back(nnvm::Op::Get("_zeros"));
+
+  // take gradient
+  nnvm::Graph g_grad = nnvm::pass::Gradient(
+      g, symbol.outputs, xs, head_grad_entry_,
+      AggregateGradient, need_mirror, nullptr,
+      zero_ops);
+  CHECK_EQ(g_grad.outputs.size(), xs.size());
+  for (const auto &e : g_grad.outputs) {
+    g.outputs.push_back(e);
   }
-  g.attrs["context"] = std::make_shared<nnvm::any>(std::move(vcontext));
   return g;
 }
 
@@ -485,6 +393,98 @@ Graph AssignContext(Graph g,
     }
   }
 
+  g.attrs["device"] = std::make_shared<dmlc::any>(std::move(device));
+  g = nnvm::pass::PlaceDevice(g, "__ctx_group__", device_map, "_CrossDeviceCopy");
+  const auto& assigned_device = g.GetAttr<nnvm::DeviceVector>("device");
+
+  ContextVector vcontext;
+  for (size_t i = 0; i < assigned_device.size(); ++i) {
+    if (assigned_device[i] == -1) {
+      vcontext.push_back(default_ctx);
+    } else {
+      vcontext.push_back(ctx_list[assigned_device[i]]);
+    }
+  }
+  g.attrs["context"] = std::make_shared<nnvm::any>(std::move(vcontext));
+  return g;
+}
+
+// pass to assign context to the graph
+Graph AssignContextV1(Graph g,
+                      const Context& default_ctx,
+                      const std::map<std::string, Context>& ctx_map,
+                      const std::vector<NDArray>& in_args,
+                      const std::vector<std::pair<OpReqType, NDArray> >& grad_store,
+                      const std::vector<NDArray>& aux_states,
+                      size_t num_forward_inputs,
+                      size_t num_forward_outputs) {
+  const auto& idx = g.indexed_graph();
+  const auto& mutable_nodes = idx.mutable_input_nodes();
+  // default use default context.
+  if (ctx_map.size() == 0) {
+    g.attrs["context"] = std::make_shared<nnvm::any>(
+        ContextVector(idx.num_nodes(), default_ctx));
+    for (const auto& x : in_args) {
+      CHECK(x.ctx() == default_ctx)
+        << "Input array is in " << x.ctx() << " while binding with ctx=" << default_ctx
+        << ". All arguments must be in global context (" << default_ctx
+        << ") unless group2ctx is specified for cross-device graph.";
+    }
+    for (const auto& x : grad_store) {
+      CHECK(x.second.ctx() == default_ctx)
+        << "Gradient array is in " << x.second.ctx() << " while binding with ctx="
+        << default_ctx << ". All gradients must be in global context (" << default_ctx
+        << ") unless group2ctx is specified for cross-device graph.";
+    }
+    return g;
+  }
+  // otherwise, use context assignment.
+  std::map<Context, int> ctx2id;
+  std::vector<Context> ctx_list;
+  nnvm::DeviceVector device(idx.num_nodes(), -1);
+  nnvm::DeviceAssignMap device_map;
+
+  for (auto &kv : ctx_map) {
+    if (ctx2id.count(kv.second) == 0) {
+      ctx2id[kv.second] = static_cast<int>(ctx_list.size());
+      ctx_list.push_back(kv.second);
+    }
+    device_map[kv.first] = ctx2id.at(kv.second);
+  }
+
+  size_t arg_top = 0, aux_top = 0;
+  for (size_t i = 0; i < num_forward_inputs; ++i) {
+    const uint32_t nid = idx.input_nodes().at(i);
+    Context ctx;
+    if (mutable_nodes.count(nid)) {
+      CHECK_LT(aux_top, aux_states.size());
+      ctx = aux_states[aux_top].ctx();
+      ++aux_top;
+    } else {
+      CHECK_LT(arg_top, in_args.size());
+      ctx = in_args[arg_top].ctx();
+      ++arg_top;
+    }
+    if (ctx2id.count(ctx) == 0) {
+      ctx2id[ctx] = static_cast<int>(ctx_list.size());
+      ctx_list.push_back(ctx);
+    }
+    device[nid] = ctx2id.at(ctx);
+  }
+  for (size_t i = num_forward_outputs; i < g.outputs.size(); ++i) {
+    const uint32_t nid = idx.outputs()[i].node_id;
+    Context ctx = grad_store[i - num_forward_outputs].second.ctx();
+    if (ctx2id.count(ctx) == 0) {
+      ctx2id[ctx] = static_cast<int>(ctx_list.size());
+      ctx_list.push_back(ctx);
+    }
+    int devid = ctx2id.at(ctx);
+    if (device[nid] != -1) {
+      CHECK_EQ(device[nid], devid) << "device of same output not equal to each other";
+    } else {
+      device[nid] = devid;
+    }
+  }
   g.attrs["device"] = std::make_shared<dmlc::any>(std::move(device));
   g = nnvm::pass::PlaceDevice(g, "__ctx_group__", device_map, "_CrossDeviceCopy");
   const auto& assigned_device = g.GetAttr<nnvm::DeviceVector>("device");
