@@ -58,17 +58,6 @@ class GraphExecutor : public Executor {
                        const nnvm::NodeEntryMap<NDArray>& feed_dict
                          = nnvm::NodeEntryMap<NDArray>());
 
-  // initialized the executor
-  void InitV1(nnvm::Symbol symbol,
-              const Context& default_ctx,
-              const std::map<std::string, Context>& ctx_map,
-              const std::vector<NDArray>& in_args,
-              const std::vector<NDArray>& arg_grad_store,
-              const std::vector<OpReqType>& grad_req_type,
-              const std::vector<NDArray>& aux_states,
-              Executor* shared_exec = nullptr,
-              const nnvm::NodeEntryMap<NDArray>& feed_dict
-                = nnvm::NodeEntryMap<NDArray>());
   // initialize executor for bind
   void Init(nnvm::Symbol symbol,
             const Context& default_ctx,
@@ -162,16 +151,6 @@ class GraphExecutor : public Executor {
                      std::vector<NDArray>* in_arg_vec,
                      std::vector<NDArray>* arg_grad_vec,
                      std::vector<NDArray>* aux_state_vec);
-  // internal initialization of the graph.
-  Graph InitGraphV1(nnvm::Symbol symbol,
-                    const Context& default_ctx,
-                    const std::map<std::string, Context>& ctx_map,
-                    const std::vector<NDArray>& in_args,
-                    const std::vector<NDArray>& arg_grad_store,
-                    const std::vector<OpReqType>& grad_req_type,
-                    const std::vector<NDArray>& aux_states,
-                    const nnvm::NodeEntryMap<NDArray>& feed_dict
-                      = nnvm::NodeEntryMap<NDArray>());
   // internal initialization of the graph for simple bind
   Graph InitGraph(nnvm::Symbol symbol,
                   const Context& default_ctx,
@@ -180,10 +159,6 @@ class GraphExecutor : public Executor {
                   const std::vector<Context>& arg_grad_ctxes,
                   const std::vector<Context>& aux_state_ctxes,
                   const std::vector<OpReqType>& grad_req_types);
-  // initialize the full graph, including gradient.
-  Graph InitFullGraphV1(nnvm::Symbol symbol,
-                        const std::vector<OpReqType>& grad_req_type,
-                        const std::vector<NDArray>& arg_grad_store);
   // intialize the full graph for simple bind, including gradient
   Graph InitFullGraph(nnvm::Symbol symbol,
                       const std::vector<OpReqType>& grad_req_types);
