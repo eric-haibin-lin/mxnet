@@ -8,7 +8,7 @@ from mxnet.test_utils import *
 def test_elemwise_add_dense():
     data1 = mx.symbol.Variable('data1')
     data2 = mx.symbol.Variable('data2')
-    shape = (1, 1)
+    shape = (2, 2)
     data1_tmp = np.ones(shape)
     data2_tmp = np.zeros(shape) + 2
     test = mx.symbol.elemwise_add(data1, data2)
@@ -106,20 +106,22 @@ def test_elemwise_add_multiple_stages():
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
 
+# TODO(haibin) also add test for backward pass
 def test_cast_storage():
-    def test_rsp_to_dns(data, row_idx, shape):
-        rsp = mx.sparse_nd.array(values=data, index_list=[row_idx], storage_type='row_sparse', shape=shape, aux_types = [np.int32])
+    def test_rsp_to_dns(shape):
+        rsp, data, row_idx = rand_sparse_ndarray(shape, 'row_sparse', allow_zeros = True)
         dns_out = mx.nd.cast_storage(rsp, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())
-        for k, v in enumerate(row_idx):
-            dns_expected[v, :] = data[k]
+        if row_idx is not None:
+            for k, v in enumerate(row_idx):
+                dns_expected[v, :] = data[k]
         assert same(dns_out.asnumpy(), dns_expected)
 
-    def test_dns_to_rsp(dns_in):
-        dns_in = np.array(dns_in)
+    def test_dns_to_rsp(shape):
+        dns_in = rand_ndarray(shape, 'default')
         rsp_out = mx.nd.cast_storage(mx.nd.array(dns_in, dtype=default_dtype()), storage_type='row_sparse')
         ret = mx.nd.cast_storage(rsp_out, storage_type='default')
-        assert same(ret.asnumpy(), dns_in)
+        assert same(ret.asnumpy(), dns_in.asnumpy())
 
     def test_csr_to_dns(data, indptr, col_idx, shape):
         indptr = np.array(indptr, dtype=np.int32)
@@ -143,9 +145,9 @@ def test_cast_storage():
         ret = mx.nd.cast_storage(csr_out, storage_type='default')
         assert same(ret.asnumpy(), dns_in)
 
-    test_rsp_to_dns([], [], (10, 3))
-    test_rsp_to_dns(random_arrays((4,2)), [2, 4, 5, 7], (10, 2))
-    test_dns_to_rsp([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
+    shape = (rnd.randint(1, 10),rnd.randint(1, 10))
+    test_rsp_to_dns(shape)
+    test_dns_to_rsp(shape)
     test_csr_to_dns([], [0, 0, 0, 0, 0], [], (4, 4))
     test_csr_to_dns([5, 8, 3, 6], [0, 0, 2, 3, 4], [0, 1, 2, 1], (4, 4))
     test_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
