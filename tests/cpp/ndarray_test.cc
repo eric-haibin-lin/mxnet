@@ -10,6 +10,7 @@
 #include "../src/operator/tensor/elemwise_binary_op.h"
 #include "../src/operator/tensor/elemwise_unary_op.h"
 #include "../src/operator/optimizer_op-inl.h"
+#include "../src/operator/tensor/init_op.h"
 
 #define TEST_DTYPE float
 #define TEST_ITYPE int32_t
@@ -214,7 +215,7 @@ void SGDDnsRspTest() {
   Engine::Get()->PushSync([weight, rsp_grad, output, param](RunContext ctx) {
       std::vector<NDArray> inputs{weight, rsp_grad}, outputs{output};
       std::vector<OpReqType> req({kAddTo});
-      op::SGDUpdateDnsRspImpl<cpu>(param, {}, inputs, req, outputs);
+      //op::SparseSGDUpdateDnsRspImpl<cpu>(param, {}, inputs, req, outputs);
     }, weight.ctx(), {rsp_grad.var()}, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   auto sgd = [lr, wd, rescale] (TEST_DTYPE weight, TEST_DTYPE grad) {
@@ -226,6 +227,32 @@ void SGDDnsRspTest() {
                                  7 + sgd(7, 3), 8 + sgd(8, 4)});
   output.WaitToRead();
   CheckDataRegion(output.data(), expected.data());
+}
+
+void CopyFromToRspDnsTest() {
+  Context ctx;
+  // Sparse ndarray
+  TShape shape({2, 2});
+  NDArray nd = GetRspND(shape, ctx, {0}, {1, 1});
+  // Dense ndarray
+  NDArray dense_nd = GetDenseND(shape, ctx, {1, 1, 0, 0});
+  nd.WaitToRead();
+  CopyFromTo(nd, &dense_nd);
+  dense_nd.WaitToRead();
+  CheckDataRegion(nd.data(), dense_nd.data());
+}
+
+void CopyFromToRspRspTest() {
+  Context ctx;
+  // Sparse ndarray
+  TShape shape({3, 2});
+  NDArray nd = GetRspND(shape, ctx, {0}, {1, 1});
+  // Sparse ndarray with enough memory. It's expected to reuse the memory
+  NDArray dst_nd = GetRspND(shape, ctx, {0, 1, 2}, {1, 1, 2, 2, 3, 3});
+  nd.WaitToRead();
+  CopyFromTo(nd, &dst_nd);
+  dst_nd.WaitToRead();
+  CheckDataRegion(nd.data(), dst_nd.data());
 }
 
 TEST(NDArray, conversion) {
@@ -245,6 +272,10 @@ TEST(NDArray, basics) {
 }
 
 TEST(NDArray, optimizer) {
-  SGDDnsRspTest();
+  //SGDDnsRspTest();
 }
 
+TEST(NDArray, copy) {
+  CopyFromToRspDnsTest();
+  CopyFromToRspRspTest();
+}

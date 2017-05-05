@@ -88,6 +88,10 @@ def random_sparse_ndarray(shape, storage_type, sparsity = 0.5, allow_zeros = Fal
         raise Exception('Not implemented for SparseND yet!')
     return arr
 
+def random_ndarray(shape, storage_type):
+    if storage_type == 'default':
+        return mx.nd.array(random_arrays(shape))
+    return random_sparse_ndarray(shape, storage_type, 0.5, False)
 
 def np_reduce(dat, axis, keepdims, numpy_reduce_func):
     """Compatible reduce for old version of NumPy.

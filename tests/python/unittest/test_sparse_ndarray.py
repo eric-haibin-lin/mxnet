@@ -60,13 +60,21 @@ def test_sparse_nd_zeros():
     sparse_zero = mx.sparse_nd.zeros((2,2), 'row_sparse')
     assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
 
-def check_sparse_nd_copy(storage_type):
-    c = random_sparse_ndarray((10, 10), storage_type, allow_zeros = True)
-    d = c.copyto(mx.Context('cpu', 0))
-    assert np.sum(np.abs(c.asnumpy() != d.asnumpy())) == 0.0
+def check_sparse_nd_copy(from_stype, to_stype):
+    shape = (random.randint(1, 10), random.randint(1, 10))
+    from_nd = random_ndarray(shape, from_stype)
+    # copy to ctx
+    to_ctx = from_nd.copyto(default_context())
+    # copy to stype
+    to_stype = random_ndarray(shape, to_stype)
+    to_stype = from_nd.copyto(to_stype)
+    assert np.sum(np.abs(from_nd.asnumpy() != to_ctx.asnumpy())) == 0.0
+    assert np.sum(np.abs(from_nd.asnumpy() != to_stype.asnumpy())) == 0.0
 
 def test_sparse_nd_copy():
-    check_sparse_nd_copy('row_sparse')
+    check_sparse_nd_copy('row_sparse', 'row_sparse')
+    check_sparse_nd_copy('row_sparse', 'default')
+    check_sparse_nd_copy('default', 'row_sparse')
 
 def test_sparse_nd_property():
     storage_type = 'row_sparse'

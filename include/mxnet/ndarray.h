@@ -29,13 +29,15 @@
 #endif
 
 namespace mxnet {
-
 // forward declarations
 class NDArray;
 
 namespace op {
 template<typename xpu>
 void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst);
+
+template<typename xpu>
+void CastStorageComputeImpl(mshadow::Stream<xpu> *s, const NDArray& input, const NDArray& output);
 };
 
 namespace ndarray {
@@ -698,38 +700,44 @@ class NDArray {
     inline void CheckAndAlloc(const TShape &shape, const std::vector<TShape> &aux_shapes,
                               int dtype) {
       // calculate size, perform allocation
-      if (delay_alloc) {
-        if (kRowSparseStorage == storage_type) {
-          // For row sparse, aux_shape indicates the number of rows to allocate
-          auto aux_shape = aux_shapes[rowsparse::kIdx];
-          CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
-          CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
-          TShape storage_shape(shape);
-          storage_shape[0] = aux_shape[0];
-          CheckAndAllocData(storage_shape, dtype);
-        } else if (kCSRStorage == storage_type) {
-          CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]);
-          CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]);
-          CheckAndAllocData(aux_shapes[csr::kIdx], dtype);
-        } else {
-          LOG(FATAL) << "Storage type " << storage_type << " not implemented for CheckAndAlloc";
-        }
+      if (kRowSparseStorage == storage_type) {
+        // For row sparse, aux_shape indicates the number of rows to allocate
+        auto aux_shape = aux_shapes[rowsparse::kIdx];
+        CHECK_EQ(shape.ndim(), 2) << "High dim RowSparse not yet implemented";
+        CheckAndAllocAuxData(rowsparse::kIdx, aux_shape);
+        TShape storage_shape(shape);
+        storage_shape[0] = aux_shape[0];
+        CheckAndAllocData(storage_shape, dtype);
+      } else if (kCSRStorage == storage_type) {
+        CheckAndAllocAuxData(csr::kIndPtr, aux_shapes[csr::kIndPtr]);
+        CheckAndAllocAuxData(csr::kIdx, aux_shapes[csr::kIdx]);
+        CheckAndAllocData(aux_shapes[csr::kIdx], dtype);
+      } else {
+        LOG(FATAL) << "Storage type " << storage_type << " not implemented for CheckAndAlloc";
       }
     }
     // create storage handle for data based on shape and dtype, assuming ctx is set
-    // shandle and storage shape are updated
+    // storage shape is updated
+    // if data is already allocated, try reuse the storage. Otherwise, free the current one
+    // and allocate new storage
     inline void CheckAndAllocData(const TShape &shape, int dtype) {
       CHECK_NE(aux_shapes.size(), 0) << "data is expected to be allocated after aux_data";
+      auto dbytes = shape.Size() * mshadow::mshadow_sizeof(dtype);
+      if (shandle.size < dbytes) {
+        // free storage if necessary and alloc again
+        if (shandle.size > 0) Storage::Get()->Free(shandle);
+        // init storage
+        shandle = Storage::Get()->Alloc(dbytes, ctx);
+      }
       // init shape
       storage_shape = shape;
-      // init storage
-      auto dbytes = shape.Size() * mshadow::mshadow_sizeof(dtype);
-      shandle = Storage::Get()->Alloc(dbytes, ctx);
       // delay_alloc is only set when data storage handle is present
       delay_alloc = false;
     }
     // create storage handle for aux data based on shape, assuming ctx and aux type are set
-    // aux_handle and aux shape are updated
+    // aux shape is updated
+    // if aux data is already allocated, try reuse the storage. Otherwise, free the current one
+    // and allocate new storage
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
       CHECK_GT(shape.Size(), 0) << "shape cannot be empty in CheckAndAllocAuxData";
       CHECK_EQ(shape.ndim(), 1) << "shape must be 1D in CheckAndAllocAuxData";
@@ -742,11 +750,15 @@ class NDArray {
         aux_shapes.resize(i + 1);
         aux_handles.resize(i + 1);
       }
+      size_t aux_bytes = shape.Size() * mshadow::mshadow_sizeof(aux_types[i]);
+      if (aux_handles[i].size < aux_bytes) {
+        // free storage if necessary and alloc again
+        if (aux_handles[i].size > 0) Storage::Get()->Free(aux_handles[i]);
+        // init aux storage
+        aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx);
+      }
       // init shape
       aux_shapes[i] = shape;
-      // Init aux storage
-      size_t aux_bytes = shape.Size() * mshadow::mshadow_sizeof(aux_types[i]);
-      aux_handles[i] = Storage::Get()->Alloc(aux_bytes, ctx);
     }
     /*! \brief destructor */
     ~Chunk() {
@@ -784,6 +796,7 @@ class NDArray {
 template<typename from_xpu, typename to_xpu>
 inline void CopyFromToRspImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc) {
   using namespace mshadow;
+  CHECK_EQ(from.storage_type(), to->storage_type()) << "Copying with different storage type";
   // if source is zeros, fill destination with zeros, too
   auto s = ctx.get_stream<to_xpu>();
   if (from.is_zeros_hint()) {
@@ -804,6 +817,7 @@ inline void CopyFromToRspImpl(const NDArray from, NDArray *to, RunContext ctx, b
 template<typename from_xpu, typename to_xpu>
 inline void CopyFromToDnsImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc) {
   using namespace mshadow;
+  CHECK_EQ(from.storage_type(), to->storage_type()) << "Copying with different storage type";
   if (alloc) to->CheckAndAlloc();
   TBlob tmp = to->data();
   ndarray::Copy<from_xpu, to_xpu>(from.data(), &tmp,
@@ -818,11 +832,28 @@ inline void CopyFromToDnsImpl(const NDArray from, NDArray *to, RunContext ctx, b
 // Make a copy of an NDArray based on storage type
 template<typename from_xpu, typename to_xpu>
 void CopyFromToImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc) {
-  auto stype = from.storage_type();
-  if (stype == kDefaultStorage) {
-    CopyFromToDnsImpl<from_xpu, to_xpu>(from, to, ctx, alloc);
-  } else if (stype == kRowSparseStorage) {
-    CopyFromToRspImpl<from_xpu, to_xpu>(from, to, ctx, alloc);
+  // if storage type doesn't match, cast the storage first
+  auto from_stype = from.storage_type();
+  auto to_stype = to->storage_type();
+  NDArray casted_nd;
+  if (from_stype != to_stype) {
+    TShape shape = from.shape();
+    auto from_ctx = from.ctx();
+    auto s = ctx.get_stream<from_xpu>();
+    // TODO(haibin) inplace conversion
+    if (to_stype == kDefaultStorage) {
+      casted_nd = NDArray(shape, from_ctx);
+    } else {
+      casted_nd = NDArray(to_stype, shape, from_ctx);
+    }
+    op::CastStorageComputeImpl<from_xpu>(s, from, casted_nd);
+  } else {
+    casted_nd = from;
+  }
+  if (to_stype == kDefaultStorage) {
+    CopyFromToDnsImpl<from_xpu, to_xpu>(casted_nd, to, ctx, alloc);
+  } else if (to_stype == kRowSparseStorage) {
+    CopyFromToRspImpl<from_xpu, to_xpu>(casted_nd, to, ctx, alloc);
   } else {
     // TODO(haibin) support csr copy
     LOG(FATAL) << "Not implemented yet";

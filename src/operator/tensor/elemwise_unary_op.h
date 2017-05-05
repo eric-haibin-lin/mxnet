@@ -253,7 +253,7 @@ void CastStorageRspDnsImpl(mshadow::Stream<xpu> *s, const NDArray& rsp, TBlob* d
       // assign zeros
       mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, dns->Size(), dns->dptr<DType>());
       if (rsp.is_zeros_hint() == false) {
-        // Copy over row by row
+        // copy over row by row
         auto in_data = rsp.data().FlatTo2D<xpu, DType>(s);
         auto out_data = dns->FlatTo2D<xpu, DType>(s);
         auto num_rows = rsp.aux_shape(rowsparse::kIdx).Size();

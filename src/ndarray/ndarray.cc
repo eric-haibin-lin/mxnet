@@ -233,12 +233,12 @@ void ScalarOp(const NDArray &lhs,
   }
 }
 
+
 void CopyFromTo(const NDArray &from, NDArray *to, int priority, bool alloc_output) {
   if (from.var() == to->var()) {
     // skip to copy to itself
     return;
   }
-  CHECK_EQ(from.storage_type(), to->storage_type()) << "Copying with different storage type";
   CHECK(from.shape() == to->shape())
       << "operands shape mismatch"
       << "from.shape = " << from.shape() << " to.shape=" << to->shape();
