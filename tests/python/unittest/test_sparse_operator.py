@@ -108,7 +108,7 @@ def test_elemwise_add_multiple_stages():
 
 def test_cast_storage():
     def test_rsp_to_dns(data, row_idx, shape):
-        rsp = mx.sparse_nd.array(values=data, index_list=[row_idx], storage_type='row_sparse', shape=shape)
+        rsp = mx.sparse_nd.array(values=data, index_list=[row_idx], storage_type='row_sparse', shape=shape, aux_types = [np.int32])
         dns_out = mx.nd.cast_storage(rsp, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())
         for k, v in enumerate(row_idx):
@@ -144,7 +144,7 @@ def test_cast_storage():
         assert same(ret.asnumpy(), dns_in)
 
     test_rsp_to_dns([], [], (10, 3))
-    test_rsp_to_dns([[1, 2], [3, 4], [5, 6], [7, 8]], [2, 4, 5, 7], (10, 2))
+    test_rsp_to_dns(random_arrays((4,2)), [2, 4, 5, 7], (10, 2))
     test_dns_to_rsp([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
     test_csr_to_dns([], [0, 0, 0, 0, 0], [], (4, 4))
     test_csr_to_dns([5, 8, 3, 6], [0, 0, 2, 3, 4], [0, 1, 2, 1], (4, 4))

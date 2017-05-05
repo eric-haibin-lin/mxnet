@@ -220,8 +220,7 @@ class SparseNDArray(NDArray):
     def asnumpy(self):
         """Return a dense ``numpy.ndarray`` object with value copied from this array
         """
-        dense_nd = self.to_dense()
-        return dense_nd.asnumpy()
+        return self.to_dense().asnumpy()
 
     def asscalar(self):
         raise Exception('Not implemented for SparseND yet!')

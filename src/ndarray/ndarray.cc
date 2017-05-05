@@ -11,6 +11,7 @@
 #include <mxnet/resource.h>
 #include <mshadow/tensor.h>
 #include "./ndarray_function.h"
+#include "../operator/tensor/init_op.h"
 
 #if MXNET_USE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -253,60 +254,28 @@ void CopyFromTo(const NDArray &from, NDArray *to, int priority, bool alloc_outpu
 
   if (a == cpu::kDevMask && b == cpu::kDevMask) {
     Engine::Get()->PushSync([from, ret, alloc](RunContext ctx) {
-        auto storage_type = from.storage_type();
-        if (storage_type == kDefaultStorage) {
-          if (alloc) ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Copy<cpu, cpu>(from.data(), &tmp,
-                                  from.ctx(), ret.ctx(), ctx);
-        } else if (storage_type == kRowSparseStorage) {
-          auto aux_shape = from.aux_shape(0);
-          if (aux_shape.Size() == 0) return;
-          if (alloc) ret.CheckAndAlloc({aux_shape});
-          TBlob val = ret.data();
-          TBlob idx = ret.aux_data(rowsparse::kIdx);
-          ndarray::Copy<cpu, cpu>(from.data(), &val,
-                                  from.ctx(), ret.ctx(), ctx);
-          ndarray::Copy<cpu, cpu>(from.aux_data(rowsparse::kIdx), &idx,
-                                  from.ctx(), ret.ctx(), ctx);
-        } else {
-          LOG(FATAL) << "Not implemented yet";
-        }
+        NDArray nd(ret);
+        CopyFromToImpl<cpu, cpu>(from, &nd, ctx, alloc);
       }, from.ctx(), const_vars, {ret.var()},
       FnProperty::kNormal, priority, PROFILER_MESSAGE("CopyCPU2CPU"));
   } else {
 #if MXNET_USE_CUDA
     if (a == cpu::kDevMask && b == gpu::kDevMask) {
       Engine::Get()->PushSync([from, ret, alloc](RunContext ctx) {
-          if (from.storage_type() != kDefaultStorage) LOG(FATAL) << "GPU not implemented yet";
-          if (alloc) ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Copy<cpu, gpu>(from.data(), &tmp,
-                                  from.ctx(), ret.ctx(), ctx);
-          // Wait GPU kernel to complete
-          ctx.get_stream<gpu>()->Wait();
+          NDArray nd(ret);
+          CopyFromToImpl<cpu, gpu>(from, &nd, ctx, alloc);
         }, ret.ctx(), const_vars, {ret.var()},
         FnProperty::kCopyToGPU, priority, PROFILER_MESSAGE("CopyCPU2GPU"));
     } else if (a == gpu::kDevMask && b == cpu::kDevMask) {
       Engine::Get()->PushSync([from, ret, alloc](RunContext ctx) {
-          if (from.storage_type() != kDefaultStorage) LOG(FATAL) << "GPU not implemented yet";
-          if (alloc) ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Copy<gpu, cpu>(from.data(), &tmp,
-                                  from.ctx(), ret.ctx(), ctx);
-          // Wait GPU kernel to complete
-          ctx.get_stream<gpu>()->Wait();
+          NDArray nd(ret);
+          CopyFromToImpl<gpu, cpu>(from, &nd, ctx, alloc);
         }, from.ctx(), const_vars, {ret.var()},
         FnProperty::kCopyFromGPU, priority, PROFILER_MESSAGE("CopyGPU2CPU"));
     } else if (a == gpu::kDevMask && b == gpu::kDevMask) {
       Engine::Get()->PushSync([from, ret, alloc](RunContext ctx) {
-          if (from.storage_type() != kDefaultStorage) LOG(FATAL) << "GPU not implemented yet";
-          if (alloc) ret.CheckAndAlloc();
-          TBlob tmp = ret.data();
-          ndarray::Copy<gpu, gpu>(from.data(), &tmp,
-                                  from.ctx(), ret.ctx(), ctx);
-          // Wait GPU kernel to complete
-          ctx.get_stream<gpu>()->Wait();
+          NDArray nd(ret);
+          CopyFromToImpl<gpu, gpu>(from, &nd, ctx, alloc);
         }, from.ctx(), const_vars, {ret.var()},
         from.dtype() != ret.dtype() ? FnProperty::kNormal : FnProperty::kCopyFromGPU,
         priority, PROFILER_MESSAGE("CopyGPU2GPU"));

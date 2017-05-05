@@ -774,7 +774,7 @@ void DotCsrDnsRspImpl(const OpContext& ctx,
                 lhs.shape()[0], out_tmp.shape_[1]);
 
             // cast dns to rsp
-            CastStorageDnsRspImpl<xpu>(ctx, TBlob(out_tmp), ret);
+            CastStorageDnsRspImpl<xpu>(s, TBlob(out_tmp), ret);
           } else {
             // TODO(junwu): check whether the following code is a bottleneck
             // allocate output NDArray (single thread)

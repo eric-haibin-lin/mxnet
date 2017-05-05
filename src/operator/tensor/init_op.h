@@ -15,6 +15,8 @@
 #include <string>
 #include <limits>
 #include "../elemwise_op_common.h"
+#include "../mxnet_op.h"
+
 
 namespace mxnet {
 namespace op {
@@ -126,8 +128,22 @@ void FillCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
-template<typename xpu, int value>
-void FillComputeEx(const nnvm::NodeAttrs& attrs,
+// Fill a rsp NDArray with zeros by updating values. It doesn't update the index.
+template<typename xpu>
+void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
+  bool is_zeros = dst->is_zeros_hint();
+  if (is_zeros) return;
+  // If not filled with zero, do it explicitly
+  auto values = dst->data();
+  MSHADOW_TYPE_SWITCH(values.type_flag_, DType, {
+    mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, values.Size(), values.dptr<DType>());
+  });
+}
+
+
+// This operator never falls back, since there's no input NDArray
+template<typename xpu>
+void FillComputeZerosEx(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
                  const std::vector<NDArray>& inputs,
                  const std::vector<OpReqType>& req,
@@ -138,7 +154,12 @@ void FillComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(outputs.size(), 1);
   CHECK_EQ(inputs.size(), 0);
   auto stype = outputs[0].storage_type();
-  CHECK_EQ(value, 0) << "Not implemented yet";
+  if (stype == kRowSparseStorage) {
+    NDArray nd(outputs[0]);
+    FillZerosRspImpl<xpu>(s, &nd);
+  } else {
+    LOG(INFO) << "Not implemented storage type";
+  }
 }
 
 template<typename xpu>

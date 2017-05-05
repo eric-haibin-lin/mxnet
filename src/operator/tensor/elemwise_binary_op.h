@@ -41,42 +41,35 @@ void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
                          const std::vector<NDArray>& inputs,
                          const std::vector<OpReqType>& req,
                          const std::vector<NDArray>& outputs) {
-  CHECK_EQ(inputs.size(), 2);
-  CHECK_EQ(outputs.size(), 1);
-  auto &nd_l = inputs[0];
-  auto &nd_r = inputs[1];
+  auto &lhs = inputs[0];
+  auto &rhs = inputs[1];
   auto &output = outputs[0];
 
-  CHECK_EQ(nd_l.storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
-  // Memory Estimation
-  unsigned int num_rows_l = nd_l.aux_shape(rowsparse::kIdx).Size();
-  unsigned int num_rows_r = nd_r.aux_shape(rowsparse::kIdx).Size();
-  // TODO(haibin) both zero?
-  if (num_rows_l + num_rows_r == 0) {
+  bool zeros_l = lhs.is_zeros_hint();
+  bool zeros_r = rhs.is_zeros_hint();
+  // both inputs are zeros
+  if (zeros_l && zeros_r) return;
+  // one of the input is zeros
+  if (zeros_l || zeros_r) {
+    NDArray out(output);
+    CopyFromToRspImpl<xpu, xpu>(zeros_l ? rhs : lhs, &out, ctx.run_ctx, true);
     return;
   }
-  // This is (roughly) the number of result rows
+  // Memory Estimation: This is (roughly) the number of result rows. We still
+  // need to subtract the number of common rows
+  unsigned int num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
+  unsigned int num_rows_r = rhs.aux_shape(rowsparse::kIdx).Size();
   output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (num_rows_l == 0) {
-    NDArray out(output);
-    CopyFromTo(nd_r, &out);
-    return;
-  }
-  if (num_rows_r == 0) {
-    NDArray out(output);
-    CopyFromTo(nd_l, &out);
-    return;
-  }
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(nd_l.aux_type(rowsparse::kIdx), IType, {
+    MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
       // Indices
-      auto indices_l = nd_l.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-      auto indices_r = nd_r.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto indices_l = lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto indices_r = rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
       auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
       // Data
-      auto data_l = nd_l.data().FlatTo2D<xpu, DType>(s);
-      auto data_r = nd_r.data().FlatTo2D<xpu, DType>(s);
+      auto data_l = lhs.data().FlatTo2D<xpu, DType>(s);
+      auto data_r = rhs.data().FlatTo2D<xpu, DType>(s);
       auto out = output.data().FlatTo2D<xpu, DType>(s);
 
       // TODO(haibin) A more appropriate way: Copy to output, then apply ops
@@ -139,7 +132,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
     }
     CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
     CHECK_EQ(inputs[1].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
-    BinaryComputeRspRsp<xpu, Op>(attrs, ctx, inputs, req, outputs);
+    BinaryComputeRspRsp<xpu, OP>(attrs, ctx, inputs, req, outputs);
     return;
   } else {
     LOG(FATAL) << "Not implemented";

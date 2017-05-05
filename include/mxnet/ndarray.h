@@ -15,6 +15,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <typeinfo>
 #include <memory>
 #include "./base.h"
 #include "./storage.h"
@@ -28,8 +29,20 @@
 #endif
 
 namespace mxnet {
-// forward declaration
+
+// forward declarations
 class NDArray;
+
+namespace op {
+template<typename xpu>
+void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst);
+};
+
+namespace ndarray {
+template<typename from_xpu, typename to_xpu>
+void Copy(const TBlob &from, TBlob *to, Context from_ctx, Context to_ctx, RunContext ctx);
+};
+
 namespace autograd {
 class AGNode;
 
@@ -291,6 +304,19 @@ class NDArray {
   /*! \return whether this ndarray is not initialized */
   inline bool is_none() const {
     return ptr_.get() == nullptr;
+  }
+  // returns true if a sparse ndarray's aux_data are not initialized, indicating a NDArray with zeros
+  inline bool is_zeros_hint() const {
+    if (is_none()) return true;
+    auto stype = storage_type();
+    CHECK_NE(stype, kDefaultStorage);
+    if (stype == kRowSparseStorage || stype == kCSRStorage) {
+      auto &shape = aux_shape(0);
+      return ptr_->aux_handles.size() == 0 || shape.ndim() == 0 || shape.Size() == 0;
+    } else {
+      LOG(FATAL) << "Unknown storage type";
+    }
+    return false;
   }
   /*!
    * \brief Block until all the pending write operations with respect
@@ -754,6 +780,54 @@ class NDArray {
   autograd::AGNodeEntry entry_;
 };
 
+// Make a copy of a row-sparse NDArray
+template<typename from_xpu, typename to_xpu>
+inline void CopyFromToRspImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc) {
+  using namespace mshadow;
+  // if source is zeros, fill destination with zeros, too
+  auto s = ctx.get_stream<to_xpu>();
+  if (from.is_zeros_hint()) {
+    op::FillZerosRspImpl<to_xpu>(s, to);
+    return;
+  }
+  auto aux_shape = from.aux_shape(rowsparse::kIdx);
+  if (alloc) to->CheckAndAlloc({aux_shape});
+  TBlob val = to->data();
+  TBlob idx = to->aux_data(rowsparse::kIdx);
+  ndarray::Copy<from_xpu, to_xpu>(from.data(), &val,
+                                  from.ctx(), to->ctx(), ctx);
+  ndarray::Copy<from_xpu, to_xpu>(from.aux_data(rowsparse::kIdx), &idx,
+                                  from.ctx(), to->ctx(), ctx);
+}
+
+// Make a copy of a dense NDArray
+template<typename from_xpu, typename to_xpu>
+inline void CopyFromToDnsImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc) {
+  using namespace mshadow;
+  if (alloc) to->CheckAndAlloc();
+  TBlob tmp = to->data();
+  ndarray::Copy<from_xpu, to_xpu>(from.data(), &tmp,
+                                  from.ctx(), to->ctx(), ctx);
+  auto &gpu_tid = typeid(mshadow::gpu);
+  if (typeid(from_xpu) == gpu_tid || typeid(to_xpu) == gpu_tid) {
+    // Wait GPU kernel to complete
+    ctx.get_stream<gpu>()->Wait();
+  }
+}
+
+// Make a copy of an NDArray based on storage type
+template<typename from_xpu, typename to_xpu>
+void CopyFromToImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc) {
+  auto stype = from.storage_type();
+  if (stype == kDefaultStorage) {
+    CopyFromToDnsImpl<from_xpu, to_xpu>(from, to, ctx, alloc);
+  } else if (stype == kRowSparseStorage) {
+    CopyFromToRspImpl<from_xpu, to_xpu>(from, to, ctx, alloc);
+  } else {
+    // TODO(haibin) support csr copy
+    LOG(FATAL) << "Not implemented yet";
+  }
+}
 
 /*!
  * \brief Perform elementwise sum over each data from source, store result into out.
