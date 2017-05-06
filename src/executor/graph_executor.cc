@@ -520,17 +520,19 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     uint32_t nid = idx.input_nodes().at(i);
     uint32_t oid = head_grad_map_.at(idx[nid].source);
     uint32_t eid = idx.entry_id(idx.outputs()[oid]);
-    NDArrayStorageType storage_type = (NDArrayStorageType) vstorage_type[eid];
+    NDArrayStorageType stype = (NDArrayStorageType) vstorage_type[eid];
     CHECK_NE(vshape[eid].ndim(), 0U);
     CHECK_NE(vdtype[eid], -1);
-    // init NDArray based on storage_type
-    if (storage_type != kDefaultStorage) {
-      data_entry_[idx.entry_id(nid, 0)] =
-        NDArray(storage_type, vshape[eid], data_context[eid], true, vdtype[eid]);
+    auto data_eid = idx.entry_id(nid, 0);
+    // initialize NDArray based on storage_type
+    if (stype != kDefaultStorage) {
+      data_entry_[data_eid] = NDArray(stype, vshape[eid], data_context[eid], true, vdtype[eid]);
     } else {
-      data_entry_[idx.entry_id(nid, 0)] =
-        NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
+      data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
+#if EXECUTOR_DEBUG
+    LOG(INFO) << "init data entry " << data_eid << " as stype " << stype;
+#endif
   }
   // get maximum bytes in each pool
   for (size_t i = 0; i < vshape.size(); ++i) {
@@ -546,7 +548,6 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     if (info.bytes == 0) {
       info = PoolEntry{data_context[i], bytes, data_storage_type[i]};
     } else {
-      // std::cout << "WARNING Updated info.bytes" << std::endl;
       info.bytes = std::max(info.bytes, bytes);
     }
   }
@@ -614,6 +615,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     } else {
       data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
     }
+#if EXECUTOR_DEBUG
+    LOG(INFO) << "init data entry " << i << " as stype " << storage_type;
+#endif
   }
 }
 

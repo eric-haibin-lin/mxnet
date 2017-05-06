@@ -68,33 +68,28 @@ void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  NDArrayStorageType storage_type = inputs[1].storage_type();
-  CHECK_EQ(storage_type, kRowSparseStorage);
-  if (req[0] == kNullOp) {
-    LOG(FATAL) << "kNullOp in IdentityComputeEx not supported yet";
-  }
-  if (req[0] == kWriteInplace) {
-    LOG(FATAL) << "kWriteInplace for sparse storage not supported yet";
-  }
-  bool is_zeros_hint = inputs[1].is_zeros_hint();
+  auto &input = inputs[0];
+  auto &output = outputs[0];
+  CHECK_NE(req[0], kNullOp) << "kNullOp in IdentityComputeEx not supported yet";
+  CHECK_NE(req[0], kWriteInplace) << "kWriteInplace in IdentityComputeEx not supported yet";
+  bool is_zeros_hint = input.is_zeros_hint();
   if (is_zeros_hint) return;
-  TShape shape = inputs[1].aux_shape(rowsparse::kIdx);
-  outputs[0].CheckAndAlloc({shape});
-  MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), AuxType, {
-      auto out_d = outputs[0].data().FlatTo1D<xpu, DType>(s);
-      auto out_aux = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      auto in_aux = inputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+  TShape shape = input.aux_shape(rowsparse::kIdx);
+  output.CheckAndAlloc({shape});
+  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+    MSHADOW_TYPE_SWITCH(output.aux_type(rowsparse::kIdx), AuxType, {
+      auto out_d = output.data().FlatTo1D<xpu, DType>(s);
+      auto out_aux = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+      auto in_aux = input.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
       ASSIGN_DISPATCH(out_d, req[0],
-                      F<mshadow_op::identity>(inputs[1].data().FlatTo1D<xpu, DType>(s)));
+                      F<mshadow_op::identity>(input.data().FlatTo1D<xpu, DType>(s)));
       ASSIGN_DISPATCH(out_aux, req[0], F<mshadow_op::identity>(in_aux));
     });
   });
 }
 
-// FIXME the index is hard coded for _identity_with_attr_like_rhs op
 template<typename xpu>
-void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
+void IdentityLikeRhsComputeEx(const nnvm::NodeAttrs& attrs,
                      const OpContext& ctx,
                      const std::vector<NDArray>& inputs,
                      const std::vector<OpReqType>& req,
@@ -104,9 +99,13 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(inputs.size(), 2);
   CHECK_EQ(outputs.size(), 1);
   Stream<xpu> *s = ctx.get_stream<xpu>();
-  NDArrayStorageType stype = inputs[1].storage_type();
-  CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
-  IdentityComputeRsp<xpu>(attrs, ctx, inputs, req, outputs);
+  size_t rhs_idx = 1;
+  NDArrayStorageType stype = inputs[rhs_idx].storage_type();
+  if (stype == kRowSparseStorage) {
+    IdentityComputeRsp<xpu>(attrs, ctx, inputs, req, outputs);
+  } else {
+    LOG(FATAL) << "Not implemented yet";
+  }
 }
 
 struct CastParam : public dmlc::Parameter<CastParam> {

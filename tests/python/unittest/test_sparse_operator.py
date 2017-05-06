@@ -4,73 +4,33 @@ import mxnet as mx
 from numpy.testing import assert_allclose
 from mxnet.test_utils import *
 
+def check_elemwise_add(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
+    lhs = mx.symbol.Variable('lhs', storage_type = lhs_stype)
+    rhs = mx.symbol.Variable('rhs', storage_type = rhs_stype)
+    if lhs_grad_stype is not None:
+        lhs._set_attr(grad_stype_hint=str(lhs_grad_stype))
+    if rhs_grad_stype is not None:
+        rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
 
-def test_elemwise_add_dense():
-    data1 = mx.symbol.Variable('data1')
-    data2 = mx.symbol.Variable('data2')
-    shape = (2, 2)
-    data1_tmp = np.ones(shape)
-    data2_tmp = np.zeros(shape) + 2
-    test = mx.symbol.elemwise_add(data1, data2)
-    # check_numeric_gradient(test, [data_tmp])
-    check_symbolic_forward(test, {'data1':data1_tmp,
-                                  'data2':data2_tmp}, [data1_tmp + data2_tmp])
-    #check_symbolic_backward(test, [data_tmp], [np.ones(shape)], [2 * data_tmp])
-    arr_grad1 = mx.nd.empty(shape)
-    arr_grad2 = mx.nd.empty(shape)
-    # init grad arrays before bind
-    exec_test = test.bind(default_context(), args={'data1':mx.nd.array(data1_tmp), 'data2':mx.nd.array(data2_tmp)},
-                          args_grad=[arr_grad1, arr_grad2])
-    exec_test.forward(is_train=True)
-    assert_almost_equal(exec_test.outputs[0].asnumpy(), data1_tmp + data2_tmp)
-    exec_test.backward(out_grads = exec_test.outputs)
-    assert_almost_equal(arr_grad1.asnumpy(), arr_grad2.asnumpy())
+    lhs_nd = rand_ndarray(shape, lhs_stype, sparsity=0)
+    rhs_nd = rand_ndarray(shape, rhs_stype, sparsity=0)
+    lhs_np = lhs_nd.asnumpy()
+    rhs_np = rhs_nd.asnumpy()
 
+    d_sum = lhs_np + rhs_np
+    location = {'lhs':lhs_nd, 'rhs':rhs_nd}
+    test = mx.symbol.elemwise_add(lhs, rhs)
+    check_symbolic_forward(test, location, [d_sum])
+    #check_numeric_gradient(test, location)
+    check_symbolic_backward(test, location, [d_sum], [d_sum, d_sum])
 
-def test_elemwise_add_dense_sparse():
-    # prep data
-    dense_np = np.array([[1,2],[3,4],[5,6]])
-    sparse_np1 = np.array([[5,10],[0,0],[0,0]])
-    dense_nd = mx.nd.array(dense_np)
-
-    val = mx.nd.array([5, 10]);
-    idx = mx.nd.array([0], dtype=np.int32);
-    sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2))
-
-    data1 = mx.symbol.Variable('data1')
-    data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
-    test = mx.symbol.elemwise_add(data1, data2, name='plus')
-    check_symbolic_forward(test, {'data1':dense_nd,
-                                  'data2':sparse_nd1}, [dense_np + sparse_np1])
-
-
-def test_elemwise_add_sparse_sparse():
-    # prep data
-    shape = (4, 2)
-    sparse_np1 = np.array([[5,10],[0,0],[0,0],[0,0]])
-    sparse_np2 = np.array([[0,0],[5,10],[0,0],[0,0]])
-
-    val1 = mx.nd.array([5, 10])
-    val2 = mx.nd.array([5, 10])
-    idx1 = mx.nd.array([0], dtype=np.int32);
-    idx2 = mx.nd.array([1], dtype=np.int32);
-    sparse_nd1 = mx.sparse_nd.row_sparse(val1, idx1, shape)
-    sparse_nd2 = mx.sparse_nd.row_sparse(val2, idx2, shape)
-
-    data1 = mx.symbol.Variable('data1', storage_type='row_sparse')
-    data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
-    test = mx.symbol.elemwise_add(data1, data2, name='plus')
-    check_symbolic_forward(test, {'data1':sparse_nd1,
-                                  'data2':sparse_nd2}, [sparse_np1 + sparse_np2])
-    arr_grad1 = mx.sparse_nd.zeros(shape, 'row_sparse')
-    arr_grad2 = mx.sparse_nd.zeros(shape, 'row_sparse')
-    exec_test = test.bind(default_context(), args={'data1':sparse_nd1, 'data2':sparse_nd2},
-                          args_grad=[arr_grad1, arr_grad2])
-    exec_test.forward(is_train=True)
-    assert_almost_equal(exec_test.outputs[0].asnumpy(), sparse_np1 + sparse_np2)
-    exec_test.backward(out_grads = exec_test.outputs)
-    assert_almost_equal(arr_grad1.asnumpy(), arr_grad2.asnumpy())
-
+def test_elemwise_add():
+    shape = (rnd.randint(1, 10),rnd.randint(1, 10))
+    check_elemwise_add('default', 'default', shape)
+    check_elemwise_add('default', 'row_sparse', shape)
+    check_elemwise_add('row_sparse', 'default', shape)
+    check_elemwise_add('row_sparse', 'row_sparse', shape,
+                       lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 def test_elemwise_add_multiple_stages():
     # prep data
@@ -188,9 +148,7 @@ def test_sparse_dot():
 
 
 if __name__ == '__main__':
-    test_elemwise_add_dense()
-    test_elemwise_add_dense_sparse()
-    test_elemwise_add_sparse_sparse()
+    test_elemwise_add()
     test_elemwise_add_multiple_stages()
     test_cast_storage()
     test_sparse_dot()

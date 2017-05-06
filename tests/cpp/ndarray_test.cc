@@ -63,6 +63,12 @@ void InferElemwiseStorageTest() {
   out_attrs = {kUndefinedStorage};
   op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
   EXPECT_EQ(out_attrs[0], kDefaultStorage);
+  // rsp, rsp -> rsp
+  in_attrs = {kRowSparseStorage};
+  out_attrs = {kUndefinedStorage, kUndefinedStorage};
+  op::ElemwiseStorageType<1, 2>(attrs, &in_attrs, &out_attrs);
+  EXPECT_EQ(out_attrs[0], kRowSparseStorage);
+  EXPECT_EQ(out_attrs[1], kRowSparseStorage);
 }
 
 // Optimizer

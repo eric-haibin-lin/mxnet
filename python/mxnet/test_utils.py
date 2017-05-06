@@ -65,7 +65,7 @@ def random_arrays(*shapes):
         return arrays[0]
     return arrays
 
-# TODO(haibin) also include types in arguments
+# TODO(haibin) also include types in arguments and set the default ctx
 def rand_sparse_ndarray(shape, storage_type, sparsity = None, allow_zeros = False):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     sparsity = rnd.rand() if sparsity is None else sparsity
@@ -91,11 +91,11 @@ def rand_sparse_ndarray(shape, storage_type, sparsity = None, allow_zeros = Fals
         raise Exception('Not implemented for SparseND yet!')
     return arr
 
-def rand_ndarray(shape, storage_type):
+def rand_ndarray(shape, storage_type, sparsity = None):
     if storage_type == 'default':
         arr = mx.nd.array(random_arrays(shape))
     else:
-        arr, _, _ = rand_sparse_ndarray(shape, storage_type)
+        arr, _, _ = rand_sparse_ndarray(shape, storage_type, sparsity = sparsity)
     return arr
 
 def np_reduce(dat, axis, keepdims, numpy_reduce_func):
@@ -290,7 +290,7 @@ def _parse_location(sym, location, ctx):
 
     Returns
     -------
-    dict of str to np.ndarray
+    dict of str to NDArray
     """
     assert isinstance(location, (dict, list, tuple))
     if isinstance(location, dict):
@@ -601,7 +601,19 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     if isinstance(expected, (list, tuple)):
         expected = {k:v for k, v in zip(sym.list_arguments(), expected)}
     args_grad_npy = {k:_rng.normal(size=v.shape) for k, v in expected.items()}
-    args_grad_data = {k: mx.nd.array(v, ctx=ctx) for k, v in args_grad_npy.items()}
+    # args_grad_data should be casted to storage type if hinted
+    # TODO(haibin) this is a temporary solution for testing. remove later
+    attrs = sym.attr_dict()
+    args_grad_data = {}
+    for k, v in args_grad_npy.items():
+        grad_stype = attrs[k].get('grad_stype_hint', None)
+        nd = mx.nd.array(v, ctx=ctx)
+        if grad_stype is not None:
+            out = mx.nd.cast_storage(nd, storage_type=grad_stype)
+            args_grad_data[k] = out
+        else:
+            args_grad_data[k] = nd
+
     if isinstance(grad_req, str):
         grad_req = {k:grad_req for k in sym.list_arguments()}
     elif isinstance(grad_req, (list, tuple)):

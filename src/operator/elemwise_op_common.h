@@ -61,12 +61,10 @@ template<typename AttrType, bool (*is_none)(const AttrType&),
 inline bool ElemwiseStorageAttr(const nnvm::NodeAttrs& attrs,
                          std::vector<AttrType> *in_attrs,
                          std::vector<AttrType> *out_attrs) {
-  // LOG(INFO) << "ElemwiseStorageAttr for " << attrs.name;
   auto deduce = [&](std::vector<AttrType> *vec, const char *name, AttrType& result,
                     bool fallback) {
       auto &v = *vec;
       for (size_t i = 0; i < vec->size(); ++i) {
-        // LOG(INFO) << "deduce " << (*vec)[i];
         if (v[i] == kUndefinedStorage) {
           // if input type is unknown, assume it's default storage
           CHECK(assign(&v[i], kDefaultStorage));
@@ -123,12 +121,16 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
 }
 
 inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
-                         std::vector<int> *in_attrs,
-                         std::vector<int> *out_attrs) {
+                                           std::vector<int> *in_attrs,
+                                           std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(2)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(1)) << " in operator " << attrs.name;
-  return ElemwiseStorageAttr<int, type_is_none, type_assign, false, false>(
-    attrs, in_attrs, out_attrs);
+  auto &in = *in_attrs;
+  auto &out = *out_attrs;
+  CHECK_NE(in[1], kUndefinedStorage) << "rhs storage type must be known";
+  if (in[0] == kUndefinedStorage) in[0] = in[1];
+  if (out[0] == kUndefinedStorage) out[0] = in[1];
+  return true;
 }
 
 // Transfer gradient and input to FGradient function

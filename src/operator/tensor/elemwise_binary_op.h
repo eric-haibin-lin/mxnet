@@ -168,6 +168,8 @@ void BinaryBackwardUseNoneRsp(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
+  CHECK_EQ(outputs[0].storage_type(), kRowSparseStorage);
+  CHECK_EQ(outputs[1].storage_type(), kRowSparseStorage);
   CHECK(typeid(LOP) == typeid(mshadow_op::identity));
   CHECK(typeid(ROP) == typeid(mshadow_op::identity));
   TShape shape = inputs[0].aux_shape(rowsparse::kIdx);

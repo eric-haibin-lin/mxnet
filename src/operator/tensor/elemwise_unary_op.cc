@@ -83,7 +83,7 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 .set_attr<nnvm::FIgnoreInputs>("FIgnoreInputs",
     [](const NodeAttrs& attrs) { return std::vector<uint32_t>(1, 1); })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, IdentityComputeEx<cpu>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, IdentityLikeRhsComputeEx<cpu>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", IdentityAttrLikeRhsStorageType)
 .set_attr<nnvm::FGradient>(
