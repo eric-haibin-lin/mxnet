@@ -382,6 +382,10 @@ NNVM_REGISTER_OP(_backward_dot)
 .set_attr_parser(ParamParser<DotParam>)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", DotBackwardInferStorageType)
+.set_attr<FResourceRequest>("FResourceRequest",
+  [](const NodeAttrs& attrs) {
+    return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+  })
 .set_attr<FCompute>("FCompute<cpu>", DotBackward_<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", DotBackwardEx<cpu>)
 .add_arguments(DotParam::__FIELDS__());

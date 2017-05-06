@@ -619,8 +619,10 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     elif isinstance(grad_req, (list, tuple)):
         grad_req = {k:v for k, v in zip(sym.list_arguments(), grad_req)}
 
-    executor = sym.bind(ctx=ctx, args=location, args_grad=args_grad_data, aux_states=aux_states)
+    executor = sym.bind(ctx=ctx, args=location, args_grad=args_grad_data,
+                        aux_states=aux_states, grad_req=grad_req)
     executor.forward(is_train=True)
+
     if isinstance(out_grads, (tuple, list)):
         out_grads = [mx.nd.array(v, ctx=ctx) for v in out_grads]
     elif isinstance(out_grads, (dict)):

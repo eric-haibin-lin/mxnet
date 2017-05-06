@@ -17,12 +17,12 @@ def check_elemwise_add(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_gra
     lhs_np = lhs_nd.asnumpy()
     rhs_np = rhs_nd.asnumpy()
 
-    d_sum = lhs_np + rhs_np
-    location = {'lhs':lhs_nd, 'rhs':rhs_nd}
+    out_np = lhs_np + rhs_np
     test = mx.symbol.elemwise_add(lhs, rhs)
-    check_symbolic_forward(test, location, [d_sum])
+    location = {'lhs':lhs_nd, 'rhs':rhs_nd}
+    check_symbolic_forward(test, location, [out_np])
     #check_numeric_gradient(test, location)
-    check_symbolic_backward(test, location, [d_sum], [d_sum, d_sum])
+    check_symbolic_backward(test, location, [out_np], [out_np, out_np])
 
 def test_elemwise_add():
     shape = (rnd.randint(1, 10),rnd.randint(1, 10))
@@ -119,32 +119,39 @@ def test_cast_storage():
 # the same impl function of dot(csr, dns) = rsp and it has been tested
 # in the forward test cases as the following.
 def test_sparse_dot():
-    def test_dot_csr_dns_rsp(dns1, dns2, trans_csr):
-        dns1 = mx.nd.array(dns1)
-        dns2 = mx.nd.array(dns2)
+    def test_dot_csr_dns_rsp(csr_shape, dns_shape, trans_csr):
+        dns1 = rand_ndarray(csr_shape, 'default')
+        dns2 = rand_ndarray(dns_shape, 'default')
         csr = mx.nd.cast_storage(dns1, storage_type='csr')
         rsp_out = mx.nd.dot(csr, dns2, transpose_a=trans_csr)
-        rsp_expected = mx.nd.dot(csr.to_dense(), dns2, transpose_a=trans_csr)
+        rsp_expected = mx.nd.dot(dns1, dns2, transpose_a=trans_csr)
+        out_np = rsp_expected.asnumpy()
+        backward_trans = not trans_csr
+        rhs_backward_grad = mx.nd.dot(dns1, rsp_expected, transpose_a=backward_trans).asnumpy()
         # TODO(junwu): may need to compare rsp_out and rsp_expected in rsp format
         # instead of converting them to the dense format
-        assert same(rsp_out.asnumpy(), rsp_expected.asnumpy())
+        assert same(rsp_out.asnumpy(), out_np)
 
         # test symbolic forward
         lhs = mx.symbol.Variable('lhs', storage_type='csr')
         rhs = mx.symbol.Variable('rhs', storage_type='default')
-        sym_dot = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
-        dns2_grad = mx.sparse_nd.zeros(dns2.shape, 'row_sparse')
-        exec_dot = sym_dot.bind(default_context(), args={'lhs': csr, 'rhs': dns2}, args_grad={'rhs': dns2_grad},
-                                grad_req={'lhs': 'null', 'rhs': 'write'})
-        exec_dot.forward(is_train=True)
-        assert same(exec_dot.outputs[0].asnumpy(), rsp_expected.asnumpy())
+        rhs._set_attr(grad_stype_hint=str('row_sparse'))
+        # TODO(haibin) since backward op is not fully implemented, here we add a dense zero ndarray
+        # so that the output gradient is dense.
+        zeros = mx.symbol.Variable('zero', storage_type='default')
 
-    test_dot_csr_dns_rsp(dns1=[[0, 0, 1, 4], [2, 0, 0, 0], [0, 0, 0, 0], [2, 9, 0, 5], [0, 0, 0, 1]],
-                         dns2=[[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16]],
-                         trans_csr=False)
-    test_dot_csr_dns_rsp(dns1=[[0, 0, 1, 4], [2, 0, 0, 0], [0, 0, 0, 0], [2, 9, 0, 5], [0, 0, 0, 1]],
-                         dns2=[[1, 2, 3, 4, 5], [5, 6, 7, 8, 6], [9, 10, 11, 12, 6], [13, 14, 15, 16, 7],
-                               [1, 1, 1, 1, 2]], trans_csr=True)
+        sym_dot = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
+        test = mx.symbol.elemwise_add(sym_dot, zeros)
+        location = {'lhs':csr, 'rhs':dns2, 'zero':mx.nd.zeros(rsp_expected.shape)}
+        expected = {'rhs':rhs_backward_grad, 'zero':out_np}
+        # dot(lhs, rhs) + zeros
+        check_symbolic_forward(test, location, [rsp_expected.asnumpy()])
+        check_symbolic_backward(test, location, [out_np], expected,
+                                grad_req={'lhs': 'null', 'rhs': 'write', 'zero' : 'write'})
+
+    lhs_shape = (rnd.randint(1, 10),rnd.randint(1, 10))
+    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), trans_csr=False)
+    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), trans_csr=True)
 
 
 if __name__ == '__main__':
