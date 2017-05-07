@@ -37,33 +37,29 @@ namespace common {
 
 #if DMLC_USE_CXX11
 template <typename xpu>
-inline void PrepDefaultBlobs(const std::vector<NDArray>& ndinputs,
-                             const std::vector<NDArray>& ndoutputs,
-                             std::vector<TBlob> *input_blobs,
-                             std::vector<TBlob> *output_blobs,
-                             std::vector<NDArray> *tmp_nds,
-                             bool alloc_outputs,
-                             const OpContext& ctx) {
-  for (auto& i : ndinputs) {
-    if (i.storage_type() != kDefaultStorage) {
-      NDArray tmp_nd(i.shape(), i.ctx(), false);
-      op::CastStorageComputeEx<xpu>({}, ctx, {i}, {}, {tmp_nd});
-      tmp_nds->push_back(tmp_nd);
-      input_blobs->push_back(tmp_nd.data());
+inline void GetInputBlobs(const std::vector<NDArray>& nds,
+                          std::vector<TBlob> *blobs,
+                          std::vector<NDArray> *temps,
+                          const OpContext& ctx) {
+  for (auto& nd : nds) {
+    if (nd.storage_type() != kDefaultStorage) {
+      NDArray temp(nd.shape(), nd.ctx(), false);
+      op::CastStorageComputeEx<xpu>({}, ctx, {nd}, {}, {temp});
+      temps->push_back(temp);
+      blobs->push_back(temp.data());
     } else {
-      input_blobs->push_back(i.data());
+      blobs->push_back(nd.data());
     }
-  }
-  for (auto& i : ndoutputs) {
-    if (alloc_outputs) i.CheckAndAlloc();
-    output_blobs->push_back(i.data());
   }
 }
 
-inline void PrepVars(const std::vector<NDArray> &nds,
-                     std::vector<Engine::VarHandle> *vars) {
-  for (auto& i : nds) {
-    vars->push_back(i.var());
+template <typename xpu>
+inline void GetOutputBlobs(const std::vector<NDArray>& nds,
+                           std::vector<TBlob> *blobs,
+                           bool alloc) {
+  for (auto& nd : nds) {
+    if (alloc) nd.CheckAndAlloc();
+    blobs->push_back(nd.data());
   }
 }
 

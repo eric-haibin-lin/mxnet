@@ -313,17 +313,17 @@ inline void ParamParser(nnvm::NodeAttrs* attrs) {
 }
 
 template <typename xpu>
-void FComputeExFallback(const nnvm::NodeAttrs& attrs,
-                        const OpContext& ctx,
-                        const std::vector<NDArray>& inputs,
-                        const std::vector<OpReqType>& req,
-                        const std::vector<NDArray>& outputs,
-                        FCompute fcompute) {
-  std::vector<TBlob> input_blobs, output_blobs;
-  std::vector<NDArray> tmp_nds;
-  common::PrepDefaultBlobs<xpu>(inputs, outputs, &input_blobs,
-                                &output_blobs, &tmp_nds, false, ctx);
-  fcompute(attrs, ctx, input_blobs, req, output_blobs);
+void FCompExFallback(const nnvm::NodeAttrs& attrs,
+                     const OpContext& ctx,
+                     const std::vector<NDArray>& inputs,
+                     const std::vector<OpReqType>& req,
+                     const std::vector<NDArray>& outputs,
+                     FCompute fcompute) {
+  std::vector<TBlob> in_blobs, out_blobs;
+  std::vector<NDArray> tmps;
+  common::GetInputBlobs<xpu>(inputs, &in_blobs, &tmps, ctx);
+  common::GetOutputBlobs<xpu>(outputs, &out_blobs, false);
+  fcompute(attrs, ctx, in_blobs, req, out_blobs);
 }
 
 

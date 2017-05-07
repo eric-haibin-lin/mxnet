@@ -32,7 +32,7 @@ const int kNonDefaultStorage = -2;
  */
 class OpExecutor {
  public:
-  /*! \brief input arrays */
+  /*! \brief input data arrays, which may be either input or aux */
   std::vector<NDArray> in_array;
   /*! \brief output data arrays */
   std::vector<NDArray> out_array;

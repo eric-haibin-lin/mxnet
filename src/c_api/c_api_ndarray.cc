@@ -249,8 +249,8 @@ void SetDependency(std::vector<engine::VarHandle> *p_read_vars,
     }
     CHECK_LE(ntmp, 1) << "Only support 1 temp space request";
   }
-  common::PrepVars(ndinputs, &read_vars);
-  common::PrepVars(ndoutputs, &write_vars);
+  for (auto& i : ndinputs) read_vars.emplace_back(i.var());
+  for (auto& i : ndoutputs) write_vars.emplace_back(i.var());
   if (mutate.count(op)) {
     auxidx = mutate[op](attrs);
     std::sort(auxidx.begin(), auxidx.end());
@@ -278,21 +278,21 @@ void PushFCompute(const FCompute& fn,
         RunContext rctx,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
-      std::vector<NDArray> tmp_nds;
+      std::vector<NDArray> tmps;
 
       OpContext opctx{is_train, rctx,
                       engine::CallbackOnComplete(),
                       requested};
       if (ctx.dev_mask() == gpu::kDevMask) {
 #if MXNET_USE_CUDA
-        common::PrepDefaultBlobs<gpu>(ndinputs, ndoutputs, &input_blobs,
-                                      &output_blobs, &tmp_nds, true, opctx);
+        common::GetInputBlobs<gpu>(ndinputs, &input_blobs, &tmps, opctx);
+        common::GetOutputBlobs<gpu>(ndoutputs, &output_blobs, true);
 #else
         LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
       } else {
-        common::PrepDefaultBlobs<cpu>(ndinputs, ndoutputs, &input_blobs,
-                                      &output_blobs, &tmp_nds, true, opctx);
+        common::GetInputBlobs<cpu>(ndinputs, &input_blobs, &tmps, opctx);
+        common::GetOutputBlobs<cpu>(ndoutputs, &output_blobs, true);
       }
       std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
       fn(attrs, opctx, input_blobs, req, output_blobs);

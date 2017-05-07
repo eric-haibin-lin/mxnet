@@ -88,16 +88,15 @@ def test_sparse_nd_property():
     assert(a.storage_type == 'row_sparse')
 
 def test_sparse_nd_setitem():
-    shape = (3, 4, 2)
-
+    shape = (3, 4)
     # ndarray assignment
-    x = mx.nd.zeros(shape)
+    x = mx.sparse_nd.zeros(shape, storage_type='row_sparse')
     x[:] = mx.nd.ones(shape)
     x_np = np.ones(shape, dtype=x.dtype)
     assert same(x.asnumpy(), x_np)
 
     # numpy assignment
-    x = mx.nd.zeros(shape)
+    x = mx.sparse_nd.zeros(shape, storage_type='row_sparse')
     x[:] = np.ones(shape)
     x_np = np.ones(shape, dtype=x.dtype)
     assert same(x.asnumpy(), x_np)
@@ -108,4 +107,5 @@ if __name__ == '__main__':
     test_sparse_nd_elementwise_fallback()
     test_sparse_nd_copy()
     test_sparse_nd_elemwise_add()
+    test_sparse_nd_setitem()
     #test_sparse_nd_property()

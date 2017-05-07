@@ -15,7 +15,7 @@
 #endif
 #include "../common/utils.h"
 
-#define EXEC_DISPATCH_DEBUG 0
+#define EXEC_ATTACH_OP_DEBUG 0
 namespace mxnet {
 
 namespace op {
@@ -29,6 +29,23 @@ class ForwardOpExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
     op_ctx.run_ctx = rctx;
+    if (!initialized) {
+      in_data_.clear(); out_data_.clear();
+      if (is_gpu) {
+#if MXNET_USE_CUDA
+        common::GetInputBlobs<gpu>(in_array_, &in_data_, &tmps_, op_ctx);
+        common::GetInputBlobs<gpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
+        common::GetOutputBlobs<gpu>(out_array, &out_data_, true);
+#else
+        LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
+#endif
+      } else {
+        common::GetInputBlobs<cpu>(in_array_, &in_data_, &tmps_, op_ctx);
+        common::GetInputBlobs<cpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
+        common::GetOutputBlobs<cpu>(out_array, &out_data_, true);
+      }
+      initialized = true;
+    }
     op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
 #if MKL_EXPERIMENTAL == 1
     mkl_tblobs_prv_to_cpu(in_data_);
@@ -38,18 +55,15 @@ class ForwardOpExecutor : public OpExecutor {
   }
 
   void Setup() override {
-    in_data_.clear(); aux_data_.clear();
+    // We need to tell whether in NDArray is input or aux
     for (size_t i = 0; i < in_array.size(); ++i) {
       if (!std::binary_search(aux_index_.begin(), aux_index_.end(), i)) {
-        in_data_.push_back(in_array[i].data());
+        in_array_.emplace_back(in_array[i]);
       } else {
-        aux_data_.push_back(in_array[i].data());
+        aux_array_.emplace_back(in_array[i]);
       }
     }
-    out_data_.resize(out_array.size());
-    std::transform(out_array.begin(), out_array.end(), out_data_.begin(), [](const NDArray& nd) {
-        return nd.data();
-      });
+    initialized = false;
   }
   Operator::ExecType exec_type() const override {
     return op_->exec_type();
@@ -65,6 +79,8 @@ class ForwardOpExecutor : public OpExecutor {
   std::shared_ptr<Operator> op_;
   std::vector<uint32_t> aux_index_;
   std::vector<TBlob> in_data_, out_data_, aux_data_;
+  std::vector<NDArray> in_array_, aux_array_, tmps_;
+  bool initialized = false;
 };
 
 // backward executor
@@ -141,16 +157,17 @@ class FComputeExecutor : public OpExecutor {
   void Run(RunContext rctx, bool is_gpu) override {
     op_ctx.run_ctx = rctx;
     if (!initialized) {
+      in_data_.clear(); out_data_.clear();
       if (is_gpu) {
 #if MXNET_USE_CUDA
-        common::PrepDefaultBlobs<gpu>(in_array, out_array, &in_data_,
-                                      &out_data_, &tmp_nds_, true, op_ctx);
+        common::GetInputBlobs<gpu>(in_array, &in_data_, &tmp_nds_, op_ctx);
+        common::GetOutputBlobs<gpu>(out_array, &out_data_, true);
 #else
         LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
       } else {
-        common::PrepDefaultBlobs<cpu>(in_array, out_array, &in_data_,
-                                      &out_data_, &tmp_nds_, true, op_ctx);
+        common::GetInputBlobs<cpu>(in_array, &in_data_, &tmp_nds_, op_ctx);
+        common::GetOutputBlobs<cpu>(out_array, &out_data_, true);
       }
       initialized = true;
     }
@@ -161,8 +178,7 @@ class FComputeExecutor : public OpExecutor {
 #endif
   }
   void Setup() override {
-    in_array_ = in_array;
-    out_array_ = out_array;
+    initialized = false;
   }
   Operator::ExecType exec_type() const override {
     return Operator::kSync;
@@ -175,7 +191,8 @@ class FComputeExecutor : public OpExecutor {
   FCompute fcompute_;
   NodeAttrs attrs_;
   std::vector<TBlob> in_data_, out_data_;
-  std::vector<NDArray> in_array_, out_array_, tmp_nds_;
+  // TODO(haibin) refactor init code
+  std::vector<NDArray> tmp_nds_;
   bool initialized = false;
 };
 
@@ -236,7 +253,7 @@ Graph AttachOpExecs(Graph g) {
     FCompute fcompute = common::GetFCompute(inode.source->op(), vctx[i]);
     FComputeEx fcompute_ex =
       common::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stypes[i]);
-#if EXEC_DISPATCH_DEBUG
+#if EXEC_ATTACH_OP_DEBUG
     LOG(INFO) << "dispatch type = " << dispatch_stypes[i];
 #endif
     if (fcreate_layer_op.count(inode.source->op())) {
@@ -254,22 +271,29 @@ Graph AttachOpExecs(Graph g) {
               inode.source->attrs, vctx[i], ishape, itype));
       }
       ret[i] = std::make_shared<ForwardOpExecutor>(opr, mutate_index);
+#if EXEC_ATTACH_OP_DEBUG
+      LOG(INFO) << "ForwardOp for op " << inode.source->op()->name;
+#endif
     } else if (is_layer_backward.get(inode.source->op(), false)) {
       CHECK_GE(inode.control_deps.size(), 1);
       uint32_t fwd_id = inode.control_deps[0];
       CHECK(vctx[fwd_id] == vctx[i]);
       CHECK(ret[fwd_id] != nullptr);
+      CHECK_EQ(dispatch_stypes[i], kDefaultStorage) << "BackwardOp doesn't handle non-default storage yet";
       ret[i] = std::make_shared<BackwardOpExecutor>(
           dynamic_cast<ForwardOpExecutor*>(ret[fwd_id].get())->op_,
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),
           mutate_index);
+#if EXEC_ATTACH_OP_DEBUG
+      LOG(INFO) << "BackwardOp for op " << inode.source->op()->name;
+#endif
     } else if (fcompute_ex != nullptr) {
-#if EXEC_DISPATCH_DEBUG
+#if EXEC_ATTACH_OP_DEBUG
       LOG(INFO) << "FComputeEx for op " << inode.source->op()->name;
 #endif
       ret[i] = std::make_shared<FComputeExExecutor>(fcompute_ex, inode.source->attrs);
     } else if (fcompute != nullptr) {
-#if EXEC_DISPATCH_DEBUG
+#if EXEC_ATTACH_OP_DEBUG
       LOG(INFO) << "FCompute for op " << inode.source->op()->name;
 #endif
       ret[i] = std::make_shared<FComputeExecutor>(fcompute, inode.source->attrs);

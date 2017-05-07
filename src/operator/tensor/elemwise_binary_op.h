@@ -127,7 +127,7 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
   if (typeid(OP) == typeid(mshadow::op::plus)) {
     // If any input is dense, fallback to FCompute
     if (common::ContainsDefaultStorage(inputs)) {
-      FComputeExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
+      FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
       return;
     }
     CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";

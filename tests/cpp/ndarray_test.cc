@@ -115,13 +115,30 @@ void CopyFromToRspDnsTest() {
   CheckDataRegion(nd.data(), dns_nd.data());
 }
 
-void CopyFromToRspRspTest() {
+void CopyFromToRspRspReuseTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({3, 2});
-  NDArray nd = RspND(shape, ctx, {0}, {1, 1});
+  NDArray nd = RspND(shape, ctx, {0}, {1,2});
   // Sparse ndarray with enough memory. It's expected to reuse the memory
-  NDArray dst_nd = RspND(shape, ctx, {0, 1, 2}, {});
+  NDArray dst_nd = RspND(shape, ctx, {0, 1, 2}, {6,6,6,6,6,6});
+  nd.WaitToRead();
+  CopyFromTo(nd, &dst_nd);
+  dst_nd.WaitToRead();
+  CheckDataRegion(nd.data(), dst_nd.data());
+  CHECK_EQ(dst_nd.aux_shape(rowsparse::kIdx)[0], 1);
+  CHECK_EQ(dst_nd.storage_shape()[0], 1);
+  CHECK_EQ(dst_nd.storage_shape()[1], 2);
+}
+
+
+void CopyFromToRspRspFreeTest() {
+  Context ctx;
+  // Sparse ndarray
+  TShape shape({3, 2});
+  NDArray nd = RspND(shape, ctx, {0, 1}, {1,1,1,1});
+  // Sparse ndarray with enough memory. It's expected to reuse the memory
+  NDArray dst_nd = RspND(shape, ctx, {0}, {2,2});
   nd.WaitToRead();
   CopyFromTo(nd, &dst_nd);
   dst_nd.WaitToRead();
@@ -221,5 +238,6 @@ TEST(NDArray, optimizer) {
 
 TEST(NDArray, copy) {
   CopyFromToRspDnsTest();
-  CopyFromToRspRspTest();
+  CopyFromToRspRspReuseTest();
+  CopyFromToRspRspFreeTest();
 }

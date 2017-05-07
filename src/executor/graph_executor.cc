@@ -403,29 +403,32 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
   size_t arg_top = 0, aux_top = 0;
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
+    size_t eid = idx.entry_id(nid, 0);
     if (mutable_nodes.count(nid)) {
       CHECK_LT(aux_top, aux_states.size());
-      data_entry_[idx.entry_id(nid, 0)] = aux_states[aux_top];
+      data_entry_[eid] = aux_states[aux_top];
       arg_shapes.push_back(aux_states[aux_top].shape());
       arg_types.push_back(aux_states[aux_top].dtype());
       arg_storage_types.push_back(aux_states[aux_top].storage_type());
       ++aux_top;
     } else {
       CHECK_LT(arg_top, in_args.size());
-      data_entry_[idx.entry_id(nid, 0)] = in_args[arg_top];
+      data_entry_[eid] = in_args[arg_top];
       arg_shapes.push_back(in_args[arg_top].shape());
       arg_types.push_back(in_args[arg_top].dtype());
       arg_storage_types.push_back(in_args[arg_top].storage_type());
       ++arg_top;
     }
-    // LOG(INFO) << "update data_entry_[ " << idx.entry_id(nid, 0) << "]"
-    //  << " " << data_entry_[idx.entry_id(nid, 0)].storage_type();
+#if EXECUTOR_DEBUG
+     LOG(INFO) << "assign data entry " << eid << "\tas stype " << data_entry_[eid].storage_type() << " (input)";
+#endif
   }
   for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
-    data_entry_[idx.entry_id(idx.outputs()[j])]
-        = grad_store_[j - num_forward_outputs_].second;
-    // LOG(INFO) << "update data_entry_[ " << idx.entry_id(idx.outputs()[j]) << "]"
-    //  << " " << data_entry_[idx.entry_id(idx.outputs()[j])].storage_type() << "(output)";
+    auto eid = idx.entry_id(idx.outputs()[j]);
+    data_entry_[eid] = grad_store_[j - num_forward_outputs_].second;
+#if EXECUTOR_DEBUG
+     LOG(INFO) << "assign data entry " << eid << "\tas stype " << data_entry_[eid].storage_type() << " (output)";
+#endif
   }
   arg_shapes.resize(idx.input_nodes().size(), TShape());
   arg_types.resize(idx.input_nodes().size(), -1);
@@ -531,7 +534,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
 #if EXECUTOR_DEBUG
-    LOG(INFO) << "init data entry " << data_eid << " as stype " << stype;
+    LOG(INFO) << "init   data entry " << data_eid << "\tas stype " << stype;
 #endif
   }
   // get maximum bytes in each pool
@@ -616,7 +619,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
     }
 #if EXECUTOR_DEBUG
-    LOG(INFO) << "init data entry " << i << " as stype " << storage_type;
+    LOG(INFO) << "init   data entry " << i << " as stype " << storage_type;
 #endif
   }
 }
@@ -875,7 +878,7 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
       bool profiling = false;
 #endif
 #if EXECUTOR_DEBUG
-      LOG(INFO) << "Running node " << nid << " - " << seg_op.topo_end - 1;
+      LOG(INFO) << "Run node " << nid << " - " << seg_op.topo_end - 1;
 #endif
       Engine::Get()->Push(seg_op.opr, seg_op.ctx, 0, profiling);
       nid = seg_op.topo_end - 1;
@@ -888,7 +891,7 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
     if (op_nodes_[nid].skip_exec_node) continue;
     opnode.exec->op_ctx.is_train = is_train;
 #if EXECUTOR_DEBUG
-      LOG(INFO) << "Running node " << nid;
+      LOG(INFO) << "Run node " << nid;
 #endif
     if (opnode.exec->exec_type() == Operator::kCrossDeviceCopy) {
       CHECK_EQ(inode.inputs.size(), 1U);
