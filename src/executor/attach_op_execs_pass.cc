@@ -8,14 +8,15 @@
 #include <mxnet/op_attr_types.h>
 #include <nnvm/graph_attr_types.h>
 #include "./exec_pass.h"
+#include "../common/utils.h"
 #if MXNET_USE_MKL2017 == 1
 #include <mkl_memory.h>
 #include "../operator/mkl/mkl_memory-inl.h"
 #include "../operator/mkl/mkl_util-inl.h"
 #endif
-#include "../common/utils.h"
 
 #define EXEC_ATTACH_OP_DEBUG 0
+
 namespace mxnet {
 
 namespace op {
@@ -29,23 +30,26 @@ class ForwardOpExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
     op_ctx.run_ctx = rctx;
-    if (!initialized) {
-      in_data_.clear(); out_data_.clear();
-      if (is_gpu) {
+
+    // TODO(haibin) ForwardOp is stateful. If any input ndarray has non-default storage,
+    // we need to cast it to default storage and setup the tblobs again. For example,
+    // if any of the input ndarray chagnes, the updated value won't be reflected in the temporary
+    // ndarray with default storage. This is not efficient and should be improved later.
+    in_data_.clear(); out_data_.clear(); aux_data_.clear(); tmps_.clear();
+    if (is_gpu) {
 #if MXNET_USE_CUDA
-        common::GetInputBlobs<gpu>(in_array_, &in_data_, &tmps_, op_ctx);
-        common::GetInputBlobs<gpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
-        common::GetOutputBlobs<gpu>(out_array, &out_data_, true);
+      common::GetInputBlobs<gpu>(in_array_, &in_data_, &tmps_, op_ctx);
+      common::GetInputBlobs<gpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
+      common::GetOutputBlobs<gpu>(out_array, &out_data_, true);
 #else
-        LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
+      LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
-      } else {
-        common::GetInputBlobs<cpu>(in_array_, &in_data_, &tmps_, op_ctx);
-        common::GetInputBlobs<cpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
-        common::GetOutputBlobs<cpu>(out_array, &out_data_, true);
-      }
-      initialized = true;
+    } else {
+      common::GetInputBlobs<cpu>(in_array_, &in_data_, &tmps_, op_ctx);
+      common::GetInputBlobs<cpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
+      common::GetOutputBlobs<cpu>(out_array, &out_data_, true);
     }
+
     op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
 #if MKL_EXPERIMENTAL == 1
     mkl_tblobs_prv_to_cpu(in_data_);
@@ -63,7 +67,6 @@ class ForwardOpExecutor : public OpExecutor {
         aux_array_.emplace_back(in_array[i]);
       }
     }
-    initialized = false;
   }
   Operator::ExecType exec_type() const override {
     return op_->exec_type();
@@ -80,7 +83,6 @@ class ForwardOpExecutor : public OpExecutor {
   std::vector<uint32_t> aux_index_;
   std::vector<TBlob> in_data_, out_data_, aux_data_;
   std::vector<NDArray> in_array_, aux_array_, tmps_;
-  bool initialized = false;
 };
 
 // backward executor
@@ -156,7 +158,10 @@ class FComputeExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
     op_ctx.run_ctx = rctx;
-    if (!initialized) {
+    // setup blobs
+    // TODO(haibin) we should avoid repeating this if it's known that all inputs are in
+    // default-storage.
+    {
       in_data_.clear(); out_data_.clear();
       if (is_gpu) {
 #if MXNET_USE_CUDA
@@ -169,7 +174,6 @@ class FComputeExecutor : public OpExecutor {
         common::GetInputBlobs<cpu>(in_array, &in_data_, &tmp_nds_, op_ctx);
         common::GetOutputBlobs<cpu>(out_array, &out_data_, true);
       }
-      initialized = true;
     }
     fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
 #if MKL_EXPERIMENTAL == 1
@@ -177,9 +181,7 @@ class FComputeExecutor : public OpExecutor {
     mkl_tblobs_prv_to_cpu(out_data_);
 #endif
   }
-  void Setup() override {
-    initialized = false;
-  }
+  void Setup() override {}
   Operator::ExecType exec_type() const override {
     return Operator::kSync;
   }
@@ -191,9 +193,7 @@ class FComputeExecutor : public OpExecutor {
   FCompute fcompute_;
   NodeAttrs attrs_;
   std::vector<TBlob> in_data_, out_data_;
-  // TODO(haibin) refactor init code
   std::vector<NDArray> tmp_nds_;
-  bool initialized = false;
 };
 
 // fcomputend executor
