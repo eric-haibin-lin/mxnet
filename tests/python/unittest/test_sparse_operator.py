@@ -4,7 +4,7 @@ import mxnet as mx
 from numpy.testing import assert_allclose
 from mxnet.test_utils import *
 
-def check_elemwise_add(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
+def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
     lhs = mx.symbol.Variable('lhs', storage_type = lhs_stype)
     rhs = mx.symbol.Variable('rhs', storage_type = rhs_stype)
     if lhs_grad_stype is not None:
@@ -24,16 +24,16 @@ def check_elemwise_add(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_gra
     check_numeric_gradient(test, location)
     check_symbolic_backward(test, location, [out_np], [out_np, out_np])
 
-def test_elemwise_add():
+def test_elemwise_add_ex():
     shape = (rnd.randint(1, 10),rnd.randint(1, 10))
-    check_elemwise_add('default', 'default', shape)
-    check_elemwise_add('default', 'row_sparse', shape)
-    check_elemwise_add('row_sparse', 'default', shape)
-    check_elemwise_add('row_sparse', 'row_sparse', shape,
+    check_elemwise_add_ex('default', 'default', shape)
+    check_elemwise_add_ex('default', 'row_sparse', shape)
+    check_elemwise_add_ex('row_sparse', 'default', shape)
+    check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
                        lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 # TODO(haibin) randomize this test
-def test_elemwise_add_multiple_stages():
+def test_elemwise_add_ex_multiple_stages():
     # prep data
     shape = (4, 2)
     ds_np = np.array([[1,2],[3,4],[5,6],[7,8]])
@@ -68,7 +68,7 @@ def test_elemwise_add_multiple_stages():
 
 
 # TODO(haibin) also add test for backward pass
-def test_cast_storage():
+def test_cast_storage_ex():
     def test_rsp_to_dns(shape):
         rsp, data, row_idx = rand_sparse_ndarray(shape, 'row_sparse', allow_zeros = True)
         dns_out = mx.nd.cast_storage(rsp, storage_type='default')
@@ -156,7 +156,7 @@ def test_sparse_dot():
 
 
 if __name__ == '__main__':
-    test_elemwise_add()
-    test_elemwise_add_multiple_stages()
-    test_cast_storage()
+    test_elemwise_add_ex()
+    test_elemwise_add_ex_multiple_stages()
+    test_cast_storage_ex()
     test_sparse_dot()

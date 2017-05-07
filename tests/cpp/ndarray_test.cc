@@ -175,7 +175,7 @@ void BinaryDenseSparseTest() {
   // TODO(haibin) also check with zeros..
 }*/
 
-void BinaryRsRsTest() {
+void BinaryAddRspRsp() {
   Context ctx = Context::CPU();
 
   TShape index_shape({2});
@@ -216,13 +216,13 @@ void BinaryRsRsTest() {
 }
 
 TEST(NDArray, binary_add) {
-  BinaryRsRsTest();
+  BinaryAddRspRsp();
   //BinaryDenseSparseTest();
-
   //Wait for all operations to finish
   Engine::Get()->WaitForAll();
   InferElemwiseStorageTest();
 }
+
 TEST(NDArray, conversion) {
   CastDnsDnsTest();
   CastRspDnsTest();

@@ -15,6 +15,9 @@ NNVM_REGISTER_OP(sgd_update)
 NNVM_REGISTER_OP(sgd_mom_update)
 .set_attr<FCompute>("FCompute<gpu>", SGDMomUpdate<gpu>);
 
+NNVM_REGISTER_OP(sparse_sgd_update)
+.set_attr<FComputeEx>(FCOMP_EX_GPU, SparseSGDUpdateEx<gpu>);
+
 NNVM_REGISTER_OP(adam_update)
 .set_attr<FCompute>("FCompute<gpu>", AdamUpdate<gpu>);
 

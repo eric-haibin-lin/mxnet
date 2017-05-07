@@ -272,9 +272,10 @@ class SparseNDArray(NDArray):
 
 
 # TODO We need a to_dense method to test it
-def csr(values, idx, indptr, shape, ctx=Context.default_ctx, dtype=mx_real_t, aux_types=None):
+def csr(values, idx, indptr, shape, ctx=None, dtype=mx_real_t, aux_types=None):
     ''' constructor '''
     hdl = NDArrayHandle()
+    ctx = Context.default_ctx if ctx is None else ctx
     # TODO currently only supports NDArray input
     assert (isinstance(values, NDArray))
     assert (isinstance(indptr, NDArray))
@@ -297,9 +298,10 @@ def csr(values, idx, indptr, shape, ctx=Context.default_ctx, dtype=mx_real_t, au
 
 # pylint: enable= no-member
 # TODO(haibin) also specify aux_types
-def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, aux_types=None):
+def row_sparse(values, index, shape, ctx=None, dtype=mx_real_t, aux_types=None):
     ''' rsp constructor which only accepts NDArray as input '''
     hdl = NDArrayHandle()
+    ctx = Context.default_ctx if ctx is None else ctx
     assert (isinstance(values, NDArray))
     assert (isinstance(index, NDArray))
     indices = c_array(NDArrayHandle, [index.handle])

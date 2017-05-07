@@ -133,11 +133,13 @@ template<typename xpu>
 void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   bool is_zeros = dst->is_zeros_hint();
   if (is_zeros) return;
-  // If not filled with zero, do it explicitly
-  auto values = dst->data();
-  MSHADOW_TYPE_SWITCH(values.type_flag_, DType, {
-    mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, values.Size(), values.dptr<DType>());
-  });
+  // reset the shapes if it's not zeros
+  auto aux_shape = dst->aux_shape(rowsparse::kIdx);
+  auto storage_shape = dst->storage_shape();
+  aux_shape[0] = 0;
+  storage_shape[0] = 0;
+  dst->SetAuxShape(rowsparse::kIdx, aux_shape);
+  dst->SetStorageShape(storage_shape);
 }
 
 

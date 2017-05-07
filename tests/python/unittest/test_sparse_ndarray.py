@@ -42,20 +42,6 @@ def test_sparse_nd_elementwise_fallback():
         check_sparse_nd_elemwise_binary(shape, ['default', 'row_sparse'], op, g)
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
 
-# TODO(haibin) remove this test since it's already in test_sp_operator
-def check_cast_rsp():
-    val = np.array([5, 10])
-    idx = np.array([1])
-    sparse_val = np.array([[0, 0], [5, 10], [0, 0], [0, 0], [0, 0]])
-    a = mx.nd.array(val)
-    b = mx.nd.array(idx, dtype=np.int32)
-    d = mx.sparse_nd.array(a, [b], 'row_sparse', (5,2))
-    f = mx.sparse_nd.to_dense(d)
-    assert_almost_equal(f.asnumpy(), sparse_val)
-
-def test_sparse_nd_cast():
-    check_cast_rsp()
-
 def test_sparse_nd_zeros():
     shape = (rnd.randint(1, 10), rnd.randint(1, 10))
     zero = mx.nd.zeros(shape)
@@ -104,7 +90,6 @@ def test_sparse_nd_setitem():
     assert same(x.asnumpy(), x_np)
 
 if __name__ == '__main__':
-    test_sparse_nd_cast()
     test_sparse_nd_zeros()
     test_sparse_nd_elementwise_fallback()
     test_sparse_nd_copy()
