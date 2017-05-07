@@ -66,7 +66,7 @@ def random_arrays(*shapes):
     return arrays
 
 # TODO(haibin) also include types in arguments and set the default ctx
-def rand_sparse_ndarray(shape, storage_type, sparsity = None, allow_zeros = False):
+def rand_sparse_ndarray(shape, storage_type, sparsity=None, allow_zeros=False):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     sparsity = rnd.rand() if sparsity is None else sparsity
     arr, val, indices = (None, None, None)
@@ -91,11 +91,11 @@ def rand_sparse_ndarray(shape, storage_type, sparsity = None, allow_zeros = Fals
         raise Exception('Not implemented for SparseND yet!')
     return arr
 
-def rand_ndarray(shape, storage_type, sparsity = None):
+def rand_ndarray(shape, storage_type, sparsity=None):
     if storage_type == 'default':
         arr = mx.nd.array(random_arrays(shape))
     else:
-        arr, _, _ = rand_sparse_ndarray(shape, storage_type, sparsity = sparsity)
+        arr, _, _ = rand_sparse_ndarray(shape, storage_type, sparsity=sparsity)
     return arr
 
 def np_reduce(dat, axis, keepdims, numpy_reduce_func):

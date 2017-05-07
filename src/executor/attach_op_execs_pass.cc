@@ -279,7 +279,8 @@ Graph AttachOpExecs(Graph g) {
       uint32_t fwd_id = inode.control_deps[0];
       CHECK(vctx[fwd_id] == vctx[i]);
       CHECK(ret[fwd_id] != nullptr);
-      CHECK_EQ(dispatch_stypes[i], kDefaultStorage) << "BackwardOp doesn't handle non-default storage yet";
+      CHECK_EQ(dispatch_stypes[i], kDefaultStorage)
+               << "BackwardOp doesn't handle non-default storage yet";
       ret[i] = std::make_shared<BackwardOpExecutor>(
           dynamic_cast<ForwardOpExecutor*>(ret[fwd_id].get())->op_,
           mxnet::op::OpPropGetOpProperty(inode.source->attrs),

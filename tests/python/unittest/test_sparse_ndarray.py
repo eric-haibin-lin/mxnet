@@ -77,15 +77,17 @@ def test_sparse_nd_copy():
     check_sparse_nd_copy('row_sparse', 'row_sparse')
     check_sparse_nd_copy('row_sparse', 'default')
     check_sparse_nd_copy('default', 'row_sparse')
-'''
-def test_sparse_nd_property():
+
+def check_sparse_nd_prop_rsp():
     storage_type = 'row_sparse'
-    a, _, _ = rand_sparse_ndarray((10, 10), storage_type, allow_zeros = True)
-    a.wait_to_read()
-    #TODO(haibin) possible race condition here?
+    shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+    a, _, _ = rand_sparse_ndarray(shape, storage_type, allow_zeros = True)
     assert(a.num_aux == 1)
     assert(a.aux_type(0) == np.int32)
     assert(a.storage_type == 'row_sparse')
+
+def test_sparse_nd_property():
+    check_sparse_nd_prop_rsp()
 
 def test_sparse_nd_setitem():
     shape = (3, 4)
@@ -100,7 +102,7 @@ def test_sparse_nd_setitem():
     x[:] = np.ones(shape)
     x_np = np.ones(shape, dtype=x.dtype)
     assert same(x.asnumpy(), x_np)
-'''
+
 if __name__ == '__main__':
     test_sparse_nd_cast()
     test_sparse_nd_zeros()
@@ -108,4 +110,4 @@ if __name__ == '__main__':
     test_sparse_nd_copy()
     test_sparse_nd_elemwise_add()
     test_sparse_nd_setitem()
-    #test_sparse_nd_property()
+    test_sparse_nd_property()

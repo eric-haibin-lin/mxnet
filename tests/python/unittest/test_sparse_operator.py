@@ -21,7 +21,7 @@ def check_elemwise_add(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_gra
     test = mx.symbol.elemwise_add(lhs, rhs)
     location = {'lhs':lhs_nd, 'rhs':rhs_nd}
     check_symbolic_forward(test, location, [out_np])
-    #check_numeric_gradient(test, location)
+    check_numeric_gradient(test, location)
     check_symbolic_backward(test, location, [out_np], [out_np, out_np])
 
 def test_elemwise_add():
@@ -32,6 +32,7 @@ def test_elemwise_add():
     check_elemwise_add('row_sparse', 'row_sparse', shape,
                        lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
+# TODO(haibin) randomize this test
 def test_elemwise_add_multiple_stages():
     # prep data
     shape = (4, 2)
@@ -86,7 +87,7 @@ def test_cast_storage():
     def test_csr_to_dns(data, indptr, col_idx, shape):
         indptr = np.array(indptr, dtype=np.int32)
         col_idx = np.array(col_idx, dtype=np.int32)
-        csr = mx.sparse_nd.array(values=data, index_list=[col_idx, indptr], storage_type='csr', shape=shape,
+        csr = mx.sparse_nd.array(values=data, indices=[col_idx, indptr], storage_type='csr', shape=shape,
                                  aux_types=[np.int32, np.int32])
         dns_out = mx.nd.cast_storage(csr, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())

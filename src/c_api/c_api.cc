@@ -416,13 +416,6 @@ int MXNDArrayGetAuxType(NDArrayHandle handle,
   API_END();
 }
 
-int MXNDArrayGetNumAux(NDArrayHandle handle, mx_uint *out_num_aux) {
-  API_BEGIN();
-  NDArray *arr = static_cast<NDArray*>(handle);
-  *out_num_aux = arr->num_aux();
-  API_END();
-}
-
 int MXNDArrayGetContext(NDArrayHandle handle,
                         int *out_dev_type,
                         int *out_dev_id) {

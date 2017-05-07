@@ -299,15 +299,12 @@ class NDArray {
     if (is_none()) return kUndefinedStorage;
     return ptr_->storage_type;
   }
-  inline size_t num_aux() const {
-    if (is_none()) return 0;
-    return ptr_->aux_handles.size();
-  }
   /*! \return whether this ndarray is not initialized */
   inline bool is_none() const {
     return ptr_.get() == nullptr;
   }
-  // returns true if a sparse ndarray's aux_data are not initialized, indicating a NDArray with zeros
+  // returns true if a sparse ndarray's aux_data are not initialized,
+  // indicating a NDArray with zeros
   inline bool is_zeros_hint() const {
     if (is_none()) return true;
     auto stype = storage_type();

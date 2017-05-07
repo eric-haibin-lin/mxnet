@@ -111,8 +111,9 @@ struct SparseSGDDnsRspKernel {
   // IType is row sparse idx type
   // i is the ith row in row sparse gradient
   template<typename DType, typename IType>
-  MSHADOW_XINLINE static void Map(int i, size_t width, DType* out, const DType* weight, const IType* grad_idx,
-                                  const DType *grad_val, const DType clip_gradient, const DType lr,
+  MSHADOW_XINLINE static void Map(int i, size_t width, DType* out, const DType* weight,
+                                  const IType* grad_idx, const DType *grad_val,
+                                  const DType clip_gradient, const DType lr,
                                   const DType wd, const DType rescale_grad) {
     for (size_t j = 0; j < width; j++) {
       uint64_t data_i = grad_idx[i] * width + j;
@@ -159,7 +160,6 @@ inline void SparseSGDUpdateDnsRspImpl(const SGDParam& param,
           static_cast<DType>(param.clip_gradient),
           static_cast<DType>(param.lr), static_cast<DType>(param.wd),
           static_cast<DType>(param.rescale_grad));
-
       });
     });
   });

@@ -46,7 +46,7 @@ It updates the weights using::
 .set_attr_parser(ParamParser<SGDParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)
-// TODO write FCompute for sparse sgd
+// TODO(haibin) write FCompute for sparse sgd
 // .set_attr<FCompute>("FCompute<cpu>", SGDUpdate<cpu>)
 .set_attr<FComputeEx>(FCOMP_EX_CPU, SparseSGDUpdateEx<cpu>)
 .add_argument("weight", "NDArray-or-Symbol", "Weight")

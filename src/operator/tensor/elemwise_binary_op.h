@@ -203,6 +203,7 @@ void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs& attrs,
   auto stype = inputs[0].storage_type();
   CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
   BinaryBackwardUseNoneRsp<xpu, LOP, ROP>(attrs, ctx, inputs, req, outputs);
+  // TODO(haibin) fallback for kDefaultStorage
 }
 
 template<typename xpu, typename LOP, typename ROP>

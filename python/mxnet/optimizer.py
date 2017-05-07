@@ -339,10 +339,10 @@ class SparseSGD(SGD):
 
         if state is not None:
             sparse_sgd_mom_update(weight, grad, state, out=weight,
-                           lr=lr, wd=wd, **self.kwargs)
+                                  lr=lr, wd=wd, **self.kwargs)
         else:
             sparse_sgd_update(weight, grad, out=weight,
-                       lr=lr, wd=wd, **self.kwargs)
+                              lr=lr, wd=wd, **self.kwargs)
 
 
 @register

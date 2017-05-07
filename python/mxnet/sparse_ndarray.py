@@ -17,7 +17,7 @@ import sys as _sys
 
 # import operator
 import numpy as np
-from .base import _LIB  # , string_types, numeric_types
+from .base import _LIB, string_types, numeric_types
 from .base import c_array, mx_real_t  # , py_str, c_str
 from .base import mx_uint, NDArrayHandle, check_call
 # from .base import ctypes2buffer
@@ -163,10 +163,30 @@ class SparseNDArray(NDArray):
         raise Exception('Not implemented for SparseND yet!')
 
     def __setitem__(self, key, value):
-        raise Exception('Not implemented for SparseND yet!')
+        if not self.writable:
+            raise ValueError('Failed to assign to a readonly NDArray')
+        if isinstance(key, py_slice):
+            if key.step is not None or key.start is not None or key.stop is not None:
+                raise ValueError('slicing not supported in SparseNDArray yet')
+            if isinstance(value, NDArray):
+                if value.handle is not self.handle:
+                    value.copyto(self)
+            elif isinstance(value, numeric_types):
+                #_internal._set_value(float(value), out=self)
+                raise Exception("Not supported yet")
+            elif isinstance(value, (np.ndarray, np.generic)):
+                # TODO(haibin) this is not very efficient. Implement sync_copyfrom for
+                # sparse ndarray to avoid an extra copy
+                tmp = ndarray.array(value)
+                tmp.copyto(self)
+            else:
+                raise TypeError('type %s not supported' % str(type(value)))
+        else:
+            assert(isinstance(key, (int, tuple)))
+            raise Exception('SparseNDArray only supports [:] for assignment')
 
     def __getitem__(self, key):
-        raise Exception('Not implemented for SparseND yet!')
+        raise Exception('getitem Not implemented for SparseND yet!')
 
     def _sync_copyfrom(self, source_array):
         raise Exception('Not implemented for SparseND yet!')
@@ -188,8 +208,7 @@ class SparseNDArray(NDArray):
     # def shape(self):
     def aux_type(self, i):
         aux_type = ctypes.c_int()
-        check_call(_LIB.MXNDArrayGetAuxType(
-                   self.handle, i, ctypes.byref(aux_type)))
+        check_call(_LIB.MXNDArrayGetAuxType(self.handle, i, ctypes.byref(aux_type)))
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
@@ -202,9 +221,10 @@ class SparseNDArray(NDArray):
     # def dtype(self):
     @property
     def num_aux(self):
-        num_aux = mx_uint()
-        check_call(_LIB.MXNDArrayGetNumAux(self.handle, ctypes.byref(num_aux)))
-        return num_aux.value
+        ''' The number of aux data used to help store the sparse ndarray '''
+        # This is not necessarily the size of aux_handles in the backend NDArray class,
+        # since row sparse with zeros will not have any aux_handle initialized.
+        return len(_STORAGE_AUX_TYPES[self.storage_type])
     @property
     # pylint: disable= invalid-name, undefined-variable
     def T(self):
@@ -235,7 +255,8 @@ class SparseNDArray(NDArray):
                 return
             return _internal._copyto(self, out=other)
         elif isinstance(other, Context):
-            hret = SparseNDArray(_new_alloc_handle(self.storage_type, self.shape, other, True, self.dtype, self.aux_types()))
+            hret = SparseNDArray(_new_alloc_handle(self.storage_type, self.shape, other,
+                                                   True, self.dtype, self.aux_types()))
             return _internal._copyto(self, out=hret)
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
@@ -296,7 +317,7 @@ def row_sparse(values, index, shape, ctx=Context.default_ctx, dtype=mx_real_t, a
     return SparseNDArray(hdl)
 
 
-def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
+def array(values, indices, storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
     ''' constructor '''
     # TODO check input array types. Assume NDArray class for now
     # TODO support other types
@@ -304,21 +325,21 @@ def array(values, index_list, storage_type, shape, ctx=None, dtype=mx_real_t, au
     assert (storage_type == 'row_sparse' or storage_type == 'csr')
     if aux_types is not None:
         assert isinstance(aux_types, list)
-        assert len(aux_types) == len(index_list)
+        assert len(aux_types) == len(indices)
     if not isinstance(values, NDArray):
         values = ndarray.array(values)
-    for i, index in enumerate(index_list):
+    for i, index in enumerate(indices):
         if not isinstance(index, NDArray):
-            index_list[i] = ndarray.array(index, dtype=aux_types[i] if aux_types is not None else None)
+            indices[i] = ndarray.array(index, dtype=aux_types[i] if aux_types is not None else None)
 
     if isinstance(shape, int):
         shape = (shape,)
     if ctx is None:
         ctx = Context.default_ctx
     if storage_type == 'row_sparse':
-        arr = row_sparse(values, index_list[0], shape, ctx=ctx, dtype=dtype, aux_types=aux_types)
+        arr = row_sparse(values, indices[0], shape, ctx=ctx, dtype=dtype, aux_types=aux_types)
     elif storage_type == 'csr':
-        arr = csr(values, index_list[0], index_list[1], shape, ctx, dtype, aux_types)
+        arr = csr(values, indices[0], indices[1], shape, ctx, dtype, aux_types)
     else:
         raise Exception('Not implemented for SparseND yet!')
     return arr
@@ -362,9 +383,9 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
         ctx = Context.default_ctx
     assert (storage_type == 'row_sparse' or storage_type == 'csr')
     if aux_types is None:
-        if 'row_sparse' == storage_type:
+        if storage_type == 'row_sparse':
             aux_types = _STORAGE_AUX_TYPES['row_sparse']
-        elif 'csr' == storage_type:
+        elif storage_type == 'csr':
             aux_types = _STORAGE_AUX_TYPES['csr']
     # pylint: disable= no-member, protected-access
     out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx,

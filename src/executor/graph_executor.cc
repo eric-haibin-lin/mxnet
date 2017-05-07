@@ -420,14 +420,16 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
       ++arg_top;
     }
 #if EXECUTOR_DEBUG
-     LOG(INFO) << "assign data entry " << eid << "\tas stype " << data_entry_[eid].storage_type() << " (input)";
+     LOG(INFO) << "assign data entry " << eid << "\tas stype "
+               << data_entry_[eid].storage_type() << " (input)";
 #endif
   }
   for (size_t j = num_forward_outputs_; j < idx.outputs().size(); ++j) {
     auto eid = idx.entry_id(idx.outputs()[j]);
     data_entry_[eid] = grad_store_[j - num_forward_outputs_].second;
 #if EXECUTOR_DEBUG
-     LOG(INFO) << "assign data entry " << eid << "\tas stype " << data_entry_[eid].storage_type() << " (output)";
+     LOG(INFO) << "assign data entry " << eid << "\tas stype "
+               << data_entry_[eid].storage_type() << " (output)";
 #endif
   }
   arg_shapes.resize(idx.input_nodes().size(), TShape());
