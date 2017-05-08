@@ -238,6 +238,23 @@ void CastStorageDnsRspImpl(mshadow::Stream<xpu> *s, const TBlob& dns, NDArray* r
   });
 }
 
+// TODO(haibin) Use memcopy instead will be much faster than assigning each individual element
+struct CastStorageRspDnsKernel {
+  template<typename DType, typename IType>
+  MSHADOW_XINLINE static void Map(int i, const index_t width, const IType* idx, const DType *data,
+                                  DType* dns, const index_t invalid_rid) {
+    auto rid = idx[i];
+    // skip invalid rows
+    if (rid == invalid_rid) return;
+    auto dns_offset = rid * width;
+    auto rsp_offset = i * width;
+    for (size_t col = 0; col < width; col++) {
+      dns[dns_offset + col] = data[rsp_offset + col];
+    }
+  }
+};
+
+
 /*!
  * \brief This function assumes that the meomry for dns has been allocated already
  * since the shape is known at binding stage.
@@ -253,17 +270,15 @@ void CastStorageRspDnsImpl(mshadow::Stream<xpu> *s, const NDArray& rsp, TBlob* d
       mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, dns->Size(), dns->dptr<DType>());
       if (rsp.is_zeros_hint() == false) {
         // copy over row by row
-        auto in_data = rsp.data().FlatTo2D<xpu, DType>(s);
-        auto out_data = dns->FlatTo2D<xpu, DType>(s);
+        auto in_idx = rsp.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s).dptr_;
+        auto in_data = rsp.data().FlatTo2D<xpu, DType>(s).dptr_;
+        auto out_data = dns->FlatTo2D<xpu, DType>(s).dptr_;
         auto num_rows = rsp.aux_shape(rowsparse::kIdx).Size();
-        auto invalid_rid = rsp.shape()[0];
-        auto in_idx = rsp.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-        for (size_t i = 0; i < num_rows; i += 1) {
-          auto rid = in_idx[i];
-          // skip invalid rows
-          if (rid == invalid_rid) continue;
-          mshadow::Copy(out_data[rid], in_data[i], s);
-        }
+        auto rsp_shape = rsp.shape();
+        auto invalid_rid = rsp_shape[0];
+        auto width = rsp_shape.ProdShape(1, rsp_shape.ndim());
+        mxnet_op::Kernel<CastStorageRspDnsKernel, xpu>::Launch(s, num_rows, width, in_idx, in_data,
+                                                               out_data, invalid_rid);
       }
     });
   });
