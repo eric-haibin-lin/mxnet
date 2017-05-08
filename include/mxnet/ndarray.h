@@ -485,6 +485,30 @@ class NDArray {
     }
     return ret;
   }
+  // Wrap the tblob of aux data into an NDArray which shares the same variable with the
+  // current one. Users of this function is not expected to modify it.
+  inline const NDArray AuxNDArray(size_t i) const {
+    CHECK_NE(storage_type(), kDefaultStorage);
+    CHECK(i < ptr_->aux_shapes.size());
+    // returns an empty NDArray
+    if (is_zeros_hint()) {
+      return NDArray();
+    }
+    auto context = ctx();
+    TBlob blob(ptr_->aux_handles[i].dptr, aux_shape(i), context.dev_mask(), aux_type(i));
+    return NDArray(blob, context.dev_id, var());
+  }
+  // Wrap the tblob of data into an NDArray which shares the same variable with the
+  // current one. Users of this function is not expected to modify it.
+  inline const NDArray DataNDArray() const {
+    CHECK_NE(storage_type(), kDefaultStorage);
+    if (is_zeros_hint()) {
+      return NDArray();
+    }
+    auto context = ctx();
+    TBlob blob(ptr_->shandle.dptr, storage_shape(), context.dev_mask(), dtype_);
+    return NDArray(blob, context.dev_id, var());
+  }
   /*!
    * \brief Create a NDArray that shares memory with current one
    *  The new array must have smaller memory size than the current array.

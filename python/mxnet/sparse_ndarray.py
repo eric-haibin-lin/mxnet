@@ -269,7 +269,28 @@ class SparseNDArray(NDArray):
 
     def to_dense(self):
         return to_dense(self)
+    # Get a read-only copy of the aux data associated with the SparseNDArray.
+    # If the SparseNDArray is not yet compacted, the returned result may include invalid values
+    def _aux_data(self, i):
+        hdl = NDArrayHandle()
+        check_call(_LIB.MXNDArrayGetAuxNDArray(self.handle, i, ctypes.byref(hdl)))
+        nd = NDArray(hdl, False)
+        if nd.ndim == 0:
+            return None
+        return nd
 
+    # Get a read-only copy of the aux data associated with the SparseNDArray.
+    # If the SparseNDArray is not yet compacted, the returned result may include invalid values
+    def _data(self):
+        hdl = NDArrayHandle()
+        check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
+        nd = NDArray(hdl, False)
+        if nd.ndim == 0:
+            return ndarray.array([], dtype=self.dtype)
+        return nd
+
+    def compact(self):
+        raise Exception("Not implemented yet")
 
 # TODO We need a to_dense method to test it
 def csr(values, idx, indptr, shape, ctx=None, dtype=mx_real_t, aux_types=None):

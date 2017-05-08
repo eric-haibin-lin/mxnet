@@ -66,11 +66,19 @@ def test_sparse_nd_copy():
 
 def check_sparse_nd_prop_rsp():
     storage_type = 'row_sparse'
-    shape = (rnd.randint(1, 10), rnd.randint(1, 10))
-    a, _, _ = rand_sparse_ndarray(shape, storage_type, allow_zeros = True)
-    assert(a.num_aux == 1)
-    assert(a.aux_type(0) == np.int32)
-    assert(a.storage_type == 'row_sparse')
+    shape = (rnd.randint(1, 2), rnd.randint(1, 2))
+    nd, v, idx = rand_sparse_ndarray(shape, storage_type, allow_zeros = True)
+    assert(nd.num_aux == 1)
+    assert(nd.aux_type(0) == np.int32)
+    assert(nd.storage_type == 'row_sparse')
+    #if v is not None:
+    if v is None:
+      v = mx.nd.array([]).asnumpy()
+    if idx is None:
+      idx = mx.nd.array([]).asnumpy()
+    assert_almost_equal(nd._data().asnumpy(), v)
+    # TODO(haibin) test data
+    #assert_almost_equal(nd._aux_data(0).asnumpy(), idx)
 
 def test_sparse_nd_property():
     check_sparse_nd_prop_rsp()

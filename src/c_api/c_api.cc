@@ -416,6 +416,23 @@ int MXNDArrayGetAuxType(NDArrayHandle handle,
   API_END();
 }
 
+int MXNDArrayGetAuxNDArray(NDArrayHandle handle,
+                           mx_uint i,
+                           NDArrayHandle *out) {
+  API_BEGIN();
+  NDArray *arr = static_cast<NDArray*>(handle);
+  *out = new NDArray(arr->AuxNDArray(i));
+  API_END();
+}
+
+int MXNDArrayGetDataNDArray(NDArrayHandle handle,
+                            NDArrayHandle *out) {
+  API_BEGIN();
+  NDArray *arr = static_cast<NDArray*>(handle);
+  *out = new NDArray(arr->DataNDArray());
+  API_END();
+}
+
 int MXNDArrayGetContext(NDArrayHandle handle,
                         int *out_dev_type,
                         int *out_dev_id) {
