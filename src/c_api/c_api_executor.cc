@@ -167,11 +167,11 @@ int MXExecutorBindEX(SymbolHandle symbol_handle,
  * \param in_arg_len number of list_arguments
  * \param in_arg_dev_types device type list of list_arguments
  * \param in_arg_dev_ids device id list of list_arguments
- * \param grad_req_types req type list of all gradients of list_arguments
+ * \param provided_grad_req_types req type list of all gradients of list_arguments
  * \param aux_state_len number of list_auxiliary_states
  * \param aux_state_dev_types device type list of list_auxiliary_states
  * \param aux_state_dev_ids device id list of list_auxiliary_states
- * \param num_provided_args number of user provided in_arg and aux_state shapes
+ * \param num_provided_arg_shapes number of user provided in_arg and aux_state shapes
  * \param provided_arg_shape_names name list of provided shapes
  * \param provided_arg_shape_data provided shape data
  * \param provided_arg_shape_idx provided shape data index
@@ -202,14 +202,10 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                          const char** g2c_keys,
                          const int* g2c_dev_types,
                          const int* g2c_dev_ids,
-                         const mx_uint in_arg_len,
-                         const int* in_arg_dev_types,
-                         const int* in_arg_dev_ids,
-                         const mx_uint* grad_req_types,
-                         const mx_uint aux_state_len,
-                         const int* aux_state_dev_types,
-                         const int* aux_state_dev_ids,
-                         const mx_uint num_provided_args,
+                         const mx_uint provided_grad_req_list_len,
+                         const char** provided_grad_req_names,
+                         const char** provided_grad_req_types,
+                         const mx_uint num_provided_arg_shapes,
                          const char** provided_arg_shape_names,
                          const mx_uint* provided_arg_shape_data,
                          const mx_uint* provided_arg_shape_idx,
@@ -221,67 +217,151 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                          mx_uint* num_shared_data_arrays,
                          const char*** shared_data_array_name_list,
                          NDArrayHandle** shared_data_array_handle_list,
-                         const mx_uint num_shared_exec_in_args,
-                         NDArrayHandle* shared_exec_in_arg_handles,
-                         const mx_uint num_shared_exec_arg_grads,
-                         NDArrayHandle* shared_exec_arg_grad_handles,
-                         const mx_uint num_shared_exec_aux_states,
-                         NDArrayHandle* shared_exec_aux_state_handles,
+                         mx_uint* num_in_args,
                          NDArrayHandle** in_args,
                          NDArrayHandle** arg_grads,
+                         mx_uint* num_aux_states,
                          NDArrayHandle** aux_states,
                          ExecutorHandle shared_exec_handle,
                          ExecutorHandle* out) {
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   API_BEGIN();
   nnvm::Symbol *sym = static_cast<nnvm::Symbol*>(symbol_handle);
-  // create default ctx
-  Context ctx = Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id);
 
-  // create ctx map
-  std::map<std::string, Context> ctx_map;
-  for (mx_uint i = 0; i < num_g2c_keys; ++i) {
-    ctx_map[g2c_keys[i]] = Context::Create(
-        static_cast<Context::DeviceType>(g2c_dev_types[i]), g2c_dev_ids[i]);
-  }
+  // get in_arg names
+  std::vector<std::string> in_arg_names = sym->ListInputNames(nnvm::Symbol::kReadOnlyArgs);
+  std::vector<std::string> aux_state_names = sym->ListInputNames(nnvm::Symbol::kAuxiliaryStates);
 
-  // create ctxes for in_args and arg_grads
-  // create grad_req_type_vec for in_arg_grads
-  std::vector<Context> in_arg_ctx_vec;
-  std::vector<Context> arg_grad_ctx_vec;
-  std::vector<OpReqType> grad_req_type_vec;
-  for (mx_uint i = 0; i < in_arg_len; ++i) {
-    in_arg_ctx_vec.push_back(Context::Create(
-          static_cast<Context::DeviceType>(in_arg_dev_types[i]), in_arg_dev_ids[i]));
-    if (grad_req_types[i] == 0) {
-      arg_grad_ctx_vec.push_back(Context());
-      grad_req_type_vec.push_back(kNullOp);
-    } else {
-      arg_grad_ctx_vec.push_back(Context::Create(
-            static_cast<Context::DeviceType>(in_arg_dev_types[i]), in_arg_dev_ids[i]));
-      grad_req_type_vec.push_back(static_cast<OpReqType>(grad_req_types[i]));
+  // attr_dict for setting up type_dict and arg/aux ctx
+  std::unordered_map<std::string, std::unordered_map<std::string, std::string>> attr_dict;
+  if (nullptr == provided_arg_dtypes || nullptr == g2c_keys) {
+    std::vector<std::tuple<std::string, std::string, std::string>> attrs = sym->ListAttrsRecursive();
+    for (const auto& tp : attrs) {
+      attr_dict[std::get<0>(tp)][std::get<1>(tp)] = std::get<2>(tp);
     }
   }
 
-  // create ctxes for aux_states
-  std::vector<Context> aux_state_ctx_vec;
-  for (mx_uint i = 0; i < aux_state_len; ++i) {
-    aux_state_ctx_vec.push_back(Context::Create(
-          static_cast<Context::DeviceType>(aux_state_dev_types[i]), aux_state_dev_ids[i]));
+  // setup arg_dtype_map
+  std::unordered_map<std::string, int> arg_dtype_map;
+  if (nullptr == provided_arg_dtypes) {  // use attr_dict
+    for (const auto& arg_name : in_arg_names) {
+      const auto it = attr_dict.find(arg_name);
+      if (it == attr_dict.end() || !it->second.count("__ctx_group__")) {
+        arg_dtype_map[arg_name] = mshadow::kFloat32;
+      }
+    }
+  } else {  // use user input type_dict
+    // create dtype map for in_args and aux_states
+    for (mx_uint i = 0; i < num_provided_arg_dtypes; ++i) {
+      arg_dtype_map[provided_arg_dtype_names[i]] = provided_arg_dtypes[i];
+    }
+  }
+
+  // create default ctx
+  Context ctx = Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id);
+  // create ctx map
+  std::map<std::string, Context> ctx_map;
+  std::vector<Context> in_arg_ctx_vec(in_arg_names.size(), ctx);
+  std::vector<Context> aux_state_ctx_vec(aux_state_names.size(), ctx);
+  if (nullptr != g2c_keys) {  // use user input group2ctx dict
+    for (mx_uint i = 0; i < num_g2c_keys; ++i) {
+      ctx_map[g2c_keys[i]] = Context::Create(
+          static_cast<Context::DeviceType>(g2c_dev_types[i]), g2c_dev_ids[i]);
+    }
+
+    // initialize in_arg_ctx_vec using group2ctx if there are any
+    for (size_t i = 0; i < in_arg_ctx_vec.size(); ++i) {
+      const auto it1 = attr_dict.find(in_arg_names[i]);
+      if (it1 != attr_dict.end()) {
+        const auto it2 = it1->second.find("__ctx_group__");
+        if (it2 != it1->second.end()) {
+          const auto it3 = ctx_map.find(it2->second);
+          if (it3 != ctx_map.end()) {
+            in_arg_ctx_vec[i] = it3->second;
+          }
+        }
+      }
+    }
+
+    // initialize aux_state_ctx_vec using group2ctx if there are any
+    for (size_t i = 0; i < aux_state_ctx_vec.size(); ++i) {
+      const auto it1 = attr_dict.find(aux_state_names[i]);
+      if (it1 != attr_dict.end()) {
+        const auto it2 = it1->second.find("__ctx_group__");
+        if (it2 != it1->second.end()) {
+          const auto it3 = ctx_map.find(it2->second);
+          if (it3 != ctx_map.end()) {
+            aux_state_ctx_vec[i] = it3->second;
+          }
+        }
+      }
+    }
+  }
+
+  // create provided_grad_req_map
+  const std::map<std::string, OpReqType> req_map = {{"null", kNullOp}, {"write", kWriteTo}, {"add", kAddTo}};
+  std::unordered_map<std::string, std::string> provided_grad_req_map;
+  std::string grad_req_type;
+  if (0 == provided_grad_req_list_len
+      && nullptr == provided_grad_req_names
+      && nullptr != provided_grad_req_types) {  // string, grad_req='write'
+    CHECK_EQ(req_map.count(provided_grad_req_types[0]), 1U)
+      << "grad_req=" << provided_grad_req_types[0] << " is not a valid input in simple_bind; "
+      "only \'null\', \'write\', and \'add\' are supported";
+    grad_req_type = "string";
+  } else if (provided_grad_req_list_len > 0
+      && nullptr == provided_grad_req_names
+      && nullptr != provided_grad_req_types) {  // list, grad_req=['null', 'write']
+    grad_req_type = "list";
+    CHECK_EQ(provided_grad_req_list_len, in_arg_names.size())
+      << "The length of grad_req list does not match the number of input arguments in simple_bind, "
+      "expected " << in_arg_names.size() << ", provided " << provided_grad_req_list_len;
+  } else if (provided_grad_req_list_len > 0
+      && nullptr != provided_grad_req_names
+      && nullptr != provided_grad_req_types) {  // dict, grad_req=['lhs': 'null', 'rhs': 'write']
+    grad_req_type = "dict";
+    for (mx_uint i = 0; i < provided_grad_req_list_len; ++i) {
+      CHECK_EQ(req_map.count(provided_grad_req_types[i]), 1U)
+        << "grad_req=" << provided_grad_req_types[i] << " is not a valid input in simple_bind; "
+        "only \'null\', \'write\', and \'add\' are supported";
+      provided_grad_req_map[provided_grad_req_names[i]] = provided_grad_req_types[i];
+    }
+  } else {  // grad_req is None
+    grad_req_type = "none";
+  }
+
+  // initialize arg_grad_ctx_vec and grad_req_type_vec
+  std::vector<Context> arg_grad_ctx_vec(in_arg_names.size());
+  std::vector<OpReqType> grad_req_type_vec(in_arg_names.size(), kNullOp);
+  if ("none" != grad_req_type) {
+    for (size_t i = 0; i < in_arg_names.size(); ++i) {
+      OpReqType cur_req = kNullOp;
+      if ("string" == grad_req_type) {
+        cur_req = req_map.at(provided_grad_req_types[0]);
+      } else if ("list" == grad_req_type) {
+        CHECK_EQ(req_map.count(provided_grad_req_types[i]), 1U)
+          << "grad_req=" << provided_grad_req_types[i] << " is not a valid input in simple_bind; "
+          "only \'null\', \'write\', and \'add\' are supported";
+        cur_req = req_map.at(provided_grad_req_types[i]);
+      } else if ("dict" == grad_req_type) {
+        const auto it = provided_grad_req_map.find(in_arg_names[i]);
+        if (it != provided_grad_req_map.end()) {
+          cur_req = req_map.at(it->second);
+        }
+      }
+      if (kNullOp != cur_req) {
+        arg_grad_ctx_vec[i] = in_arg_ctx_vec[i];
+        grad_req_type_vec[i] = static_cast<OpReqType>(cur_req);
+      }
+    }
   }
 
   // create shape map for in_args and aux_states
   std::unordered_map<std::string, TShape> arg_shape_map;
-  for (mx_uint i = 0; i < num_provided_args; ++i) {
+  for (mx_uint i = 0; i < num_provided_arg_shapes; ++i) {
     arg_shape_map[provided_arg_shape_names[i]] =
       TShape(provided_arg_shape_data+provided_arg_shape_idx[i],
              provided_arg_shape_data+provided_arg_shape_idx[i+1]);
-  }
-
-  // create dtype map for in_args and aux_states
-  std::unordered_map<std::string, int> arg_dtype_map;
-  for (mx_uint i = 0; i < num_provided_arg_dtypes; ++i) {
-    arg_dtype_map[provided_arg_dtype_names[i]] = provided_arg_dtypes[i];
   }
 
   // create para name set for sharing data array memory
@@ -303,31 +383,6 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     for (mx_uint i = 0; i < *num_shared_data_arrays; ++i) {
       shared_data_array_map[*shared_data_array_name_list[i]] = *(*shared_data_array_ptrs)[i];
     }
-    
-    // create shared_exec_in_args
-    NDArray** shared_exec_in_arg_ptrs =
-      reinterpret_cast<NDArray**>(shared_exec_in_arg_handles);
-    for (mx_uint i = 0; i < num_shared_exec_in_args; ++i) {
-      shared_exec_in_args.push_back(*shared_exec_in_arg_ptrs[i]);
-    }
-
-    // create shared_exec_arg_grads
-    NDArray** shared_exec_arg_grad_ptrs =
-      reinterpret_cast<NDArray**>(shared_exec_arg_grad_handles);
-    for (mx_uint i = 0; i < num_shared_exec_arg_grads; ++i) {
-      if (nullptr == shared_exec_arg_grad_ptrs[i]) {
-        shared_exec_arg_grads.push_back(NDArray());
-      } else {
-        shared_exec_arg_grads.push_back(*shared_exec_arg_grad_ptrs[i]);
-      }
-    }
-
-    // create shared_exec_aux_states
-    NDArray** shared_exec_aux_state_ptrs =
-      reinterpret_cast<NDArray**>(shared_exec_aux_state_handles);
-    for (mx_uint i = 0; i < num_shared_exec_aux_states; ++i) {
-      shared_exec_aux_states.push_back(*shared_exec_aux_state_ptrs[i]);
-    }
   }
 
   // create temporary place holders for the initialized NDArrays
@@ -338,8 +393,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
 
   *out = Executor::SimpleBind(*sym, ctx, ctx_map, in_arg_ctx_vec, arg_grad_ctx_vec,
                               aux_state_ctx_vec, arg_shape_map, arg_dtype_map, grad_req_type_vec,
-                              param_name_set, shared_exec_in_args, shared_exec_arg_grads,
-                              shared_exec_aux_states, &in_arg_vec, &arg_grad_vec, &aux_state_vec,
+                              param_name_set, &in_arg_vec, &arg_grad_vec, &aux_state_vec,
                               use_shared_data_arrays? &shared_data_array_map : nullptr,
                               reinterpret_cast<Executor*>(shared_exec_handle));
 

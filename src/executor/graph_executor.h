@@ -49,6 +49,9 @@ class GraphExecutor : public Executor {
   void PartialForward(bool is_train, int step, int *step_left) override;
   void Backward(const std::vector<NDArray> &head_grads) override;
   const std::vector<NDArray>& outputs() const override;
+  const std::unordered_map<std::string, NDArray>& in_arg_map() const override;
+  const std::unordered_map<std::string, NDArray>& arg_grad_map() const override;
+  const std::unordered_map<std::string, NDArray>& aux_state_map() const override;
   void Print(std::ostream &os) const override; // NOLINT(*)
   void SetMonitorCallback(const MonitorCallback& callback) override;
   // Initialize the rest of attributes
@@ -80,9 +83,6 @@ class GraphExecutor : public Executor {
             const std::unordered_map<std::string, int>& arg_dtype_map,
             const std::vector<OpReqType>& grad_req_types,
             const std::unordered_set<std::string>& param_names,
-            const std::vector<NDArray>& shared_exec_in_args,
-            const std::vector<NDArray>& shared_exec_arg_grads,
-            const std::vector<NDArray>& shared_exec_aux_states,
             std::vector<NDArray>* in_arg_vec,
             std::vector<NDArray>* arg_grad_vec,
             std::vector<NDArray>* aux_state_vec,
@@ -143,10 +143,7 @@ class GraphExecutor : public Executor {
                      const std::vector<Context>& aux_state_ctxes,
                      const std::vector<OpReqType>& grad_req_types,
                      const std::unordered_set<std::string>& param_names,  // DataParallelExecutorGroup.param_names
-                     const bool has_shared_exec,  // shared_exec != nullptr
-                     const std::vector<NDArray>& shared_exec_in_args,
-                     const std::vector<NDArray>& shared_exec_arg_grads,
-                     const std::vector<NDArray>& shared_exec_aux_states,
+                     const Executor* shared_exec,  // shared_exec != nullptr
                      std::unordered_map<std::string, NDArray>* shared_data_arrays,  // self.shared_data_arrays[i] L636
                      std::vector<NDArray>* in_arg_vec,
                      std::vector<NDArray>* arg_grad_vec,
@@ -193,6 +190,12 @@ class GraphExecutor : public Executor {
   std::vector<NDArray> data_pool_;
   // output arrays
   std::vector<NDArray> output_arrays_;
+  // input argument map, key is arg name, value is arg's NDArray
+  std::unordered_map<std::string, NDArray> in_arg_map_;
+  // arg grad map, key is arg name, value is arg grad NDArray
+  std::unordered_map<std::string, NDArray> arg_grad_map_;
+  // aux state map, key is aux state name, value is aux state NDArray
+  std::unordered_map<std::string, NDArray> aux_state_map_;
   // gradient store
   std::vector<std::pair<OpReqType, NDArray> > grad_store_;
   // array to hold head gradient.

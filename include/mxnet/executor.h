@@ -70,6 +70,21 @@ class Executor {
    */
   virtual const std::vector<NDArray> &outputs() const = 0;
   /*!
+   * \brief get input argument map, key is arg name, value is arg's NDArray.
+   * \return input argument map in the executor.
+   */
+  virtual const std::unordered_map<std::string, NDArray>& in_arg_map() const = 0;
+  /*!
+   * \brief get input argument graident map, key is arg name, value is gradient's NDArray.
+   * \return input argument gradient map in the executor.
+   */
+  virtual const std::unordered_map<std::string, NDArray>& arg_grad_map() const = 0;
+  /*!
+   * \brief get aux state map, key is arg name, value is aux state's NDArray.
+   * \return aux state map in the executor.
+   */
+  virtual const std::unordered_map<std::string, NDArray>& aux_state_map() const = 0;
+  /*!
    * \brief Create an operator by bind symbol with context and arguments.
    *  If user do not want to compute the gradients of i-th argument, grad_req_type[i] can be kNullOp.
    *
@@ -102,9 +117,9 @@ class Executor {
                               const std::unordered_map<std::string, int>& arg_dtype_map,
                               const std::vector<OpReqType>& grad_req_types,
                               const std::unordered_set<std::string>& param_names,
-                              const std::vector<NDArray>& shared_exec_in_args,
-                              const std::vector<NDArray>& shared_exec_arg_grads,
-                              const std::vector<NDArray>& shared_exec_aux_states,
+                              //const std::vector<NDArray>& shared_exec_in_args,
+                              //const std::vector<NDArray>& shared_exec_arg_grads,
+                              //const std::vector<NDArray>& shared_exec_aux_states,
                               std::vector<NDArray>* in_args,
                               std::vector<NDArray>* arg_grads,
                               std::vector<NDArray>* aux_states,
