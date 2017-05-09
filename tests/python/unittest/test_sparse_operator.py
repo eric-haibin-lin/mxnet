@@ -40,8 +40,8 @@ def test_elemwise_add_ex_multiple_stages():
     sp_np1 = np.array([[5,10],[0,0],[0,0],[0,0]])
     sp_np2 = np.array([[0,0],[5,10],[0,0],[0,0]])
 
-    val1 = mx.nd.array([5, 10]);
-    val2 = mx.nd.array([5, 10]);
+    val1 = mx.nd.array([[5, 10]]);
+    val2 = mx.nd.array([[5, 10]]);
     idx1 = mx.nd.array([0], dtype=np.int32);
     idx2 = mx.nd.array([1], dtype=np.int32);
     sp_nd1 = mx.sparse_nd.row_sparse(val1, idx1, shape)

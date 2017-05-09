@@ -145,36 +145,6 @@ void CopyFromToRspRspFreeTest() {
   CheckDataRegion(nd.data(), dst_nd.data());
 }
 
-/*
-void BinaryDenseSparseTest() {
-  Context ctx = Context::CPU();
-
-  TShape output_shape({3, 2});
-  NDArray input_nd0 = RspND(output_shape, ctx, {0, 1}, {10, 10, 10, 10});
-  NDArray input_nd1 = DnsND(output_shape, ctx, {1, 2, 3, 4, 5, 6});
-  NDArray output(kRowSparseStorage, output_shape, ctx);
-
-  std::vector<Engine::VarHandle> const_vars;
-  const_vars.push_back(input_nd0.var());
-  const_vars.push_back(input_nd1.var());
-  Engine::Get()->PushSync([input_nd0, input_nd1, output](RunContext ctx) {
-      nnvm::NodeAttrs attrs;
-      OpContext op_ctx;
-      std::vector<NDArray> inputs, outputs;
-      std::vector<OpReqType> req;
-      inputs.push_back(input_nd0);
-      inputs.push_back(input_nd1);
-      outputs.push_back(output);
-      op::BinaryComputeEx<cpu, mshadow::op::plus>(attrs, op_ctx, inputs, req, outputs);
-    }, input_nd0.ctx(), const_vars, {output.var()},
-    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
-  std::vector<TEST_DTYPE> output_vals({11, 12, 3, 4, 15, 16});
-  NDArray out_data = DnsND(output_shape, ctx, output_vals);
-  Engine::Get()->WaitForAll();
-  CheckDataRegion(out_data.data(), output.data());
-  // TODO(haibin) also check with zeros..
-}*/
-
 void BinaryAddRspRsp() {
   Context ctx = Context::CPU();
 
@@ -217,10 +187,6 @@ void BinaryAddRspRsp() {
 
 TEST(NDArray, binary_add) {
   BinaryAddRspRsp();
-  //BinaryDenseSparseTest();
-  //Wait for all operations to finish
-  Engine::Get()->WaitForAll();
-  InferElemwiseStorageTest();
 }
 
 TEST(NDArray, conversion) {
@@ -240,4 +206,8 @@ TEST(NDArray, copy) {
   CopyFromToRspDnsTest();
   CopyFromToRspRspReuseTest();
   CopyFromToRspRspFreeTest();
+}
+
+TEST(NDArray, infer_storage) {
+  InferElemwiseStorageTest();
 }

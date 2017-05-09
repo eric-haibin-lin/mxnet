@@ -27,6 +27,7 @@ float RandFloat() {
   return v;
 }
 
+// Get an NDArray with provided indices, prepared for a RowSparse NDArray.
 NDArray RspIdxND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> &values) {
   NDArray nd(shape, ctx, false, ROW_SPARSE_IDX_TYPE);
   size_t num_val = values.size();
@@ -39,9 +40,11 @@ NDArray RspIdxND(const TShape shape, const Context ctx, const std::vector<TEST_I
   return nd;
 }
 
+// Get a dense NDArray with provided values.
 NDArray DnsND(const TShape shape, const Context ctx, std::vector<TEST_DTYPE> vs) {
   NDArray nd(shape, ctx, false);
   size_t num_val = shape.Size();
+  // generate random values
   while (vs.size() < num_val) {
     auto v = RandFloat();
     vs.push_back(v);
@@ -56,14 +59,25 @@ NDArray DnsND(const TShape shape, const Context ctx, std::vector<TEST_DTYPE> vs)
   return nd;
 }
 
+// Get a RowSparse NDArray with provided indices and values
 NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> idx,
               std::vector<TEST_DTYPE> vals) {
+  CHECK(shape.ndim() <= 2) << "High dimensional row sparse not implemented yet";
   index_t num_rows = idx.size();
   index_t num_cols = vals.size() / idx.size();
+  // create index NDArray
   NDArray index = RspIdxND(TShape({num_rows}), ctx, idx);
   CHECK_EQ(vals.size() % idx.size(), 0);
-  NDArray raw_data = DnsND(TShape({num_rows, num_cols}), ctx, vals);
-  NDArray nd(raw_data, {index}, ctx, kRowSparseStorage, shape);
+  // create value NDArray
+  NDArray data = DnsND(TShape({num_rows, num_cols}), ctx, vals);
+  // create result nd
+  NDArray nd(kRowSparseStorage, shape, ctx, false, mshadow::default_type_flag,
+             {}, {TShape({num_rows})});
+  // assign values
+  NDArray nd_aux = nd.AuxNDArray(0);
+  NDArray nd_data = nd.DataNDArray();
+  CopyFromTo(index, &nd_aux);
+  CopyFromTo(raw_data, &nd_data);
   return nd;
 }
 

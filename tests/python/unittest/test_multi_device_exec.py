@@ -38,7 +38,7 @@ def check_ctx_group_sparse(mode='dense_sparse'):
     dense_np = np.array([[1,2],[3,4],[5,6]])
     sparse_np1 = np.array([[5,10],[0,0],[0,0]])
     dense_nd = mx.nd.array(dense_np)
-    val = mx.nd.array([5, 10]);
+    val = mx.nd.array([[5, 10]]);
     idx = mx.nd.array([0], dtype=np.int32);
     sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2))
     sparse_nd2 = mx.sparse_nd.row_sparse(val, idx, (3,2))

@@ -260,6 +260,17 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
 
 /*!
  * \brief create an empty sparse NDArray with specified shape and data type
+ * \param storage_type the storage type of the ndarray
+ * \param shape the pointer to the shape
+ * \param ndim the dimension of the shape
+ * \param dev_type device type, specify device we want to take
+ * \param dev_id the device id of the specific device
+ * \param delay_alloc whether to delay allocation until
+ *        the narray is first mutated
+ * \param dtype data type of created array
+ * \param num_aux the number of aux data to support this ndarray
+ * \param out the returning handle
+ * \return 0 when success, -1 when failure happens
  */
 MXNET_DLL int MXNDArrayCreateSparseEx(int storage_type,
                     const mx_uint *shape,
@@ -269,7 +280,9 @@ MXNET_DLL int MXNDArrayCreateSparseEx(int storage_type,
                     int delay_alloc,
                     int dtype,
                     mx_uint num_aux,
-                    int *aux_types,
+                    int *aux_type,
+                    mx_uint *aux_ndims,
+                    const mx_uint *aux_shape,
                     NDArrayHandle *out);
 
 /*!

@@ -128,7 +128,7 @@ void FillCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
-// Fill a rsp NDArray with zeros by updating values. It doesn't update the index.
+// Fill a rsp NDArray with zeros by updating the aux shape.
 template<typename xpu>
 void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   bool is_zeros = dst->is_zeros_hint();
@@ -136,6 +136,7 @@ void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   // reset the shapes if it's not zeros
   auto aux_shape = dst->aux_shape(rowsparse::kIdx);
   auto storage_shape = dst->storage_shape();
+  // when the first dimension to 0, ProdShape(aux_shape) = 0, which indicates empty aux_data
   aux_shape[0] = 0;
   storage_shape[0] = 0;
   dst->SetAuxShape(rowsparse::kIdx, aux_shape);

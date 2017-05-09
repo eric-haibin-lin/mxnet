@@ -181,16 +181,26 @@ int MXNDArrayCreateSparseEx(int storage_type,
                     int dtype,
                     mx_uint num_aux,
                     int *aux_type,
+                    mx_uint *aux_ndims,
+                    const mx_uint *aux_shape,
                     NDArrayHandle *out) {
   API_BEGIN();
   std::vector<int> aux_types;
-  for (size_t i = 0; i < num_aux; i++) aux_types.push_back(aux_type[i]);
+  std::vector<TShape> aux_shapes;
+  auto shape_start = aux_shape;
+  for (size_t i = 0; i < num_aux; i++) {
+    // types
+    aux_types.push_back(aux_type[i]);
+    // shapes
+    aux_shapes.emplace_back(shape_start, shape_start + aux_ndims[i]);
+    shape_start += aux_ndims[i];
+  }
   *out = new NDArray(
       NDArrayStorageType(storage_type),
       TShape(shape, shape + ndim),
       Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id),
       delay_alloc != 0,
-      dtype, aux_types);
+      dtype, aux_types, aux_shapes);
   API_END();
 }
 
