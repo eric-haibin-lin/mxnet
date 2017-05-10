@@ -213,7 +213,6 @@ class NDArray {
   // TODO(haibin) CamelCase
   inline const TShape aux_shape(size_t i) const {
     CHECK(storage_type() != kDefaultStorage);
-    if (i >= ptr_->aux_shapes.size()) return TShape();
     return ptr_->aux_shapes[i];
   }
 
@@ -702,7 +701,7 @@ class NDArray {
       }
     }
     // create storage handle for data based on shape and dtype, assuming ctx is set
-    // storage shape is updated
+    // storage shape is also updated
     // if data is already allocated, try reuse the storage. Otherwise, free the current one
     // and allocate new storage
     inline void CheckAndAllocData(const TShape &shape, int dtype) {

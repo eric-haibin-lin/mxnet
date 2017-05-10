@@ -1,6 +1,4 @@
-# coding: utf-8
-# pylint: disable= redefined-builtin, protected-access
-"""NDArray API of mxnet."""
+"""SparseNDArray API of mxnet."""
 from __future__ import absolute_import
 from __future__ import division
 try:
@@ -312,9 +310,6 @@ fixed-size items, stored in sparse format.
             return _internal._copyto(self, out=hret)
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
-
-    def copy(self):
-        raise Exception('Not implemented for SparseND yet!')
 
     def to_dense(self):
         return to_dense(self)
