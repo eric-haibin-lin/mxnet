@@ -297,100 +297,141 @@ class SparseNDArray(NDArray):
     def compact(self):
         raise Exception("Not implemented yet")
 
-# TODO We need a to_dense method to test it
-def csr(values, idx, indptr, shape, ctx=None, dtype=mx_real_t, aux_types=None):
-    ''' constructor '''
-    hdl = NDArrayHandle()
-    ctx = Context.default_ctx if ctx is None else ctx
-    # TODO currently only supports NDArray input
-    assert (isinstance(values, NDArray))
-    assert (isinstance(indptr, NDArray))
-    assert (isinstance(idx, NDArray))
-    assert (isinstance(shape, tuple))
-    indices = c_array(NDArrayHandle, [indptr.handle, idx.handle])
-    num_aux = mx_uint(2)
-    check_call(_LIB.MXNDArrayCreateSparse(
-        values.handle, num_aux, indices,
-        c_array(mx_uint, shape),
-        mx_uint(len(shape)),
-        ctypes.c_int(_STORAGE_TYPE_STR_TO_ID['csr']),
-        ctypes.c_int(ctx.device_typeid),
-        ctypes.c_int(ctx.device_id),
-        ctypes.c_int(int(False)),
-        ctypes.c_int(int(_DTYPE_NP_TO_MX[np.dtype(dtype).type])),
-        ctypes.byref(hdl)))
-    return SparseNDArray(hdl)
-
-def csr(values, index, indptr, shape, ctx=None, dtype=mx_real_t, aux_types=None):
-    ''' shape = (d1, d2)
-    values has shape (m, ) where m is the number of non-zeros entries
-    '''
-    assert(index.ndim == 1)
-    storage_type = 'csr'
-    if ctx is None:
-        ctx = Context.default_ctx
-    if aux_types is None:
-        aux_types = _STORAGE_AUX_TYPES[storage_type]
-    #TODO read aux types from inputs
-    aux_shapes = [indptr.shape, index.shape]
-    nd = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype, aux_types, aux_shapes))
-    nd_data = nd._data(True)
-    print(nd_data)
-    nd_aux1 = nd._aux_data(0, True)
-    nd_aux2 = nd._aux_data(1, True)
-    values.copyto(nd_data)
-    index.copyto(nd_aux2)
-    indptr.copyto(nd_aux1)
-    return nd
-
-
-def row_sparse(values, index, shape, ctx=None, dtype=mx_real_t, aux_types=None):
-    ''' shape = (d1, d2 .. dk)
-    values is expected to have shape (d1, d2 .. dk)
-    index has shape (m, ) where m is the number of rows which contains non-zeros entries
-    '''
-    assert(values.ndim == len(shape))
-    assert(index.ndim == 1)
-    storage_type = 'row_sparse'
-    if ctx is None:
-        ctx = Context.default_ctx
-    if aux_types is None:
-        aux_types = _STORAGE_AUX_TYPES[storage_type]
-    #TODO read aux types from inputs
-    aux_shapes = [index.shape]
-    nd = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype, aux_types, aux_shapes))
-    nd_data = nd._data(True)
-    nd_aux = nd._aux_data(0, True)
-    values.copyto(nd_data)
-    index.copyto(nd_aux)
-    return nd
-
-def array(values, indices, storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
-    ''' constructor '''
-    # TODO check input array types. Assume NDArray class for now
-    # TODO support other types
-    # TODO also specify auxtypes
-    assert (storage_type == 'row_sparse' or storage_type == 'csr')
-    if aux_types is not None:
-        assert isinstance(aux_types, list)
-        assert len(aux_types) == len(indices)
-    if not isinstance(values, NDArray):
-        values = ndarray.array(values)
-    for i, index in enumerate(indices):
-        if not isinstance(index, NDArray):
-            indices[i] = ndarray.array(index, dtype=aux_types[i] if aux_types is not None else None)
-
-    if isinstance(shape, int):
-        shape = (shape,)
-    if ctx is None:
-        ctx = Context.default_ctx
-    if storage_type == 'row_sparse':
-        arr = row_sparse(values, indices[0], shape, ctx=ctx, dtype=dtype, aux_types=aux_types)
-    elif storage_type == 'csr':
-        arr = csr(values, indices[0], indices[1], shape, ctx, dtype, aux_types)
+def _prepare_src_array(src, dtype, default_dtype):
+    if isinstance(src, NDArray):
+        dtype = src.dtype if dtype is None else dtype
     else:
-        raise Exception('Not implemented for SparseND yet!')
-    return arr
+        dtype = default_dtype if dtype is None else dtype
+        if not isinstance(src, np.ndarray):
+            try:
+                src = np.array(src, dtype=dtype)
+            except:
+                raise TypeError('values must be array like object')
+    return src, dtype
+
+def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, indices_type=None):
+    """Creates a 2D array with compressed sparse row format.
+
+    A SparseNDArray with `csr` storage represents a NDArray as three separate arrays: `values`,
+    `indptr` and `indices`. It uses the standard CSR representation where the column indices for
+    row i are stored in indices[indptr[i]:indptr[i+1]] and their corresponding values are stored
+    in values[indptr[i]:indptr[i+1]].
+
+    Parameters
+    ----------
+    values: array_like
+        An object exposing the array interface, with shape [nnz], where D0 is the number of
+        non-zero entries.
+    indptr: array_like
+        An object exposing the array interface, with shape [D0 + 1]. The first element in indptr
+        should always be zero.
+    indices: array_like
+        An object exposing the array interface, with shape [nnz].
+    ctx : Context, optional
+        Device context (default is the current default context).
+    dtype : str or numpy.dtype, optional
+        The data type of the output array. The default dtype is ``values.dtype``
+        if `values` is an `NDArray`, `float32` otherwise.
+    indptr_type: str or numpy.dtype, optional
+        The data type of the indices array. The default dtype is ``indptr.dtype``
+        if `indptr` is an `NDArray`, `int32` otherwise.
+    indices_type: str or numpy.dtype, optional
+        The data type of the indices array. The default dtype is ``indices.dtype``
+        if `indicies` is an `NDArray`, `int32` otherwise.
+
+    Returns
+    -------
+    SparseNDArray
+        An `SparseNDArray` with the `csr` storage representation.
+    """
+    storage_type = 'csr'
+    # context 
+    if ctx is None:
+        ctx = Context.default_ctx
+    # prepare src array and types
+    values, dtype = _prepare_src_array(values, dtype, mx_real_t)
+    indptr, indptr_type = _prepare_src_array(indptr, indptr_type,
+                                             _STORAGE_AUX_TYPES[storage_type][0])
+    indices, indices_type = _prepare_src_array(indices, indices_type,
+                                             _STORAGE_AUX_TYPES[storage_type][1])
+    # verify types
+    assert('int' in str(indptr_type) or 'long' in str(indptr_type))
+    assert('int' in str(indices_type) or 'long' in str(indices_type))
+    # verify shapes
+    aux_shapes = [indptr.shape, indices.shape]
+    assert(values.ndim == 1)
+    assert(indptr.ndim == 1)
+    assert(indices.ndim == 1)
+    result = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
+                                             [indptr_type, indices_type], aux_shapes))
+    # assign indptr, indices and values
+    values_ref = result._data(True)
+    indptr_ref = result._aux_data(0, True)
+    indices_ref = result._aux_data(1, True)
+    values_ref[:] = values
+    indptr_ref[:] = indptr
+    indices_ref[:] = indices
+    return result
+
+def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
+    """Creates a row sparse array with a set of tensor slices at given indices.
+
+    A SparseNDArray with `row_sparse` storage is typically used to represent a subset of a larger
+    NDArray  with `default` storage of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
+    in indices are the indices in the first dimension of the slices that have been extracted from
+    the larger NDArray.
+
+    The corresponding NDArray ``dense`` with `default` storage represented by a ``rsp``
+    SparseNDArray with `row_sparse` storage has
+
+    ``dense[rsp.indices[i], :, :, :, ...] = rsp.values[i, :, :, :, ...]``
+
+    `row_sparse` SparseNDArray is used principally in the definition of gradients for operations
+    that have sparse gradients (e.g. SparseEmbedding).
+
+    Parameters
+    ----------
+    values: array_like
+        An object exposing the array interface, with shape [D0, D1, .. Dn], where D0 is
+        the number of rows with non-zeros entries.
+    indices: array_like
+        An object exposing the array interface, with shape [D0].
+    ctx : Context, optional
+        Device context (default is the current default context).
+    dtype : str or numpy.dtype, optional
+        The data type of the output array. The default dtype is ``values.dtype``
+        if `values` is an `NDArray`, `float32` otherwise.
+    indices_type: str or numpy.dtype, optional
+        The data type of the indices array. The default dtype is ``indices.dtype``
+        if `indicies` is an `NDArray`, `int32` otherwise.
+
+    Returns
+    -------
+    SparseNDArray
+        An `SparseNDArray` with the `row_sparse` storage representation.
+    """
+    storage_type = 'row_sparse'
+    # context
+    if ctx is None:
+        ctx = Context.default_ctx
+    # prepare src array and types
+    values, dtype = _prepare_src_array(values, dtype, mx_real_t)
+    indices, indices_type = _prepare_src_array(indices, indices_type,
+                                               _STORAGE_AUX_TYPES[storage_type][0])
+    # verify types
+    assert('int' in str(indices_type) or 'long' in str(indices_type))
+    # verify shapes
+    indices_shape = indices.shape
+    assert(values.ndim == len(shape))
+    assert(indices.ndim == 1)
+    result = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
+                       [indices_type], [indices.shape]))
+    # assign indices and values
+    values_ref = result._data(True)
+    indices_ref = result._aux_data(0, True)
+    values_ref[:] = values
+    indices_ref[:] = indices
+    return result
 
 def to_dense(source):
     return ndarray.cast_storage(source, storage_type='default')
@@ -437,7 +478,6 @@ def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
     out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, True, dtype, aux_types))
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
     # pylint: enable= no-member, protected-access
-
 
 _STORAGE_TYPE_TO_ND_CLASS = {
     _STORAGE_TYPE_STR_TO_ID['default']: ndarray.NDArray,

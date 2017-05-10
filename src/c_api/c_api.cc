@@ -131,31 +131,6 @@ int MXNDArrayCreate(const mx_uint *shape,
   API_END();
 }
 
-// TODO(haibin) remove this API
-int MXNDArrayCreateSparse(NDArrayHandle data,
-                    mx_uint num_aux,
-                    NDArrayHandle *aux_vec,
-                    const mx_uint *shape,
-                    mx_uint ndim,
-                    int storage_type,
-                    int dev_type,
-                    int dev_id,
-                    int delay_alloc,
-                    int dtype,
-                    NDArrayHandle *out) {
-  API_BEGIN();
-  auto ctx = Context::Create(static_cast<Context::DeviceType>(dev_type), dev_id);
-  std::vector<NDArray> aux_ndarrays;
-  NDArray* data_ptr = reinterpret_cast<NDArray*>(data);
-  for (size_t i = 0; i < num_aux; i++) {
-    NDArray* nd_aux_ptr = reinterpret_cast<NDArray*>(aux_vec[i]);
-    aux_ndarrays.push_back(*nd_aux_ptr);
-  }
-  NDArrayStorageType stype = (NDArrayStorageType) storage_type;
-  *out = new NDArray(*data_ptr, aux_ndarrays, ctx, stype, TShape(shape, shape + ndim));
-  API_END();
-}
-
 int MXNDArrayCreateEx(const mx_uint *shape,
                     mx_uint ndim,
                     int dev_type,

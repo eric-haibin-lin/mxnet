@@ -223,21 +223,6 @@ MXNET_DLL int MXNDArrayCreate(const mx_uint *shape,
                               NDArrayHandle *out);
 
 /*!
- * \brief create a NDArray with specified sparse type, shape and aux data(e.g. index)
- * aux data is copied during construction.
- */
-MXNET_DLL int MXNDArrayCreateSparse(NDArrayHandle data,
-                    mx_uint num_aux,
-                    NDArrayHandle *aux_data,
-                    const mx_uint *shape,
-                    mx_uint ndim,
-                    int storage_type,
-                    int dev_type,
-                    int dev_id,
-                    int delay_alloc,
-                    int dtype,
-                    NDArrayHandle *out);
-/*!
  * \brief create a NDArray with specified shape and data type
  * \param shape the pointer to the shape
  * \param ndim the dimension of the shape
@@ -269,6 +254,9 @@ MXNET_DLL int MXNDArrayCreateEx(const mx_uint *shape,
  *        the narray is first mutated
  * \param dtype data type of created array
  * \param num_aux the number of aux data to support this ndarray
+ * \param aux_type data type of the aux data for the created array
+ * \param aux_ndims the dimension of the shapes of aux data
+ * \param aux_shape the shapes of aux data
  * \param out the returning handle
  * \return 0 when success, -1 when failure happens
  */

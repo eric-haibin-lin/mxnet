@@ -87,19 +87,6 @@ enum NDArrayStorageType {
   kCSRStorage,             // csr
 };
 
-/*!
- * \brief issue an copy operation from one NDArray to another
- *  the two ndarray can sit on different devices
- *  this operation will be scheduled by the engine
- *
- * \param from the ndarray we want to copy data from
- * \param to the target ndarray
- * \param priority Priority of the action.
- * \param alloc_output whether to allocate memory for the output ndarray
- * \note The function name explicitly marks the order of from and to
- *     due to different possible convention carried by copy function.
- */
-void CopyFromTo(const NDArray &from, NDArray *to, int priority = 0, bool alloc_output = true);
 
 /*!
  * \brief ndarray interface
@@ -188,14 +175,6 @@ class NDArray {
       Mkl_mem_ = std::make_shared<MKLMemHolder>();
 #endif
   }
-  NDArray(NDArray data, const std::vector<NDArray> aux_data, Context ctx,
-          NDArrayStorageType storage_type, const TShape &shape)
-      : ptr_(std::make_shared<Chunk>(data, aux_data, ctx, storage_type)), shape_(shape),
-        offset_(0), dtype_(data.data().type_flag_), entry_({nullptr, 0, 0}) {
-#if MKL_EXPERIMENTAL == 1
-      Mkl_mem_ = std::make_shared<MKLMemHolder>();
-#endif
-  }
 
   /*!
    * \return the shape of current NDArray.
@@ -261,7 +240,6 @@ class NDArray {
       shape = storage_shape();
     }
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
-      CHECK(ptr_->shandle.dptr != nullptr);
       res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
         + offset_, shape, ptr_->shandle.ctx.dev_mask(), dtype());
     });
@@ -657,44 +635,6 @@ class NDArray {
       shandle.ctx = ctx_;
       if (!delay_alloc_) this->CheckAndAlloc();
     }
-    // construct a chunk by copying over data
-    Chunk(const NDArray &nd, const std::vector<NDArray> &nd_aux, Context ctx_,
-          NDArrayStorageType storage_type_)
-        : static_data(false), delay_alloc(false), storage_type(storage_type_), ctx(ctx_) {
-      // Vars
-      var = Engine::Get()->NewVariable();
-      // Data Storage
-      const auto &data = nd.data();
-      storage_shape = data.shape_;
-      shandle.ctx = ctx;
-      shandle.size = data.shape_.Size() * mshadow::mshadow_sizeof(data.type_flag_);
-      shandle = Storage::Get()->Alloc(shandle.size, shandle.ctx);
-
-      // Copy data
-      // Single threaded copy may not saturate memory bandwidth
-      CHECK_EQ(nd.storage_type(), kDefaultStorage);
-      auto data_blob = TBlob(shandle.dptr, storage_shape, shandle.ctx.dev_mask(), data.type_flag_);
-      NDArray data_wrapper(data_blob, ctx.dev_id, var);
-      CopyFromTo(nd, &data_wrapper, 0, false);
-
-      // Aux shapes, types and storage
-      CHECK_GT(storage_shape.ndim(), 0);
-      for (size_t i = 0; i < nd_aux.size(); i++) {
-        const auto &aux_d = nd_aux[i].data();
-        aux_shapes.emplace_back(aux_d.shape_);
-        aux_types.emplace_back(aux_d.type_flag_);
-        Storage::Handle aux_handle;
-        aux_handle.ctx = ctx;
-        aux_handle.size = aux_shapes[i].Size() * mshadow::mshadow_sizeof(aux_types[i]);
-        aux_handle = Storage::Get()->Alloc(aux_handle.size, aux_handle.ctx);
-        aux_handles.emplace_back(aux_handle);
-        // Copy aux data
-        CHECK_EQ(nd_aux[i].storage_type(), kDefaultStorage);
-        TBlob aux_blob(aux_handle.dptr, aux_shapes[i], ctx.dev_mask(), aux_types[i]);
-        NDArray aux_wrapper(aux_blob, ctx.dev_id, var);
-        CopyFromTo(nd_aux[i], &aux_wrapper, 0, false);
-      }
-    }
 
     Chunk(const TBlob &data, int dev_id, Engine::VarHandle shared_var)
         : static_data(true), delay_alloc(false) {
@@ -837,6 +777,20 @@ class NDArray {
   /*! \brief node entry for autograd */
   autograd::AGNodeEntry entry_;
 };
+
+/*!
+ * \brief issue an copy operation from one NDArray to another
+ *  the two ndarray can sit on different devices
+ *  this operation will be scheduled by the engine
+ *
+ * \param from the ndarray we want to copy data from
+ * \param to the target ndarray
+ * \param priority Priority of the action.
+ * \param alloc_output whether to allocate memory for the output ndarray
+ * \note The function name explicitly marks the order of from and to
+ *     due to different possible convention carried by copy function.
+ */
+void CopyFromTo(const NDArray &from, NDArray *to, int priority = 0, bool alloc_output = true);
 
 // Make a copy of a row-sparse NDArray
 template<typename from_xpu, typename to_xpu>

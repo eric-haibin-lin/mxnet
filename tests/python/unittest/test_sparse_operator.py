@@ -87,8 +87,7 @@ def test_cast_storage_ex():
     def test_csr_to_dns(data, indptr, col_idx, shape):
         indptr = np.array(indptr, dtype=np.int32)
         col_idx = np.array(col_idx, dtype=np.int32)
-        csr = mx.sparse_nd.array(values=data, indices=[col_idx, indptr], storage_type='csr', shape=shape,
-                                 aux_types=[np.int32, np.int32])
+        csr = mx.sparse_nd.csr(data, indptr, col_idx, shape=shape)
         dns_out = mx.nd.cast_storage(csr, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())
         i = 0

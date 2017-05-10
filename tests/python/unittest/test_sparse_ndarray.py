@@ -80,7 +80,39 @@ def check_sparse_nd_prop_rsp():
     # TODO(haibin) test data
     #assert_almost_equal(nd._aux_data(0).asnumpy(), idx)
 
-def test_sparse_nd_property():
+def test_sparse_nd_basic():
+    def check_rsp_creation(values, indices, shape):
+        rsp = mx.sparse_nd.row_sparse(values, indices, shape)
+        dns = mx.nd.zeros(shape)
+        dns[1] = mx.nd.array(values[0])
+        dns[3] = mx.nd.array(values[1])
+        assert_almost_equal(rsp.asnumpy(), dns.asnumpy())
+
+    def check_csr_creation(values, indptr, indices, shape):
+        csr = mx.sparse_nd.csr(values, indptr, indices, shape)
+        dns = mx.nd.zeros(shape)
+        dns[0][1] = values[0]
+        dns[1][1] = values[1]
+        dns[3][0] = values[2]
+        assert_almost_equal(csr.asnumpy(), dns.asnumpy())
+
+    shape = (4,2)
+    values = np.random.rand(2,2)
+    indices = np.array([1,3])
+    check_rsp_creation(values, indices, shape)
+
+    values = mx.nd.array(np.random.rand(2,2))
+    indices = mx.nd.array([1,3], dtype='int32')
+    check_rsp_creation(values, indices, shape)
+
+    values = [[0.1, 0.2], [0.3, 0.4]]
+    indices = [1,3]
+    check_rsp_creation(values, indices, shape)
+
+    values = np.random.rand(3)
+    indptr = np.array([0,1,2,2,3])
+    indices = np.array([1,1,0])
+    check_csr_creation(values, indptr, indices, shape)
     check_sparse_nd_prop_rsp()
 
 def test_sparse_nd_setitem():
@@ -103,4 +135,4 @@ if __name__ == '__main__':
     test_sparse_nd_copy()
     test_sparse_nd_elemwise_add()
     test_sparse_nd_setitem()
-    test_sparse_nd_property()
+    test_sparse_nd_basic()
