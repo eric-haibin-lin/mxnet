@@ -246,7 +246,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   if (nullptr == provided_arg_dtypes) {  // use attr_dict
     for (const auto& arg_name : in_arg_names) {
       const auto it = attr_dict.find(arg_name);
-      if (it == attr_dict.end() || !it->second.count("__ctx_group__")) {
+      if (it == attr_dict.end() || !it->second.count("__dtype__")) {
         arg_dtype_map[arg_name] = mshadow::kFloat32;
       }
     }
@@ -410,6 +410,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     ret->ret_handles.push_back(new NDArray(nd));
   }
   if (in_arg_vec.size() > 0) {
+    *num_in_args = in_arg_vec.size();
     *in_args = &(ret->ret_handles[nd_idx]);
     nd_idx = ret->ret_handles.size();
   }
@@ -433,6 +434,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     ret->ret_handles.push_back(new NDArray(nd));
   }
   if (aux_state_vec.size() > 0) {
+    *num_aux_states = aux_state_vec.size();
     *aux_states = &(ret->ret_handles[nd_idx]);
     nd_idx = ret->ret_handles.size();
   }
