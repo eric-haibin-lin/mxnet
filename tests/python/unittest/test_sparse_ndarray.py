@@ -45,7 +45,7 @@ def test_sparse_nd_elementwise_fallback():
 def test_sparse_nd_zeros():
     shape = (rnd.randint(1, 10), rnd.randint(1, 10))
     zero = mx.nd.zeros(shape)
-    sparse_zero = mx.sparse_nd.zeros(shape, 'row_sparse')
+    sparse_zero = mx.sparse_nd.zeros('row_sparse', shape)
     assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
 
 def check_sparse_nd_copy(from_stype, to_stype):
@@ -121,13 +121,13 @@ def test_sparse_nd_basic():
 def test_sparse_nd_setitem():
     shape = (3, 4)
     # ndarray assignment
-    x = mx.sparse_nd.zeros(shape, storage_type='row_sparse')
+    x = mx.sparse_nd.zeros('row_sparse', shape)
     x[:] = mx.nd.ones(shape)
     x_np = np.ones(shape, dtype=x.dtype)
     assert same(x.asnumpy(), x_np)
 
     # numpy assignment
-    x = mx.sparse_nd.zeros(shape, storage_type='row_sparse')
+    x = mx.sparse_nd.zeros('row_sparse', shape)
     x[:] = np.ones(shape)
     x_np = np.ones(shape, dtype=x.dtype)
     assert same(x.asnumpy(), x_np)

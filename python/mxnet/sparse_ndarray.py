@@ -1,6 +1,5 @@
 # coding: utf-8
-# pylint: disable= too-many-lines, redefined-builtin, protected-access
-# pylint: disable=import-error, no-name-in-module, undefined-variable
+# pylint: disable= redefined-builtin, protected-access
 """NDArray API of mxnet."""
 from __future__ import absolute_import
 from __future__ import division
@@ -10,7 +9,7 @@ except ImportError:
     from builtins import slice as py_slice
 
 import ctypes
-# import warnings
+import warnings
 
 import os as _os
 import sys as _sys
@@ -49,7 +48,7 @@ _STORAGE_AUX_TYPES = {
 
 
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc, dtype, aux_types, aux_shapes=None):
-    """Return a new handle with specified shape and context.
+    """Return a new handle with specified shape, type and context.
 
     Empty handle is only used to hold results
 
@@ -81,12 +80,14 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc, dtype, aux_types, a
 
 
 class SparseNDArray(NDArray):
-    ''' sparse ndarray '''
+    """An array object representing a multidimensional, homogeneous array of
+fixed-size items, stored in sparse format.
+
+    """
     __slots__ = []
 
-    # def __repr__(self):
-    def __reduce__(self):
-        return SparseNDArray, (None,), self.__getstate__()
+    #def __reduce__(self):
+    #    return SparseNDArray, (None,), self.__getstate__()
 
     def __add__(self, other):
         raise Exception('Not implemented for SparseND yet!')
@@ -167,20 +168,34 @@ class SparseNDArray(NDArray):
         raise Exception('Not implemented for SparseND yet!')
 
     def __setitem__(self, key, value):
+        """x.__setitem__(i, y) <=> x[i]=y
+
+        Set self[key] to value.
+
+        Parameters
+        ----------
+        key : slice
+            The indexing key.
+        value : NDArray or numpy.ndarray
+            The value to set.
+
+        """
         if not self.writable:
             raise ValueError('Failed to assign to a readonly NDArray')
         if isinstance(key, py_slice):
             if key.step is not None or key.start is not None or key.stop is not None:
                 raise ValueError('slicing not supported in SparseNDArray yet')
             if isinstance(value, NDArray):
+                # avoid copying to itself
                 if value.handle is not self.handle:
                     value.copyto(self)
             elif isinstance(value, numeric_types):
-                #_internal._set_value(float(value), out=self)
-                raise Exception("Not supported yet")
+                raise Exception("Assigning numeric types to SparseNDArray not supported yet.")
             elif isinstance(value, (np.ndarray, np.generic)):
-                # TODO(haibin) this is not very efficient. Implement sync_copyfrom for
+                # TODO(haibin) this is not efficient. Implement sync_copyfrom for
                 # sparse ndarray to avoid an extra copy
+                warnings.warn('Assigning non-NDArray object to SparseNDArray is not efficient',
+                              RuntimeWarning)
                 tmp = ndarray.array(value)
                 tmp.copyto(self)
             else:
@@ -247,8 +262,8 @@ class SparseNDArray(NDArray):
         raise Exception('Transpose is not supported for SparseNDArray.')
 
     @property
-    def _aux_types(self):
-        ''' The types of the aux data for the SparseNDArray.
+    def aux_types(self):
+        ''' The data types of the aux data for the SparseNDArray.
         '''
         aux_types = []
         num_aux = self._num_aux
@@ -258,16 +273,34 @@ class SparseNDArray(NDArray):
 
     def asnumpy(self):
         """Return a dense ``numpy.ndarray`` object with value copied from this array
+
         """
         return self.to_dense().asnumpy()
-
-    def asscalar(self):
-        raise Exception('Not implemented for SparseND yet!')
 
     def astype(self, dtype):
         raise Exception('Not implemented for SparseND yet!')
 
     def copyto(self, other):
+        """Copies the value of this array to another array.
+
+        If ``other`` is a ``NDArray`` object, then ``other.shape`` and
+        ``self.shape`` should be the same. This function copies the value from
+        ``self`` to ``other``.
+
+        If ``other`` is a context, a new ``NDArray`` will be first created on
+        the target context, and the value of ``self`` is copied.
+
+        Parameters
+        ----------
+        other : NDArray or Context
+            The destination array or context.
+
+        Returns
+        -------
+        NDArray
+            The copied array. If ``other`` is an ``NDArray``, then the return value
+            and ``other`` will point to the same ``NDArray``.
+       """
         if isinstance(other, NDArray):
             if other.handle is self.handle:
                 warnings.warn('You are attempting to copy an array to itself', RuntimeWarning)
@@ -275,7 +308,7 @@ class SparseNDArray(NDArray):
             return _internal._copyto(self, out=other)
         elif isinstance(other, Context):
             hret = SparseNDArray(_new_alloc_handle(self.storage_type, self.shape, other,
-                                                   True, self.dtype, self._aux_types))
+                                                   True, self.dtype, self.aux_types))
             return _internal._copyto(self, out=hret)
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
@@ -283,21 +316,23 @@ class SparseNDArray(NDArray):
     def copy(self):
         raise Exception('Not implemented for SparseND yet!')
 
-    def as_in_context(self, context):
-        raise Exception('Not implemented for SparseND yet!')
-
     def to_dense(self):
         return to_dense(self)
-    # Get a read-only copy of the aux data associated with the SparseNDArray.
-    # If the SparseNDArray is not yet compacted, the returned result may include invalid values
+
     def _aux_data(self, i, writable=False):
+        """ Get a reference to the i-th aux data associated with the SparseNDArray. If the
+        SparseNDArray is not yet compacted, the returned result may include invalid values.
+
+        """
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetAuxNDArray(self.handle, i, ctypes.byref(hdl)))
         return NDArray(hdl, writable)
 
-    # Get a read-only copy of the aux data associated with the SparseNDArray.
-    # If the SparseNDArray is not yet compacted, the returned result may include invalid values
     def _data(self, writable=False):
+        """ Get a reference to the data associated with the SparseNDArray. If the
+        SparseNDArray is not yet compacted, the returned result may include invalid values.
+
+        """
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
         return NDArray(hdl, writable)
@@ -441,54 +476,54 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     return result
 
 def to_dense(source):
+    """ Return a dense array representation of this SparseNDArray.
+
+    Returns
+    -------
+    SparseNDArray
+        The dense array with default storage
+    """
     return ndarray.cast_storage(source, storage_type='default')
 
-def empty(storage_type, shape, ctx=None, dtype=mx_real_t, aux_types=None):
-    if isinstance(shape, int):
-        shape = (shape, )
-    if ctx is None:
-        ctx = Context.default_ctx
-    if aux_types is None:
-        aux_types = _STORAGE_AUX_TYPES[storage_type]
-    return SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype, aux_types))
-
-def zeros(shape, storage_type, ctx=None, dtype=mx_real_t, aux_types=None):
+def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     """Return a new array of given shape and type, filled with zeros.
 
     Parameters
     ----------
     shape : int or tuple of int
         The shape of the empty array
-    storage_type:
-        'row_sparse', etc
+    storage_type: string
+        The storage type of the empty array, such as 'row_sparse', 'csr', etc
     ctx : Context, optional
         An optional device context (default is the current default context)
     dtype : str or numpy.dtype, optional
         An optional value type (default is `float32`)
-    aux_types:
-        [np.int32], etc
+    aux_types: list of numpy.dtype, optional
+        An optional type for the aux data for SparseNDArray (default values depends
+        on the storage type)
 
     Returns
     -------
-    NDArray
+    SparseNDArray
         A created array
     """
     if ctx is None:
         ctx = Context.default_ctx
-    assert (storage_type == 'row_sparse' or storage_type == 'csr')
+
+    dtype = mx_real_t if dtype is None else dtype
     if aux_types is None:
-        if storage_type == 'row_sparse':
-            aux_types = _STORAGE_AUX_TYPES['row_sparse']
-        elif storage_type == 'csr':
-            aux_types = _STORAGE_AUX_TYPES['csr']
-    # pylint: disable= no-member, protected-access
+        if storage_type == 'row_sparse' or storage_type == 'csr':
+            aux_types = _STORAGE_AUX_TYPES[storage_type]
+        else:
+            raise Exception("unknown storage type")
+    assert(len(aux_types) == len(_STORAGE_AUX_TYPES[storage_type]))
     out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, True, dtype, aux_types))
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
-    # pylint: enable= no-member, protected-access
 
 _STORAGE_TYPE_TO_ND_CLASS = {
     _STORAGE_TYPE_STR_TO_ID['default']: ndarray.NDArray,
     _STORAGE_TYPE_STR_TO_ID['row_sparse']: SparseNDArray,
     _STORAGE_TYPE_STR_TO_ID['csr']: SparseNDArray,
 }
+
 _init_ndarray_module(_STORAGE_TYPE_TO_ND_CLASS, "mxnet")

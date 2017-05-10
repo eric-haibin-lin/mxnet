@@ -1148,10 +1148,9 @@ class Symbol(SymbolBase):
         arg_ndarrays = [
             # avoid allocating dense ndarrays for sparse inputs
             _nd_zeros(shape, dev, dtype=dtype) if storage_type != 'row_sparse'
-            else _sparse_nd_zeros(shape, storage_type, dev, dtype=dtype)
+            else _sparse_nd_zeros(storage_type, shape, dev, dtype=dtype)
             for dtype, dev, shape, storage_type in \
                 zip(arg_types, arg_ctx, arg_shapes, arg_storage_types)]
-        # print(arg_ndarrays)
         if grad_req != 'null':
             grad_ndarrays = {}
             for name, shape, dev, dtype in zip(
