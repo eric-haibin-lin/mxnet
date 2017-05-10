@@ -719,8 +719,9 @@ class NDArray {
       // delay_alloc is only set when data storage handle is present
       delay_alloc = false;
     }
-    // create storage handle for aux data based on shape, assuming ctx and aux type are set
-    // aux shape is updated
+    // create storage handle for aux data based on shape
+    // this function assumes ctx, aux shapes and aux types are set
+    // aux shape is also updated
     // if aux data is already allocated, try reuse the storage. Otherwise, free the current one
     // and allocate new storage
     inline void CheckAndAllocAuxData(size_t i, const TShape &shape) {
@@ -729,10 +730,6 @@ class NDArray {
         << "storage type cannot be kUndefinedStorage in CheckAndAllocAuxData";
       CHECK_NE(storage_type, kDefaultStorage)
         << "storage type cannot be kDefaultStorage in CheckAndAllocAuxData";
-      if (aux_shapes.size() <= i) {
-        aux_shapes.resize(i + 1);
-        aux_handles.resize(i + 1);
-      }
       if (aux_handles.size() <= i) {
         aux_handles.resize(i + 1);
       }

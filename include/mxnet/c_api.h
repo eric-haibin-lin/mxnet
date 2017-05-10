@@ -441,10 +441,16 @@ MXNET_DLL int MXNDArrayGetData(NDArrayHandle handle,
 MXNET_DLL int MXNDArrayGetDType(NDArrayHandle handle,
                                int *out_dtype);
 
-// Get the aux type for ith aux data
+/*!
+ * \brief get the type of the ith aux data in NDArray
+ * \param handle the handle to the narray
+ * \param i the index of the aux data
+ * \param out_type pointer holder to get type of aux data
+ * \return 0 when success, -1 when failure happens
+ */
 MXNET_DLL int MXNDArrayGetAuxType(NDArrayHandle handle,
                                   mx_uint i,
-                                  int *out_aux_type);
+                                  int *out_type);
 
 // Get the ith aux data blob wrapped in an NDArray
 MXNET_DLL int MXNDArrayGetAuxNDArray(NDArrayHandle handle,

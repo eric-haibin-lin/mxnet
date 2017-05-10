@@ -17,7 +17,7 @@ import sys as _sys
 
 # import operator
 import numpy as np
-from .base import _LIB, string_types, numeric_types
+from .base import _LIB, numeric_types #string_types
 from .base import c_array, mx_real_t  # , py_str, c_str
 from .base import mx_uint, NDArrayHandle, check_call
 # from .base import ctypes2buffer
@@ -25,7 +25,7 @@ from .context import Context
 from . import _ndarray_internal as _internal
 from . import ndarray
 from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
-from .ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
+from .ndarray import _STORAGE_TYPE_STR_TO_ID#, _STORAGE_TYPE_ID_TO_STR
 from .ndarray import NDArray
 
 # Use different verison of SymbolBase
@@ -207,39 +207,53 @@ class SparseNDArray(NDArray):
     def broadcast_to(self, shape):
         raise Exception('Not implemented for SparseND yet!')
 
-    # def wait_to_read(self):
-    # @property
-    # def shape(self):
-    def aux_type(self, i):
+    def _aux_type(self, i):
+        """Data-type of the array’s ith aux data.
+
+        Returns
+        -------
+        numpy.dtype
+            This NDArray's data type.
+        """
         aux_type = ctypes.c_int()
         check_call(_LIB.MXNDArrayGetAuxType(self.handle, i, ctypes.byref(aux_type)))
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
-    def size(self):
-        raise Exception('Not implemented for SparseND yet!')
+    def indices(self):
+        stype = self.storage_type
+        if stype == 'row_sparse':
+            return self._aux_data(0)
+        elif stype == 'csr':
+            return self._aux_data(1)
+        raise Exception("unknown storage type " + stype)
 
-    # @property
-    # def context(self):
-    # @property
-    # def dtype(self):
     @property
-    def num_aux(self):
-        ''' The number of aux data used to help store the sparse ndarray '''
-        # This is not necessarily the size of aux_handles in the backend NDArray class,
-        # since row sparse with zeros will not have any aux_handle initialized.
+    def indptr(self):
+        stype = self.storage_type
+        if stype == 'csr':
+            return self._aux_data(0)
+        raise Exception("unknown storage type " + stype)
+
+    @property
+    def _num_aux(self):
+        ''' The number of aux data used to help store the sparse ndarray.
+        '''
         return len(_STORAGE_AUX_TYPES[self.storage_type])
+
     @property
     # pylint: disable= invalid-name, undefined-variable
     def T(self):
-        raise Exception('Not implemented for SparseND yet!')
-    # TODO(haibin) Should this be a property?
+        raise Exception('Transpose is not supported for SparseNDArray.')
+
     @property
-    def aux_types(self):
+    def _aux_types(self):
+        ''' The types of the aux data for the SparseNDArray.
+        '''
         aux_types = []
-        num_aux = self.num_aux
+        num_aux = self._num_aux
         for i in xrange(num_aux):
-            aux_types.append(self.aux_type(i))
+            aux_types.append(self._aux_type(i))
         return aux_types
 
     def asnumpy(self):
@@ -261,7 +275,7 @@ class SparseNDArray(NDArray):
             return _internal._copyto(self, out=other)
         elif isinstance(other, Context):
             hret = SparseNDArray(_new_alloc_handle(self.storage_type, self.shape, other,
-                                                   True, self.dtype, self.aux_types))
+                                                   True, self.dtype, self._aux_types))
             return _internal._copyto(self, out=hret)
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
@@ -279,20 +293,14 @@ class SparseNDArray(NDArray):
     def _aux_data(self, i, writable=False):
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetAuxNDArray(self.handle, i, ctypes.byref(hdl)))
-        nd = NDArray(hdl, writable)
-        if nd.ndim == 0:
-            return None
-        return nd
+        return NDArray(hdl, writable)
 
     # Get a read-only copy of the aux data associated with the SparseNDArray.
     # If the SparseNDArray is not yet compacted, the returned result may include invalid values
     def _data(self, writable=False):
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
-        nd = NDArray(hdl, writable)
-        if nd.ndim == 0:
-            return ndarray.array([], dtype=self.dtype)
-        return nd
+        return NDArray(hdl, writable)
 
     def compact(self):
         raise Exception("Not implemented yet")
@@ -345,7 +353,7 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
         An `SparseNDArray` with the `csr` storage representation.
     """
     storage_type = 'csr'
-    # context 
+    # context
     if ctx is None:
         ctx = Context.default_ctx
     # prepare src array and types
@@ -353,7 +361,7 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
     indptr, indptr_type = _prepare_src_array(indptr, indptr_type,
                                              _STORAGE_AUX_TYPES[storage_type][0])
     indices, indices_type = _prepare_src_array(indices, indices_type,
-                                             _STORAGE_AUX_TYPES[storage_type][1])
+                                               _STORAGE_AUX_TYPES[storage_type][1])
     # verify types
     assert('int' in str(indptr_type) or 'long' in str(indptr_type))
     assert('int' in str(indices_type) or 'long' in str(indices_type))
@@ -421,11 +429,10 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     # verify types
     assert('int' in str(indices_type) or 'long' in str(indices_type))
     # verify shapes
-    indices_shape = indices.shape
     assert(values.ndim == len(shape))
     assert(indices.ndim == 1)
     result = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
-                       [indices_type], [indices.shape]))
+                                             [indices_type], [indices.shape]))
     # assign indices and values
     values_ref = result._data(True)
     indices_ref = result._aux_data(0, True)

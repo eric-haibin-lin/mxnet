@@ -394,10 +394,10 @@ int MXNDArrayGetDType(NDArrayHandle handle,
 
 int MXNDArrayGetAuxType(NDArrayHandle handle,
                         mx_uint i,
-                        int *out_aux_type) {
+                        int *out_type) {
   API_BEGIN();
   NDArray *arr = static_cast<NDArray*>(handle);
-  *out_aux_type = arr->aux_type(i);
+  *out_type = arr->aux_type(i);
   API_END();
 }
 
