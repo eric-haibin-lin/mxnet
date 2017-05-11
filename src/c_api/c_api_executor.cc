@@ -331,7 +331,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   }
 
   // initialize arg_grad_ctx_vec and grad_req_type_vec
-  std::vector<Context> arg_grad_ctx_vec(in_arg_names.size());
+  std::vector<Context> arg_grad_ctx_vec(in_arg_names.size(), ctx);
   std::vector<OpReqType> grad_req_type_vec(in_arg_names.size(), kNullOp);
   if ("none" != grad_req_type) {
     for (size_t i = 0; i < in_arg_names.size(); ++i) {

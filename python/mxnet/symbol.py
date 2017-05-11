@@ -1128,7 +1128,7 @@ class Symbol(SymbolBase):
         ----------
         >>> x = mx.sym.Variable('x')
         >>> y = mx.sym.FullyConnected(x, num_hidden=4)
-        >>> exe = y.simple_bind(mx.cpu(), x=(5,4), grad_req=[])
+        >>> exe = y.simple_bind(mx.cpu(), x=(5,4), grad_req='null')
         >>> exe.forward()
         [<NDArray 5x4 @cpu(0)>]
         >>> exe.outputs[0].asnumpy()
@@ -1169,15 +1169,6 @@ class Symbol(SymbolBase):
         executor : mxnet.Executor
             The generated executor
         """
-        # listed_arguments = self.list_arguments()  # read-only args
-        # listed_aux_states = self.list_auxiliary_states()  # aux states
-
-        # attr_dict = None
-        # if type_dict is None:
-        #     attr_dict = self.attr_dict()
-        #     type_dict = {k: mx_real_t for k in listed_arguments
-        #                  if k not in attr_dict or '__dtype__' not in attr_dict[k]}
-
         num_provided_arg_types = 0
         provided_arg_type_names = ctypes.POINTER(ctypes.c_char_p)()  # provided type argument names
         provided_arg_type_data = ctypes.POINTER(mx_uint)()  # provided types
@@ -1214,9 +1205,13 @@ class Symbol(SymbolBase):
                 provided_req_type_list_len = 0
                 provided_grad_req_types = [c_str(grad_req)]
             elif isinstance(grad_req, list):
+                if len(grad_req) == 0:
+                    raise RuntimeError('grad_req in simple_bind cannot be an empty list')
                 provided_grad_req_types = [c_str(item) for item in grad_req]
                 provided_req_type_list_len = len(provided_grad_req_types)
             elif isinstance(grad_req, dict):
+                if len(grad_req) == 0:
+                    raise RuntimeError('grad_req in simple_bind cannot be an empty dict')
                 provided_grad_req_names = []
                 provided_grad_req_types = []
                 for k, v in grad_req.items():
@@ -1225,19 +1220,6 @@ class Symbol(SymbolBase):
                 provided_grad_req_names = c_array(ctypes.c_char_p, provided_grad_req_names)
                 provided_req_type_list_len = len(provided_grad_req_types)
             provided_grad_req_types = c_array(ctypes.c_char_p, provided_grad_req_types)
-
-        # if group2ctx is not None:
-        #     if attr_dict is None:
-        #         attr_dict = self.attr_dict()
-        #     arg_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx)
-        #                if name in attr_dict and '__ctx_group__' in attr_dict[name]
-        #                else ctx for name in listed_arguments]
-        #     aux_ctx = [group2ctx.get(attr_dict[name]['__ctx_group__'], ctx)
-        #                if name in attr_dict and '__ctx_group__' in attr_dict[name]
-        #                else ctx for name in listed_aux_states]
-        # else:
-        #     arg_ctx = [ctx] * len(listed_arguments)
-        #     aux_ctx = [ctx] * len(listed_aux_states)
 
         num_ctx_map_keys = mx_uint(0)
         ctx_map_keys = ctypes.POINTER(ctypes.c_char_p)()
@@ -1362,7 +1344,7 @@ class Symbol(SymbolBase):
         ----------
         >>> x = mx.sym.Variable('x')
         >>> y = mx.sym.FullyConnected(x, num_hidden=4)
-        >>> exe = y.simple_bind(mx.cpu(), x=(5,4), grad_req=[])
+        >>> exe = y.simple_bind(mx.cpu(), x=(5,4), grad_req='null')
         >>> exe.forward()
         [<NDArray 5x4 @cpu(0)>]
         >>> exe.outputs[0].asnumpy()
