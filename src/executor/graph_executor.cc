@@ -536,7 +536,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
 #if EXECUTOR_DEBUG
-    LOG(INFO) << "init   data entry " << data_eid << "\tas stype " << stype;
+    LOG(INFO) << "init   data entry " << data_eid << "\tas stype " << stype << "(head_grad)";
 #endif
   }
   // get maximum bytes in each pool
@@ -606,7 +606,6 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     }
   }
   // assign the data entries
-
   for (size_t i = 0; i < data_entry_.size(); ++i) {
     // avoid pre-allocated arrays
     if (!data_entry_[i].is_none()) continue;
@@ -618,7 +617,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       const NDArray& src = data_pool_.at(storage_id);
       data_entry_[i] = src.AsArray(vshape[i], vdtype[i]);
     } else {
-      data_entry_[i] = NDArray(storage_type, vshape[i], vctx[i]);
+      data_entry_[i] = NDArray(storage_type, vshape[i], data_context[i]);
     }
 #if EXECUTOR_DEBUG
     LOG(INFO) << "init   data entry " << i << " as stype " << storage_type;

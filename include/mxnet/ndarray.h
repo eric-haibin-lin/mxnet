@@ -659,7 +659,7 @@ class NDArray {
       storage_shape = data.shape_;
     }
     // Constructor for a non-default storage chunk
-    Chunk(NDArrayStorageType storage_type_, TShape storage_shape_, Context ctx_,
+    Chunk(NDArrayStorageType storage_type_, const TShape &storage_shape_, Context ctx_,
           bool delay_alloc_, int dtype, std::vector<int> aux_types_,
           const std::vector<TShape> &aux_shapes_)
         : static_data(false), delay_alloc(delay_alloc_), storage_type(storage_type_),
