@@ -619,11 +619,13 @@ void DotCsrDnsDnsImpl(const OpContext& ctx,
               s, data_out.Size(), data_out.dptr<DType>());
         }
         if (trans_lhs) {
+          if (lhs.is_zeros_hint()) return;
           mxnet_op::Kernel<DotCsrDnsDns<true, false>, xpu>::Launch(s, data_out.Size(),
               data_out.dptr<DType>(), data_l.dptr<DType>(), indptr_l.dptr<IType>(),
               col_idx_l.dptr<CType>(), data_r.dptr<DType>(), lhs.shape()[0],
               rhs.shape()[1]);
         } else {
+          if (lhs.is_zeros_hint()) return;
           mxnet_op::Kernel<DotCsrDnsDns<false, false>, xpu>::Launch(s, data_out.Size(),
               data_out.dptr<DType>(), data_l.dptr<DType>(), indptr_l.dptr<IType>(),
               col_idx_l.dptr<CType>(), data_r.dptr<DType>(), rhs.shape()[1]);
@@ -767,12 +769,13 @@ void DotCsrDnsRspImpl(const OpContext& ctx,
               mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(
                   s, out_tmp.shape_.Size(), out_tmp.dptr_);
             }
-            // generate a temporary dns output
-            mxnet_op::Kernel<DotCsrDnsDns<true, false>, xpu>::Launch(
-                s, out_tmp.shape_.Size(), out_tmp.dptr_, data_l.dptr<DType>(),
-                indptr_l.dptr<IType>(), col_idx_l.dptr<CType>(), data_r.dptr<DType>(),
-                lhs.shape()[0], out_tmp.shape_[1]);
-
+            if (lhs.is_zeros_hint() == false) {
+              // generate a temporary dns output
+              mxnet_op::Kernel<DotCsrDnsDns<true, false>, xpu>::Launch(
+                  s, out_tmp.shape_.Size(), out_tmp.dptr_, data_l.dptr<DType>(),
+                  indptr_l.dptr<IType>(), col_idx_l.dptr<CType>(), data_r.dptr<DType>(),
+                  lhs.shape()[0], out_tmp.shape_[1]);
+            }
             // cast dns to rsp
             CastStorageDnsRspImpl<xpu>(s, TBlob(out_tmp), ret);
           } else {
@@ -860,6 +863,17 @@ void DotBackwardCsrDnsRsp(const nnvm::NodeAttrs& attrs,
 }
 
 template<typename xpu>
+void DotBackwardCsrDnsDns(const nnvm::NodeAttrs& attrs,
+                          const OpContext& ctx,
+                          const std::vector<NDArray>& inputs,
+                          const std::vector<OpReqType>& req,
+                          const std::vector<NDArray>& outputs) {
+  const DotParam& param = nnvm::get<DotParam>(attrs.parsed);
+  NDArray ret = outputs[1];
+  DotCsrDnsDnsImpl<xpu>(ctx, inputs[1], inputs[0], req[1], !param.transpose_a, &ret);
+}
+
+template<typename xpu>
 void DotBackwardEx(const nnvm::NodeAttrs& attrs,
                    const OpContext& ctx,
                    const std::vector<NDArray>& inputs,
@@ -875,12 +889,18 @@ void DotBackwardEx(const nnvm::NodeAttrs& attrs,
   // TODO(junwu): check whether this CHECK is reasonable
   const DotParam& param = nnvm::get<DotParam>(attrs.parsed);
   CHECK(!param.transpose_b) << "sparse dot only supports dot(A, X) and dot(A.T(), X)";
-
   if (inputs[0].storage_type() == kDefaultStorage  // ograd dns format
+      // dns, csr, dns => *, rsp
       && inputs[1].storage_type() == kCSRStorage  // csr input lhs of the op
       && inputs[2].storage_type() == kDefaultStorage  // dns input rhs of the op
       && outputs[1].storage_type() == kRowSparseStorage) {  // grad(rhs) rsp format
     DotBackwardCsrDnsRsp<xpu>(attrs, ctx, inputs, req, outputs);
+  } else if (inputs[0].storage_type() == kDefaultStorage  // ograd dns format
+      // dns, csr, dns => *, dns
+      && inputs[1].storage_type() == kCSRStorage  // csr input lhs of the op
+      && inputs[2].storage_type() == kDefaultStorage  // dns input rhs of the op
+      && outputs[1].storage_type() == kDefaultStorage) {  // grad(rhs) dns format
+    DotBackwardCsrDnsDns<xpu>(attrs, ctx, inputs, req, outputs);
   } else {
     // TODO(junwu): add fallback mechanism
     LOG(FATAL) << "Not supported";

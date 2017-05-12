@@ -134,17 +134,25 @@ void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   bool is_zeros = dst->is_zeros_hint();
   if (is_zeros) return;
   // reset the shapes if it's not zeros
-  auto aux_shape = dst->aux_shape(rowsparse::kIdx);
   auto storage_shape = dst->storage_shape();
-  // when the first dimension to 0, ProdShape(aux_shape) = 0, which indicates empty aux_data
-  aux_shape[0] = 0;
   storage_shape[0] = 0;
-  dst->SetAuxShape(rowsparse::kIdx, aux_shape);
+  dst->SetAuxShape(rowsparse::kIdx, TShape({0}));
   dst->SetStorageShape(storage_shape);
 }
 
+// Fill a CSR NDArray with zeros by updating the aux shape.
+template<typename xpu>
+void FillZerosCsrImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
+  bool is_zeros = dst->is_zeros_hint();
+  if (is_zeros) return;
+  // reset the shapes if it's not zeros
+  TShape new_shape({0});
+  dst->SetAuxShape(csr::kIndPtr, new_shape);
+  dst->SetAuxShape(csr::kIdx, new_shape);
+  dst->SetStorageShape(new_shape);
+}
 
-// This operator never falls back, since there's no input NDArray
+// This operator never needs to fall back, since there's no input NDArray
 template<typename xpu>
 void FillComputeZerosEx(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
@@ -160,8 +168,11 @@ void FillComputeZerosEx(const nnvm::NodeAttrs& attrs,
   if (stype == kRowSparseStorage) {
     NDArray nd(outputs[0]);
     FillZerosRspImpl<xpu>(s, &nd);
+  } else if (stype == kCSRStorage) {
+    NDArray nd(outputs[0]);
+    FillZerosCsrImpl<xpu>(s, &nd);
   } else {
-    LOG(INFO) << "Not implemented storage type";
+    LOG(FATAL) << "storage type not implemented.";
   }
 }
 

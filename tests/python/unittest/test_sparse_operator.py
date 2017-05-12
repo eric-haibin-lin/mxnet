@@ -108,6 +108,7 @@ def test_cast_storage_ex():
     test_rsp_to_dns(shape)
     test_dns_to_rsp(shape)
     test_csr_to_dns([], [0, 0, 0, 0, 0], [], (4, 4))
+    test_csr_to_dns([], [], [], (4, 4))
     test_csr_to_dns([5, 8, 3, 6], [0, 0, 2, 3, 4], [0, 1, 2, 1], (4, 4))
     test_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
 
@@ -118,7 +119,7 @@ def test_cast_storage_ex():
 # the same impl function of dot(csr, dns) = rsp and it has been tested
 # in the forward test cases as the following.
 def test_sparse_dot():
-    def test_dot_csr_dns_rsp(csr_shape, dns_shape, trans_csr):
+    def test_dot_csr_dns_rsp(csr_shape, dns_shape, dns_grad_stype, trans_csr):
         dns1 = rand_ndarray(csr_shape, 'default')
         dns2 = rand_ndarray(dns_shape, 'default')
         csr = mx.nd.cast_storage(dns1, storage_type='csr')
@@ -134,7 +135,7 @@ def test_sparse_dot():
         # test symbolic forward
         lhs = mx.symbol.Variable('lhs', storage_type='csr')
         rhs = mx.symbol.Variable('rhs', storage_type='default')
-        rhs._set_attr(grad_stype_hint=str('row_sparse'))
+        rhs._set_attr(grad_stype_hint=str(dns_grad_stype))
         # TODO(haibin) since backward op is not fully implemented, here we add a dense zero ndarray
         # so that the output gradient is dense.
         zeros = mx.symbol.Variable('zero', storage_type='default')
@@ -149,8 +150,10 @@ def test_sparse_dot():
                                 grad_req={'lhs': 'null', 'rhs': 'write', 'zero' : 'write'})
 
     lhs_shape = (rnd.randint(1, 10),rnd.randint(1, 10))
-    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), trans_csr=False)
-    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), trans_csr=True)
+    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
+    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
+    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'default', False)
+    test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'default', True)
 
 def test_sparse_embedding():
     in_dim = 10

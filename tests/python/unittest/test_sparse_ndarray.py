@@ -43,10 +43,14 @@ def test_sparse_nd_elementwise_fallback():
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
 
 def test_sparse_nd_zeros():
+    def check_sparse_nd_zeros(shape, stype):
+        zero = mx.nd.zeros(shape)
+        sparse_zero = mx.sparse_nd.zeros('row_sparse', shape)
+        assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
+
     shape = (rnd.randint(1, 10), rnd.randint(1, 10))
-    zero = mx.nd.zeros(shape)
-    sparse_zero = mx.sparse_nd.zeros('row_sparse', shape)
-    assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
+    check_sparse_nd_zeros(shape, 'row_sparse')
+    check_sparse_nd_zeros(shape, 'csr')
 
 def check_sparse_nd_copy(from_stype, to_stype):
     shape = (rnd.randint(1, 10), rnd.randint(1, 10))

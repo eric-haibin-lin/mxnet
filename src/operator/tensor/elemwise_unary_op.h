@@ -436,6 +436,7 @@ void CastStorageCsrDnsImpl(mshadow::Stream<xpu> *s, const NDArray& csr, TBlob* d
         const index_t num_cols = dns->shape_[1];
         DType* dns_data = dns->dptr<DType>();
         mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, dns->shape_.Size(), dns_data);
+        if (csr.is_zeros_hint()) return;
         const IType* indptr = csr.aux_data(csr::kIndPtr).dptr<IType>();
         const CType* col_idx = csr.aux_data(csr::kIdx).dptr<CType>();
         const DType* csr_data = csr.data().dptr<DType>();

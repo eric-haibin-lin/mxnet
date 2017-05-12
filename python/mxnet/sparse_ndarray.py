@@ -204,7 +204,9 @@ fixed-size items, stored in sparse format.
             raise Exception('SparseNDArray only supports [:] for assignment')
 
     def __getitem__(self, key):
-        raise Exception('getitem Not implemented for SparseND yet!')
+        warnings.warn('getitem for SparseNDArray is not efficient', RuntimeWarning)
+        dns = ndarray.cast_storage(self, 'default')
+        return dns[key]
 
     def _sync_copyfrom(self, source_array):
         raise Exception('Not implemented for SparseND yet!')
