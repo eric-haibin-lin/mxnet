@@ -236,6 +236,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   std::unordered_map<std::string, std::unordered_map<std::string, std::string>> attr_dict;
   if (nullptr == provided_arg_dtypes || nullptr == g2c_keys) {
     std::vector<std::tuple<std::string, std::string, std::string>> attrs = sym->ListAttrsRecursive();
+    attr_dict.reserve(attrs.size());
     for (const auto& tp : attrs) {
       attr_dict[std::get<0>(tp)][std::get<1>(tp)] = std::get<2>(tp);
     }
@@ -252,6 +253,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     }
   } else {  // use user input type_dict
     // create dtype map for in_args and aux_states
+    arg_dtype_map.reserve(num_provided_arg_dtypes);
     for (mx_uint i = 0; i < num_provided_arg_dtypes; ++i) {
       arg_dtype_map[provided_arg_dtype_names[i]] = provided_arg_dtypes[i];
     }
@@ -320,6 +322,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
       && nullptr != provided_grad_req_names
       && nullptr != provided_grad_req_types) {  // dict, grad_req=['lhs': 'null', 'rhs': 'write']
     grad_req_type = "dict";
+    provided_grad_req_map.reserve(provided_grad_req_list_len);
     for (mx_uint i = 0; i < provided_grad_req_list_len; ++i) {
       CHECK_EQ(req_map.count(provided_grad_req_types[i]), 1U)
         << "grad_req=" << provided_grad_req_types[i] << " is not a valid input in simple_bind; "
@@ -357,15 +360,17 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   }
 
   // create shape map for in_args and aux_states
-  std::unordered_map<std::string, TShape> arg_shape_map;
+  std::unordered_map<std::string, TShape> arg_shape_map(num_provided_arg_shapes);
   for (mx_uint i = 0; i < num_provided_arg_shapes; ++i) {
-    arg_shape_map[provided_arg_shape_names[i]] =
-      TShape(provided_arg_shape_data+provided_arg_shape_idx[i],
-             provided_arg_shape_data+provided_arg_shape_idx[i+1]);
+    auto p = arg_shape_map.emplace(provided_arg_shape_names[i],
+        TShape(provided_arg_shape_data+provided_arg_shape_idx[i],
+          provided_arg_shape_data+provided_arg_shape_idx[i+1]));
+    CHECK(p.second) << "Duplicate shapes are provided for argument "
+      << provided_arg_shape_names[i] << " in simple_bind";
   }
 
   // create para name set for sharing data array memory
-  std::unordered_set<std::string> param_name_set;
+  std::unordered_set<std::string> param_name_set(num_param_names);
   for (mx_uint i = 0; i < num_param_names; ++i) {
     param_name_set.insert(param_name_list[i]);
   }
@@ -378,6 +383,7 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   bool use_shared_data_arrays = (nullptr != *shared_data_array_handle_list);
   if (use_shared_data_arrays) {
     // create shared_data_array_map
+    shared_data_array_map.reserve(*num_shared_data_arrays);
     NDArray*** shared_data_array_ptrs =
       reinterpret_cast<NDArray***>(shared_data_array_handle_list);
     for (mx_uint i = 0; i < *num_shared_data_arrays; ++i) {

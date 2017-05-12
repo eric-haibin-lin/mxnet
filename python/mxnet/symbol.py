@@ -1116,8 +1116,7 @@ class Symbol(SymbolBase):
 
     def simple_bind(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
                     param_names=None, shared_exec=None, shared_data_arrays=None, **kwargs):
-        """This function is DEPRECATED.
-        Bind current symbol to get an executor, allocate all the arguments needed.
+        """Bind current symbol to get an executor, allocate all the arguments needed.
         Allows specifying data types.
 
         This function simplifies the binding procedure. You need to specify only input data shapes.
