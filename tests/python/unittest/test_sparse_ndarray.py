@@ -11,7 +11,7 @@ def check_sparse_nd_elemwise_binary(shapes, storage_types, f, g):
     nds = []
     for i, storage_type in enumerate(storage_types):
         if storage_type == 'row_sparse':
-            nd, _, _ = rand_sparse_ndarray(shapes[i], storage_type, allow_zeros = True)
+            nd, _ = rand_sparse_ndarray(shapes[i], storage_type)
         elif storage_type == 'default':
             nd = mx.nd.array(random_arrays(shapes[i]), dtype = np.float32)
         else:
@@ -52,18 +52,19 @@ def test_sparse_nd_zeros():
     check_sparse_nd_zeros(shape, 'row_sparse')
     check_sparse_nd_zeros(shape, 'csr')
 
-def check_sparse_nd_copy(from_stype, to_stype):
-    shape = (rnd.randint(1, 10), rnd.randint(1, 10))
-    from_nd = rand_ndarray(shape, from_stype)
-    # copy to ctx
-    to_ctx = from_nd.copyto(default_context())
-    # copy to stype
-    to_stype = rand_ndarray(shape, to_stype)
-    to_stype = from_nd.copyto(to_stype)
-    assert np.sum(np.abs(from_nd.asnumpy() != to_ctx.asnumpy())) == 0.0
-    assert np.sum(np.abs(from_nd.asnumpy() != to_stype.asnumpy())) == 0.0
 
 def test_sparse_nd_copy():
+    def check_sparse_nd_copy(from_stype, to_stype):
+        shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+        from_nd = rand_ndarray(shape, from_stype)
+        # copy to ctx
+        to_ctx = from_nd.copyto(default_context())
+        # copy to stype
+        to_nd = rand_ndarray(shape, to_stype)
+        to_nd = from_nd.copyto(to_nd)
+        assert np.sum(np.abs(from_nd.asnumpy() != to_ctx.asnumpy())) == 0.0
+        assert np.sum(np.abs(from_nd.asnumpy() != to_nd.asnumpy())) == 0.0
+
     check_sparse_nd_copy('row_sparse', 'row_sparse')
     check_sparse_nd_copy('row_sparse', 'default')
     check_sparse_nd_copy('default', 'row_sparse')
@@ -71,7 +72,7 @@ def test_sparse_nd_copy():
 def check_sparse_nd_prop_rsp():
     storage_type = 'row_sparse'
     shape = (rnd.randint(1, 2), rnd.randint(1, 2))
-    nd, v, idx = rand_sparse_ndarray(shape, storage_type, allow_zeros = True)
+    nd, (v, idx) = rand_sparse_ndarray(shape, storage_type)
     assert(nd._num_aux == 1)
     assert(nd.indices.dtype == np.int32)
     assert(nd.storage_type == 'row_sparse')
@@ -88,16 +89,11 @@ def test_sparse_nd_basic():
         indices = mx.nd.array(indices).asnumpy()
         assert_almost_equal(rsp.indices.asnumpy(), indices)
 
-    def check_csr_creation(values, indptr, indices, shape):
-        csr = mx.sparse_nd.csr(values, indptr, indices, shape)
-        dns = mx.nd.zeros(shape)
-        dns[0][1] = values[0]
-        dns[1][1] = values[1]
-        dns[3][0] = values[2]
-        indices = mx.nd.array(indices).asnumpy()
-        indptr = mx.nd.array(indptr).asnumpy()
-        assert_almost_equal(csr.asnumpy(), dns.asnumpy())
+    def check_csr_creation(shape):
+        csr, (indptr, indices, values) = rand_sparse_ndarray(shape, 'csr')
         assert_almost_equal(csr.indptr.asnumpy(), indptr)
+        assert_almost_equal(csr.indices.asnumpy(), indices)
+        assert_almost_equal(csr.values.asnumpy(), values)
 
     shape = (4,2)
     values = np.random.rand(2,2)
@@ -112,11 +108,9 @@ def test_sparse_nd_basic():
     indices = [1,3]
     check_rsp_creation(values, indices, shape)
 
-    values = np.random.rand(3)
-    indptr = np.array([0,1,2,2,3])
-    indices = np.array([1,1,0])
-    check_csr_creation(values, indptr, indices, shape)
+    check_csr_creation(shape)
     check_sparse_nd_prop_rsp()
+
 
 def test_sparse_nd_setitem():
     shape = (3, 4)
@@ -132,6 +126,18 @@ def test_sparse_nd_setitem():
     x_np = np.ones(shape, dtype=x.dtype)
     assert same(x.asnumpy(), x_np)
 
+def test_sparse_nd_slice():
+    def check_sparse_nd_csr_slice(shape):
+        storage_type = 'csr'
+        A, _ = rand_sparse_ndarray(shape, storage_type)
+        A2 = A.asnumpy()
+        start = rnd.randint(0, shape[0] - 1)
+        end = rnd.randint(start + 1, shape[0])
+        assert same(A[start:end].asnumpy(), A2[start:end])
+
+    shape = (rnd.randint(2, 10), rnd.randint(1, 10))
+    check_sparse_nd_csr_slice(shape)
+
 if __name__ == '__main__':
     test_sparse_nd_zeros()
     test_sparse_nd_elementwise_fallback()
@@ -139,3 +145,4 @@ if __name__ == '__main__':
     test_sparse_nd_elemwise_add()
     test_sparse_nd_setitem()
     test_sparse_nd_basic()
+    test_sparse_nd_slice()

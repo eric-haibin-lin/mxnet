@@ -219,7 +219,10 @@ void CastStorageDnsRspImpl(mshadow::Stream<xpu> *s, const TBlob& dns, NDArray* r
       for (index_t i = 0; i < num_rows; ++i) {
         if (row_idx[i] < static_cast<RType>(num_rows)) ++nnr;
       }
-      if (0 == nnr) return;  // zero matrix
+      if (0 == nnr) {
+        rsp->SetAuxShape(rowsparse::kIdx, TShape({0}));
+        return;  // zero matrix
+      }
       rsp->CheckAndAllocData(mshadow::Shape2(nnr, num_cols));
       // TODO(junwu): single thread for compressing row_idx and copying data
       // from dns to rsp, might be a bottleneck.

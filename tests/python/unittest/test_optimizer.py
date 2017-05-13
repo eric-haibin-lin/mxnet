@@ -35,15 +35,15 @@ def compare_optimizer(opt1, opt2, shape, w_stype='default', g_stype='default'):
         w2 = mx.random.uniform(shape=shape, ctx=default_context())
         w1 = w2.copyto(default_context())
     elif w_stype == 'row_sparse':
-        w2 = random_sparse_ndarray(shape, w_stype, allow_zeros = False)
-        w1 = random_sparse_ndarray(shape, w_stype, allow_zeros = False).to_dense()
+        w2 = rand_ndarray(shape, w_stype)
+        w1 = rand_ndarray(shape, w_stype).to_dense()
     else:
         raise Exception("type not supported yet")
     if g_stype == 'default':
         g2 = mx.random.uniform(shape=shape, ctx=default_context())
         g1 = g2.copyto(default_context())
     elif g_stype == 'row_sparse':
-        g2 = random_sparse_ndarray(shape, g_stype, allow_zeros = False)
+        g2 = rand_ndarray(shape, g_stype)
         g1 = g2.copyto(default_context()).to_dense()
     else:
         raise Exception("type not supported yet")

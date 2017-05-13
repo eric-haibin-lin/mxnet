@@ -10,6 +10,7 @@ import os
 import errno
 import logging
 import numpy as np
+import scipy as sp
 import numpy.testing as npt
 import numpy.random as rnd
 import mxnet as mx
@@ -65,37 +66,37 @@ def random_arrays(*shapes):
         return arrays[0]
     return arrays
 
-# TODO(haibin) also include types in arguments and set the default ctx
-def rand_sparse_ndarray(shape, storage_type, sparsity=None, allow_zeros=False):
+# TODO(haibin) also include types in arguments
+def rand_sparse_ndarray(shape, storage_type, density=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
-    sparsity = rnd.rand() if sparsity is None else sparsity
-    arr, val, indices = (None, None, None)
+    density = rnd.rand() if density is None else density
     if storage_type == 'row_sparse':
         # TODO(haibin) support high dim sparse ndarray
         assert(len(shape) < 3)
         prod = np.prod(shape)
         num_cols = long(prod / shape[0])
         # sample index
-        while True:
-            idx_sample = rnd.rand(shape[0])
-            indices = np.argwhere(idx_sample > sparsity).flatten()
-            if indices.shape[0] > 0:
-                break
-            if allow_zeros:
-                return mx.sparse_nd.zeros('row_sparse', shape), np.array([]), np.array([], dtype='int32')
+        idx_sample = rnd.rand(shape[0])
+        indices = np.argwhere(idx_sample < density).flatten()
+        if indices.shape[0] == 0:
+            return mx.sparse_nd.zeros('row_sparse', shape), (np.array([]), np.array([], dtype='int32'))
         # generate random values
         val = rnd.rand(indices.shape[0], num_cols)
-        arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int32), val, indices
+        arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int32)
+        return arr, (val, indices)
+    elif storage_type == 'csr':
+        assert(len(shape) == 2)
+        csr = sp.sparse.rand(shape[0], shape[1], density=density, format='csr')
+        result = mx.sparse_nd.csr(csr.data, csr.indptr, csr.indices, shape)
+        return result, (csr.indptr, csr.indices, csr.data)
     else:
-        # TODO(haibin) support csr
-        raise Exception('Not implemented for SparseND yet!')
-    return arr
+        assert(False), "unknown storage type"
 
-def rand_ndarray(shape, storage_type, sparsity=None):
+def rand_ndarray(shape, storage_type, density=None):
     if storage_type == 'default':
         arr = mx.nd.array(random_arrays(shape))
     else:
-        arr, _, _ = rand_sparse_ndarray(shape, storage_type, sparsity=sparsity)
+        arr, _ = rand_sparse_ndarray(shape, storage_type, density=density)
     return arr
 
 def np_reduce(dat, axis, keepdims, numpy_reduce_func):

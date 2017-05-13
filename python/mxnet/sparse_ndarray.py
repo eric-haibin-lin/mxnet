@@ -183,7 +183,7 @@ fixed-size items, stored in sparse format.
             raise ValueError('Failed to assign to a readonly NDArray')
         if isinstance(key, py_slice):
             if key.step is not None or key.start is not None or key.stop is not None:
-                raise ValueError('slicing not supported in SparseNDArray yet')
+                raise ValueError('Assignment with slicing not supported in SparseNDArray.')
             if isinstance(value, NDArray):
                 # avoid copying to itself
                 if value.handle is not self.handle:
@@ -204,15 +204,72 @@ fixed-size items, stored in sparse format.
             raise Exception('SparseNDArray only supports [:] for assignment')
 
     def __getitem__(self, key):
-        warnings.warn('getitem for SparseNDArray is not efficient', RuntimeWarning)
-        dns = ndarray.cast_storage(self, 'default')
-        return dns[key]
+        stype = self.storage_type
+        assert(stype == 'csr'), "getitem for " + str(stype) + " not implemented yet";
+        if isinstance(key, int):
+            raise Exception("Not implemented yet")
+        if isinstance(key, py_slice):
+            if key.step is not None:
+                raise ValueError('NDArray only supports continuous slicing on axis 0')
+            if key.start is not None or key.stop is not None:
+                return self._slice(key.start, key.stop)
+            else:
+                return self
+        if isinstance(key, tuple):
+            raise ValueError('Multi-dimension indexing is not supported')
 
     def _sync_copyfrom(self, source_array):
         raise Exception('Not implemented for SparseND yet!')
 
     def _slice(self, start, stop):
-        raise Exception('Not implemented for SparseND yet!')
+        """Returns a read-only sliced SparseNDArray that shares memory with current one.
+        For csr SparseNDArray, it only slices the indptr array, and keeps the original values
+        and indices.
+
+        The existing slice operation is not very efficient when it's copied, since the indices
+        and values are a superset of the sliced region.
+
+
+        Parameters
+        ----------
+        start : int
+            Starting index of slice.
+        stop : int
+            Finishing index of slice.
+
+        Example
+        ----------
+        >>> indptr = np.array([0, 2, 3, 6])
+        >>> indices = np.array([0, 2, 2, 0, 1, 2])
+        >>> data = np.array([1, 2, 3, 4, 5, 6])
+        >>> a = mx.sparse_nd.csr(data, indptr, indices, (3, 3))
+        >>> a.asnumpy()
+        array([[1, 0, 2],
+               [0, 0, 3],
+               [4, 5, 6]])
+
+        >>> a[1:2].asnumpy()
+        array([[0, 0, 3]])
+
+        >>> a[1:2].indptr.asnumpy()
+        array([[2, 3]])
+
+        >>> a[1:2].indicies.asnumpy()
+        array([0, 2, 2, 0, 1, 2])
+
+        >>> a[1:2].values.asnumpy()
+        array([1, 2, 3, 4, 5, 6])
+
+        """
+        stype = self.storage_type
+        assert(stype == 'csr'), "_slice for " + str(stype) + " not implemented yet";
+        warnings.warn('slicing SparseNDArray is not efficient', RuntimeWarning)
+        handle = NDArrayHandle()
+        start = mx_uint(start) if start else mx_uint(0)
+        stop = mx_uint(stop) if stop else mx_uint(self.shape[0])
+        check_call(_LIB.MXNDArraySlice(
+            self.handle, start, stop, ctypes.byref(handle)))
+        return SparseNDArray(handle=handle, writable=False)
 
     def _at(self, idx):
         raise Exception('at operator for SparseND is not supported.')
@@ -234,6 +291,11 @@ fixed-size items, stored in sparse format.
         aux_type = ctypes.c_int()
         check_call(_LIB.MXNDArrayGetAuxType(self.handle, i, ctypes.byref(aux_type)))
         return _DTYPE_MX_TO_NP[aux_type.value]
+
+    @property
+    def values(self):
+        stype = self.storage_type
+        return self._data(0)
 
     @property
     def indices(self):
@@ -403,6 +465,7 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
     assert(values.ndim == 1)
     assert(indptr.ndim == 1)
     assert(indices.ndim == 1)
+    assert(len(shape) == 2)
     result = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
                                              [indptr_type, indices_type], aux_shapes))
     # assign indptr, indices and values

@@ -1,6 +1,7 @@
 # pylint: skip-file
 import numpy as np
 import mxnet as mx
+import scipy as sp
 from numpy.testing import assert_allclose
 from mxnet.test_utils import *
 
@@ -12,8 +13,8 @@ def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_
     if rhs_grad_stype is not None:
         rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
 
-    lhs_nd = rand_ndarray(shape, lhs_stype, sparsity=0)
-    rhs_nd = rand_ndarray(shape, rhs_stype, sparsity=0)
+    lhs_nd = rand_ndarray(shape, lhs_stype)
+    rhs_nd = rand_ndarray(shape, rhs_stype)
     lhs_np = lhs_nd.asnumpy()
     rhs_np = rhs_nd.asnumpy()
 
@@ -69,7 +70,7 @@ def test_elemwise_add_ex_multiple_stages():
 # TODO(haibin) also add test for backward pass
 def test_cast_storage_ex():
     def test_rsp_to_dns(shape):
-        rsp, data, row_idx = rand_sparse_ndarray(shape, 'row_sparse', allow_zeros = True)
+        rsp, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse')
         dns_out = mx.nd.cast_storage(rsp, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())
         if row_idx is not None:
@@ -83,20 +84,11 @@ def test_cast_storage_ex():
         ret = mx.nd.cast_storage(rsp_out, storage_type='default')
         assert same(ret.asnumpy(), dns_in.asnumpy())
 
-    def test_csr_to_dns(data, indptr, col_idx, shape):
-        indptr = np.array(indptr, dtype=np.int32)
-        col_idx = np.array(col_idx, dtype=np.int32)
-        csr = mx.sparse_nd.csr(data, indptr, col_idx, shape=shape)
-        dns_out = mx.nd.cast_storage(csr, storage_type='default')
-        dns_expected = np.zeros(shape, dtype=default_dtype())
-        i = 0
-        while i < len(indptr) - 1:
-            j = indptr[i]
-            while j < indptr[i+1]:
-                dns_expected[i, col_idx[j]] = data[j]
-                j = j + 1
-            i = i + 1
-        assert same(dns_out.asnumpy(), dns_expected)
+    def test_csr_to_dns(shape):
+        csr, (indptr, indices, values) = rand_sparse_ndarray(shape, 'csr')
+        mx_dns = csr.to_dense()
+        np_dns = sp.sparse.csr_matrix((values, indices, indptr), shape).todense()
+        assert_almost_equal(mx_dns.asnumpy(), np_dns)
 
     def test_dns_to_csr(dns_in):
         dns_in= np.array(dns_in)
@@ -107,9 +99,7 @@ def test_cast_storage_ex():
     shape = (rnd.randint(1, 10),rnd.randint(1, 10))
     test_rsp_to_dns(shape)
     test_dns_to_rsp(shape)
-    test_csr_to_dns([], [0, 0, 0, 0, 0], [], (4, 4))
-    test_csr_to_dns([], [], [], (4, 4))
-    test_csr_to_dns([5, 8, 3, 6], [0, 0, 2, 3, 4], [0, 1, 2, 1], (4, 4))
+    test_csr_to_dns((4, 4))
     test_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
 
 # TODO(junwu): The backward of the operator dot cannot be tested for now
@@ -155,6 +145,7 @@ def test_sparse_dot():
     test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'default', False)
     test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'default', True)
 
+'''
 def test_sparse_embedding():
     in_dim = 10
     out_dim = 4
@@ -182,10 +173,11 @@ def test_sparse_embedding():
     grad[:] = np_grad
     exe_test.backward([grad])
     assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad))
+'''
 
 if __name__ == '__main__':
     test_elemwise_add_ex()
     test_elemwise_add_ex_multiple_stages()
     test_cast_storage_ex()
     test_sparse_dot()
-    test_sparse_embedding()
+    #test_sparse_embedding()

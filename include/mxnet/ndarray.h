@@ -234,13 +234,19 @@ class NDArray {
     CHECK(ptr_ != nullptr);
     TBlob res;
     TShape shape = shape_;
-    if (storage_type() != kDefaultStorage) {
-      CHECK(offset_ == 0) << "Non-default storage should never set offset_";
-      shape = storage_shape();
-    }
+    auto stype = storage_type();
     MSHADOW_TYPE_SWITCH(dtype(), DType, {
-      res = TBlob(static_cast<DType*>(ptr_->shandle.dptr)
-        + offset_, shape, ptr_->shandle.ctx.dev_mask(), dtype());
+      auto dptr = static_cast<DType*>(ptr_->shandle.dptr);
+      if (stype == kDefaultStorage) {
+        dptr += offset_;
+      } else if (stype == kCSRStorage) {
+        shape = storage_shape();
+      } else if (stype == kRowSparseStorage) {
+        shape = storage_shape();
+      } else {
+        LOG(FATAL) << "unknown storage type " << stype;
+      }
+      res = TBlob(dptr, shape, ptr_->shandle.ctx.dev_mask(), dtype());
     });
 #if MKL_EXPERIMENTAL == 1
     res.Mkl_mem_ = Mkl_mem_;
@@ -251,12 +257,23 @@ class NDArray {
    * \return the aux TBlob
    */
   inline TBlob aux_data(size_t i) const {
-    CHECK(storage_type() != kDefaultStorage);
+    auto stype = storage_type();
     TBlob res;
-    CHECK(i < ptr_->aux_handles.size());
-    MSHADOW_TYPE_SWITCH(aux_type(i), DType, {
-      res = TBlob(static_cast<DType*>(ptr_->aux_handles[i].dptr), aux_shape(i),
-                  ptr_->aux_handles[i].ctx.dev_mask(), aux_type(i));
+    auto shape = aux_shape(i);
+    auto type = aux_type(i);
+    MSHADOW_TYPE_SWITCH(type, DType, {
+      auto dptr = static_cast<DType*>(ptr_->aux_handles[i].dptr);
+      if (stype == kRowSparseStorage) {
+        CHECK_EQ(offset_, 0);
+      } else if (stype == kCSRStorage) {
+        if (i == csr::kIndPtr) {
+          dptr += offset_;
+          shape[0] = shape_[0] + 1;
+        }
+      } else {
+        LOG(FATAL) << "Unexpected storage type";
+      }
+      res = TBlob(dptr, shape, ptr_->aux_handles[i].ctx.dev_mask(), type);
     });
 #if MKL_EXPERIMENTAL == 1
     res.Mkl_mem_ = Mkl_mem_;
@@ -450,19 +467,28 @@ class NDArray {
   void SyncCopyToCPU(void *data, size_t size) const;
   /*!
    * \brief Slice a NDArray
-   * \param begin begin index in first dim
-   * \param end end index in first dim
+   * \param begin begin index in first dim (inclusive)
+   * \param end end index in first dim (exclusive)
    * \return sliced NDArray
    */
   inline NDArray Slice(index_t begin, index_t end) const {
     NDArray ret = *this;
     CHECK(!is_none()) << "NDArray is not initialized";
     CHECK_GE(shape_[0], end) << "Slice end index out of range";
-    CHECK(storage_type() == kDefaultStorage) << "Slice not yet implemented for storage "
-                                             << storage_type();
-    size_t length = shape_.ProdShape(1, shape_.ndim());
-    ret.offset_ += begin * length;
-    ret.shape_[0] = end - begin;
+    auto stype = storage_type();
+    if (stype == kDefaultStorage) {
+      size_t length = shape_.ProdShape(1, shape_.ndim());
+      ret.offset_ += begin * length;
+      ret.shape_[0] = end - begin;
+    } else if (stype == kCSRStorage) {
+      // for csr, the offset variable is used to adjust indptr
+      // while getting aux_data, the dptr of indptr is advanced by offset,
+      // and shape for indptr is end - begin + 1
+      ret.offset_ += begin;
+      ret.shape_[0] = end - begin;
+    } else {
+      LOG(FATAL) << "Slice not yet implemented for storage " << stype;
+    }
     return ret;
   }
   /*!
@@ -490,17 +516,13 @@ class NDArray {
   inline const NDArray AuxNDArray(size_t i) const {
     CHECK_NE(storage_type(), kDefaultStorage);
     CHECK(i < ptr_->aux_shapes.size());
-    auto context = ctx();
-    TBlob blob(ptr_->aux_handles[i].dptr, aux_shape(i), context.dev_mask(), aux_type(i));
-    return NDArray(blob, context.dev_id, var());
+    return NDArray(aux_data(i), ctx().dev_id, var());
   }
   // Wrap the tblob of data into an NDArray which shares the same variable with the
   // current one.
   inline const NDArray DataNDArray() const {
     CHECK_NE(storage_type(), kDefaultStorage);
-    auto context = ctx();
-    TBlob blob(ptr_->shandle.dptr, storage_shape(), context.dev_mask(), dtype_);
-    return NDArray(blob, context.dev_id, var());
+    return NDArray(data(), ctx().dev_id, var());
   }
   /*!
    * \brief Create a NDArray that shares memory with current one
@@ -767,7 +789,7 @@ class NDArray {
   /*! \brief shape of current NDArray */
   TShape shape_;
   /*! \brief offset in chunk */
-  size_t offset_;
+  size_t offset_ = 0;
   /*! \brief type of data */
   int dtype_ = -1;
   /*! \brief node entry for autograd */
