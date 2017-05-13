@@ -29,7 +29,7 @@ const char *kNamespaceSeparator = "$";
 DMLC_JSON_ENABLE_ANY(int, int);
 
 // convert nnvm symbol to a nnvm graph.
-inline nnvm::Graph Symbol2Graph(const nnvm::Symbol &s) {
+nnvm::Graph Symbol2Graph(const nnvm::Symbol &s) {
   nnvm::Graph g;
   g.outputs = s.outputs;
   g.attrs["mxnet_version"] = std::make_shared<nnvm::any>(static_cast<int>(MXNET_VERSION));
@@ -366,7 +366,7 @@ int MXSymbolSaveToJSON(SymbolHandle symbol, const char **out_json) {
 namespace mxnet {
 
 template<typename AttrType>
-inline void MatchArguments(
+void MatchArguments(
     const nnvm::IndexedGraph& idx,
     const std::unordered_map<std::string, AttrType>& known_arg_attrs,
     std::vector<AttrType>* arg_attrs,
