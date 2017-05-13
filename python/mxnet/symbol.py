@@ -1184,7 +1184,8 @@ class Symbol(SymbolBase):
             provided_arg_type_data = c_array(ctypes.c_int, provided_arg_type_data)
 
         provided_arg_shape_data = []  # shape data
-        # argument shape index in sdata, e.g. [sdata[indptr[0]], sdata[indptr[1]]) is the shape of the first arg
+        # argument shape index in sdata,
+        # e.g. [sdata[indptr[0]], sdata[indptr[1]]) is the shape of the first arg
         provided_arg_shape_idx = [0]
         provided_arg_shape_names = []  # provided argument names
         for k, v in kwargs.items():
@@ -1318,7 +1319,8 @@ class Symbol(SymbolBase):
         grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
                        if arg_grad_handles[i] is not None
                        else None for i in range(num_in_args.value)]
-        aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i])) for i in range(num_aux_states.value)]
+        aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i]))
+                      for i in range(num_aux_states.value)]
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
         executor.arg_arrays = arg_arrays
