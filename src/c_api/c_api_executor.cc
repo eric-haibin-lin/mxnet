@@ -164,13 +164,9 @@ int MXExecutorBindEX(SymbolHandle symbol_handle,
  * \param g2c_keys key list of group2ctx
  * \param g2c_dev_types device type list of group2ctx
  * \param g2c_dev_ids id list of group2ctx
- * \param in_arg_len number of list_arguments
- * \param in_arg_dev_types device type list of list_arguments
- * \param in_arg_dev_ids device id list of list_arguments
- * \param provided_grad_req_types req type list of all gradients of list_arguments
- * \param aux_state_len number of list_auxiliary_states
- * \param aux_state_dev_types device type list of list_auxiliary_states
- * \param aux_state_dev_ids device id list of list_auxiliary_states
+ * \param provided_grad_req_list_len grad_req length provided by users in front-end
+ * \param provided_grad_req_names grad_req names provided by users in front-end
+ * \param provided_grad_req_types req types provided by users in front-end
  * \param num_provided_arg_shapes number of user provided in_arg and aux_state shapes
  * \param provided_arg_shape_names name list of provided shapes
  * \param provided_arg_shape_data provided shape data
@@ -183,14 +179,10 @@ int MXExecutorBindEX(SymbolHandle symbol_handle,
  * \param num_shared_data_arrays number of shared data arrays passed from _bind_ith_exec
  * \param shared_data_array_name_list shared data array names passed from _bind_ith_exec
  * \param shared_data_array_handle_list shared data array handles passed from _bind_ith_exec
- * \param num_shared_exec_in_args number of in_args associated with the shared executor
- * \param shared_exec_in_arg_handles in_arg arrays associated with the shared executor
- * \param num_shared_exec_arg_grads number of arg gradients associated with the shared executor
- * \param shared_exec_arg_grad_handles arg gradient handles associated with the shared executor
- * \param num_shared_exec_aux_states number of aux states associated with the shared executor
- * \param shared_exec_aux_state_handles aux state handles associated with the shared executor
+ * \param num_in_args number of input arguments of this sym
  * \param in_args list_arguments associated with the current executor
  * \param arg_grads list of gradients of in_args associated with the current executor
+ * \param num_aux_states number of aux states of this sym
  * \param aux_states list_auxiliary_states associated with the current executor
  * \param shared_exec_handle shared excutor handle passed from _bind_ith_exec
  * \param out the handle of the executor to be created
@@ -235,7 +227,8 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   // attr_dict for setting up type_dict and arg/aux ctx
   std::unordered_map<std::string, std::unordered_map<std::string, std::string>> attr_dict;
   if (nullptr == provided_arg_dtypes || nullptr == g2c_keys) {
-    std::vector<std::tuple<std::string, std::string, std::string>> attrs = sym->ListAttrsRecursive();
+    std::vector<std::tuple<std::string, std::string, std::string>> attrs =
+      sym->ListAttrsRecursive();
     attr_dict.reserve(attrs.size());
     for (const auto& tp : attrs) {
       attr_dict[std::get<0>(tp)][std::get<1>(tp)] = std::get<2>(tp);
@@ -301,7 +294,8 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   }
 
   // create provided_grad_req_map
-  const std::map<std::string, OpReqType> req_map = {{"null", kNullOp}, {"write", kWriteTo}, {"add", kAddTo}};
+  const std::map<std::string, OpReqType> req_map =
+    {{"null", kNullOp}, {"write", kWriteTo}, {"add", kAddTo}};
   std::unordered_map<std::string, std::string> provided_grad_req_map;
   std::string grad_req_type;
   if (0 == provided_grad_req_list_len

@@ -374,7 +374,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                          const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   // create in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes
   auto get_ctx1 = [](const NDArray& nd) { return nd.ctx(); };
-  auto get_ctx2 = [default_ctx](const NDArray& nd) {
+  auto get_ctx2 = [default_ctx](const NDArray& nd) -> Context {
     if (nd.is_none()) return default_ctx;
     return nd.ctx();
   };
@@ -500,8 +500,7 @@ NDArray ReshapeOrCreate(const std::string& name,
       CHECK_EQ(it->second.dtype(), dest_arg_dtype)
         << "Requested arg array's dtype does not match the reusable ndarray";
       return it->second.Reshape(dest_arg_shape);
-    }
-    else {
+    } else {
       LOG(WARNING) << "Bucketing: data " << name << " has a shape " << dest_arg_shape
                    << ", which is larger than already allocated shape " << it->second.shape()
                    << ". Need to re-allocate. Consider putting default bucket key to be "
@@ -553,11 +552,20 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
     if (mutable_nodes.count(nid)) {  // aux_states
       if (nullptr != shared_exec) {
         const NDArray& aux_nd = shared_exec_aux_states.at(arg_name);
-        CHECK_EQ(inferred_shape, aux_nd.shape()) << "Inferred shape does not match shared_exec.aux_array's shape";
-        CHECK_EQ(inferred_dtype, aux_nd.dtype()) << "Inferred dtype does not match shared_exec.aux_array's dtype";
+        CHECK_EQ(inferred_shape, aux_nd.shape())
+          << "Inferred shape does not match shared_exec.aux_array's shape."
+             " Therefore, the allocated memory for shared_exec.aux_array cannot"
+             " be resued for creating auxilliary NDArray of the argument"
+          << arg_name << " for the current executor";
+        CHECK_EQ(inferred_dtype, aux_nd.dtype())
+          << "Inferred dtype does not match shared_exec.aux_array's dtype."
+             " Therefore, the allocated memory for shared_exec.aux_array cannot"
+             " be resued for creating auxilliary NDArray of the argument"
+          << arg_name << " for the current executor";
         aux_state_vec->emplace_back(aux_nd);
       } else {
-        aux_state_vec->emplace_back(inferred_shape, aux_state_ctxes[aux_top], false, inferred_dtype);
+        aux_state_vec->emplace_back(inferred_shape, aux_state_ctxes[aux_top],
+                                    false, inferred_dtype);
         aux_state_vec->back() = 0;
       }  // if (has_shared_exec)
       data_entry_[eid] = aux_state_vec->back();
@@ -567,8 +575,16 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
       if (param_names.count(arg_name)) {  // model parameter
         if (nullptr != shared_exec) {
           const NDArray& in_arg_nd = shared_exec_in_args.at(arg_name);
-          CHECK_EQ(inferred_shape, in_arg_nd.shape()) << "Inferred shape does not match shared_exec.aux_array's shape";
-          CHECK_EQ(inferred_dtype, in_arg_nd.dtype()) << "Inferred dtype does not match shared_exec.aux_array's dtype";
+          CHECK_EQ(inferred_shape, in_arg_nd.shape())
+            << "Inferred shape does not match shared_exec.arg_array's shape"
+               " Therefore, the allocated memory for shared_exec.arg_array cannot"
+               " be resued for creating NDArray of the argument"
+            << arg_name << " for the current executor";
+          CHECK_EQ(inferred_dtype, in_arg_nd.dtype())
+            << "Inferred dtype does not match shared_exec.arg_array's dtype"
+               " Therefore, the allocated memory for shared_exec.arg_array cannot"
+               " be resued for creating NDArray of the argument"
+            << arg_name << " for the current executor";
           in_arg_vec->emplace_back(in_arg_nd);
           if (kNullOp == grad_req_types[arg_top]) {
             arg_grad_vec->emplace_back();
@@ -582,7 +598,8 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
           if (kNullOp == grad_req_types[arg_top]) {
             arg_grad_vec->emplace_back();
           } else {
-            arg_grad_vec->emplace_back(inferred_shape, arg_grad_ctxes[arg_top], false, inferred_dtype);
+            arg_grad_vec->emplace_back(inferred_shape, arg_grad_ctxes[arg_top],
+                                       false, inferred_dtype);
             arg_grad_vec->back() = 0;
             grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
           }  // if (kNullOp == grad_req_types[arg_top])
@@ -702,7 +719,6 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                          const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
                             aux_state_ctxes, grad_req_types);
-  
   // The following code of shape and dtype inferences and argument
   // initialization is for simple_bind only. Regular bind operation
   // should do this differently.
@@ -739,7 +755,6 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                   g.GetAttr<nnvm::DTypeVector>("dtype"),
                   in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
                   grad_req_types, param_names, shared_exec,
-                  //shared_exec_in_args, shared_exec_arg_grads, shared_exec_aux_states,
                   shared_data_arrays, in_arg_vec, arg_grad_vec, aux_state_vec);
   }
   // The above code of shape and dtype inferences and argument

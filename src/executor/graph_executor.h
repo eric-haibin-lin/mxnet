@@ -142,9 +142,9 @@ class GraphExecutor : public Executor {
                      const std::vector<Context>& arg_grad_ctxes,
                      const std::vector<Context>& aux_state_ctxes,
                      const std::vector<OpReqType>& grad_req_types,
-                     const std::unordered_set<std::string>& param_names,  // DataParallelExecutorGroup.param_names
-                     const Executor* shared_exec,  // shared_exec != nullptr
-                     std::unordered_map<std::string, NDArray>* shared_data_arrays,  // self.shared_data_arrays[i] L636
+                     const std::unordered_set<std::string>& param_names,
+                     const Executor* shared_exec,
+                     std::unordered_map<std::string, NDArray>* shared_data_arrays,
                      std::vector<NDArray>* in_arg_vec,
                      std::vector<NDArray>* arg_grad_vec,
                      std::vector<NDArray>* aux_state_vec);

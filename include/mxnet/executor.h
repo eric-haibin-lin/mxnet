@@ -120,7 +120,8 @@ class Executor {
                               std::vector<NDArray>* in_args,
                               std::vector<NDArray>* arg_grads,
                               std::vector<NDArray>* aux_states,
-                              std::unordered_map<std::string, NDArray>* shared_data_arrays = nullptr,
+                              std::unordered_map<std::string, NDArray>*
+                                shared_data_arrays = nullptr,
                               Executor* shared_exec = nullptr);
   /*!
    * \brief the prototype of user-defined monitor callback
