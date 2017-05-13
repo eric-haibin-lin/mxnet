@@ -6,7 +6,6 @@
 #include <mxnet/base.h>
 #include <mxnet/c_api.h>
 #include <mxnet/executor.h>
-#include <nnvm/graph_attr_types.h>
 #include "./c_api_common.h"
 
 int MXExecutorPrint(ExecutorHandle handle, const char **out_str) {
