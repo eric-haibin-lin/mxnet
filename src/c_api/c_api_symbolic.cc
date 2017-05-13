@@ -28,6 +28,14 @@ const char *kNamespaceSeparator = "$";
 
 DMLC_JSON_ENABLE_ANY(int, int);
 
+// convert nnvm symbol to a nnvm graph.
+inline nnvm::Graph Symbol2Graph(const nnvm::Symbol &s) {
+  nnvm::Graph g;
+  g.outputs = s.outputs;
+  g.attrs["mxnet_version"] = std::make_shared<nnvm::any>(static_cast<int>(MXNET_VERSION));
+  return g;
+}
+
 std::vector<uint32_t> ReadOnlyArgIndices(const nnvm::IndexedGraph& idx) {
   std::vector<uint32_t> ret;
   auto& arg_nodes = idx.input_nodes();
@@ -354,6 +362,47 @@ int MXSymbolSaveToJSON(SymbolHandle symbol, const char **out_json) {
   *out_json = ret->ret_str.c_str();
   API_END();
 }
+
+namespace mxnet {
+
+template<typename AttrType>
+inline void MatchArguments(
+    const nnvm::IndexedGraph& idx,
+    const std::unordered_map<std::string, AttrType>& known_arg_attrs,
+    std::vector<AttrType>* arg_attrs,
+    const char* source) {
+  auto& arg_nodes = idx.input_nodes();
+  CHECK_EQ(arg_attrs->size(), arg_nodes.size());
+  size_t nmatched = 0;
+  for (size_t i = 0; i < arg_nodes.size(); ++i) {
+    const std::string& name = idx[arg_nodes[i]].source->attrs.name;
+    auto it = known_arg_attrs.find(name);
+    if (it != known_arg_attrs.end()) {
+      arg_attrs->at(i) = it->second;
+      ++nmatched;
+    }
+  }
+  if (nmatched != known_arg_attrs.size()) {
+    std::unordered_set<std::string> keys;
+    std::ostringstream head, msg;
+    msg << "\nCandidate arguments:\n";
+    for (size_t i = 0; i < arg_nodes.size(); ++i) {
+      std::string arg_name = idx[arg_nodes[i]].source->attrs.name;
+      keys.insert(arg_name);
+      msg << "\t[" << i << ']' << arg_name << '\n';
+    }
+    for (const auto& kv : known_arg_attrs) {
+      const std::string& key = kv.first;
+      if (keys.count(key) == 0) {
+        LOG(FATAL) << source
+                   << "Keyword argument name " << key << " not found."
+                   << msg.str();
+      }
+    }
+  }
+}
+
+}  // namespace mxnet
 
 int MXSymbolInferShape(SymbolHandle sym,
                        mx_uint num_args,
