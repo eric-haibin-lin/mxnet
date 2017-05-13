@@ -360,8 +360,8 @@ void SparseEmbeddingOpBackwardDnsDnsRsp(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   CHECK_EQ(inputs.size(), 2U);
   CHECK_EQ(outputs.size(), 2U);
-  //CHECK_EQ(req[embedding::kData], kNullOp)
-   //       << "Embedding layer doesn't support calculate data gradient" << req[0] << " " << req[1];
+  // CHECK_EQ(req[embedding::kData], kNullOp)
+  //       << "Embedding layer doesn't support calculate data gradient" << req[0] << " " << req[1];
   // idx shape (d1, d2 .. dk)
   auto idx = inputs[1];
   // grad shape (d1, d2, .. dk, out_dim)
@@ -387,7 +387,7 @@ void SparseEmbeddingOpBackwardDnsDnsRsp(const nnvm::NodeAttrs& attrs,
       // Assuming aux_type == IType for now
       // idx_data shape (d1 * d2 * .. dk)
       // input embedding indice (d1 * d2 * .. dk), each idx in [0, input_dim)
-      auto idx_data = idx.data().FlatTo1D<xpu,IType>(s);
+      auto idx_data = idx.data().FlatTo1D<xpu, IType>(s);
       // grad_data shape (d1 * d2 * .. dk, out_dim)
       auto grad_data = grad.data().get_with_shape<xpu, 2, DType>(
         Shape2(oshape.ProdShape(0, oshape.ndim()-1), oshape[oshape.ndim()-1]), s);
@@ -426,8 +426,8 @@ void SparseEmbeddingOpBackwardEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   CHECK_EQ(inputs.size(), 2U);
   CHECK_EQ(outputs.size(), 2U);
-  //CHECK_EQ(req[embedding::kData], kNullOp)
-   //       << "Embedding layer doesn't support calculate data gradient" << req[0] << " " << req[1];
+  // CHECK_EQ(req[embedding::kData], kNullOp)
+  //       << "Embedding layer doesn't support calculate data gradient" << req[0] << " " << req[1];
   // idx shape (d1, d2 .. dk)
   auto idx_stype = inputs[1].storage_type();
   // grad shape (d1, d2, .. dk, out_dim)

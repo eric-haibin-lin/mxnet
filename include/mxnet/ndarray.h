@@ -873,7 +873,8 @@ void CopyFromToImpl(const NDArray from, NDArray *to, RunContext ctx, bool alloc)
   } else if (to_stype == kRowSparseStorage) {
     CopyFromToRspImpl<from_xpu, to_xpu>(casted_nd, to, ctx, alloc);
   } else {
-    // TODO(haibin) support csr copy
+    // TODO(haibin) support csr copy. For sliced csr, we want to only copy the related
+    // indices and values instead of the superset.
     LOG(FATAL) << "Not implemented yet";
   }
 }

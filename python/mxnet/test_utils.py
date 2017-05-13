@@ -9,8 +9,8 @@ import subprocess
 import os
 import errno
 import logging
-import numpy as np
 import scipy as sp
+import numpy as np
 import numpy.testing as npt
 import numpy.random as rnd
 import mxnet as mx

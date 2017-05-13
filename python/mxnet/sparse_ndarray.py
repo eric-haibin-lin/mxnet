@@ -205,7 +205,7 @@ fixed-size items, stored in sparse format.
 
     def __getitem__(self, key):
         stype = self.storage_type
-        assert(stype == 'csr'), "getitem for " + str(stype) + " not implemented yet";
+        assert(stype == 'csr'), "getitem for " + str(stype) + " not implemented yet"
         if isinstance(key, int):
             raise Exception("Not implemented yet")
         if isinstance(key, py_slice):
@@ -262,7 +262,7 @@ fixed-size items, stored in sparse format.
 
         """
         stype = self.storage_type
-        assert(stype == 'csr'), "_slice for " + str(stype) + " not implemented yet";
+        assert(stype == 'csr'), "_slice for " + str(stype) + " not implemented yet"
         warnings.warn('slicing SparseNDArray is not efficient', RuntimeWarning)
         handle = NDArrayHandle()
         start = mx_uint(start) if start else mx_uint(0)
@@ -294,7 +294,6 @@ fixed-size items, stored in sparse format.
 
     @property
     def values(self):
-        stype = self.storage_type
         return self._data(0)
 
     @property
@@ -396,6 +395,7 @@ fixed-size items, stored in sparse format.
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
         return NDArray(hdl, writable)
+
 
     def compact(self):
         raise Exception("Not implemented yet")
