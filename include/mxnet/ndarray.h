@@ -321,18 +321,17 @@ class NDArray {
   inline bool is_none() const {
     return ptr_.get() == nullptr;
   }
-  // returns true if a sparse ndarray's aux_data are not initialized,
-  // indicating a NDArray with zeros
-  inline bool is_zeros_hint() const {
-    if (is_none()) return true;
+  // returns true if a sparse ndarray's aux_data and storage are initialized
+  inline bool storage_initialized() const {
+    if (is_none()) return false;
     auto stype = storage_type();
     CHECK_NE(stype, kDefaultStorage);
     if (stype == kRowSparseStorage || stype == kCSRStorage) {
-      return aux_shape(0).Size() == 0;
+      return aux_shape(0).Size() != 0;
     } else {
       LOG(FATAL) << "Unknown storage type";
     }
-    return false;
+    return true;
   }
   /*!
    * \brief Block until all the pending write operations with respect
@@ -682,7 +681,7 @@ class NDArray {
     }
     // Constructor for a non-default storage chunk
     Chunk(NDArrayStorageType storage_type_, const TShape &storage_shape_, Context ctx_,
-          bool delay_alloc_, int dtype, std::vector<int> aux_types_,
+          bool delay_alloc_, int dtype, const std::vector<int> &aux_types_,
           const std::vector<TShape> &aux_shapes_)
         : static_data(false), delay_alloc(delay_alloc_), storage_type(storage_type_),
           aux_types(aux_types_), ctx(ctx_), storage_shape(storage_shape_),
@@ -817,7 +816,7 @@ inline void CopyFromToRspImpl(const NDArray from, NDArray *to, RunContext ctx, b
   CHECK_EQ(from.storage_type(), to->storage_type()) << "Copying with different storage type";
   // if source is zeros, fill destination with zeros, too
   auto s = ctx.get_stream<to_xpu>();
-  if (from.is_zeros_hint()) {
+  if (!from.storage_initialized()) {
     op::FillZerosRspImpl<to_xpu>(s, to);
     return;
   }

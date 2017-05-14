@@ -131,8 +131,7 @@ void FillCompute(const nnvm::NodeAttrs& attrs,
 // Fill a rsp NDArray with zeros by updating the aux shape.
 template<typename xpu>
 void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
-  bool is_zeros = dst->is_zeros_hint();
-  if (is_zeros) return;
+  if (!dst->storage_initialized()) return;
   // reset the shapes if it's not zeros
   auto storage_shape = dst->storage_shape();
   storage_shape[0] = 0;
@@ -143,8 +142,7 @@ void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
 // Fill a CSR NDArray with zeros by updating the aux shape.
 template<typename xpu>
 void FillZerosCsrImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
-  bool is_zeros = dst->is_zeros_hint();
-  if (is_zeros) return;
+  if (!dst->storage_initialized()) return;
   // reset the shapes if it's not zeros
   TShape new_shape({0});
   dst->SetAuxShape(csr::kIndPtr, new_shape);

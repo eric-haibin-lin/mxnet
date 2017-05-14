@@ -72,8 +72,7 @@ void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
   auto &output = outputs[0];
   CHECK_NE(req[0], kNullOp) << "kNullOp in IdentityComputeEx not supported yet";
   CHECK_NE(req[0], kWriteInplace) << "kWriteInplace in IdentityComputeEx not supported yet";
-  bool is_zeros_hint = input.is_zeros_hint();
-  if (is_zeros_hint) return;
+  if (!input.storage_initialized()) return;
   TShape shape = input.aux_shape(rowsparse::kIdx);
   output.CheckAndAlloc({shape});
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
@@ -271,7 +270,7 @@ void CastStorageRspDnsImpl(mshadow::Stream<xpu> *s, const NDArray& rsp, TBlob* d
     NDARRAY_IDX_TYPE_SWITCH(rsp.aux_type(rowsparse::kIdx), IType, {
       // assign zeros
       mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, dns->Size(), dns->dptr<DType>());
-      if (rsp.is_zeros_hint() == false) {
+      if (rsp.storage_initialized()) {
         // copy over row by row
         auto in_idx = rsp.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s).dptr_;
         auto in_data = rsp.data().FlatTo2D<xpu, DType>(s).dptr_;
@@ -439,7 +438,7 @@ void CastStorageCsrDnsImpl(mshadow::Stream<xpu> *s, const NDArray& csr, TBlob* d
         const index_t num_cols = dns->shape_[1];
         DType* dns_data = dns->dptr<DType>();
         mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(s, dns->shape_.Size(), dns_data);
-        if (csr.is_zeros_hint()) return;
+        if (!csr.storage_initialized()) return;
         const IType* indptr = csr.aux_data(csr::kIndPtr).dptr<IType>();
         const CType* col_idx = csr.aux_data(csr::kIdx).dptr<CType>();
         const DType* csr_data = csr.data().dptr<DType>();

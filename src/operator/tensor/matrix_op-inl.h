@@ -619,13 +619,13 @@ void DotCsrDnsDnsImpl(const OpContext& ctx,
               s, data_out.Size(), data_out.dptr<DType>());
         }
         if (trans_lhs) {
-          if (lhs.is_zeros_hint()) return;
+          if (!lhs.storage_initialized()) return;
           mxnet_op::Kernel<DotCsrDnsDns<true, false>, xpu>::Launch(s, data_out.Size(),
               data_out.dptr<DType>(), data_l.dptr<DType>(), indptr_l.dptr<IType>(),
               col_idx_l.dptr<CType>(), data_r.dptr<DType>(), lhs.shape()[0],
               rhs.shape()[1]);
         } else {
-          if (lhs.is_zeros_hint()) return;
+          if (!lhs.storage_initialized()) return;
           mxnet_op::Kernel<DotCsrDnsDns<false, false>, xpu>::Launch(s, data_out.Size(),
               data_out.dptr<DType>(), data_l.dptr<DType>(), indptr_l.dptr<IType>(),
               col_idx_l.dptr<CType>(), data_r.dptr<DType>(), rhs.shape()[1]);
@@ -769,7 +769,7 @@ void DotCsrDnsRspImpl(const OpContext& ctx,
               mxnet_op::Kernel<mxnet_op::set_zero, xpu>::Launch(
                   s, out_tmp.shape_.Size(), out_tmp.dptr_);
             }
-            if (lhs.is_zeros_hint() == false) {
+            if (lhs.storage_initialized()) {
               // generate a temporary dns output
               mxnet_op::Kernel<DotCsrDnsDns<true, false>, xpu>::Launch(
                   s, out_tmp.shape_.Size(), out_tmp.dptr_, data_l.dptr<DType>(),

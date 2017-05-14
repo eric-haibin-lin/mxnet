@@ -45,14 +45,14 @@ void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
   auto &rhs = inputs[1];
   auto &output = outputs[0];
 
-  bool zeros_l = lhs.is_zeros_hint();
-  bool zeros_r = rhs.is_zeros_hint();
+  bool init_l = lhs.storage_initialized();
+  bool init_r = rhs.storage_initialized();
   // both inputs are zeros
-  if (zeros_l && zeros_r) return;
+  if (!init_l && !init_r) return;
   // one of the input is zeros
-  if (zeros_l || zeros_r) {
+  if (!init_l || !init_r) {
     NDArray out(output);
-    CopyFromToRspImpl<xpu, xpu>(zeros_l ? rhs : lhs, &out, ctx.run_ctx, true);
+    CopyFromToRspImpl<xpu, xpu>(!init_l ? rhs : lhs, &out, ctx.run_ctx, true);
     return;
   }
   // Memory Estimation: This is (roughly) the number of result rows. We still
