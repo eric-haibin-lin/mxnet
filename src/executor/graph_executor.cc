@@ -493,9 +493,9 @@ NDArray ReshapeOrCreate(const std::string& name,
                         const TShape& dest_arg_shape,
                         const int dest_arg_dtype,
                         const Context& ctx,
-                        std::unordered_map<std::string, NDArray>* shared_data_arrays) {
-  auto it = shared_data_arrays->find(name);
-  if (it != shared_data_arrays->end()) {
+                        std::unordered_map<std::string, NDArray>* shared_buffer) {
+  auto it = shared_buffer->find(name);
+  if (it != shared_buffer->end()) {
     if (it->second.shape().Size() >= dest_arg_shape.Size()) {  // memory can be reused
       CHECK_EQ(it->second.dtype(), dest_arg_dtype)
         << "Requested arg array's dtype does not match the reusable ndarray";
@@ -510,16 +510,16 @@ NDArray ReshapeOrCreate(const std::string& name,
       return it->second;
     }  // arg_array.shape().Size() >= arg_shape.Size()
   } else {
-    auto p = shared_data_arrays->emplace(name, NDArray(dest_arg_shape, ctx, false, dest_arg_dtype));
+    auto p = shared_buffer->emplace(name, NDArray(dest_arg_shape, ctx, false, dest_arg_dtype));
     p.first->second = 0;
     return p.first->second;
-  }  // if (it != shared_data_arrays->end())
+  }  // if (it != shared_buffer->end())
 }
 
 /*!
  * \brief Initialize in_args, arg_grads, and aux_states
  * and their data_entry_ of the executor using
- * shared_data_arrays from DataParallelExecutorGroup
+ * shared_buffer from DataParallelExecutorGroup
  * and shared_exec if available.
  */
 void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
@@ -529,9 +529,9 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const std::vector<Context>& arg_grad_ctxes,
                                   const std::vector<Context>& aux_state_ctxes,
                                   const std::vector<OpReqType>& grad_req_types,
-                                  const std::unordered_set<std::string>& param_names,
+                                  const std::unordered_set<std::string>& shared_arg_names,
                                   const Executor* shared_exec,
-                                  std::unordered_map<std::string, NDArray>* shared_data_arrays,
+                                  std::unordered_map<std::string, NDArray>* shared_buffer,
                                   std::vector<NDArray>* in_arg_vec,
                                   std::vector<NDArray>* arg_grad_vec,
                                   std::vector<NDArray>* aux_state_vec) {
@@ -572,7 +572,7 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
       aux_state_map_.emplace(arg_name, aux_state_vec->back());
       ++aux_top;
     } else {  // in_args
-      if (param_names.count(arg_name)) {  // model parameter
+      if (shared_arg_names.count(arg_name)) {  // model parameter
         if (nullptr != shared_exec) {
           const NDArray& in_arg_nd = shared_exec_in_args.at(arg_name);
           CHECK_EQ(inferred_shape, in_arg_nd.shape())
@@ -604,18 +604,18 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
             grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
           }  // if (kNullOp == grad_req_types[arg_top])
         }  // if (has_shared_exec)
-      } else {  // !param_names.count(arg_name)
+      } else {  // !shared_arg_names.count(arg_name)
         in_arg_vec->emplace_back(ReshapeOrCreate(arg_name, inferred_shape, inferred_dtype,
-                                                 in_arg_ctxes[arg_top], shared_data_arrays));
+                                                 in_arg_ctxes[arg_top], shared_buffer));
         if (kNullOp == grad_req_types[arg_top]) {
           arg_grad_vec->emplace_back();
         } else {
           arg_grad_vec->emplace_back(ReshapeOrCreate("grad of " + arg_name, inferred_shape,
                                                      inferred_dtype, arg_grad_ctxes[arg_top],
-                                                     shared_data_arrays));
+                                                     shared_buffer));
           grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
         }  // if (kNullOp == grad_req_types[arg_top])
-      }  // if (param_names.count(arg_name))
+      }  // if (shared_arg_names.count(arg_name))
       in_arg_map_.emplace(arg_name, in_arg_vec->back());
       if (!arg_grad_vec->back().is_none()) {
         arg_grad_map_.emplace(arg_name, arg_grad_vec->back());
@@ -710,11 +710,11 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
                          const std::unordered_map<std::string, TShape>& arg_shape_map,
                          const std::unordered_map<std::string, int>& arg_dtype_map,
                          const std::vector<OpReqType>& grad_req_types,
-                         const std::unordered_set<std::string>& param_names,
+                         const std::unordered_set<std::string>& shared_arg_names,
                          std::vector<NDArray>* in_arg_vec,
                          std::vector<NDArray>* arg_grad_vec,
                          std::vector<NDArray>* aux_state_vec,
-                         std::unordered_map<std::string, NDArray>* shared_data_arrays,
+                         std::unordered_map<std::string, NDArray>* shared_buffer,
                          Executor* shared_exec,
                          const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   nnvm::Graph g = InitGraph(symbol, default_ctx, ctx_map, in_arg_ctxes, arg_grad_ctxes,
@@ -745,7 +745,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
 
   // Create in_args, arg_grads, and aux_states using
   // the inferred shapes and dtypes.
-  if (nullptr == shared_data_arrays) {  // regular simple bind
+  if (nullptr == shared_buffer) {  // regular simple bind
     InitArguments(idx, g.GetAttr<nnvm::ShapeVector>("shape"),
                   g.GetAttr<nnvm::DTypeVector>("dtype"),
                   in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
@@ -754,8 +754,8 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     InitArguments(idx, g.GetAttr<nnvm::ShapeVector>("shape"),
                   g.GetAttr<nnvm::DTypeVector>("dtype"),
                   in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
-                  grad_req_types, param_names, shared_exec,
-                  shared_data_arrays, in_arg_vec, arg_grad_vec, aux_state_vec);
+                  grad_req_types, shared_arg_names, shared_exec,
+                  shared_buffer, in_arg_vec, arg_grad_vec, aux_state_vec);
   }
   // The above code of shape and dtype inferences and argument
   // initialization is for simple_bind only. Regular bind operation
@@ -1275,19 +1275,19 @@ Executor *Executor::SimpleBind(nnvm::Symbol symbol,
                                const std::unordered_map<std::string, TShape>& arg_shape_map,
                                const std::unordered_map<std::string, int>& arg_dtype_map,
                                const std::vector<OpReqType>& grad_req_types,
-                               const std::unordered_set<std::string>& param_names,
+                               const std::unordered_set<std::string>& shared_arg_names,
                                std::vector<NDArray>* in_args,
                                std::vector<NDArray>* arg_grads,
                                std::vector<NDArray>* aux_states,
-                               std::unordered_map<std::string, NDArray>* shared_data_arrays,
+                               std::unordered_map<std::string, NDArray>* shared_buffer,
                                Executor* shared_exec) {
   auto exec = new exec::GraphExecutor();
   exec->Init(symbol, default_ctx, group2ctx,
              in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
              arg_shape_map, arg_dtype_map,
-             grad_req_types, param_names,
+             grad_req_types, shared_arg_names,
              in_args, arg_grads, aux_states,
-             shared_data_arrays, shared_exec);
+             shared_buffer, shared_exec);
   return exec;
 }
 

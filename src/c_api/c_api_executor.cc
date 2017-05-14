@@ -173,11 +173,11 @@ int MXExecutorBindEX(SymbolHandle symbol_handle,
  * \param num_provided_arg_dtypes number of user provided in_arg and axu_state dtypes
  * \param provided_arg_dtype_names argument name list of provided dtypes
  * \param provided_arg_dtypes data of provided dtypes
- * \param num_param_names number of parameter names passed from _bind_ith_exec
- * \param param_name_list parameter name list passed from _bind_ith_exec
- * \param num_shared_data_arrays number of shared data arrays passed from _bind_ith_exec
- * \param shared_data_array_name_list shared data array names passed from _bind_ith_exec
- * \param shared_data_array_handle_list shared data array handles passed from _bind_ith_exec
+ * \param num_shared_arg_names number of parameter names passed from _bind_ith_exec
+ * \param shared_arg_name_list parameter name list passed from _bind_ith_exec
+ * \param shared_buffer_len number of shared data arrays passed from _bind_ith_exec
+ * \param shared_buffer_name_list shared data array names passed from _bind_ith_exec
+ * \param shared_buffer_handle_list shared data array handles passed from _bind_ith_exec
  * \param num_in_args number of input arguments of this sym
  * \param in_args list_arguments associated with the current executor
  * \param arg_grads list of gradients of in_args associated with the current executor
@@ -203,11 +203,11 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
                          const mx_uint num_provided_arg_dtypes,
                          const char** provided_arg_dtype_names,
                          const int* provided_arg_dtypes,
-                         const mx_uint num_param_names,
-                         const char** param_name_list,
-                         mx_uint* num_shared_data_arrays,
-                         const char*** shared_data_array_name_list,
-                         NDArrayHandle** shared_data_array_handle_list,
+                         const mx_uint num_shared_arg_names,
+                         const char** shared_arg_name_list,
+                         mx_uint* shared_buffer_len,
+                         const char*** shared_buffer_name_list,
+                         NDArrayHandle** shared_buffer_handle_list,
                          mx_uint* num_in_args,
                          NDArrayHandle** in_args,
                          NDArrayHandle** arg_grads,
@@ -363,24 +363,24 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
   }
 
   // create para name set for sharing data array memory
-  std::unordered_set<std::string> param_name_set(num_param_names);
-  for (mx_uint i = 0; i < num_param_names; ++i) {
-    param_name_set.insert(param_name_list[i]);
+  std::unordered_set<std::string> shared_arg_name_set(num_shared_arg_names);
+  for (mx_uint i = 0; i < num_shared_arg_names; ++i) {
+    shared_arg_name_set.insert(shared_arg_name_list[i]);
   }
 
-  // create shared_data_array_map
-  std::unordered_map<std::string, NDArray> shared_data_array_map;
+  // create shared_buffer_map
+  std::unordered_map<std::string, NDArray> shared_buffer_map;
   std::vector<NDArray> shared_exec_in_args;
   std::vector<NDArray> shared_exec_arg_grads;
   std::vector<NDArray> shared_exec_aux_states;
-  bool use_shared_data_arrays = (nullptr != *shared_data_array_handle_list);
-  if (use_shared_data_arrays) {
-    // create shared_data_array_map
-    shared_data_array_map.reserve(*num_shared_data_arrays);
-    NDArray*** shared_data_array_ptrs =
-      reinterpret_cast<NDArray***>(shared_data_array_handle_list);
-    for (mx_uint i = 0; i < *num_shared_data_arrays; ++i) {
-      shared_data_array_map[*shared_data_array_name_list[i]] = *(*shared_data_array_ptrs)[i];
+  bool use_shared_buffer = (nullptr != *shared_buffer_handle_list);
+  if (use_shared_buffer) {
+    // create shared_buffer_map
+    shared_buffer_map.reserve(*shared_buffer_len);
+    NDArray*** shared_buffer_ptrs =
+      reinterpret_cast<NDArray***>(shared_buffer_handle_list);
+    for (mx_uint i = 0; i < *shared_buffer_len; ++i) {
+      shared_buffer_map[*shared_buffer_name_list[i]] = *(*shared_buffer_ptrs)[i];
     }
   }
 
@@ -392,15 +392,15 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
 
   *out = Executor::SimpleBind(*sym, ctx, ctx_map, in_arg_ctx_vec, arg_grad_ctx_vec,
                               aux_state_ctx_vec, arg_shape_map, arg_dtype_map, grad_req_type_vec,
-                              param_name_set, &in_arg_vec, &arg_grad_vec, &aux_state_vec,
-                              use_shared_data_arrays? &shared_data_array_map : nullptr,
+                              shared_arg_name_set, &in_arg_vec, &arg_grad_vec, &aux_state_vec,
+                              use_shared_buffer? &shared_buffer_map : nullptr,
                               reinterpret_cast<Executor*>(shared_exec_handle));
 
   // copy ndarray ptrs to ret->handles so that front end
   // can access them
   ret->ret_handles.clear();
   ret->ret_handles.reserve(in_arg_vec.size()+arg_grad_vec.size()+aux_state_vec.size()
-                           +shared_data_array_map.size());
+                           +shared_buffer_map.size());
   size_t nd_idx = 0;
   for (const auto& nd : in_arg_vec) {
     if (nd.is_none()) {
@@ -438,19 +438,19 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
     nd_idx = ret->ret_handles.size();
   }
 
-  if (use_shared_data_arrays) {
+  if (use_shared_buffer) {
     ret->ret_vec_charp.clear();
-    ret->ret_vec_charp.reserve(shared_data_array_map.size());
-    for (const auto kv : shared_data_array_map) {
+    ret->ret_vec_charp.reserve(shared_buffer_map.size());
+    for (const auto kv : shared_buffer_map) {
       if (kv.second.is_none()) {
         LOG(FATAL) << "Shared data NDArray cannot be un-allocated";
       }
       ret->ret_handles.push_back(new NDArray(kv.second));
       ret->ret_vec_charp.push_back(kv.first.c_str());
     }
-    *num_shared_data_arrays = shared_data_array_map.size();
-    *shared_data_array_handle_list = &(ret->ret_handles[nd_idx]);
-    *shared_data_array_name_list = &(ret->ret_vec_charp[0]);
+    *shared_buffer_len = shared_buffer_map.size();
+    *shared_buffer_handle_list = &(ret->ret_handles[nd_idx]);
+    *shared_buffer_name_list = &(ret->ret_vec_charp[0]);
   }
 
   API_END();
