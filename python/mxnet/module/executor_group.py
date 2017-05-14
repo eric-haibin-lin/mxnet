@@ -4,7 +4,6 @@
 
 import logging
 from collections import OrderedDict
-import warnings
 import numpy as np
 
 from .. import context as ctx
