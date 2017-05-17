@@ -6,7 +6,7 @@
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
 #include <cstdlib>
-
+/*
 #include "../src/operator/tensor/elemwise_binary_op.h"
 #include "../src/operator/tensor/elemwise_unary_op.h"
 #include "../src/operator/optimizer_op-inl.h"
@@ -102,4 +102,4 @@ NDArray Convert(NDArrayStorageType type, NDArray src) {
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   converted.WaitToRead();
   return converted;
-}
+}*/
