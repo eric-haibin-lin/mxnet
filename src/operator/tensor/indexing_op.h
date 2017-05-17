@@ -399,7 +399,8 @@ void SparseEmbeddingOpBackwardDnsDnsRsp(const nnvm::NodeAttrs& attrs,
         size_t width = output.shape()[1];
         size_t segment_len = (num_rows + num_threads - 1) / num_threads;
         // fill indices with invalid row ids
-        Kernel<mxnet_op::fill, xpu>::Launch(s, num_rows, output_idx.dptr_, static_cast<IType>(num_rows));
+        Kernel<mxnet_op::fill, xpu>::Launch(s, num_rows, output_idx.dptr_,
+                                            static_cast<IType>(num_rows));
         // fill zeros if needed
         if (req_type == kWriteTo) {
           Kernel<mxnet_op::set_zero, xpu>::Launch(s, output_val.shape_.Size(), output_val.dptr_);

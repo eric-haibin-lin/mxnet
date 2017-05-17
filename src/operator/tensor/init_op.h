@@ -135,7 +135,7 @@ void FillZerosRspImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   // reset the shapes if it's not zeros
   auto storage_shape = dst->storage_shape();
   storage_shape[0] = 0;
-  dst->SetAuxShape(rowsparse::kIdx, TShape({0}));
+  dst->SetAuxShape(rowsparse::kIdx, TShape(mshadow::Shape1(0)));
   dst->SetStorageShape(storage_shape);
 }
 

@@ -273,7 +273,7 @@ void CastStorageDnsRspImpl(mshadow::Stream<xpu> *s, const TBlob& dns, NDArray* r
         if (row_idx[i] < static_cast<RType>(num_rows)) ++nnr;
       }
       if (0 == nnr) {
-        rsp->SetAuxShape(rowsparse::kIdx, TShape({0}));
+        rsp->SetAuxShape(rowsparse::kIdx, TShape(mshadow::Shape1(0)));
         return;  // zero matrix
       }
       rsp->CheckAndAllocData(mshadow::Shape2(nnr, num_cols));

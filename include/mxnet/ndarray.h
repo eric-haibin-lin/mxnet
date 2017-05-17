@@ -118,7 +118,7 @@ class NDArray {
   NDArray(const NDArrayStorageType storage_type, const TShape &shape, Context ctx,
           bool delay_alloc = true, int dtype = mshadow::default_type_flag,
           std::vector<int> aux_types = {}, std::vector<TShape> aux_shapes = {},
-          TShape storage_shape = TShape({0}))
+          TShape storage_shape = TShape(mshadow::Shape1(0)))
       : shape_(shape), offset_(0), dtype_(dtype), entry_({nullptr, 0, 0}) {
       // Assign default aux types if not given
       if (aux_types.size() == 0) {
@@ -134,10 +134,10 @@ class NDArray {
       // unknown shapes are intialized as {0} such that Size() would return 0
       if (aux_shapes.size() == 0) {
         if (storage_type == kRowSparseStorage) {
-          aux_shapes = {TShape({0})};
+          aux_shapes = {TShape(mshadow::Shape1(0))};
         } else if (storage_type == kCSRStorage) {
           // aux shapes for indptr and indices
-          aux_shapes = {TShape({0}), TShape({0})};
+          aux_shapes = {TShape(mshadow::Shape1(0)), TShape(mshadow::Shape1(0))};
         } else {
           LOG(FATAL) << "Unknown storage type" << storage_type;
         }
