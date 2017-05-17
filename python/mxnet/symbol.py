@@ -1376,7 +1376,7 @@ class Symbol(SymbolBase):
             shared_buffer_names = []
             shared_buffer_handles = []
             for k, v in shared_buffer.items():
-                assert(v.storage_type == 'default'), \
+                assert(v.storage_type == 'default_storage'), \
                     "shared_buffer is expected to only contain NDArrays with default storage"
                 shared_buffer_names.append(c_str(k))
                 shared_buffer_handles.append(v.handle)
@@ -1450,7 +1450,7 @@ class Symbol(SymbolBase):
         # redefine NDArray class based on storage types
         def check_storage_type(ndarrays):
             for idx, array in enumerate(ndarrays):
-                if array is not None and array.storage_type != 'default':
+                if array is not None and array.storage_type != 'default_storage':
                     ndarrays[idx].__class__ = SparseNDArray
             return ndarrays
         arg_arrays = check_storage_type(arg_arrays)

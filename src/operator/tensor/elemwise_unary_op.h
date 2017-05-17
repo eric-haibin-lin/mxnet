@@ -209,7 +209,7 @@ struct CastStorageParam : public dmlc::Parameter<CastStorageParam> {
   int storage_type;
   DMLC_DECLARE_PARAMETER(CastStorageParam) {
     DMLC_DECLARE_FIELD(storage_type)
-    .add_enum("default", kDefaultStorage)
+    .add_enum("default_storage", kDefaultStorage)
     .add_enum("row_sparse", kRowSparseStorage)
     .add_enum("csr", kCSRStorage)
     .describe("Output storage type.");

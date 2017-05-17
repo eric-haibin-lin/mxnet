@@ -93,7 +93,7 @@ def rand_sparse_ndarray(shape, storage_type, density=None):
         assert(False), "unknown storage type"
 
 def rand_ndarray(shape, storage_type, density=None):
-    if storage_type == 'default':
+    if storage_type == 'default_storage':
         arr = mx.nd.array(random_arrays(shape))
     else:
         arr, _ = rand_sparse_ndarray(shape, storage_type, density=density)

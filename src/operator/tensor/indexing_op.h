@@ -367,9 +367,9 @@ void SparseEmbeddingOpBackwardDnsDnsRsp(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(outputs.size(), 2U);
   if (req[1] == kNullOp) return;
   // check storage types
-  auto idx = inputs[1]; // idx shape (d1, d2 .. dk)
-  auto grad = inputs[0]; // grad shape (d1, d2, .. dk, out_dim)
-  auto output = outputs[1]; // weight shape (in_dim, out_dim)
+  auto idx = inputs[1];  // idx shape (d1, d2 .. dk)
+  auto grad = inputs[0];  // grad shape (d1, d2, .. dk, out_dim)
+  auto output = outputs[1];  // weight shape (in_dim, out_dim)
   CHECK_EQ(idx.storage_type(), kDefaultStorage);
   CHECK_EQ(grad.storage_type(), kDefaultStorage);
   CHECK_EQ(output.dtype(), grad.dtype());

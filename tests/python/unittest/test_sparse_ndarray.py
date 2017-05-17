@@ -12,7 +12,7 @@ def check_sparse_nd_elemwise_binary(shapes, storage_types, f, g):
     for i, storage_type in enumerate(storage_types):
         if storage_type == 'row_sparse':
             nd, _ = rand_sparse_ndarray(shapes[i], storage_type)
-        elif storage_type == 'default':
+        elif storage_type == 'default_storage':
             nd = mx.nd.array(random_arrays(shapes[i]), dtype = np.float32)
         else:
             assert(False)
@@ -27,8 +27,8 @@ def test_sparse_nd_elemwise_add():
     op = mx.nd.elemwise_add
     for i in xrange(num_repeats):
         shape = [(rnd.randint(1, 10),rnd.randint(1, 10))] * 2
-        check_sparse_nd_elemwise_binary(shape, ['default'] * 2, op, g)
-        check_sparse_nd_elemwise_binary(shape, ['default', 'row_sparse'], op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
 
 # Test a operator which doesn't implement FComputeEx
@@ -38,8 +38,8 @@ def test_sparse_nd_elementwise_fallback():
     op = mx.nd.add_n
     for i in xrange(num_repeats):
         shape = [(rnd.randint(1, 10), rnd.randint(1, 10))] * 2
-        check_sparse_nd_elemwise_binary(shape, ['default'] * 2, op, g)
-        check_sparse_nd_elemwise_binary(shape, ['default', 'row_sparse'], op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
 
 def test_sparse_nd_zeros():
@@ -66,9 +66,9 @@ def test_sparse_nd_copy():
         assert np.sum(np.abs(from_nd.asnumpy() != to_nd.asnumpy())) == 0.0
 
     check_sparse_nd_copy('row_sparse', 'row_sparse')
-    check_sparse_nd_copy('row_sparse', 'default')
-    check_sparse_nd_copy('default', 'row_sparse')
-    check_sparse_nd_copy('default', 'csr')
+    check_sparse_nd_copy('row_sparse', 'default_storage')
+    check_sparse_nd_copy('default_storage', 'row_sparse')
+    check_sparse_nd_copy('default_storage', 'csr')
 
 def check_sparse_nd_prop_rsp():
     storage_type = 'row_sparse'

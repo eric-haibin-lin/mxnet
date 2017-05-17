@@ -56,13 +56,13 @@ _DTYPE_MX_TO_NP = {
 }
 _STORAGE_TYPE_ID_TO_STR = {
     -1 : 'undefined',
-    0  : 'default',
+    0  : 'default_storage',
     1  : 'row_sparse',
     2  : 'csr',
 }
 _STORAGE_TYPE_STR_TO_ID = {
     'undefined'  : -1,
-    'default'    : 0,
+    'default_storage'    : 0,
     'row_sparse' : 1,
     'csr'        : 2,
 }

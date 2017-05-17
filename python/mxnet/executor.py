@@ -99,7 +99,7 @@ class Executor(object):
                                                     ctypes.byref(storage_type)))
             assert(storage_type != _STORAGE_TYPE_STR_TO_ID['undefined'])
             output = NDArray(NDArrayHandle(handles[i])) \
-                if storage_type.value == _STORAGE_TYPE_STR_TO_ID['default'] \
+                if storage_type.value == _STORAGE_TYPE_STR_TO_ID['default_storage'] \
                 else  SparseNDArray(NDArrayHandle(handles[i]))
             outputs.append(output)
         return outputs

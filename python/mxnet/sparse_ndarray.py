@@ -481,11 +481,11 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     """Creates a row sparse array with a set of tensor slices at given indices.
 
     A SparseNDArray with `row_sparse` storage is typically used to represent a subset of a larger
-    NDArray  with `default` storage of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
+    NDArray  with `default_storage` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
     in indices are the indices in the first dimension of the slices that have been extracted from
     the larger NDArray.
 
-    The corresponding NDArray ``dense`` with `default` storage represented by a ``rsp``
+    The corresponding NDArray ``dense`` with `default_storage` represented by a ``rsp``
     SparseNDArray with `row_sparse` storage has
 
     ``dense[rsp.indices[i], :, :, :, ...] = rsp.values[i, :, :, :, ...]``
@@ -544,7 +544,7 @@ def to_dense(source):
     SparseNDArray
         The dense array with default storage
     """
-    return ndarray.cast_storage(source, storage_type='default')
+    return ndarray.cast_storage(source, storage_type='default_storage')
 
 def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     """Return a new array of given shape and type, filled with zeros.
@@ -582,7 +582,7 @@ def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
 
 _STORAGE_TYPE_TO_ND_CLASS = {
-    _STORAGE_TYPE_STR_TO_ID['default']: ndarray.NDArray,
+    _STORAGE_TYPE_STR_TO_ID['default_storage']: ndarray.NDArray,
     _STORAGE_TYPE_STR_TO_ID['row_sparse']: SparseNDArray,
     _STORAGE_TYPE_STR_TO_ID['csr']: SparseNDArray,
 }

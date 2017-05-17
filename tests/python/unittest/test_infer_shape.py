@@ -138,9 +138,9 @@ def check_infer_storage(v1, v2, v1_storage, v2_storage, out_chunk):
 def test_elemwise_add_infer_storage_type():
     v1 = mx.symbol.Variable('v1')
     v2 = mx.symbol.Variable('v2')
-    check_infer_storage(v1, v2, 'default', 'default', 'default')
-    check_infer_storage(v1, v2, 'default', 'row_sparse', 'default')
-    check_infer_storage(v1, v2, 'row_sparse', 'default', 'default')
+    check_infer_storage(v1, v2, 'default_storage', 'default_storage', 'default_storage')
+    check_infer_storage(v1, v2, 'default_storage', 'row_sparse', 'default_storage')
+    check_infer_storage(v1, v2, 'row_sparse', 'default_storage', 'default_storage')
     check_infer_storage(v1, v2, 'row_sparse', 'row_sparse', 'row_sparse')
 
 if __name__ == "__main__":
