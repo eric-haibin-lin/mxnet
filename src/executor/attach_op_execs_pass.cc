@@ -236,7 +236,7 @@ Graph AttachOpExecs(Graph g) {
   const auto& vctx = g.GetAttr<ContextVector>("context");
   const auto& saved_opr = g.GetAttr<
     std::unordered_map<const nnvm::Node*, std::shared_ptr<Operator>>>("saved_opr");
-  const auto& dispatch_stypes = g.GetAttr<StorageTypeVector>("dispatch_storage_types");
+  const auto& dispatch_stypes = g.GetAttr<StorageTypeVector>("dispatch_stypes");
 
   // get the graph
   const auto& idx = g.indexed_graph();
@@ -254,7 +254,7 @@ Graph AttachOpExecs(Graph g) {
     FComputeEx fcompute_ex =
       common::GetFComputeEx(inode.source->op(), vctx[i], dispatch_stypes[i]);
 #if EXEC_ATTACH_OP_DEBUG
-    LOG(INFO) << "dispatch type = " << dispatch_stypes[i];
+    LOG(INFO) << "dispatch storage type = " << dispatch_stypes[i];
 #endif
     if (fcreate_layer_op.count(inode.source->op())) {
       std::vector<TShape> ishape;

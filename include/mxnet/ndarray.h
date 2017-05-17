@@ -735,7 +735,7 @@ class NDArray {
         if (skip_free == false) {
           Storage::Get()->Free(h);
           for (size_t i = 0; i < aux_h.size(); i++) {
-            Storage::Get()->Free(aux_h[i]);
+            if (aux_h[i].size > 0) Storage::Get()->Free(aux_h[i]);
           }
         }
       }, shandle.ctx, var);
