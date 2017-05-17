@@ -489,7 +489,6 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
   data_entry_.resize(idx.num_node_entries());
   size_t arg_top = 0, aux_top = 0;
   auto mutable_nodes = idx.mutable_input_nodes();
-  // TODO(junwu): populate in_arg_map, arg_grad_map, and aux_state_map
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
     const uint32_t eid = idx.entry_id(nid, 0);
@@ -602,7 +601,6 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
   const auto& shared_exec_in_args = shared_exec->in_arg_map();
   const auto& shared_exec_arg_grads = shared_exec->arg_grad_map();
   const auto& shared_exec_aux_states = shared_exec->aux_state_map();
-  // TODO(junwu): populate in_arg_map, arg_grad_map, and aux_state_map
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
     const uint32_t eid = idx.entry_id(nid, 0);
@@ -845,6 +843,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       arg_stypes[i] = it3->second;
     }
   }
+  // TODO(jun/haibin) check if InferShape is successful, and give warnings instead of segfault later
   g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
   g = nnvm::pass::InferType(g, arg_dtypes, "__dtype__");
   g = nnvm::pass::InferStorageType(g, arg_stypes, "__storage_type__");

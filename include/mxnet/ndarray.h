@@ -127,7 +127,7 @@ class NDArray {
         } else if (storage_type == kCSRStorage) {
           aux_types = {CSR_IND_PTR_TYPE, CSR_IDX_DTYPE};
         } else {
-          LOG(FATAL) << "Unknown storage type";
+          LOG(FATAL) << "Unknown storage type" << storage_type;
         }
       }
       // Assign default shapes if not given
@@ -139,7 +139,7 @@ class NDArray {
           // aux shapes for indptr and indices
           aux_shapes = {TShape({0}), TShape({0})};
         } else {
-          LOG(FATAL) << "Unknown storage type";
+          LOG(FATAL) << "Unknown storage type" << storage_type;
         }
       }
       if (storage_shape.Size() == 0) {
@@ -149,7 +149,7 @@ class NDArray {
         } else if (storage_type == kCSRStorage) {
           storage_shape = aux_shapes[csr::kIdx];
         } else {
-          LOG(FATAL) << "Unknown storage type";
+          LOG(FATAL) << "Unknown storage type" << storage_type;
         }
       }
       ptr_ = std::make_shared<Chunk>(storage_type, storage_shape, ctx, delay_alloc,

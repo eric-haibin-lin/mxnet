@@ -145,7 +145,6 @@ def test_sparse_dot():
     test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'default', False)
     test_dot_csr_dns_rsp(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'default', True)
 
-'''
 def test_sparse_embedding():
     in_dim = 10
     out_dim = 4
@@ -153,7 +152,6 @@ def test_sparse_embedding():
 
     data = mx.sym.Variable("data", dtype=np.int32)
     embed = mx.sym.SparseEmbedding(data=data, input_dim=in_dim, output_dim=out_dim, name="embed")
-    # TODO(haibin) test again when simple_bind cpp api is ready
     exe_test = embed.simple_bind(default_context(), grad_req={'data': 'null', 'embed_weight': 'write'},
                                  data=(batch,))
     arg_map = dict(zip(embed.list_arguments(), exe_test.arg_arrays))
@@ -173,11 +171,10 @@ def test_sparse_embedding():
     grad[:] = np_grad
     exe_test.backward([grad])
     assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad))
-'''
 
 if __name__ == '__main__':
     test_elemwise_add_ex()
     test_elemwise_add_ex_multiple_stages()
     test_cast_storage_ex()
     test_sparse_dot()
-    #test_sparse_embedding()
+    test_sparse_embedding()

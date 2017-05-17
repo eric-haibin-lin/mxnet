@@ -33,34 +33,34 @@ def test_ctx_group():
         else:
             assert arr.context == group2ctx['stage2']
 
-def check_ctx_group_sparse(mode='dense_sparse'):
-    # Input Data
-    dense_np = np.array([[1,2],[3,4],[5,6]])
-    sparse_np1 = np.array([[5,10],[0,0],[0,0]])
-    dense_nd = mx.nd.array(dense_np)
-    val = mx.nd.array([[5, 10]]);
-    idx = mx.nd.array([0], dtype=np.int32);
-    sparse_nd1 = mx.sparse_nd.row_sparse(val, idx, (3,2))
-    sparse_nd2 = mx.sparse_nd.row_sparse(val, idx, (3,2))
+def check_ctx_group_sparse(lhs_stype, rhs_stype):
+    with mx.AttrScope(ctx_group='stage1'):
+        lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
+        rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
+        plus  = mx.symbol.elemwise_add(lhs, rhs, name='plus')
 
-    # Symbols
-    if mode == 'dense_dense':
-      data1 = mx.symbol.Variable('data1')
-      data2 = mx.symbol.Variable('data2')
-    elif mode == 'dense_sparse':
-      data1 = mx.symbol.Variable('data1')
-      data2 = mx.symbol.Variable('data2', storage_type='row_sparse')
+    set_stage1 = set(plus.list_arguments())
+    with mx.AttrScope(ctx_group='stage2'):
+        softmax  = mx.symbol.SoftmaxOutput(data = plus, name = 'softmax')
 
-    mlp  = mx.symbol.elemwise_add(data1, data2, name='plus')
-    texec = mlp.simple_bind(mx.cpu(0), data1=(3,2), data2=(3,2))
-    output = texec.forward()
+    set_stage2 = set(softmax.list_arguments()) - set_stage1
 
-'''
-This tests the simple bind function
-'''
+    group2ctx = {
+        'stage1' : mx.cpu(1),
+        'stage2' : mx.cpu(2)
+    }
+    texec = softmax.simple_bind(mx.cpu(0), group2ctx=group2ctx, lhs=(1,200), rhs=(1,200))
+
+    for arr, name in zip(texec.arg_arrays, softmax.list_arguments()):
+        if name in set_stage1:
+            assert arr.context == group2ctx['stage1']
+        else:
+            assert arr.context == group2ctx['stage2']
+
 def test_ctx_group_sparse():
-    check_ctx_group_sparse('dense_sparse')
-    check_ctx_group_sparse('dense_dense')
+    check_ctx_group_sparse('default', 'default')
+    check_ctx_group_sparse('default', 'row_sparse')
+    check_ctx_group_sparse('row_sparse', 'row_sparse')
 
 if __name__ == '__main__':
     test_ctx_group()
