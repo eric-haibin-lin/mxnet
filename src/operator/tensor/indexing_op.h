@@ -387,7 +387,7 @@ void SparseEmbeddingOpBackwardDnsDnsRsp(const nnvm::NodeAttrs& attrs,
   unsigned int num_rows = output.shape()[0];
   output.CheckAndAlloc({TShape({num_rows})});
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(idx.dtype(), IType, {
+    NDARRAY_IDX_TYPE_SWITCH(idx.dtype(), IType, {
       MXNET_ASSIGN_REQ_SWITCH(req[1], req_type, {
         // input embedding indice, each idx in [0, input_dim)
         auto idx_data = idx.data().FlatTo1D<xpu, IType>(s);
