@@ -385,7 +385,7 @@ void SparseEmbeddingOpBackwardDnsDnsRsp(const nnvm::NodeAttrs& attrs,
            << "embedding input index and gradient row sparse type doesn't match!";
   // Alloc dense output
   unsigned int num_rows = output.shape()[0];
-  output.CheckAndAlloc({TShape({num_rows})});
+  output.CheckAndAlloc({mshadow::Shape1(num_rows)});
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
     NDARRAY_IDX_TYPE_SWITCH(idx.dtype(), IType, {
       MXNET_ASSIGN_REQ_SWITCH(req[1], req_type, {

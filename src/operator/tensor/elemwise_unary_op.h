@@ -420,7 +420,7 @@ void CastStorageDnsCsrImpl(mshadow::Stream<xpu> *s, const TBlob& dns, NDArray* c
       NDARRAY_IDX_TYPE_SWITCH(csr->aux_type(csr::kIdx), CType, {  // col idx type
         const index_t num_rows = dns.shape_[0];
         const index_t num_cols = dns.shape_[1];
-        csr->CheckAndAllocAuxData(csr::kIndPtr, TShape({num_rows+1}));
+        csr->CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(num_rows+1));
         IType* indptr = csr->aux_data(csr::kIndPtr).dptr<IType>();
         DType* dns_data = dns.dptr<DType>();
         mxnet_op::Kernel<FillCsrIndPtr, xpu>::Launch(s, num_rows, indptr,
@@ -432,8 +432,8 @@ void CastStorageDnsCsrImpl(mshadow::Stream<xpu> *s, const TBlob& dns, NDArray* c
           indptr[i+1] += indptr[i];
         }
         // allocate column idx array and value array
-        csr->CheckAndAllocAuxData(csr::kIdx, TShape({static_cast<index_t>(indptr[num_rows])}));
-        csr->CheckAndAllocData(TShape({static_cast<index_t>(indptr[num_rows])}));
+        csr->CheckAndAllocAuxData(csr::kIdx, mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
+        csr->CheckAndAllocData(mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
         // fill col_idx and value arrays of the csr
         mxnet_op::Kernel<FillCsrColIdxAndVals, xpu>::Launch(s, num_rows,
             csr->data().dptr<DType>(), csr->aux_data(csr::kIdx).dptr<CType>(),

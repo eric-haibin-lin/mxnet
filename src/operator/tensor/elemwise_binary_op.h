@@ -150,7 +150,7 @@ void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
   // need to subtract the number of common rows
   unsigned int num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
   unsigned int num_rows_r = rhs.aux_shape(rowsparse::kIdx).Size();
-  output.CheckAndAlloc({TShape({num_rows_l + num_rows_r})});
+  output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
     MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {

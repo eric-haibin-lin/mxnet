@@ -786,7 +786,7 @@ void DotCsrDnsRspImpl(const OpContext& ctx,
             for (int i = 0; i < static_cast<int>(indptr_l.Size())-1; ++i) {
               if (indptr[i] < indptr[i+1]) ++nnr;
             }
-            ret->CheckAndAlloc({TShape({nnr})});
+            ret->CheckAndAlloc({mshadow::Shape1(nnr)});
             // fill in row_idx_out (single thread)
             const TBlob data_out = ret->data();
             const TBlob row_idx_out = ret->aux_data(rowsparse::kIdx);

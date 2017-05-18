@@ -66,13 +66,13 @@ NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYP
   index_t num_rows = idx.size();
   index_t num_cols = vals.size() / idx.size();
   // create index NDArray
-  NDArray index = RspIdxND(TShape({num_rows}), ctx, idx);
+  NDArray index = RspIdxND(mshadow::Shape1(num_rows), ctx, idx);
   CHECK_EQ(vals.size() % idx.size(), 0);
   // create value NDArray
-  NDArray data = DnsND(TShape({num_rows, num_cols}), ctx, vals);
+  NDArray data = DnsND(mshadow::Shape2(num_rows, num_cols), ctx, vals);
   // create result nd
   NDArray nd(kRowSparseStorage, shape, ctx, false, mshadow::default_type_flag,
-             {}, {TShape({num_rows})});
+             {}, {mshadow::Shape1(num_rows)});
   // assign values
   NDArray nd_aux = nd.AuxNDArray(0);
   NDArray nd_data = nd.DataNDArray();
