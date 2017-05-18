@@ -251,13 +251,13 @@ fixed-size items, stored in sparse format.
         >>> a[1:2].asnumpy()
         array([[0, 0, 3]])
 
-        >>> a[1:2].indptr.asnumpy()
+        >>> a[1:2]._indptr.asnumpy()
         array([[2, 3]])
 
-        >>> a[1:2].indicies.asnumpy()
+        >>> a[1:2]._indicies.asnumpy()
         array([0, 2, 2, 0, 1, 2])
 
-        >>> a[1:2].values.asnumpy()
+        >>> a[1:2]._values.asnumpy()
         array([1, 2, 3, 4, 5, 6])
 
         """
@@ -293,11 +293,27 @@ fixed-size items, stored in sparse format.
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
-    def values(self):
+    def _values(self):
+        """The values array of the SparseNDArray. This is a read-only view of the values array.
+        They reveal internal implementation details and should be used with care.
+
+        Returns
+        -------
+        NDArray
+            This SparseNDArray's values array.
+        """
         return self._data(0)
 
     @property
-    def indices(self):
+    def _indices(self):
+        """The indices array of the SparseNDArray. This is a read-only view of the indices array.
+        They reveal internal implementation details and should be used with care.
+
+        Returns
+        -------
+        NDArray
+            This SparseNDArray's indices array.
+        """
         stype = self.storage_type
         if stype == 'row_sparse':
             return self._aux_data(0)
@@ -306,7 +322,16 @@ fixed-size items, stored in sparse format.
         raise Exception("unknown storage type " + stype)
 
     @property
-    def indptr(self):
+    def _indptr(self):
+        """The indptr array of the SparseNDArray with `csr` storage type.
+        This is a read-only view of the indptr array.
+        They reveal internal implementation details and should be used with care.
+
+        Returns
+        -------
+        NDArray
+            This SparseNDArray's indptr array.
+        """
         stype = self.storage_type
         if stype == 'csr':
             return self._aux_data(0)
@@ -383,6 +408,7 @@ fixed-size items, stored in sparse format.
         SparseNDArray is not yet compacted, the returned result may include invalid values.
 
         """
+        self.wait_to_read()
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetAuxNDArray(self.handle, i, ctypes.byref(hdl)))
         return NDArray(hdl, writable)
@@ -392,6 +418,7 @@ fixed-size items, stored in sparse format.
         SparseNDArray is not yet compacted, the returned result may include invalid values.
 
         """
+        self.wait_to_read()
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
         return NDArray(hdl, writable)

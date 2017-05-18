@@ -328,7 +328,7 @@ struct EmbeddingBackwardRsp {
     size_t segment_end = (i + 1) * segment_len;
     for (size_t y = 0; y < num_idx; y++) {
       size_t j = idx[y];
-      if (j > num_rows) j = num_rows - 1;
+      if (j >= num_rows) j = num_rows - 1;
       if (j < segment_start || j >= segment_end) continue;
       dst_idx[j] = j;
       for (size_t k = 0; k < width; k++) {

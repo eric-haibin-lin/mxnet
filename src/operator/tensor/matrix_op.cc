@@ -232,6 +232,9 @@ and ``end=(e_1, e_2, ... e_n)`` indices will result in an array with the shape
 The resulting array's *k*-th dimension contains elements
  from the *k*-th dimension of the input array with the open range ``[b_k, e_k)``.
 
+For an input array of non-default storage type(e.g. `csr` or `row_sparse`), it only supports
+slicing on the first dimension.
+
 Example::
 
   x = [[  1.,   2.,   3.,   4.],
@@ -245,8 +248,10 @@ Example::
 .set_attr_parser(ParamParser<SliceParam>)
 .set_attr<nnvm::FInferShape>("FInferShape", SliceShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_slice"})
 .set_attr<FCompute>("FCompute<cpu>", Slice<cpu>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, SliceEx<cpu>)
 .add_argument("data", "NDArray-or-Symbol", "Source input")
 .add_arguments(SliceParam::__FIELDS__());
 

@@ -172,9 +172,25 @@ def test_sparse_embedding():
     exe_test.backward([grad])
     assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad))
 
+def test_sparse_slice():
+    def check_csr_slice(shape, sliced_input):
+        storage_type = 'csr'
+        A, _ = rand_sparse_ndarray(shape, storage_type)
+        A = A._slice(1, shape[0] - 1) if sliced_input else A
+        A2 = A.asnumpy()
+        begin = rnd.randint(0, A.shape[0] - 1)
+        end = rnd.randint(begin + 1, A.shape[0])
+        A_slice = mx.nd.crop(A, begin=begin, end=end)
+        assert same(A_slice.asnumpy(), A2[begin:end]), (A_slice.asnumpy(), A2[begin:end])
+
+    shape = (rnd.randint(7, 15), rnd.randint(1, 10))
+    check_csr_slice(shape, True)
+    check_csr_slice(shape, False)
+
 if __name__ == '__main__':
     test_elemwise_add_ex()
     test_elemwise_add_ex_multiple_stages()
     test_cast_storage_ex()
     test_sparse_dot()
     test_sparse_embedding()
+    test_sparse_slice()
