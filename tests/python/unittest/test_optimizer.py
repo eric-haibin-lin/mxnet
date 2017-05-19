@@ -184,7 +184,7 @@ class PySparseSGD(mx.optimizer.Optimizer):
         num_rows = weight.shape[0]
         if self.momentum == 0.0:
             # Update on a per row basis, skip all-zero rows
-            for row in xrange(num_rows):
+            for row in range(num_rows):
                 grad_row = grad[row].asnumpy()
                 all_zeros = mx.test_utils.almost_equal(grad_row, np.zeros_like(grad_row))
                 if all_zeros:
@@ -197,7 +197,7 @@ class PySparseSGD(mx.optimizer.Optimizer):
                     weight[row] = (1 - lr*wd)*weight[row] - lr*self.rescale_grad*grad[row]
         else:
             mom = state
-            for row in xrange(num_rows):
+            for row in range(num_rows):
               grad_row = grad[row].asnumpy()
               all_zeros = mx.test_utils.almost_equal(grad_row, np.zeros_like(grad_row))
               if all_zeros:

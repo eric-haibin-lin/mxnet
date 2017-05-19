@@ -25,7 +25,7 @@ def test_sparse_nd_elemwise_add():
     num_repeats = 10
     g = lambda x,y: x + y
     op = mx.nd.elemwise_add
-    for i in xrange(num_repeats):
+    for i in range(num_repeats):
         shape = [(rnd.randint(1, 10),rnd.randint(1, 10))] * 2
         check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
         check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
@@ -36,7 +36,7 @@ def test_sparse_nd_elementwise_fallback():
     num_repeats = 10
     g = lambda x,y: x + y
     op = mx.nd.add_n
-    for i in xrange(num_repeats):
+    for i in range(num_repeats):
         shape = [(rnd.randint(1, 10), rnd.randint(1, 10))] * 2
         check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
         check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)

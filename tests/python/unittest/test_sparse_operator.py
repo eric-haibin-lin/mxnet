@@ -59,7 +59,7 @@ def test_elemwise_add_ex_multiple_stages():
     check_symbolic_forward(test, {'sp_data1':sp_nd1, 'sp_data2':sp_nd2,
                           'ds_data':ds_nd}, [sp_np1 + sp_np2 + ds_np])
 
-    arr_grads = [mx.nd.zeros(shape) for i in xrange(3)]
+    arr_grads = [mx.nd.zeros(shape) for i in range(3)]
     exec_test = test.bind(default_context(), args={'sp_data1':sp_nd1, 'sp_data2':sp_nd2,
                           'ds_data':ds_nd}, args_grad=arr_grads)
     exec_test.forward(is_train=True)
