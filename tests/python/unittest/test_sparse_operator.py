@@ -170,7 +170,7 @@ def test_sparse_embedding():
     grad = mx.nd.zeros(np_grad.shape)
     grad[:] = np_grad
     exe_test.backward([grad])
-    assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad))
+    assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad), atol=1e-5)
 
 def test_sparse_slice():
     def check_csr_slice(shape, sliced_input):

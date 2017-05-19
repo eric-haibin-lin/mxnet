@@ -1221,7 +1221,7 @@ void Slice(const nnvm::NodeAttrs& attrs,
 // slice the indptr of a csr
 struct SliceCsrIndPtr {
   template<typename IType>
-  MSHADOW_XINLINE static void Map(int i, IType* out, const IType* in, IType* base) {
+  MSHADOW_XINLINE static void Map(int i, IType* out, const IType* in, const IType* base) {
     KERNEL_ASSIGN(out[i], kWriteTo, in[i] - *base);
   }
 };
@@ -1270,6 +1270,7 @@ void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
       auto in_data = in.data().dptr<DType>();
       auto out_data = out.data().dptr<DType>();
       int offset = in_indptr[begin];
+      // this is also a CPU-only implementation
       memcpy(out_idx, in_idx + offset, nnz * sizeof(IType));
       memcpy(out_data, in_data + offset, nnz * sizeof(DType));
     });
