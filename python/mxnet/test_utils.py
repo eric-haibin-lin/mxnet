@@ -74,7 +74,7 @@ def rand_sparse_ndarray(shape, storage_type, density=None):
         # TODO(haibin) support high dim sparse ndarray
         assert(len(shape) < 3)
         prod = np.prod(shape)
-        num_cols = long(prod / shape[0])
+        num_cols = int(prod / shape[0])
         # sample index
         idx_sample = rnd.rand(shape[0])
         indices = np.argwhere(idx_sample < density).flatten()
