@@ -144,7 +144,7 @@ template<typename xpu>
 void FillZerosCsrImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   if (!dst->storage_initialized()) return;
   // reset the shapes if it's not zeros
-  mshadow::Shape1 new_shape(0);
+  TShape new_shape(mshadow::Shape1(0));
   dst->SetAuxShape(csr::kIndPtr, new_shape);
   dst->SetAuxShape(csr::kIdx, new_shape);
   dst->SetStorageShape(new_shape);
