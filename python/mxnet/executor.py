@@ -93,7 +93,7 @@ class Executor(object):
                                           ctypes.byref(out_size), ctypes.byref(handles)))
         num_output = out_size.value
         outputs = []
-        for i in xrange(num_output):
+        for i in range(num_output):
             storage_type = ctypes.c_int(0)
             check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(handles[i], NDArrayHandle),
                                                     ctypes.byref(storage_type)))

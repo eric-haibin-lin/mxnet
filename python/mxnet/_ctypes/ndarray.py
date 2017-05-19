@@ -178,7 +178,7 @@ def %s(%s):
     if original_output is not None:
         return original_output
     ret_list = []
-    for i in xrange(num_output.value):
+    for i in range(num_output.value):
         storage_type = ctypes.c_int(0)
         check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(output_vars[i], NDArrayHandle),
                                                 ctypes.byref(storage_type)))

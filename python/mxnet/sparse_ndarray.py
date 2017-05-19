@@ -329,7 +329,7 @@ fixed-size items, stored in sparse format.
         '''
         aux_types = []
         num_aux = self._num_aux
-        for i in xrange(num_aux):
+        for i in range(num_aux):
             aux_types.append(self._aux_type(i))
         return aux_types
 
