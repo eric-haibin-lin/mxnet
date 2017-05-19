@@ -432,7 +432,8 @@ void CastStorageDnsCsrImpl(mshadow::Stream<xpu> *s, const TBlob& dns, NDArray* c
           indptr[i+1] += indptr[i];
         }
         // allocate column idx array and value array
-        csr->CheckAndAllocAuxData(csr::kIdx, mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
+        csr->CheckAndAllocAuxData(csr::kIdx,
+                                  mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
         csr->CheckAndAllocData(mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
         // fill col_idx and value arrays of the csr
         mxnet_op::Kernel<FillCsrColIdxAndVals, xpu>::Launch(s, num_rows,
