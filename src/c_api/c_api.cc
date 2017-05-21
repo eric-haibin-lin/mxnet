@@ -313,6 +313,16 @@ int MXNDArraySlice(NDArrayHandle handle,
   API_END_HANDLE_ERROR(delete ptr);
 }
 
+int MXNDArraySliceEx(NDArrayHandle handle,
+                   mx_uint slice_begin,
+                   mx_uint slice_end,
+                   NDArrayHandle out) {
+  NDArray *ptr = static_cast<NDArray*>(out);
+  API_BEGIN();
+  static_cast<NDArray*>(handle)->SliceEx(slice_begin, slice_end, ptr);
+  API_END();
+}
+
 int MXNDArrayAt(NDArrayHandle handle,
                 mx_uint idx,
                 NDArrayHandle *out) {
@@ -430,7 +440,7 @@ int MXNDArrayGetAuxNDArray(NDArrayHandle handle,
                            NDArrayHandle *out) {
   API_BEGIN();
   NDArray *arr = static_cast<NDArray*>(handle);
-  *out = new NDArray(arr->AuxNDArray(i));
+  *out = new NDArray(arr->aux_ndarray(i));
   API_END();
 }
 
@@ -438,7 +448,7 @@ int MXNDArrayGetDataNDArray(NDArrayHandle handle,
                             NDArrayHandle *out) {
   API_BEGIN();
   NDArray *arr = static_cast<NDArray*>(handle);
-  *out = new NDArray(arr->DataNDArray());
+  *out = new NDArray(arr->data_ndarray());
   API_END();
 }
 

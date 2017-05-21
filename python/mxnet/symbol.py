@@ -19,7 +19,7 @@ from .base import check_call, MXNetError
 from .context import Context, cpu
 from .ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
 from .ndarray import NDArray, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
-from .sparse_ndarray import SparseNDArray
+from .sparse_ndarray import _ndarray_cls
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope
@@ -1440,22 +1440,13 @@ class Symbol(SymbolBase):
                 shared_buffer[k] = v
 
         # create in_args, arg_grads, and aux_states for the current executor
-        arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(num_in_args.value)]
-        grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
+        arg_arrays = [_ndarray_cls(NDArrayHandle(in_arg_handles[i])) \
+                      for i in range(num_in_args.value)]
+        grad_arrays = [_ndarray_cls(NDArrayHandle(arg_grad_handles[i]))
                        if arg_grad_handles[i] is not None
                        else None for i in range(num_in_args.value)]
-        aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i]))
+        aux_arrays = [_ndarray_cls(NDArrayHandle(aux_state_handles[i]))
                       for i in range(num_aux_states.value)]
-
-        # redefine NDArray class based on storage types
-        def check_storage_type(ndarrays):
-            for idx, array in enumerate(ndarrays):
-                if array is not None and array.storage_type != 'default_storage':
-                    ndarrays[idx].__class__ = SparseNDArray
-            return ndarrays
-        arg_arrays = check_storage_type(arg_arrays)
-        grad_arrays = check_storage_type(grad_arrays)
-        aux_arrays = check_storage_type(aux_arrays)
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
         executor.arg_arrays = arg_arrays

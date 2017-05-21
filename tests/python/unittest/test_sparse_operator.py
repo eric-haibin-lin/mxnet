@@ -5,7 +5,6 @@ import scipy as sp
 from numpy.testing import assert_allclose
 from mxnet.test_utils import *
 
-
 def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
     lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
     rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
@@ -30,10 +29,11 @@ def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_
 def test_elemwise_add_ex():
     shape = (rnd.randint(1, 10), rnd.randint(1, 10))
     check_elemwise_add_ex('default_storage', 'default_storage', shape)
-    check_elemwise_add_ex('default_storage', 'row_sparse', shape)
-    check_elemwise_add_ex('row_sparse', 'default_storage', shape)
-    check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
-                          lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    # TODO(haibin/jun) enable these tests when Dns -> Rsp (compact) is implemented.
+    #check_elemwise_add_ex('default_storage', 'row_sparse', shape)
+    #check_elemwise_add_ex('row_sparse', 'default_storage', shape)
+    #check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
+    #                      lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 # TODO(haibin) randomize this test
@@ -62,14 +62,13 @@ def test_elemwise_add_ex_multiple_stages():
     check_symbolic_forward(test, {'sp_data1': sp_nd1, 'sp_data2': sp_nd2,
                                   'ds_data': ds_nd}, [sp_np1 + sp_np2 + ds_np])
 
-    arr_grads = [mx.nd.zeros(shape) for i in xrange(3)]
+    arr_grads = [mx.nd.zeros(shape) for i in range(3)]
     exec_test = test.bind(default_context(), args={'sp_data1': sp_nd1, 'sp_data2': sp_nd2,
                                                    'ds_data': ds_nd}, args_grad=arr_grads)
     exec_test.forward(is_train=True)
     assert_almost_equal(exec_test.outputs[0].asnumpy(), sp_np1 + sp_np2 + ds_np)
     exec_test.backward(out_grads=exec_test.outputs)
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
-
 
 # TODO(haibin) also add test for backward pass
 def test_cast_storage_ex():
@@ -176,20 +175,19 @@ def test_sparse_embedding():
     assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad), atol=1e-5)
 
 def test_sparse_slice():
-    def check_csr_slice(shape, sliced_input):
+    def check_csr_slice(shape, slice_input):
         storage_type = 'csr'
         A, _ = rand_sparse_ndarray(shape, storage_type)
-        A = A._slice(1, shape[0] - 1) if sliced_input else A
-        A2 = A.asnumpy()
-        begin = rnd.randint(0, A.shape[0] - 1)
-        end = rnd.randint(begin + 1, A.shape[0])
-        A_slice = mx.nd.crop(A, begin=begin, end=end)
-        assert same(A_slice.asnumpy(), A2[begin:end]), (A_slice.asnumpy(), A2[begin:end])
+        B = A._slice(1, shape[0] - 1) if slice_input else A
+        np = B.asnumpy()
+        begin = rnd.randint(0, B.shape[0] - 1)
+        end = rnd.randint(begin + 1, B.shape[0])
+        nd_slice = mx.nd.crop(B, begin=begin, end=end)
+        assert same(nd_slice.asnumpy(), np[begin:end]), (nd_slice.asnumpy(), np[begin:end])
 
     shape = (rnd.randint(7, 15), rnd.randint(1, 10))
     check_csr_slice(shape, True)
     check_csr_slice(shape, False)
-
 
 if __name__ == '__main__':
     test_elemwise_add_ex()

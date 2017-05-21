@@ -7,7 +7,6 @@
 #define MXNET_OPERATOR_TENSOR_MATRIX_OP_INL_H_
 
 #include <mxnet/operator_util.h>
-#include <dmlc/omp.h>
 #include <vector>
 #include <algorithm>
 #include <utility>
@@ -1005,6 +1004,20 @@ struct SliceCsrIndPtr {
 };
 
 /*
+ * a wrapper to launch SliceCsrIndPtr kernel.
+ * slice [src[begin] .. src[end]) and store in dst[0, end - begin)
+ */
+template<typename xpu, typename IType>
+void SliceCsrIndPtrImpl(const int begin, const int end, RunContext ctx,
+                        const IType* src, IType* dst) {
+  using namespace mshadow;
+  using namespace mxnet_op;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  int indptr_len = end - begin + 1;
+  Kernel<SliceCsrIndPtr, xpu>::Launch(s, indptr_len, dst, src + begin, src + begin);
+}
+
+/*
  * Slice a CSR NDArray
  * Only implemented for CPU
  */
@@ -1032,14 +1045,13 @@ void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
   // assume idx indptr share the same type
   MSHADOW_INT_TYPE_SWITCH(in.aux_type(kIndPtr), IType, {
     MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
+
       auto in_indptr = in.aux_data(kIndPtr).dptr<IType>();
       auto out_indptr = out.aux_data(kIndPtr).dptr<IType>();
-      int num_threads = omp_get_num_threads();
-      int segment_len = (indptr_len + num_threads - 1) / num_threads;
-      Kernel<SliceCsrIndPtr, xpu>::Launch(s, indptr_len, out_indptr, in_indptr + begin,
-                                          in_indptr + begin);
+      SliceCsrIndPtrImpl<cpu, IType>(begin, end, ctx.run_ctx, in_indptr, out_indptr);
+
       // retrieve nnz (CPU implementation)
-      int nnz = out_indptr[indptr_len - 1] - out_indptr[0];
+      int nnz = out_indptr[indptr_len - 1];
       // copy indices and values
       out.CheckAndAllocAuxData(kIdx, Shape1(nnz));
       out.CheckAndAllocData(Shape1(nnz));

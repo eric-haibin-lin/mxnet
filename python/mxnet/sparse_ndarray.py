@@ -15,16 +15,15 @@ import sys as _sys
 
 # import operator
 import numpy as np
-from .base import _LIB, numeric_types #string_types
-from .base import c_array, mx_real_t  # , py_str, c_str
+from .base import _LIB, numeric_types
+from .base import c_array, mx_real_t
 from .base import mx_uint, NDArrayHandle, check_call
-# from .base import ctypes2buffer
 from .context import Context
 from . import _ndarray_internal as _internal
 from . import ndarray
 from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
-from .ndarray import _STORAGE_TYPE_STR_TO_ID#, _STORAGE_TYPE_ID_TO_STR
-from .ndarray import NDArray
+from .ndarray import _STORAGE_TYPE_STR_TO_ID
+from .ndarray import NDArray, _storage_type
 
 # Use different verison of SymbolBase
 # When possible, use cython to speedup part of computation.
@@ -45,9 +44,8 @@ _STORAGE_AUX_TYPES = {
     'csr': [np.int32, np.int32]
 }
 
-
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc, dtype, aux_types, aux_shapes=None):
-    """Return a new handle with specified shape, type and context.
+    """Return a new handle with specified storage type, shape, dtype and context.
 
     Empty handle is only used to hold results
 
@@ -77,15 +75,14 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc, dtype, aux_types, a
         ctypes.byref(hdl)))
     return hdl
 
-
 class SparseNDArray(NDArray):
     """An array object representing a multidimensional, homogeneous array of
 fixed-size items, stored in sparse format.
 
     """
-    __slots__ = []
 
-    #def __reduce__(self):
+    def __reduce__(self):
+        raise Exception('Not implemented for SparseND yet!')
     #    return SparseNDArray, (None,), self.__getstate__()
 
     def __add__(self, other):
@@ -169,7 +166,7 @@ fixed-size items, stored in sparse format.
     def __setitem__(self, key, value):
         """x.__setitem__(i, y) <=> x[i]=y
 
-        Set self[key] to value.
+        Set self[key] to value. Only slice [:] is supported.
 
         Parameters
         ----------
@@ -178,6 +175,26 @@ fixed-size items, stored in sparse format.
         value : NDArray or numpy.ndarray
             The value to set.
 
+        Examples
+        --------
+        >>> src = mx.sparse_nd.row_sparse(data, indices, (3,3))
+        >>> src.asnumpy()
+        array([[ 1.,  0.,  2.],
+               [ 0.,  0.,  0.],
+               [ 4.,  5.,  6.]], dtype=float32)
+        >>> # assign SparseNDArray with same storage type
+        >>> x = mx.sparse_nd.zeros('row_sparse', (3,3))
+        >>> x[:] = src
+        >>> x.asnumpy()
+        array([[ 1.,  0.,  2.],
+               [ 0.,  0.,  0.],
+               [ 4.,  5.,  6.]], dtype=float32)
+        >>> # assign NDArray to SparseNDArray
+        >>> x[:] = mx.nd.ones((3,3))
+        >>> x.asnumpy()
+        array([[ 1.,  1.,  1.],
+               [ 1.,  1.,  1.],
+               [ 1.,  1.,  1.]], dtype=float32)
         """
         if not self.writable:
             raise ValueError('Failed to assign to a readonly NDArray')
@@ -191,8 +208,7 @@ fixed-size items, stored in sparse format.
             elif isinstance(value, numeric_types):
                 raise Exception("Assigning numeric types to SparseNDArray not supported yet.")
             elif isinstance(value, (np.ndarray, np.generic)):
-                # TODO(haibin) this is not efficient. Implement sync_copyfrom for
-                # sparse ndarray to avoid an extra copy
+                # TODO(haibin) Implement _sync_copyfrom for sparse ndarray to avoid an extra copy
                 warnings.warn('Assigning non-NDArray object to SparseNDArray is not efficient',
                               RuntimeWarning)
                 tmp = ndarray.array(value)
@@ -204,8 +220,27 @@ fixed-size items, stored in sparse format.
             raise Exception('SparseNDArray only supports [:] for assignment')
 
     def __getitem__(self, key):
+        """x.__getitem__(i) <=> x[i]
+
+        Returns a sliced view of this array.
+
+        Parameters
+        ----------
+        key : int or slice
+            Indexing key.
+
+        Examples
+        --------
+        >>> x[:] = mx.nd.arange(0,6).reshape((2,3))
+        >>> x.asnumpy()
+        array([[ 0.,  1.,  2.],
+               [ 3.,  4.,  5.]], dtype=float32)
+        >>> x[1:2].asnumpy()
+        array([[ 3.,  4.,  5.]], dtype=float32)
+        """
         stype = self.storage_type
-        assert(stype == 'csr'), "getitem for " + str(stype) + " not implemented yet"
+        if stype != 'csr':
+            raise Exception("__getitem__ for " + str(stype) + " not implemented yet")
         if isinstance(key, int):
             raise Exception("Not implemented yet")
         if isinstance(key, py_slice):
@@ -222,13 +257,8 @@ fixed-size items, stored in sparse format.
         raise Exception('Not implemented for SparseND yet!')
 
     def _slice(self, start, stop):
-        """Returns a read-only sliced SparseNDArray that shares memory with current one.
-        For csr SparseNDArray, it only slices the indptr array, and keeps the original values
-        and indices.
-
-        The existing slice operation is not very efficient when it's copied, since the indices
-        and values are a superset of the sliced region.
-
+        """Returns a read-only SparseNDArray slice that shares memory with current one.
+        To create a writable slice, please use ``mx.nd.slice`` instead.
 
         Parameters
         ----------
@@ -251,25 +281,20 @@ fixed-size items, stored in sparse format.
         >>> a[1:2].asnumpy()
         array([[0, 0, 3]])
 
-        >>> a[1:2]._indptr.asnumpy()
-        array([[2, 3]])
-
-        >>> a[1:2]._indicies.asnumpy()
-        array([0, 2, 2, 0, 1, 2])
-
-        >>> a[1:2]._values.asnumpy()
-        array([1, 2, 3, 4, 5, 6])
-
         """
         stype = self.storage_type
         assert(stype == 'csr'), "_slice for " + str(stype) + " not implemented yet"
         warnings.warn('slicing SparseNDArray is not efficient', RuntimeWarning)
-        handle = NDArrayHandle()
+        shape = list(self.shape)
+        shape[0] = stop - start
+        handle = _new_alloc_handle(self.storage_type, tuple(shape), self.context,
+                                   True, self.dtype, self.aux_types)
         start = mx_uint(start) if start else mx_uint(0)
         stop = mx_uint(stop) if stop else mx_uint(self.shape[0])
-        check_call(_LIB.MXNDArraySlice(
-            self.handle, start, stop, ctypes.byref(handle)))
-        return SparseNDArray(handle=handle, writable=False)
+
+        check_call(_LIB.MXNDArraySliceEx(self.handle, start, stop, handle))
+        ret = SparseNDArray(handle=handle, writable=False)
+        return ret
 
     def _at(self, idx):
         raise Exception('at operator for SparseND is not supported.')
@@ -293,7 +318,7 @@ fixed-size items, stored in sparse format.
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
-    def _values(self):
+    def values(self):
         """The values array of the SparseNDArray. This is a read-only view of the values array.
         They reveal internal implementation details and should be used with care.
 
@@ -302,10 +327,10 @@ fixed-size items, stored in sparse format.
         NDArray
             This SparseNDArray's values array.
         """
-        return self._data(0)
+        return self._data()
 
     @property
-    def _indices(self):
+    def indices(self):
         """The indices array of the SparseNDArray. This is a read-only view of the indices array.
         They reveal internal implementation details and should be used with care.
 
@@ -322,7 +347,7 @@ fixed-size items, stored in sparse format.
         raise Exception("unknown storage type " + stype)
 
     @property
-    def _indptr(self):
+    def indptr(self):
         """The indptr array of the SparseNDArray with `csr` storage type.
         This is a read-only view of the indptr array.
         They reveal internal implementation details and should be used with care.
@@ -350,8 +375,8 @@ fixed-size items, stored in sparse format.
 
     @property
     def aux_types(self):
-        ''' The data types of the aux data for the SparseNDArray.
-        '''
+        """The data types of the aux data for the SparseNDArray.
+        """
         aux_types = []
         num_aux = self._num_aux
         for i in range(num_aux):
@@ -387,7 +412,7 @@ fixed-size items, stored in sparse format.
         NDArray
             The copied array. If ``other`` is an ``NDArray``, then the return value
             and ``other`` will point to the same ``NDArray``.
-       """
+        """
         if isinstance(other, NDArray):
             if other.handle is self.handle:
                 warnings.warn('You are attempting to copy an array to itself', RuntimeWarning)
@@ -404,9 +429,7 @@ fixed-size items, stored in sparse format.
         return to_dense(self)
 
     def _aux_data(self, i, writable=False):
-        """ Get a reference to the i-th aux data associated with the SparseNDArray. If the
-        SparseNDArray is not yet compacted, the returned result may include invalid values.
-
+        """ Get an NDArray referencing the ith aux data array associated with the SparseNDArray.
         """
         self.wait_to_read()
         hdl = NDArrayHandle()
@@ -414,18 +437,12 @@ fixed-size items, stored in sparse format.
         return NDArray(hdl, writable)
 
     def _data(self, writable=False):
-        """ Get a reference to the data associated with the SparseNDArray. If the
-        SparseNDArray is not yet compacted, the returned result may include invalid values.
-
+        """ Get an NDArray referencing the value array associated with the SparseNDArray.
         """
         self.wait_to_read()
         hdl = NDArrayHandle()
         check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
         return NDArray(hdl, writable)
-
-
-    def compact(self):
-        raise Exception("Not implemented yet")
 
 def _prepare_src_array(src, dtype, default_dtype):
     if isinstance(src, NDArray):
@@ -510,7 +527,7 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     A SparseNDArray with `row_sparse` storage is typically used to represent a subset of a larger
     NDArray  with `default_storage` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
     in indices are the indices in the first dimension of the slices that have been extracted from
-    the larger NDArray.
+    the larger NDArray. The indices are expected to be sorted in ascending order.
 
     The corresponding NDArray ``dense`` with `default_storage` represented by a ``rsp``
     SparseNDArray with `row_sparse` storage has
@@ -594,10 +611,15 @@ def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     -------
     SparseNDArray
         A created array
+    Examples
+    --------
+    >>> mx.sparse_nd.zeros('csr', (1,2), mx.gpu(0))
+    <SparseNDArray 1x2 @gpu(0)>
+    >>> mx.sparse_nd.zeros('row_sparse', (1,2), mx.gpu(0), 'float16').asnumpy()
+    array([[ 0.,  0.]], dtype=float16)
     """
     if ctx is None:
         ctx = Context.default_ctx
-
     dtype = mx_real_t if dtype is None else dtype
     if aux_types is None:
         if storage_type == 'row_sparse' or storage_type == 'csr':
@@ -608,10 +630,8 @@ def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, True, dtype, aux_types))
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
 
-_STORAGE_TYPE_TO_ND_CLASS = {
-    _STORAGE_TYPE_STR_TO_ID['default_storage']: ndarray.NDArray,
-    _STORAGE_TYPE_STR_TO_ID['row_sparse']: SparseNDArray,
-    _STORAGE_TYPE_STR_TO_ID['csr']: SparseNDArray,
-}
+def _ndarray_cls(handle):
+    stype = _storage_type(handle)
+    return NDArray(handle) if stype == 'default_storage' else SparseNDArray(handle)
 
-_init_ndarray_module(_STORAGE_TYPE_TO_ND_CLASS, "mxnet")
+_init_ndarray_module(_ndarray_cls, "mxnet")
