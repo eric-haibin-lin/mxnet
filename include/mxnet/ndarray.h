@@ -209,7 +209,6 @@ class NDArray {
   /*!
    * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
    */
-  // TODO(haibin) CamelCase
   inline const TShape aux_shape(size_t i) const {
     CHECK(storage_type() != kDefaultStorage);
     return ptr_->aux_shapes[i];
@@ -239,9 +238,7 @@ class NDArray {
       auto dptr = static_cast<DType*>(ptr_->shandle.dptr);
       if (stype == kDefaultStorage) {
         dptr += offset_;
-      } else if (stype == kCSRStorage) {
-        shape = storage_shape();
-      } else if (stype == kRowSparseStorage) {
+      } else if (stype == kCSRStorage || stype == kRowSparseStorage) {
         shape = storage_shape();
       } else {
         LOG(FATAL) << "unknown storage type " << stype;
@@ -263,13 +260,8 @@ class NDArray {
     auto type = aux_type(i);
     MSHADOW_TYPE_SWITCH(type, DType, {
       auto dptr = static_cast<DType*>(ptr_->aux_handles[i].dptr);
-      if (stype == kRowSparseStorage) {
+      if (stype == kRowSparseStorage || stype == kCSRStorage) {
         CHECK_EQ(offset_, 0);
-      } else if (stype == kCSRStorage) {
-        if (i == csr::kIndPtr) {
-          dptr += offset_;
-          shape[0] = shape_[0] + 1;
-        }
       } else {
         LOG(FATAL) << "Unexpected storage type";
       }
@@ -472,6 +464,14 @@ class NDArray {
    * \return sliced NDArray
    */
   NDArray Slice(index_t begin, index_t end) const;
+
+  /*!
+   * \brief Slice a NDArray with non-default storage
+   * \param begin begin index in first dim (inclusive)
+   * \param end end index in first dim (exclusive)
+   * \return sliced NDArray
+   */
+  void SliceEx(index_t begin, index_t end, NDArray *dst) const;
   /*!
    * \brief Index a NDArray
    * \param idx the index
@@ -480,14 +480,14 @@ class NDArray {
   NDArray At(index_t idx) const;
   // Wrap the tblob of aux data into an NDArray which shares the same variable with the
   // current one.
-  inline const NDArray AuxNDArray(size_t i) const {
+  inline const NDArray aux_ndarray(size_t i) const {
     CHECK_NE(storage_type(), kDefaultStorage);
     CHECK(i < ptr_->aux_shapes.size());
     return NDArray(aux_data(i), ctx().dev_id, var());
   }
   // Wrap the tblob of data into an NDArray which shares the same variable with the
   // current one.
-  inline const NDArray DataNDArray() const {
+  inline const NDArray data_ndarray() const {
     CHECK_NE(storage_type(), kDefaultStorage);
     return NDArray(data(), ctx().dev_id, var());
   }
@@ -605,6 +605,9 @@ class NDArray {
     std::vector<TShape> aux_shapes;
     // \brief skip the deletion of var handle. Usually set when shared_var is present.
     bool skip_delete_var = false;
+
+    /*! \brief default cosntructor */
+    Chunk() : static_data(true), delay_alloc(false) {}
 
     /*! \brief construct a new chunk */
     Chunk(TShape shape, Context ctx_, bool delay_alloc_, int dtype)
@@ -779,7 +782,6 @@ inline void CopyFromToCsrImpl(const NDArray from, NDArray *to, RunContext ctx) {
   // if source storage is not initialized, fill destination with zeros
   auto s = ctx.get_stream<to_xpu>();
   if (!from.storage_initialized()) {
-    LOG(FATAL) << "To be implemented";
     // TODO(haibin) implement FillZerosCsrImpl
     // op::FillZerosCsrImpl<to_xpu>(s, to);
     return;

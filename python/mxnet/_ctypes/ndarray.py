@@ -14,7 +14,7 @@ from ..base import NDArrayHandle, OpHandle
 from ..base import check_call
 from ..ndarray_doc import _build_doc
 
-_ndarray_cls_map = {}
+_ndarray_cls = None
 
 class NDArrayBase(object):
     """Base data structure for ndarray"""
@@ -27,6 +27,8 @@ class NDArrayBase(object):
         ----------
         handle : NDArrayHandle
             NDArray handle of C API
+        writable: bool
+            Whether the NDArrayBase could be modified
         """
         if handle is not None:
             assert isinstance(handle, NDArrayHandle)
@@ -177,14 +179,8 @@ def %s(%s):
         c_array(ctypes.c_char_p, [c_str(val) for val in vals])))
     if original_output is not None:
         return original_output
-    ret_list = []
-    for i in range(num_output.value):
-        storage_type = ctypes.c_int(0)
-        check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(output_vars[i], NDArrayHandle),
-                                                ctypes.byref(storage_type)))
-        ret_list.append(_ndarray_cls_map[storage_type.value](ctypes.cast(output_vars[i], \
-                                                             NDArrayHandle)))
-    return ret_list if num_output.value > 1 else ret_list[0]
+    ret = [_ndarray_cls(ctypes.cast(output_vars[i], NDArrayHandle)) for i in range(num_output.value)]
+    return ret if num_output.value > 1 else ret[0]
 """%handle.value)
 
     local = {}
@@ -196,16 +192,16 @@ def %s(%s):
     return ndarray_function
 
 
-def _set_storage_nd_map(storage_nd_map):
+def _set_ndarray_cls(ndarray_cls):
     """Set the symbolic class to be cls"""
-    global _ndarray_cls_map
-    _ndarray_cls_map = storage_nd_map
+    global _ndarray_cls
+    _ndarray_cls = ndarray_cls
 
 
 # pylint: enable=too-many-locals, invalid-name
-def _init_ndarray_module(storage_nd_map, root_namespace):
+def _init_ndarray_module(ndarray_cls, root_namespace):
     """List and add all the ndarray functions to current module."""
-    _set_storage_nd_map(storage_nd_map)
+    _set_ndarray_cls(ndarray_cls)
     plist = ctypes.POINTER(ctypes.c_char_p)()
     size = ctypes.c_uint()
 

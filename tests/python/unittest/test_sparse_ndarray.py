@@ -6,6 +6,9 @@ from mxnet.test_utils import *
 from numpy.testing import assert_allclose
 import numpy.random as rnd
 
+def rand_shape_2d():
+    return (rnd.randint(1, 10), rnd.randint(1, 10))
+
 def check_sparse_nd_elemwise_binary(shapes, storage_types, f, g):
     # generate inputs
     nds = []
@@ -26,7 +29,7 @@ def test_sparse_nd_elemwise_add():
     g = lambda x,y: x + y
     op = mx.nd.elemwise_add
     for i in range(num_repeats):
-        shape = [(rnd.randint(1, 10),rnd.randint(1, 10))] * 2
+        shape = [rand_shape_2d()] * 2
         check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
         check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
@@ -37,7 +40,7 @@ def test_sparse_nd_elementwise_fallback():
     g = lambda x,y: x + y
     op = mx.nd.add_n
     for i in range(num_repeats):
-        shape = [(rnd.randint(1, 10), rnd.randint(1, 10))] * 2
+        shape = [rand_shape_2d()] * 2
         check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
         check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
@@ -48,14 +51,14 @@ def test_sparse_nd_zeros():
         sparse_zero = mx.sparse_nd.zeros('row_sparse', shape)
         assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
 
-    shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+    shape = rand_shape_2d()
     check_sparse_nd_zeros(shape, 'row_sparse')
     check_sparse_nd_zeros(shape, 'csr')
 
 
 def test_sparse_nd_copy():
     def check_sparse_nd_copy(from_stype, to_stype):
-        shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+        shape = rand_shape_2d()
         from_nd = rand_ndarray(shape, from_stype)
         # copy to ctx
         to_ctx = from_nd.copyto(default_context())
@@ -72,13 +75,12 @@ def test_sparse_nd_copy():
 
 def check_sparse_nd_prop_rsp():
     storage_type = 'row_sparse'
-    shape = (rnd.randint(1, 2), rnd.randint(1, 2))
+    shape = rand_shape_2d()
     nd, (v, idx) = rand_sparse_ndarray(shape, storage_type)
     assert(nd._num_aux == 1)
-    assert(nd._indices.dtype == np.int32)
+    assert(nd.indices.dtype == np.int32)
     assert(nd.storage_type == 'row_sparse')
-    assert_almost_equal(nd._data().asnumpy(), v)
-    assert_almost_equal(nd._indices.asnumpy(), idx)
+    assert_almost_equal(nd.indices.asnumpy(), idx)
 
 def test_sparse_nd_basic():
     def check_rsp_creation(values, indices, shape):
@@ -88,13 +90,13 @@ def test_sparse_nd_basic():
         dns[3] = mx.nd.array(values[1])
         assert_almost_equal(rsp.asnumpy(), dns.asnumpy())
         indices = mx.nd.array(indices).asnumpy()
-        assert_almost_equal(rsp._indices.asnumpy(), indices)
+        assert_almost_equal(rsp.indices.asnumpy(), indices)
 
     def check_csr_creation(shape):
         csr, (indptr, indices, values) = rand_sparse_ndarray(shape, 'csr')
-        assert_almost_equal(csr._indptr.asnumpy(), indptr)
-        assert_almost_equal(csr._indices.asnumpy(), indices)
-        assert_almost_equal(csr._values.asnumpy(), values)
+        assert_almost_equal(csr.indptr.asnumpy(), indptr)
+        assert_almost_equal(csr.indices.asnumpy(), indices)
+        assert_almost_equal(csr.values.asnumpy(), values)
 
     shape = (4,2)
     values = np.random.rand(2,2)
@@ -112,20 +114,20 @@ def test_sparse_nd_basic():
     check_csr_creation(shape)
     check_sparse_nd_prop_rsp()
 
-
 def test_sparse_nd_setitem():
-    shape = (3, 4)
-    # ndarray assignment
-    x = mx.sparse_nd.zeros('row_sparse', shape)
-    x[:] = mx.nd.ones(shape)
-    x_np = np.ones(shape, dtype=x.dtype)
-    assert same(x.asnumpy(), x_np)
+    def check_sparse_nd_setitem(storage_type, shape, dst):
+        x = mx.sparse_nd.zeros(storage_type, shape)
+        x[:] = dst
+        dst_nd = mx.nd.array(dst) if isinstance(dst, (np.ndarray, np.generic)) else dst
+        assert same(x.asnumpy(), dst_nd.asnumpy())
 
-    # numpy assignment
-    x = mx.sparse_nd.zeros('row_sparse', shape)
-    x[:] = np.ones(shape)
-    x_np = np.ones(shape, dtype=x.dtype)
-    assert same(x.asnumpy(), x_np)
+    shape = rand_shape_2d()
+    for stype in ['row_sparse', 'csr']:
+        # ndarray assignment
+        check_sparse_nd_setitem(stype, shape, rand_ndarray(shape, 'default_storage'))
+        check_sparse_nd_setitem(stype, shape, rand_ndarray(shape, stype))
+        # numpy assignment
+        check_sparse_nd_setitem(stype, shape, np.ones(shape))
 
 def test_sparse_nd_slice():
     def check_sparse_nd_csr_slice(shape):
@@ -134,10 +136,13 @@ def test_sparse_nd_slice():
         A2 = A.asnumpy()
         start = rnd.randint(0, shape[0] - 1)
         end = rnd.randint(start + 1, shape[0])
-        assert same(A[start:end].asnumpy(), A2[start:end])
+        values = A[start:end].values
+        indptr = A[start:end].indptr
+        assert same(A[start:end].asnumpy(), A2[start:end]), (A[start:end].asnumpy(), A2[start:end])
 
     shape = (rnd.randint(2, 10), rnd.randint(1, 10))
     check_sparse_nd_csr_slice(shape)
+
 
 if __name__ == '__main__':
     test_sparse_nd_zeros()

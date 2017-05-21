@@ -74,8 +74,8 @@ NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYP
   NDArray nd(kRowSparseStorage, shape, ctx, false, mshadow::default_type_flag,
              {}, {mshadow::Shape1(num_rows)});
   // assign values
-  NDArray nd_aux = nd.AuxNDArray(0);
-  NDArray nd_data = nd.DataNDArray();
+  NDArray nd_aux = nd.aux_ndarray(0);
+  NDArray nd_data = nd.data_ndarray();
   CopyFromTo(index, &nd_aux);
   CopyFromTo(data, &nd_data);
   return nd;
