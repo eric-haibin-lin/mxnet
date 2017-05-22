@@ -213,7 +213,7 @@ class PySparseSGD(mx.optimizer.Optimizer):
 def test_sparse_sgd():
     mx.random.seed(0)
     opt1 = PySparseSGD
-    opt2 = mx.optimizer.SparseSGD
+    opt2 = mx.optimizer.SGD
     shape = (3, 4)
     kwargs = [{},
               {'momentum': 0.9},
