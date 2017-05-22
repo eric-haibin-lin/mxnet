@@ -127,7 +127,6 @@ fixed-size items, stored in sparse format.
     def __rpow__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
-
     def __getstate__(self):
         raise Exception('Not implemented for SparseND yet!')
 
