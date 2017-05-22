@@ -4,7 +4,6 @@ import pickle
 import logging
 from .ndarray import NDArray, zeros, clip, sqrt, sign
 from .ndarray import sgd_update, sgd_mom_update, adam_update, rmsprop_update, rmspropalex_update
-from .ndarray import sparse_sgd_update, sparse_sgd_mom_update
 from .random import normal
 
 
@@ -355,35 +354,6 @@ class SGD(Optimizer):
         else:
             sgd_update(weight, grad, out=weight,
                        lr=lr, wd=wd, **kwargs)
-
-
-@register
-class SparseSGD(SGD):
-    """SGD for non-zero rows
-    """
-    def __init__(self, **kwargs):
-        super(SparseSGD, self).__init__(**kwargs)
-
-    def update(self, index, weight, grad, state):
-        assert(isinstance(weight, NDArray))
-        assert(isinstance(grad, NDArray))
-        lr = self._get_lr(index)
-        wd = self._get_wd(index)
-        self._update_count(index)
-
-        kwargs = {'rescale_grad': self.rescale_grad}
-        if self.momentum > 0:
-            kwargs['momentum'] = self.momentum
-        if self.clip_gradient:
-            kwargs['clip_gradient'] = self.clip_gradient
-
-        if state is not None:
-            sparse_sgd_mom_update(weight, grad, state, out=weight,
-                                  lr=lr, wd=wd, **kwargs)
-        else:
-            sparse_sgd_update(weight, grad, out=weight,
-                              lr=lr, wd=wd, **kwargs)
-
 
 @register
 class DCASGD(Optimizer):

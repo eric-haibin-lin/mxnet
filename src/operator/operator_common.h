@@ -330,7 +330,6 @@ void FCompExFallback(const nnvm::NodeAttrs& attrs,
   std::vector<NDArray> tmps;
   common::GetInputBlobs<xpu>(inputs, &in_blobs, &tmps, ctx, true);
   common::GetOutputBlobs<xpu>(outputs, &out_blobs);
-  LOG(INFO) << "Warning: fallback to default storage for " << fname;
   fcompute(attrs, ctx, in_blobs, req, out_blobs);
 }
 
