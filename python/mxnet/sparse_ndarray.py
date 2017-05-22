@@ -139,23 +139,6 @@ fixed-size items, stored in sparse format.
     def __rpow__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
-    def __eq__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __ne__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __gt__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __ge__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __lt__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __le__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
 
     def __getstate__(self):
         raise Exception('Not implemented for SparseND yet!')
