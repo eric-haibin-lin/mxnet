@@ -1045,7 +1045,6 @@ void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
   // assume idx indptr share the same type
   MSHADOW_INT_TYPE_SWITCH(in.aux_type(kIndPtr), IType, {
     MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
-
       auto in_indptr = in.aux_data(kIndPtr).dptr<IType>();
       auto out_indptr = out.aux_data(kIndPtr).dptr<IType>();
       SliceCsrIndPtrImpl<cpu, IType>(begin, end, ctx.run_ctx, in_indptr, out_indptr);

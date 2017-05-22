@@ -121,7 +121,7 @@ def _update_params(param_arrays, grad_arrays, updater, num_device,
         # cast storage type if stype doesn't match
         if param_names is not None and param_names[i] in stype_dict:
             for i, grad in enumerate(grad_list):
-                stype = stype_dict[name]
+                stype = stype_dict[param_names[i]]
                 if grad_list[i].storage_type != stype:
                     grad_list[i] = nd.cast_storage(grad, stype)
         index = i
