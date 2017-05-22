@@ -342,14 +342,14 @@ class SequentialModule(BaseModule):
 
             out_grads = module.get_input_grads()
 
-    def update(self):
+    def update(self, storage_type_dict=None):
         """Update parameters according to installed optimizer and the gradient computed
         in the previous forward-backward cycle.
         """
         assert self.binded and self.params_initialized and self.optimizer_initialized
 
         for module in self._modules:
-            module.update()
+            module.update(storage_type_dict=storage_type_dict)
 
     def get_outputs(self, merge_multi_context=True):
         """Get outputs from a previous forward computation.
