@@ -924,6 +924,11 @@ fixed-size items.
             return self
         return self.copyto(context)
 
+    def to_csr(self):
+        return cast_storage(self, storage_type='csr')
+
+    def to_rsp(self):
+        return cast_storage(self, storage_type='row_sparse')
 
 def onehot_encode(indices, out):
     """One-hot encoding indices into matrix out.
