@@ -9,6 +9,12 @@ import numpy.random as rnd
 def rand_shape_2d():
     return (rnd.randint(1, 10), rnd.randint(1, 10))
 
+def sparse_nd_zeros(shape, stype):
+    return mx.nd.cast_storage(mx.nd.zeros(shape), storage_type=stype)
+
+def sparse_nd_ones(shape, stype):
+    return mx.nd.cast_storage(mx.nd.ones(shape), storage_type=stype)
+
 def check_sparse_nd_elemwise_binary(shapes, storage_types, f, g):
     # generate inputs
     nds = []
@@ -138,10 +144,82 @@ def test_sparse_nd_slice():
         end = rnd.randint(start + 1, shape[0])
         values = A[start:end].values
         indptr = A[start:end].indptr
-        assert same(A[start:end].asnumpy(), A2[start:end]), (A[start:end].asnumpy(), A2[start:end])
+        assert same(A[start:end].asnumpy(), A2[start:end])
 
     shape = (rnd.randint(2, 10), rnd.randint(1, 10))
     check_sparse_nd_csr_slice(shape)
+
+def test_sparse_nd_equal():
+    stype = 'csr'
+    shape = rand_shape_2d()
+    x = sparse_nd_zeros(shape, stype)
+    y = sparse_nd_ones(shape, stype)
+    z = x == y
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = 0 == x
+    assert (z.asnumpy() == np.ones(shape)).all()
+
+def test_sparse_nd_not_equal():
+    stype = 'csr'
+    shape = rand_shape_2d()
+    x = sparse_nd_zeros(shape, stype)
+    y = sparse_nd_ones(shape, stype)
+    z = x != y
+    assert (z.asnumpy() == np.ones(shape)).all()
+    z = 0 != x
+    assert (z.asnumpy() == np.zeros(shape)).all()
+
+def test_sparse_nd_greater():
+    stype = 'csr'
+    shape = rand_shape_2d()
+    x = sparse_nd_zeros(shape, stype)
+    y = sparse_nd_ones(shape, stype)
+    z = x > y
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = y > 0
+    assert (z.asnumpy() == np.ones(shape)).all()
+    z = 0 > y
+    assert (z.asnumpy() == np.zeros(shape)).all()
+
+def test_sparse_nd_greater_equal():
+    stype = 'csr'
+    shape = rand_shape_2d()
+    x = sparse_nd_zeros(shape, stype)
+    y = sparse_nd_ones(shape, stype)
+    z = x >= y
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = y >= 0
+    assert (z.asnumpy() == np.ones(shape)).all()
+    z = 0 >= y
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = y >= 1
+    assert (z.asnumpy() == np.ones(shape)).all()
+
+def test_sparse_nd_lesser():
+    stype = 'csr'
+    shape = rand_shape_2d()
+    x = sparse_nd_zeros(shape, stype)
+    y = sparse_nd_ones(shape, stype)
+    z = y < x
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = 0 < y
+    assert (z.asnumpy() == np.ones(shape)).all()
+    z = y < 0
+    assert (z.asnumpy() == np.zeros(shape)).all()
+
+def test_sparse_nd_lesser_equal():
+    stype = 'csr'
+    shape = rand_shape_2d()
+    x = sparse_nd_zeros(shape, stype)
+    y = sparse_nd_ones(shape, stype)
+    z = y <= x
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = 0 <= y
+    assert (z.asnumpy() == np.ones(shape)).all()
+    z = y <= 0
+    assert (z.asnumpy() == np.zeros(shape)).all()
+    z = 1 <= y
+    assert (z.asnumpy() == np.ones(shape)).all()
 
 
 if __name__ == '__main__':
