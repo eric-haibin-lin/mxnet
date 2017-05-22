@@ -14,9 +14,6 @@ def assert_fcompex(f, *args, **kwargs):
 def rand_shape_2d():
     return (rnd.randint(1, 10), rnd.randint(1, 10))
 
-def sparse_nd_zeros(shape, stype):
-    return mx.nd.cast_storage(mx.nd.zeros(shape), storage_type=stype)
-
 def sparse_nd_ones(shape, stype):
     return mx.nd.cast_storage(mx.nd.ones(shape), storage_type=stype)
 
@@ -60,14 +57,14 @@ def test_sparse_nd_elementwise_fallback():
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
 
 def test_sparse_nd_zeros():
-    def check_sparse_nd_zeros(shape, stype):
+    def check_sparse_nd_zeros(stype, shape):
         zero = mx.nd.zeros(shape)
         sparse_zero = mx.sparse_nd.zeros('row_sparse', shape)
         assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
 
     shape = rand_shape_2d()
-    check_sparse_nd_zeros(shape, 'row_sparse')
-    check_sparse_nd_zeros(shape, 'csr')
+    check_sparse_nd_zeros('row_sparse', shape)
+    check_sparse_nd_zeros('csr', shape)
 
 
 def test_sparse_nd_copy():
@@ -160,7 +157,7 @@ def test_sparse_nd_slice():
 def test_sparse_nd_equal():
     stype = 'csr'
     shape = rand_shape_2d()
-    x = sparse_nd_zeros(shape, stype)
+    x = mx.sparse_nd.zeros(stype, shape)
     y = sparse_nd_ones(shape, stype)
     z = x == y
     assert (z.asnumpy() == np.zeros(shape)).all()
@@ -170,7 +167,7 @@ def test_sparse_nd_equal():
 def test_sparse_nd_not_equal():
     stype = 'csr'
     shape = rand_shape_2d()
-    x = sparse_nd_zeros(shape, stype)
+    x = mx.sparse_nd.zeros(stype, shape)
     y = sparse_nd_ones(shape, stype)
     z = x != y
     assert (z.asnumpy() == np.ones(shape)).all()
@@ -180,7 +177,7 @@ def test_sparse_nd_not_equal():
 def test_sparse_nd_greater():
     stype = 'csr'
     shape = rand_shape_2d()
-    x = sparse_nd_zeros(shape, stype)
+    x = mx.sparse_nd.zeros(stype, shape)
     y = sparse_nd_ones(shape, stype)
     z = x > y
     assert (z.asnumpy() == np.zeros(shape)).all()
@@ -192,7 +189,7 @@ def test_sparse_nd_greater():
 def test_sparse_nd_greater_equal():
     stype = 'csr'
     shape = rand_shape_2d()
-    x = sparse_nd_zeros(shape, stype)
+    x = mx.sparse_nd.zeros(stype, shape)
     y = sparse_nd_ones(shape, stype)
     z = x >= y
     assert (z.asnumpy() == np.zeros(shape)).all()
@@ -206,7 +203,7 @@ def test_sparse_nd_greater_equal():
 def test_sparse_nd_lesser():
     stype = 'csr'
     shape = rand_shape_2d()
-    x = sparse_nd_zeros(shape, stype)
+    x = mx.sparse_nd.zeros(stype, shape)
     y = sparse_nd_ones(shape, stype)
     z = y < x
     assert (z.asnumpy() == np.zeros(shape)).all()
@@ -218,7 +215,7 @@ def test_sparse_nd_lesser():
 def test_sparse_nd_lesser_equal():
     stype = 'csr'
     shape = rand_shape_2d()
-    x = sparse_nd_zeros(shape, stype)
+    x = mx.sparse_nd.zeros(stype, shape)
     y = sparse_nd_ones(shape, stype)
     z = y <= x
     assert (z.asnumpy() == np.zeros(shape)).all()
@@ -229,12 +226,50 @@ def test_sparse_nd_lesser_equal():
     z = 1 <= y
     assert (z.asnumpy() == np.ones(shape)).all()
 
+def test_sparse_nd_binary():
+    N = 100
+    def check_binary(fn):
+        for _ in range(N):
+            ndim = 2
+            oshape = np.random.randint(1, 6, size=(ndim,))
+            bdim = 2
+            lshape = list(oshape)
+            rshape = list(oshape[ndim-bdim:])
+            for i in range(bdim):
+                sep = np.random.uniform(0, 1)
+                if sep < 0.33:
+                    lshape[ndim-i-1] = 1
+                elif sep < 0.66:
+                    rshape[bdim-i-1] = 1
+            lhs = np.random.normal(0, 1, size=lshape)
+            rhs = np.random.normal(0, 1, size=rshape)
+            lhs_nd = mx.nd.array(lhs).to_csr()
+            rhs_nd = mx.nd.array(rhs).to_csr()
+            assert_allclose(fn(lhs, rhs),
+                            fn(lhs_nd, rhs_nd).asnumpy(),
+                            rtol=1e-4, atol=1e-4)
+
+    #check_binary(lambda x, y: x + y)
+    check_binary(lambda x, y: x - y)
+    check_binary(lambda x, y: x * y)
+    check_binary(lambda x, y: x / y)
+    check_binary(lambda x, y: x > y)
+    check_binary(lambda x, y: x < y)
+    check_binary(lambda x, y: x >= y)
+    check_binary(lambda x, y: x <= y)
+    check_binary(lambda x, y: x == y)
+
+def test_sparse_nd_negate():
+    npy = np.random.uniform(-10, 10, rand_shape_2d())
+    arr = mx.nd.array(npy).to_csr()
+    assert_almost_equal(npy, arr.asnumpy())
+    assert_almost_equal(-npy, (-arr).asnumpy())
+
+    # a final check to make sure the negation (-) is not implemented
+    # as inplace operation, so the contents of arr does not change after
+    # we compute (-arr)
+    assert_almost_equal(npy, arr.asnumpy())
 
 if __name__ == '__main__':
-    test_sparse_nd_zeros()
-    test_sparse_nd_elemwise_add()
-    test_sparse_nd_elementwise_fallback()
-    test_sparse_nd_copy()
-    test_sparse_nd_setitem()
-    test_sparse_nd_basic()
-    test_sparse_nd_slice()
+    import nose
+    nose.runmodule()

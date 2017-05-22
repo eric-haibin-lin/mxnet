@@ -94,28 +94,16 @@ fixed-size items, stored in sparse format.
     def __radd__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
-    def __sub__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
     def __isub__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
     def __rsub__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
-    def __mul__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __neg__(self):
-        raise Exception('Not implemented for SparseND yet!')
-
     def __imul__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
     def __rmul__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
-
-    def __div__(self, other):
         raise Exception('Not implemented for SparseND yet!')
 
     def __rdiv__(self, other):

@@ -217,8 +217,10 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(outputs.size(), 1);
   if (typeid(OP) == typeid(mshadow::op::plus)) {
     // If any input is dense, fallback to FCompute
+    // TODO(haibin) implement dns + rsp in a separate kernel
     if (common::ContainsDefaultStorage(inputs)) {
-      FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, BinaryCompute<xpu, OP>);
+      FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                           BinaryCompute<xpu, OP>, "BinaryCompute");
       return;
     }
     CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
