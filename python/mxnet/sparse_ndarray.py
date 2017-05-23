@@ -600,11 +600,13 @@ def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, True, dtype, aux_types))
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
 
-def _ndarray_cls(handle):
+def _ndarray_cls(handle, writable=True):
     stype = _storage_type(handle)
     # TODO(haibin) in the long run, we want to have CSRNDArray and RowSparseNDArray which
     # inherit from SparseNDArray
-    return NDArray(handle) if stype == 'default' else SparseNDArray(handle)
+    if stype == 'default':
+        return NDArray(handle, writable)
+    return SparseNDArray(handle, writable)
 
 # pylint: enable=too-many-locals, invalid-name
 def _init_ndarray_module(ndarray_class, root_namespace):
