@@ -245,7 +245,8 @@ struct FillRspRowIdx {
 struct MarkRspRowIdx {
   // i represents the row index of the matrix data
   template<typename DType, typename RType>
-  MSHADOW_XINLINE static void Map(int i, RType* row_idx, const DType* data, const index_t num_cols) {
+  MSHADOW_XINLINE static void Map(int i, RType* row_idx, const DType* data,
+                                  const index_t num_cols) {
     index_t j = 0;
     index_t offset = i * num_cols;
     for (; j < num_cols; ++j) {
