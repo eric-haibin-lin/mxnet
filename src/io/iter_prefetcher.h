@@ -73,6 +73,9 @@ class PrefetcherIter : public IIterator<DataBatch> {
         CHECK(batch.data.size() == (*dptr)->data.size());
         // copy data over
         for (size_t i = 0; i < batch.data.size(); ++i) {
+          LOG(INFO) << i;
+          // TODO copy aux data as well.
+          // CheckAndAllocAuxData
           CHECK_EQ((*dptr)->data.at(i).shape(), batch.data[i].shape_);
           MSHADOW_TYPE_SWITCH(batch.data[i].type_flag_, DType, {
               mshadow::Copy(((*dptr)->data)[i].data().FlatTo2D<cpu, DType>(),
