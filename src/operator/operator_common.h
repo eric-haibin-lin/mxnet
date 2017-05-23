@@ -327,7 +327,7 @@ void FCompExFallback(const nnvm::NodeAttrs& attrs,
                      FCompute fcompute) {
   std::vector<TBlob> in_blobs, out_blobs;
   std::vector<NDArray> tmps;
-  common::GetInputBlobs<xpu>(inputs, &in_blobs, &tmps, ctx);
+  common::GetInputBlobs<xpu>(inputs, &in_blobs, &tmps, ctx, true);
   common::GetOutputBlobs<xpu>(outputs, &out_blobs);
   fcompute(attrs, ctx, in_blobs, req, out_blobs);
 }

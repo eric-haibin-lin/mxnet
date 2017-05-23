@@ -6,6 +6,11 @@ from mxnet.test_utils import *
 from numpy.testing import assert_allclose
 import numpy.random as rnd
 
+def assert_fcompex(f, *args, **kwargs):
+    prev_val = mx.test_utils.set_env_var("MXNET_EXEC_STORAGE_FALLBACK", "0", "1")
+    f(*args, **kwargs)
+    mx.test_utils.set_env_var("MXNET_EXEC_STORAGE_FALLBACK", prev_val)
+
 def check_sparse_nd_elemwise_binary(shapes, storage_types, f, g):
     # generate inputs
     nds = []
@@ -27,11 +32,14 @@ def test_sparse_nd_elemwise_add():
     op = mx.nd.elemwise_add
     for i in range(num_repeats):
         shape = [(rnd.randint(1, 10),rnd.randint(1, 10))] * 2
-        check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
-        check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
-        check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
+        assert_fcompex(check_sparse_nd_elemwise_binary,
+                       shape, ['default_storage'] * 2, op, g)
+        assert_fcompex(check_sparse_nd_elemwise_binary,
+                       shape, ['default_storage', 'row_sparse'], op, g)
+        assert_fcompex(check_sparse_nd_elemwise_binary,
+                       shape, ['row_sparse', 'row_sparse'], op, g)
 
-# Test a operator which doesn't implement FComputeEx
+# test a operator which doesn't implement FComputeEx
 def test_sparse_nd_elementwise_fallback():
     num_repeats = 10
     g = lambda x,y: x + y
@@ -141,9 +149,9 @@ def test_sparse_nd_slice():
 
 if __name__ == '__main__':
     test_sparse_nd_zeros()
+    test_sparse_nd_elemwise_add()
     test_sparse_nd_elementwise_fallback()
     test_sparse_nd_copy()
-    test_sparse_nd_elemwise_add()
     test_sparse_nd_setitem()
     test_sparse_nd_basic()
     test_sparse_nd_slice()

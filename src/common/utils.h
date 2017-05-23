@@ -36,13 +36,27 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
 namespace common {
 
 #if DMLC_USE_CXX11
+/*
+ * \brief Get input TBlobs from NDArrays, potentially performing cast_storage op and store
+ *        temporary NDArrays in temps. If storage_fallback is false,
+ *        MXNET_EXEC_STORAGE_FALLBACK env var determines whether storage type fallback is allowed.
+ */
 template <typename xpu>
 inline void GetInputBlobs(const std::vector<NDArray>& nds,
                           std::vector<TBlob> *blobs,
                           std::vector<NDArray> *temps,
-                          const OpContext& ctx) {
+                          const OpContext& ctx,
+                          bool storage_fallback = false) {
+  if (storage_fallback == false) {
+    storage_fallback = dmlc::GetEnv("MXNET_EXEC_STORAGE_FALLBACK", true);
+  }
   for (auto& nd : nds) {
     if (nd.storage_type() != kDefaultStorage) {
+      if (storage_fallback == false) {
+        LOG(FATAL) << "Storage type conversion detected during execution. "
+                   << "You are probably executing an operator which "
+                   << "doesn't support NDArray inputs with non-default storage.";
+      }
       NDArray temp(nd.shape(), nd.ctx(), false);
       op::CastStorageComputeEx<xpu>({}, ctx, {nd}, {}, {temp});
       temps->push_back(temp);
