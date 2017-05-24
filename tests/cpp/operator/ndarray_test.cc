@@ -18,7 +18,7 @@
 #include "../src/operator/tensor/indexing_op.h"
 #include "../src/operator/optimizer_op-inl.h"
 #include "../src/operator/tensor/init_op.h"
-#include "test_utils.h"
+#include "test_ndarray_utils.h"
 
 using namespace mxnet;
 // Conversion Tests
