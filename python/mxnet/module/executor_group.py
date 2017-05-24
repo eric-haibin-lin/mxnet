@@ -4,8 +4,6 @@
 
 import logging
 from collections import OrderedDict
-import numpy as np
-
 from .. import context as ctx
 from .. import ndarray as nd
 from ..io import DataDesc
