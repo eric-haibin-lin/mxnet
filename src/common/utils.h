@@ -58,7 +58,7 @@ inline void GetInputBlobs(const std::vector<NDArray>& nds,
                    << "doesn't support NDArray inputs with non-default storage.";
       }
       NDArray temp(nd.shape(), nd.ctx(), false);
-      op::CastStorageComputeEx<xpu>({}, ctx, {nd}, {}, {temp});
+      op::CastStorageComputeImpl<xpu>(ctx.get_stream<xpu>(), nd, temp);
       temps->push_back(temp);
       blobs->push_back(temp.data());
     } else {
