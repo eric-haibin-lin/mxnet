@@ -9,6 +9,7 @@
 #include <mxnet/operator_util.h>
 #include <vector>
 #include <utility>
+#include <numeric>
 #include "../mxnet_op.h"
 #include "../mshadow_op.h"
 #include "../elemwise_op_common.h"
@@ -287,17 +288,7 @@ struct CopyDnsToRsp{
 
 /*!
  * \brief
- * Given a DNS storage type tensor, create a RSP type sparse tensor
- * from it. This would allocate memory for storing the row idx and
- * non-zero rows for the rsp and deep-copy non-zero rows of the
- * dns to the rsp data blob.
- * TODO(junwu): The argument type for the dense ndarray is TBlob instead
- * of NDArray since it's convenient to call this function from any
- * operator's Forward/Backward functions where dev_id is unknown
- * but required to wrap a TBlob object as an NDArray. See the use case
- * in DotForwardCsrDnsRsp in matrix_op-inl.h.
- * Will revisit this interface in the future.
- * TODO(junwu): Add gpu implementation.
+ * CPU implementation of casting a dns tensor to rsp type.
  */
 inline void CastStorageDnsRspImpl(mshadow::Stream<cpu>* s, const TBlob& dns, NDArray* rsp) {
   CHECK(rsp != nullptr);
@@ -434,18 +425,9 @@ struct FillCsrColIdxAndVals {
 
 /*!
  * \brief
- * Given a DNS storage type tensor, create a CSR type sparse tensor from it.
- * This would allocate memory for storing the indptr, values, and column idx
- * of the csr and copy the non-zero values to the value array in the csr.
- * TODO(junwu): The argument type for the dense ndarray is TBlob instead
- * of NDArray since it's convenient to call this function from any
- * operator's Forward/Backward functions where dev_id is unknown
- * but required to wrap a TBlob object as an NDArray. See the use case
- * in DotForwardCsrDnsRsp in matrix_op-inl.h.
- * Will revisit this interface in the future.
+ * CPU implementation of casting a dns tensor to csr type.
  */
-template<typename xpu>
-void CastStorageDnsCsrImpl(mshadow::Stream<xpu>* s, const TBlob& dns, NDArray* csr) {
+inline void CastStorageDnsCsrImpl(mshadow::Stream<cpu>* s, const TBlob& dns, NDArray* csr) {
   CHECK(csr != nullptr);
   CHECK_EQ(csr->storage_type(), kCSRStorage);
   CHECK_EQ(dns.shape_.ndim(), 2);
@@ -458,7 +440,7 @@ void CastStorageDnsCsrImpl(mshadow::Stream<xpu>* s, const TBlob& dns, NDArray* c
         csr->CheckAndAllocAuxData(csr::kIndPtr, mshadow::Shape1(num_rows+1));
         IType* indptr = csr->aux_data(csr::kIndPtr).dptr<IType>();
         DType* dns_data = dns.dptr<DType>();
-        mxnet_op::Kernel<FillCsrIndPtr, xpu>::Launch(s, num_rows, indptr,
+        mxnet_op::Kernel<FillCsrIndPtr, cpu>::Launch(s, num_rows, indptr,
             dns_data, num_rows, num_cols);
         // single thread to accumulate indptr
         // indptr[num_rows] indicates the number of non-zero elements
@@ -471,7 +453,7 @@ void CastStorageDnsCsrImpl(mshadow::Stream<xpu>* s, const TBlob& dns, NDArray* c
                                   mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
         csr->CheckAndAllocData(mshadow::Shape1(static_cast<index_t>(indptr[num_rows])));
         // fill col_idx and value arrays of the csr
-        mxnet_op::Kernel<FillCsrColIdxAndVals, xpu>::Launch(s, num_rows,
+        mxnet_op::Kernel<FillCsrColIdxAndVals, cpu>::Launch(s, num_rows,
             csr->data().dptr<DType>(), csr->aux_data(csr::kIdx).dptr<CType>(),
             indptr, dns_data, num_rows, num_cols);
       });
@@ -504,15 +486,7 @@ struct CopyCsrDataToDns {
 };
 
 /*!
- * \brief
- * Given a CSR storage type tensor, create a DNS type sparse tensor from it.
- * This assumes that the memory of dns.data() has been allocated in binding stage.
- * TODO(junwu): The argument type for the dense ndarray is TBlob instead
- * of NDArray since it's convenient to call this function from any
- * operator's Forward/Backward functions where dev_id is unknown
- * but required to wrap a TBlob object as an NDArray. See the use case
- * in DotForwardCsrDnsRsp in matrix_op-inl.h.
- * Will revisit this interface in the future.
+ * \brief Casts a csr tensor to dns format.
  */
 template<typename xpu>
 void CastStorageCsrDnsImpl(mshadow::Stream<xpu>* s, const NDArray& csr, TBlob* dns) {
@@ -552,6 +526,18 @@ inline bool CastStorageInferStorageType(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+// TODO(junwu) Implement GPU version for these functions
+// and move them to a .cuh file
+#ifdef __CUDACC__
+inline void CastStorageDnsRspImpl(mshadow::Stream<gpu>* s, const TBlob& dns, NDArray* rsp) {
+  LOG(FATAL) << "CastStorageDnsRspImpl gpu version is not implemented.";
+}
+
+inline void CastStorageDnsCsrImpl(mshadow::Stream<gpu>* s, const TBlob& dns, NDArray* csr) {
+  LOG(FATAL) << "CastStorageDnsCsrImpl gpu version is not implemented.";
+}
+#endif
+
 template<typename xpu>
 void CastStorageComputeImpl(mshadow::Stream<xpu>* s,
                             const NDArray& input,
@@ -568,7 +554,7 @@ void CastStorageComputeImpl(mshadow::Stream<xpu>* s,
     CastStorageDnsRspImpl(s, input.data(), &ret);
   } else if (src_stype == kDefaultStorage && dst_stype == kCSRStorage) {
     NDArray ret = output;  // get rid of the const qualifer
-    CastStorageDnsCsrImpl<xpu>(s, input.data(), &ret);
+    CastStorageDnsCsrImpl(s, input.data(), &ret);
   } else if (src_stype == kCSRStorage && dst_stype == kDefaultStorage) {
     TBlob ret = output.data();
     CastStorageCsrDnsImpl<xpu>(s, input, &ret);
