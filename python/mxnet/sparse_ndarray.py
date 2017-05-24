@@ -288,7 +288,7 @@ fixed-size items, stored in sparse format.
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
-    def values(self):
+    def _values(self):
         """The values array of the SparseNDArray. This is a read-only view of the values array.
         They reveal internal implementation details and should be used with care.
 
@@ -300,7 +300,7 @@ fixed-size items, stored in sparse format.
         return self._data()
 
     @property
-    def indices(self):
+    def _indices(self):
         """The indices array of the SparseNDArray. This is a read-only view of the indices array.
         They reveal internal implementation details and should be used with care.
 
@@ -317,7 +317,7 @@ fixed-size items, stored in sparse format.
         raise Exception("unknown storage type " + stype)
 
     @property
-    def indptr(self):
+    def _indptr(self):
         """The indptr array of the SparseNDArray with `csr` storage type.
         This is a read-only view of the indptr array.
         They reveal internal implementation details and should be used with care.
@@ -602,6 +602,8 @@ def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
 
 def _ndarray_cls(handle):
     stype = _storage_type(handle)
+    # TODO(haibin) in the long run, we want to have CSRNDArray and RowSparseNDArray which
+    # inherit from SparseNDArray
     return NDArray(handle) if stype == 'default_storage' else SparseNDArray(handle)
 
 _init_ndarray_module(_ndarray_cls, "mxnet")
