@@ -1,4 +1,13 @@
-#include <unistd.h>
+/*!
+ * Copyright (c) 2017 by Contributors
+ * \file test_utils.h
+ * \brief operator unit test utility functions
+ * \author Haibin Lin
+*/
+#ifndef TESTS_CPP_TEST_UTILS_H_
+#define TESTS_CPP_TEST_UTILS_H_
+
+/*#include <unistd.h>
 #include <dmlc/logging.h>
 #include <cstdio>
 #include <gtest/gtest.h>
@@ -6,7 +15,7 @@
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
 #include <cstdlib>
-/*
+
 #include "../src/operator/tensor/elemwise_binary_op.h"
 #include "../src/operator/tensor/elemwise_unary_op.h"
 #include "../src/operator/optimizer_op-inl.h"
@@ -103,3 +112,4 @@ NDArray Convert(NDArrayStorageType type, NDArray src) {
   converted.WaitToRead();
   return converted;
 }*/
+#endif  // TESTS_CPP_TEST_UTILS_H_

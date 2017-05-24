@@ -1,5 +1,10 @@
-#include <unistd.h>
-/*
+/*!
+ * Copyright (c) 2017 by Contributors
+ * \file ndarray_test.cc
+ * \brief ndarray unit test utility functions
+ * \author Haibin Lin
+*/
+/*#include <unistd.h>
 #include <dmlc/logging.h>
 #include <cstdio>
 #include <gtest/gtest.h>
