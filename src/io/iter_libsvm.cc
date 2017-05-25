@@ -41,16 +41,16 @@ struct LibSVMIterParam : public dmlc::Parameter<LibSVMIterParam> {
 class LibSVMIter: public IIterator<DataInst> {
  public:
   LibSVMIter() {
-    out_.data.resize(2);
+    out_.data.resize(3);
   }
   virtual ~LibSVMIter() {}
 
   // intialize iterator loads data in
   virtual void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
     param_.InitAllowUnknown(kwargs);
-    data_parser_.reset(dmlc::Parser<uint32_t>::Create(param_.data_libsvm.c_str(), 0, 1, "csv"));
+    data_parser_.reset(dmlc::Parser<uint32_t>::Create(param_.data_libsvm.c_str(), 0, 1, "libsvm"));
     if (param_.label_libsvm != "NULL") {
-      label_parser_.reset(dmlc::Parser<uint32_t>::Create(param_.label_libsvm.c_str(), 0, 1, "csv"));
+      label_parser_.reset(dmlc::Parser<uint32_t>::Create(param_.label_libsvm.c_str(), 0, 1, "libsvm"));
     } else {
       dummy_label.set_pad(false);
       dummy_label.Resize(mshadow::Shape1(1));
@@ -80,9 +80,14 @@ class LibSVMIter: public IIterator<DataInst> {
     }
     out_.index = inst_counter_++;
     CHECK_LT(data_ptr_, data_size_);
-    out_.data[0] = AsTBlob(data_parser_->Value()[data_ptr_++], param_.data_shape);
+    const auto row = data_parser_->Value()[data_ptr_++];
+    // data
+    out_.data[0] = AsDataTBlob(row);
+    // indices
+    out_.data[1] = AsIdxTBlob(row);
 
     if (label_parser_.get() != nullptr) {
+      CHECK(false) << "Not reached";
       while (label_ptr_ >= label_size_) {
         CHECK(label_parser_->Next())
             << "Data LibSVM's row is smaller than the number of rows in label_libsvm";
@@ -90,9 +95,9 @@ class LibSVMIter: public IIterator<DataInst> {
         label_size_ = label_parser_->Value().size;
       }
       CHECK_LT(label_ptr_, label_size_);
-      out_.data[1] = AsTBlob(label_parser_->Value()[label_ptr_++], param_.label_shape);
+      //out_.data[4] = AsTBlob(label_parser_->Value()[label_ptr_++], param_.label_shape);
     } else {
-      out_.data[1] = dummy_label;
+      out_.data[2] = dummy_label;
     }
     return true;
   }
@@ -102,12 +107,18 @@ class LibSVMIter: public IIterator<DataInst> {
   }
 
  private:
-  inline TBlob AsTBlob(const dmlc::Row<uint32_t>& row, const TShape& shape) {
-    CHECK_EQ(row.length, shape.Size())
-        << "The data size in LibSVM do not match size of shape: "
-        << "specified shape=" << shape << ", the libsvm row-length=" << row.length;
+
+  inline TBlob AsDataTBlob(const dmlc::Row<uint32_t>& row) {
     const real_t* ptr = row.value;
+    TShape shape(mshadow::Shape1(row.length));
+    //LOG(INFO) << "row.length is " << row.length;
     return TBlob((real_t*)ptr, shape, cpu::kDevMask);  // NOLINT(*)
+  }
+
+  inline TBlob AsIdxTBlob(const dmlc::Row<uint32_t>& row) {
+    const uint32_t* ptr = row.index;
+    TShape shape(mshadow::Shape1(row.length));
+    return TBlob((int32_t*)ptr, shape, cpu::kDevMask, mshadow::DataType<int32_t>::kFlag);  // NOLINT(*)
   }
 
   LibSVMIterParam param_;
@@ -138,7 +149,7 @@ MXNET_REGISTER_IO_ITER(LibSVMIter)
 .set_body([]() {
     return new PrefetcherIter(
         new BatchLoader(
-            new LibSVMIter()));
+            new LibSVMIter()), kCSRStorage);
   });
 
 }  // namespace io

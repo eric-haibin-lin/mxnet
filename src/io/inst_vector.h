@@ -157,7 +157,7 @@ struct TBlobBatch {
 class TBlobContainer : public mshadow::TBlob {
  public:
   TBlobContainer(void)
-    : mshadow::TBlob(), tensor_container_(nullptr) {}
+    : mshadow::TBlob(), tensor_container_(nullptr) { }
   ~TBlobContainer() {
     if (tensor_container_) {
       release();
@@ -180,12 +180,27 @@ class TBlobContainer : public mshadow::TBlob {
   void create() {
     CHECK(tensor_container_ == nullptr);
     CHECK_EQ(this->dev_mask_, mshadow::cpu::kDevMask);
+    if (this->type_flag_ == 4) {
+      using DType = int32_t;
+        auto tensor_container = new mshadow::TensorContainer<mshadow::cpu, 1, DType>(false);
+        tensor_container->Resize(mshadow::Shape1(shape_.Size()));
+        dptr_ = tensor_container->dptr_;
+        tensor_container_ = tensor_container;
+    } else if (this->type_flag_ == 0) {
+      using DType = float;
+        auto tensor_container = new mshadow::TensorContainer<mshadow::cpu, 1, DType>(false);
+        tensor_container->Resize(mshadow::Shape1(shape_.Size()));
+        dptr_ = tensor_container->dptr_;
+        tensor_container_ = tensor_container;
+    } else {
+      LOG(FATAL) << "not reached";
     MSHADOW_TYPE_SWITCH(this->type_flag_, DType, {
         auto tensor_container = new mshadow::TensorContainer<mshadow::cpu, 1, DType>(false);
         tensor_container->Resize(mshadow::Shape1(shape_.Size()));
         dptr_ = tensor_container->dptr_;
         tensor_container_ = tensor_container;
     });
+    }
   }
   void resize() {
     MSHADOW_TYPE_SWITCH(this->type_flag_, DType, {

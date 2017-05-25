@@ -306,6 +306,20 @@ class NDArray {
     CHECK(!is_none());
     return ptr_->aux_types[i];
   }
+  /*!
+   * \return the number of aux data used for given storage type
+   */
+  static size_t num_aux(NDArrayStorageType stype) {
+    size_t num = 1;
+    switch (stype) {
+      case kDefaultStorage: num = 1; break;
+      case kCSRStorage: num = 2; break;
+      case kRowSparseStorage: num = 1; break;
+       default: LOG(FATAL) << "Unknown storage type" << stype; break;
+    }
+    return num;
+  }
+
   inline NDArrayStorageType storage_type() const {
     if (is_none()) return kUndefinedStorage;
     return ptr_->storage_type;
