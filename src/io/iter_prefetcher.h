@@ -27,10 +27,8 @@ namespace io {
 // iterator on image recordio
 class PrefetcherIter : public IIterator<DataBatch> {
  public:
-  // TODO move stype to non-optional
-  explicit PrefetcherIter(IIterator<TBlobBatch>* base, NDArrayStorageType stype = kDefaultStorage)
-      : loader_(base), out_(nullptr), stype_(stype) {
-  }
+  explicit PrefetcherIter(IIterator<TBlobBatch>* base)
+      : loader_(base), out_(nullptr) {}
 
   ~PrefetcherIter() {
     while (recycle_queue_.size() != 0) {
@@ -56,30 +54,26 @@ class PrefetcherIter : public IIterator<DataBatch> {
     iter_.Init([this](DataBatch **dptr) {
         if (!loader_->Next()) return false;
         const TBlobBatch& batch = loader_->Value();
-        size_t num_aux = NDArray::NumAuxData(stype_);
         if (*dptr == nullptr) {
           // allocate databatch
           *dptr = new DataBatch();
           (*dptr)->num_batch_padd = batch.num_batch_padd;
-          // assume label is always in dense format, for now
-          bool contains_label = batch.data.size() > num_aux + 1;
-
           // (*dptr)->data.at(0) => data
           // (*dptr)->data.at(1) => label
-          (*dptr)->data.resize(contains_label ? 2 : 1);
+          (*dptr)->data.resize(2);
           (*dptr)->index.resize(batch.batch_size);
+          size_t j = 0;
           for (size_t i = 0; i < (*dptr)->data.size(); ++i) {
-            size_t j = i * num_aux;
-            //TODO for labels, also infer batch.data[j].shape_
+            bool is_data = i == 0;
+            auto stype = this->GetStorageType(is_data);
             auto dtype = param_.dtype ? param_.dtype.value() : batch.data[j].type_flag_;
-            if (stype_ == kDefaultStorage || i == 1) {
-              (*dptr)->data.at(i) = NDArray(mshadow::Shape2(batch.batch_size, 1),
-                                            Context::CPU(), false, 0);
+            if (stype == kDefaultStorage) {
+              (*dptr)->data.at(i) = NDArray(batch.data[j].shape_, Context::CPU(), false, dtype);
             } else {
-              // FIXME the shape is not correct and dtype, too
-              (*dptr)->data.at(i) = NDArray(stype_, mshadow::Shape2(batch.batch_size, 10),
-                                            Context::CPU(), false, 0);
+              (*dptr)->data.at(i) = NDArray(stype, this->GetShape(is_data),
+                                            Context::CPU(), false, dtype);
             }
+            j += NDArray::NumAuxData(stype) + 1;
           }
         }
         // copy data over
@@ -89,7 +83,7 @@ class PrefetcherIter : public IIterator<DataBatch> {
           auto stype = nd.storage_type();
           auto& data_i = ((*dptr)->data)[i];
           if (stype == kDefaultStorage) {
-            CopyFromTo(data_i.data(), batch.data[j++]);
+            CopyFromTo(data_i.data(), batch.data[j]);
           } else if (stype == kCSRStorage){
             auto& values = batch.data[j];
             auto& indices = batch.data[j + 1];
@@ -103,10 +97,10 @@ class PrefetcherIter : public IIterator<DataBatch> {
             CopyFromTo(data_i.data(), values);
             CopyFromTo(data_i.aux_data(csr::kIdx), indices);
             CopyFromTo(data_i.aux_data(csr::kIndPtr), indptr);
-            j += 3;
           } else {
             LOG(FATAL) << "Storage type not implemented: " << stype;
           }
+          j += NDArray::NumAuxData(stype) + 1;
           (*dptr)->num_batch_padd = batch.num_batch_padd;
         }
         if (batch.inst_index) {
@@ -143,6 +137,14 @@ class PrefetcherIter : public IIterator<DataBatch> {
     return *out_;
   }
 
+  virtual const NDArrayStorageType GetStorageType(bool is_data) const {
+    return loader_->GetStorageType(is_data);
+  }
+
+  virtual const TShape GetShape(bool is_data) const {
+    return loader_->GetShape(is_data);
+  }
+
  protected:
   /*! \brief prefetcher parameters */
   PrefetcherParam param_;
@@ -157,8 +159,6 @@ class PrefetcherIter : public IIterator<DataBatch> {
   /*! \brief backend thread */
   dmlc::ThreadedIter<DataBatch> iter_;
   /*! \brief storage type of NDArray */
-  // TODO add stype for label and data separately
-  NDArrayStorageType stype_;
 
   inline void CopyFromTo(TBlob dst, const TBlob src) {
     MSHADOW_TYPE_SWITCH(src.type_flag_, DType, {

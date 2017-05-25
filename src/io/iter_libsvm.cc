@@ -40,10 +40,7 @@ struct LibSVMIterParam : public dmlc::Parameter<LibSVMIterParam> {
 
 class LibSVMIter: public IIterator<DataInst> {
  public:
-  LibSVMIter() {
-    // TODO resize based on param, move to inti
-    out_.data.resize(4);
-  }
+  LibSVMIter() {}
   virtual ~LibSVMIter() {}
 
   // intialize iterator loads data in
@@ -56,6 +53,13 @@ class LibSVMIter: public IIterator<DataInst> {
       dummy_label.set_pad(false);
       dummy_label.Resize(mshadow::Shape1(1));
       dummy_label = 0.0f;
+    }
+    // both data and label are in libsvm format
+    if (param_.label_shape.Size() > 1) {
+      out_.data.resize(6);
+    } else {
+      // only data is in libsvm format. Label is scalar.
+      out_.data.resize(4);
     }
   }
 
@@ -81,16 +85,13 @@ class LibSVMIter: public IIterator<DataInst> {
     }
     out_.index = inst_counter_++;
     CHECK_LT(data_ptr_, data_size_);
-    const auto row = data_parser_->Value()[data_ptr_++];
-    // data
-    out_.data[0] = AsDataTBlob(row);
-    // indices
-    out_.data[1] = AsIdxTBlob(row);
-    // indptr
-    out_.data[2] = AsIndPtrTBlobPlaceholder(row);
+    const auto data_row = data_parser_->Value()[data_ptr_++];
+    // data, indices and indptr
+    out_.data[0] = AsDataTBlob(data_row);
+    out_.data[1] = AsIdxTBlob(data_row);
+    out_.data[2] = AsIndPtrTBlobPlaceholder(data_row);
 
     if (label_parser_.get() != nullptr) {
-      CHECK(false) << "Not reached";
       while (label_ptr_ >= label_size_) {
         CHECK(label_parser_->Next())
             << "Data LibSVM's row is smaller than the number of rows in label_libsvm";
@@ -98,7 +99,11 @@ class LibSVMIter: public IIterator<DataInst> {
         label_size_ = label_parser_->Value().size;
       }
       CHECK_LT(label_ptr_, label_size_);
-      //out_.data[4] = AsTBlob(label_parser_->Value()[label_ptr_++], param_.label_shape);
+      const auto label_row = label_parser_->Value()[label_ptr_++];
+      // data, indices and indptr
+      out_.data[3] = AsDataTBlob(label_row);
+      out_.data[4] = AsIdxTBlob(label_row);
+      out_.data[5] = AsIndPtrTBlobPlaceholder(label_row);
     } else {
       out_.data[3] = dummy_label;
     }
@@ -109,8 +114,14 @@ class LibSVMIter: public IIterator<DataInst> {
     return out_;
   }
 
-  virtual const NDArrayStorageType GetDataStorageType() const {
-    return kCSRStorage;
+  virtual const NDArrayStorageType GetStorageType(bool is_data) const {
+    if (is_data) return kCSRStorage;
+    return param_.label_shape.Size() > 1 ? kCSRStorage : kDefaultStorage;
+  }
+
+  virtual const TShape GetShape(bool is_data) const {
+    if (is_data) return param_.data_shape;
+    return param_.label_shape;
   }
 
  private:
@@ -159,7 +170,7 @@ MXNET_REGISTER_IO_ITER(LibSVMIter)
 .set_body([]() {
     return new PrefetcherIter(
         new BatchLoader(
-            new LibSVMIter()), kCSRStorage);
+            new LibSVMIter()));
   });
 
 }  // namespace io

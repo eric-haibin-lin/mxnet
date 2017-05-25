@@ -157,7 +157,7 @@ struct TBlobBatch {
 class TBlobContainer : public mshadow::TBlob {
  public:
   TBlobContainer(void)
-    : mshadow::TBlob(), tensor_container_(nullptr) { }
+    : mshadow::TBlob(), tensor_container_(nullptr) {}
   ~TBlobContainer() {
     if (tensor_container_) {
       release();

@@ -40,8 +40,8 @@ class BatchLoader : public IIterator<TBlobBatch> {
     out_.data.clear();
     // init base iterator
     base_->Init(kwargs);
-    data_stype_ = base_->GetDataStorageType();
-    label_stype_ = base_->GetLabelStorageType();
+    data_stype_ = base_->GetStorageType(true);
+    label_stype_ = base_->GetStorageType(false);
     if (param_.round_batch == 0) {
       LOG(FATAL) << "CSR batch loader doesn't support round_batch == false";
     }
@@ -58,7 +58,7 @@ class BatchLoader : public IIterator<TBlobBatch> {
   }
 
   virtual bool Next(void) {
-    if (data_stype_ == kCSRStorage) {
+    if (data_stype_ == kCSRStorage || label_stype_ == kCSRStorage) {
        return NextCSRBatch();
     } else {
       return NextDefaultBatch();
@@ -67,6 +67,20 @@ class BatchLoader : public IIterator<TBlobBatch> {
 
   virtual const TBlobBatch &Value(void) const {
     return out_;
+  }
+
+  virtual const NDArrayStorageType GetStorageType(bool is_data) const {
+    return base_->GetStorageType(is_data);
+  }
+
+  virtual const TShape GetShape(bool is_data) const {
+    TShape inst_shape = base_->GetShape(is_data);
+    std::vector<index_t> shape_vec;
+    shape_vec.push_back(param_.batch_size);
+    for (index_t dim = 0; dim < inst_shape.ndim(); ++dim) {
+      shape_vec.push_back(inst_shape[dim]);
+    }
+    return TShape(shape_vec.begin(), shape_vec.end());
   }
 
  private:

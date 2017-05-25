@@ -101,6 +101,11 @@ class CSVIter: public IIterator<DataInst> {
     return out_;
   }
 
+  virtual const TShape GetShape(bool is_data) const {
+    if (is_data) return param_.data_shape;
+    return param_.label_shape;
+  }
+
  private:
   inline TBlob AsTBlob(const dmlc::Row<uint32_t>& row, const TShape& shape) {
     CHECK_EQ(row.length, shape.Size())
