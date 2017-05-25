@@ -309,10 +309,10 @@ class NDArray {
   /*!
    * \return the number of aux data used for given storage type
    */
-  static size_t num_aux(NDArrayStorageType stype) {
-    size_t num = 1;
+  static size_t NumAuxData(NDArrayStorageType stype) {
+    size_t num = 0;
     switch (stype) {
-      case kDefaultStorage: num = 1; break;
+      case kDefaultStorage: num = 0; break;
       case kCSRStorage: num = 2; break;
       case kRowSparseStorage: num = 1; break;
        default: LOG(FATAL) << "Unknown storage type" << stype; break;

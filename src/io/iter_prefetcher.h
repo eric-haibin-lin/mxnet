@@ -56,13 +56,14 @@ class PrefetcherIter : public IIterator<DataBatch> {
     iter_.Init([this](DataBatch **dptr) {
         if (!loader_->Next()) return false;
         const TBlobBatch& batch = loader_->Value();
-        size_t num_aux = NDArray::num_aux(stype_);
+        size_t num_aux = NDArray::NumAuxData(stype_);
         if (*dptr == nullptr) {
           // allocate databatch
           *dptr = new DataBatch();
           (*dptr)->num_batch_padd = batch.num_batch_padd;
           // assume label is always in dense format, for now
-          bool contains_label = batch.data.size() > num_aux;
+          bool contains_label = batch.data.size() > num_aux + 1;
+
           // (*dptr)->data.at(0) => data
           // (*dptr)->data.at(1) => label
           (*dptr)->data.resize(contains_label ? 2 : 1);
@@ -82,42 +83,27 @@ class PrefetcherIter : public IIterator<DataBatch> {
           }
         }
         // copy data over
+        size_t j = 0;
         for (size_t i = 0; i < (*dptr)->data.size(); ++i) {
-          size_t j = i * num_aux;
-          auto &nd = ((*dptr)->data)[i];
+          auto& nd = ((*dptr)->data)[i];
           auto stype = nd.storage_type();
+          auto& data_i = ((*dptr)->data)[i];
           if (stype == kDefaultStorage) {
-    //TODO fix idx
-            MSHADOW_TYPE_SWITCH(batch.data[2].type_flag_, DType, {
-                mshadow::Copy(((*dptr)->data)[i].data().FlatTo1D<cpu, DType>(),
-                          batch.data[2].FlatTo1D<cpu, DType>());
-            });
+            CopyFromTo(data_i.data(), batch.data[j++]);
           } else if (stype == kCSRStorage){
-            size_t values_offset = j;
-            size_t indices_offset = j + 1;
-            size_t indptr_offset = batch.data.size() - 1;
+            auto& values = batch.data[j];
+            auto& indices = batch.data[j + 1];
+            auto& indptr = batch.data[j + 2];
             // allocate memory
-            nd.CheckAndAllocAuxData(csr::kIdx, batch.data[indices_offset].shape_);
-            nd.CheckAndAllocData(batch.data[values_offset].shape_);
-            CHECK_EQ(batch.data[indices_offset].shape_.Size(), batch.data[values_offset].shape_.Size());
-            CHECK_EQ(batch.data.size(), 4);
-            // the last one is indptr
-            nd.CheckAndAllocAuxData(csr::kIndPtr, batch.data[indptr_offset].shape_);
-            // copy idx
-            MSHADOW_TYPE_SWITCH(batch.data[indices_offset].type_flag_, DType, {
-              mshadow::Copy(((*dptr)->data)[i].aux_data(csr::kIdx).FlatTo1D<cpu, DType>(),
-                            batch.data[indices_offset].FlatTo1D<cpu, DType>());
-            });
-            // copy value
-            MSHADOW_TYPE_SWITCH(batch.data[values_offset].type_flag_, DType, {
-              mshadow::Copy(((*dptr)->data)[i].data().FlatTo1D<cpu, DType>(),
-                            batch.data[values_offset].FlatTo1D<cpu, DType>());
-            });
-            // copy indptr
-            MSHADOW_TYPE_SWITCH(batch.data[indptr_offset].type_flag_, DType, {
-              mshadow::Copy(((*dptr)->data)[i].aux_data(csr::kIndPtr).FlatTo1D<cpu, DType>(),
-                            batch.data[indptr_offset].FlatTo1D<cpu, DType>());
-            });
+            CHECK_EQ(indices.shape_.Size(),values.shape_.Size());
+            nd.CheckAndAllocAuxData(csr::kIdx, indices.shape_);
+            nd.CheckAndAllocData(values.shape_);
+            nd.CheckAndAllocAuxData(csr::kIndPtr, indptr.shape_);
+            // copy values, indices and indptr
+            CopyFromTo(data_i.data(), values);
+            CopyFromTo(data_i.aux_data(csr::kIdx), indices);
+            CopyFromTo(data_i.aux_data(csr::kIndPtr), indptr);
+            j += 3;
           } else {
             LOG(FATAL) << "Storage type not implemented: " << stype;
           }
@@ -173,6 +159,13 @@ class PrefetcherIter : public IIterator<DataBatch> {
   /*! \brief storage type of NDArray */
   // TODO add stype for label and data separately
   NDArrayStorageType stype_;
+
+  inline void CopyFromTo(TBlob dst, const TBlob src) {
+    MSHADOW_TYPE_SWITCH(src.type_flag_, DType, {
+      mshadow::Copy(dst.FlatTo1D<cpu, DType>(), src.FlatTo1D<cpu, DType>());
+    });
+  }
+
 };
 }  // namespace io
 }  // namespace mxnet

@@ -41,7 +41,8 @@ struct LibSVMIterParam : public dmlc::Parameter<LibSVMIterParam> {
 class LibSVMIter: public IIterator<DataInst> {
  public:
   LibSVMIter() {
-    out_.data.resize(3);
+    // TODO resize based on param, move to inti
+    out_.data.resize(4);
   }
   virtual ~LibSVMIter() {}
 
@@ -85,6 +86,8 @@ class LibSVMIter: public IIterator<DataInst> {
     out_.data[0] = AsDataTBlob(row);
     // indices
     out_.data[1] = AsIdxTBlob(row);
+    // indptr
+    out_.data[2] = AsIndPtrTBlobPlaceholder(row);
 
     if (label_parser_.get() != nullptr) {
       CHECK(false) << "Not reached";
@@ -97,7 +100,7 @@ class LibSVMIter: public IIterator<DataInst> {
       CHECK_LT(label_ptr_, label_size_);
       //out_.data[4] = AsTBlob(label_parser_->Value()[label_ptr_++], param_.label_shape);
     } else {
-      out_.data[2] = dummy_label;
+      out_.data[3] = dummy_label;
     }
     return true;
   }
@@ -115,14 +118,17 @@ class LibSVMIter: public IIterator<DataInst> {
   inline TBlob AsDataTBlob(const dmlc::Row<uint32_t>& row) {
     const real_t* ptr = row.value;
     TShape shape(mshadow::Shape1(row.length));
-    //LOG(INFO) << "row.length is " << row.length;
-    return TBlob((real_t*)ptr, shape, cpu::kDevMask);  // NOLINT(*)
+    return TBlob((real_t*)ptr, shape, cpu::kDevMask);
   }
 
   inline TBlob AsIdxTBlob(const dmlc::Row<uint32_t>& row) {
     const uint32_t* ptr = row.index;
     TShape shape(mshadow::Shape1(row.length));
-    return TBlob((int32_t*)ptr, shape, cpu::kDevMask, mshadow::DataType<int32_t>::kFlag);  // NOLINT(*)
+    return TBlob((int32_t*)ptr, shape, cpu::kDevMask, CSR_IDX_DTYPE);
+  }
+
+  inline TBlob AsIndPtrTBlobPlaceholder(const dmlc::Row<uint32_t>& row) {
+    return TBlob(nullptr, mshadow::Shape1(0), cpu::kDevMask, CSR_IND_PTR_TYPE);
   }
 
   LibSVMIterParam param_;

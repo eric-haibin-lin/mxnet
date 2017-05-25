@@ -120,29 +120,33 @@ class BatchLoader : public IIterator<TBlobBatch> {
     out_.num_batch_padd = num_overflow_;
     CHECK_EQ(inst_cache_.size(), param_.batch_size);
     this->InitDataFromBatch();
-    int32_t acc = 0;
-    using IType = int32_t;
-    data_[data_.size() - 1].get<cpu, 1, IType>()[0] = acc;
-    for (size_t j = 0; j < inst_cache_.size(); j++) {
-      const auto& d = inst_cache_[j];
-      out_.inst_index[top] = d.index;
-      size_t unit_size = 0;
-      for (size_t i = 0; i < d.data.size(); ++i) {
-        unit_size = d.data[i].shape_.Size();
-        MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
-          mshadow::Copy(data_[i].get<cpu, 1, DType>().Slice(offsets_[i], offsets_[i] + unit_size),
-                        d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size)));
-          });
-        offsets_[i] += unit_size;
-        CHECK_NE(unit_size, 0);
-        // Update the indptr tensor, only for indices and values
-        // FIXME hard code index
-        if (i == 0) {
-          acc += (int32_t) unit_size;
-          data_[d.data.size()].get<cpu, 1, IType>()[j + 1] = acc;
+    MSHADOW_INT_TYPE_SWITCH(CSR_IND_PTR_TYPE, IType, {
+      for (size_t j = 0; j < inst_cache_.size(); j++) {
+        const auto& d = inst_cache_[j];
+        out_.inst_index[top] = d.index;
+        size_t unit_size = 0;
+        for (size_t i = 0; i < d.data.size(); ++i) {
+          // indptr tensor
+          if (IsIndPtr(i)) {
+            auto indptr = data_[i].get<cpu, 1, IType>();
+            CHECK_NE(unit_size, 0);
+            if (j == 0) indptr[0] = 0;
+            indptr[j + 1] = indptr[j] + (IType) unit_size;
+            offsets_[i] = j;
+          } else {
+            // indices and values tensor
+            unit_size = d.data[i].shape_.Size();
+            MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
+              const auto begin = offsets_[i];
+              const auto end = offsets_[i] + unit_size;
+              mshadow::Copy(data_[i].get<cpu, 1, DType>().Slice(begin, end),
+                            d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size)));
+              });
+            offsets_[i] += unit_size;
+          }
         }
       }
-    }
+    });
     return true;
   }
 
@@ -204,50 +208,56 @@ class BatchLoader : public IIterator<TBlobBatch> {
     return false;
   }
 
+  inline bool IsIndPtr(size_t i) {
+    auto data_num_aux = NDArray::NumAuxData(data_stype_);
+    auto label_num_aux = NDArray::NumAuxData(label_stype_);
+    if (i == data_num_aux && data_stype_ == kCSRStorage) {
+      return true;
+    }
+    if (i == data_num_aux + 1 + label_num_aux &&
+        label_stype_ == kCSRStorage && data_stype_ == kCSRStorage) {
+      return true;
+    }
+    return false;
+  }
 
   // initialize the data holder by using from the batch
   inline void InitDataFromBatch() {
-    // TODO also init indptr for label, if any
-    LOG(INFO) << "init data ";
+    CHECK(data_stype_ == kCSRStorage || label_stype_ == kCSRStorage);
     CHECK(inst_cache_.size() > 0);
-    size_t num_data = inst_cache_[0].data.size();
     out_.data.clear();
-    //const auto& first_inst = inst_cache_[0];
-    //shape_.resize(first_inst.data.size());
-    //data_.clear();
-    data_.resize(num_data + 1);
-    CHECK(data_[num_data].dev_mask_ == 1);
-    LOG(INFO) << "Num_data: " << num_data;
     offsets_.clear();
-    offsets_.resize(num_data + 1, 0);
-    //unit_size_.resize(first_inst.data.size());
-    std::vector<size_t> sizes(num_data + 1, 0);
-    // accumulate the memory space required for a batch
-    for (size_t i = 0; i < num_data; ++i) {
+
+    size_t total_size = inst_cache_[0].data.size();
+    data_.resize(total_size);
+    offsets_.resize(total_size, 0);
+    std::vector<size_t> vec_sizes(total_size, 0);
+    // accumulate the memory required for a batch
+    for (size_t i = 0; i < total_size; ++i) {
       size_t size = 0;
-      for (const auto &d : inst_cache_) size += d.data[i].shape_.Size();
-      sizes[i] = size;
+      // vec_sizes for indptr
+      if (IsIndPtr(i)) {
+        size = param_.batch_size + 1;
+      } else {
+        for (const auto &d : inst_cache_) size += d.data[i].shape_.Size();
+      }
+      vec_sizes[i] = size;
     }
 
-    for (size_t i = 0; i < num_data; ++i) {
+    CHECK_EQ(vec_sizes[0], vec_sizes[1]);
+    for (size_t i = 0; i < total_size; ++i) {
       int src_type_flag = inst_cache_[0].data[i].type_flag_;
       // init object attributes
-      TShape dst_shape(mshadow::Shape1(sizes[i]));
-      data_[i].resize(mshadow::Shape1(sizes[i]), src_type_flag);
-      //unit_size_[i] = src_shape.Size();
+      TShape dst_shape(mshadow::Shape1(vec_sizes[i]));
+      data_[i].resize(mshadow::Shape1(vec_sizes[i]), src_type_flag);
       CHECK(data_[i].dptr_ != nullptr);
       out_.data.push_back(TBlob(data_[i].dptr_, dst_shape, cpu::kDevMask, src_type_flag));
     }
-
-    // reserve last position for indptr
-    sizes[num_data] = param_.batch_size + 1;
-    data_[num_data].resize(mshadow::Shape1(sizes[num_data]), mshadow::DataType<int32_t>::kFlag);
-    out_.data.push_back(TBlob(data_[num_data].dptr_, mshadow::Shape1(sizes[num_data]), cpu::kDevMask,mshadow::DataType<int32_t>::kFlag));
-    LOG(INFO) << "done init";
   }
 
   // initialize the data holder by using from the first data instance
   inline void InitDataFromInst(const DataInst& first_batch) {
+    // TODO remove shape_
     shape_.resize(first_batch.data.size());
     data_.resize(first_batch.data.size());
     unit_size_.resize(first_batch.data.size());
