@@ -36,6 +36,12 @@ class IIterator : public dmlc::DataIter<DType> {
   virtual const DType &Value(void) const = 0;
   /*! \brief constructor */
   virtual ~IIterator(void) {}
+
+  // TODO(haibin) add commnet
+  virtual const NDArrayStorageType GetDataStorageType() const { return kDefaultStorage; }
+
+  virtual const NDArrayStorageType GetLabelStorageType() const { return kDefaultStorage; }
+
   /*! \brief store the name of each data, it could be used for making NDArrays */
   std::vector<std::string> data_names;
   /*! \brief set data name to each attribute of data */

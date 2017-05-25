@@ -106,6 +106,10 @@ class LibSVMIter: public IIterator<DataInst> {
     return out_;
   }
 
+  virtual const NDArrayStorageType GetDataStorageType() const {
+    return kCSRStorage;
+  }
+
  private:
 
   inline TBlob AsDataTBlob(const dmlc::Row<uint32_t>& row) {

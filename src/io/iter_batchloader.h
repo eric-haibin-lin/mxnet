@@ -40,6 +40,11 @@ class BatchLoader : public IIterator<TBlobBatch> {
     out_.data.clear();
     // init base iterator
     base_->Init(kwargs);
+    data_stype_ = base_->GetDataStorageType();
+    label_stype_ = base_->GetLabelStorageType();
+    if (param_.round_batch == 0) {
+      LOG(FATAL) << "CSR batch loader doesn't support round_batch == false";
+    }
   }
 
   virtual void BeforeFirst(void) {
@@ -53,76 +58,13 @@ class BatchLoader : public IIterator<TBlobBatch> {
   }
 
   virtual bool Next(void) {
-    out_.num_batch_padd = 0;
-    out_.batch_size = param_.batch_size;
-    inst_cache_.clear();
-    this->head_ = 0;
-    // if overflow from previous round, directly return false, until before first is called
-    if (num_overflow_ != 0) return false;
-    index_t top = 0;
-    while (base_->Next()) {
-      inst_cache_.emplace_back(base_->Value());
-      if (inst_cache_.size() >= param_.batch_size) break;
+    if (data_stype_ == kCSRStorage) {
+       return NextCSRBatch();
+    } else {
+      return NextDefaultBatch();
     }
-    // TODO need to generate indptr
-    this->InitData();
-    if (inst_cache_.size() >= param_.batch_size) {
-      int32_t acc = 0;
-      using IType = int32_t;
-      data_[data_.size() - 1].get<cpu, 1, IType>()[0] = acc;
-      for (size_t j = 0; j < inst_cache_.size(); j++) {
-        const auto& d = inst_cache_[j];
-        out_.inst_index[top] = d.index;
-        size_t unit_size = 0;
-        for (size_t i = 0; i < d.data.size(); ++i) {
-          unit_size = d.data[i].shape_.Size();
-          MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
-            mshadow::Copy(data_[i].get<cpu, 1, DType>().Slice(offsets_[i], offsets_[i] + unit_size),
-                          d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size)));
-            });
-          offsets_[i] += unit_size;
-
-          CHECK_NE(unit_size, 0);
-          // Update the indptr tensor, only for indices and values
-          // FIXME hard code index
-          if (i == 0) {
-            acc += (int32_t) unit_size;
-            data_[d.data.size()].get<cpu, 1, IType>()[j + 1] = acc;
-          }
-        }
-      }
-      return true;
-    }
-
-    LOG(FATAL) << "Unreached";
-    if (top != 0) {
-      if (param_.round_batch != 0) {
-        num_overflow_ = 0;
-        base_->BeforeFirst();
-        for (; top < param_.batch_size; ++top, ++num_overflow_) {
-          CHECK(base_->Next()) << "number of input must be bigger than batch size";
-          const DataInst& d = base_->Value();
-          out_.inst_index[top] = d.index;
-          // copy data
-          for (size_t i = 0; i < d.data.size(); ++i) {
-            CHECK_EQ(unit_size_[i], d.data[i].Size());
-            size_t unit_size = d.data[i].shape_.Size();
-            MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
-                mshadow::Copy(
-                  data_[i].get<cpu, 1, DType>().Slice(top * unit_size_[i],
-                                                      (top + 1) * unit_size_[i]),
-                  d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size_[i])));
-              });
-          }
-        }
-        out_.num_batch_padd = num_overflow_;
-      } else {
-        out_.num_batch_padd = param_.batch_size - top;
-      }
-      return true;
-    }
-    return false;
   }
+
   virtual const TBlobBatch &Value(void) const {
     return out_;
   }
@@ -147,9 +89,125 @@ class BatchLoader : public IIterator<TBlobBatch> {
 
   /*! \brief tensor to hold data */
   std::vector<TBlobContainer> data_;
-  // initialize the data holder by using from the first batch.
+  NDArrayStorageType data_stype_;
+  NDArrayStorageType label_stype_;
 
-  inline void InitData() {
+  bool NextCSRBatch(void) {
+    out_.num_batch_padd = 0;
+    out_.batch_size = param_.batch_size;
+    this->head_ = 0;
+    // if overflow from previous round, directly return false, until before first is called
+    if (num_overflow_ != 0) return false;
+    index_t top = 0;
+    inst_cache_.clear();
+    while (base_->Next()) {
+      inst_cache_.emplace_back(base_->Value());
+      if (inst_cache_.size() >= param_.batch_size) break;
+    }
+    // no more data instance
+    if (inst_cache_.size() == 0) {
+      return false;
+    }
+    if (inst_cache_.size() < param_.batch_size) {
+      CHECK_GT(param_.round_batch, 0);
+      num_overflow_ = 0;
+      base_->BeforeFirst();
+      for (; inst_cache_.size() < param_.batch_size; ++num_overflow_) {
+        CHECK(base_->Next()) << "number of input must be bigger than batch size";
+        inst_cache_.emplace_back(base_->Value());
+      }
+    }
+    out_.num_batch_padd = num_overflow_;
+    CHECK_EQ(inst_cache_.size(), param_.batch_size);
+    this->InitDataFromBatch();
+    int32_t acc = 0;
+    using IType = int32_t;
+    data_[data_.size() - 1].get<cpu, 1, IType>()[0] = acc;
+    for (size_t j = 0; j < inst_cache_.size(); j++) {
+      const auto& d = inst_cache_[j];
+      out_.inst_index[top] = d.index;
+      size_t unit_size = 0;
+      for (size_t i = 0; i < d.data.size(); ++i) {
+        unit_size = d.data[i].shape_.Size();
+        MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
+          mshadow::Copy(data_[i].get<cpu, 1, DType>().Slice(offsets_[i], offsets_[i] + unit_size),
+                        d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size)));
+          });
+        offsets_[i] += unit_size;
+        CHECK_NE(unit_size, 0);
+        // Update the indptr tensor, only for indices and values
+        // FIXME hard code index
+        if (i == 0) {
+          acc += (int32_t) unit_size;
+          data_[d.data.size()].get<cpu, 1, IType>()[j + 1] = acc;
+        }
+      }
+    }
+    return true;
+  }
+
+  // TODO compare with original code
+  bool NextDefaultBatch(void) {
+    out_.num_batch_padd = 0;
+    out_.batch_size = param_.batch_size;
+    this->head_ = 0;
+
+    // if overflow from previous round, directly return false, until before first is called
+    if (num_overflow_ != 0) return false;
+    index_t top = 0;
+
+    while (base_->Next()) {
+      const DataInst& d = base_->Value();
+      out_.inst_index[top] = d.index;
+      if (data_.size() == 0) {
+        this->InitDataFromInst(d);
+      }
+      for (size_t i = 0; i < d.data.size(); ++i) {
+        // TODO remove unit_size_[i]
+        CHECK_EQ(unit_size_[i], d.data[i].Size());
+        MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
+            mshadow::Copy(
+              data_[i].get<cpu, 1, DType>().Slice(top * unit_size_[i],
+                                                  (top + 1) * unit_size_[i]),
+              d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size_[i])));
+          });
+      }
+      if (++top >= param_.batch_size) {
+        return true;
+      }
+    }
+    if (top != 0) {
+      if (param_.round_batch != 0) {
+        num_overflow_ = 0;
+        base_->BeforeFirst();
+        for (; top < param_.batch_size; ++top, ++num_overflow_) {
+          CHECK(base_->Next()) << "number of input must be bigger than batch size";
+          const DataInst& d = base_->Value();
+          out_.inst_index[top] = d.index;
+          // copy data
+          for (size_t i = 0; i < d.data.size(); ++i) {
+            CHECK_EQ(unit_size_[i], d.data[i].Size());
+            MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
+                mshadow::Copy(
+                  data_[i].get<cpu, 1, DType>().Slice(top * unit_size_[i],
+                                                      (top + 1) * unit_size_[i]),
+                  d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size_[i])));
+              });
+          }
+        }
+        out_.num_batch_padd = num_overflow_;
+      } else {
+        out_.num_batch_padd = param_.batch_size - top;
+      }
+      return true;
+    }
+    return false;
+  }
+
+
+  // initialize the data holder by using from the batch
+  inline void InitDataFromBatch() {
+    // TODO also init indptr for label, if any
     LOG(INFO) << "init data ";
     CHECK(inst_cache_.size() > 0);
     size_t num_data = inst_cache_[0].data.size();
@@ -188,8 +246,8 @@ class BatchLoader : public IIterator<TBlobBatch> {
     LOG(INFO) << "done init";
   }
 
-  /*
-  inline void InitData(const DataInst& first_batch) {
+  // initialize the data holder by using from the first data instance
+  inline void InitDataFromInst(const DataInst& first_batch) {
     shape_.resize(first_batch.data.size());
     data_.resize(first_batch.data.size());
     unit_size_.resize(first_batch.data.size());
@@ -206,14 +264,11 @@ class BatchLoader : public IIterator<TBlobBatch> {
       }
       TShape dst_shape(shape_vec.begin(), shape_vec.end());
       shape_[i] = dst_shape;
-      // TODO resize the actual size?
-      // THIS includes batch size. How do we estimate the size for the entire batch?
       data_[i].resize(mshadow::Shape1(dst_shape.Size()), src_type_flag);
-      // TODO unit size is no longer == shape.Size()
       unit_size_[i] = src_shape.Size();
       out_.data.push_back(TBlob(data_[i].dptr_, dst_shape, cpu::kDevMask, src_type_flag));
     }
-  }*/
+  }
 
 };  // class BatchLoader
 }  // namespace io
