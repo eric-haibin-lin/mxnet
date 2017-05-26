@@ -34,18 +34,8 @@ class SparsePrefetcherIter : public PrefetcherIter {
   ~SparsePrefetcherIter() {}
 
   virtual void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
-    // TODO refactor this
-    std::vector<std::pair<std::string, std::string> > kwargs_left;
-    // init image rec param
-    kwargs_left = param_.InitAllowUnknown(kwargs);
-    // use the kwarg to init batch loader
-    sparse_loader_->Init(kwargs);
-    // maximum prefetch threaded iter internal size
-    const int kMaxPrefetchBuffer = 16;
-    // init thread iter
-    iter_.set_max_capacity(kMaxPrefetchBuffer);
-
-    iter_.Init([this](DataBatch **dptr) {
+    PrefetcherIter::InitParams(kwargs);
+    iter.Init([this](DataBatch **dptr) {
         if (!sparse_loader_->Next()) return false;
         const TBlobBatch& batch = sparse_loader_->Value();
         if (*dptr == nullptr) {
