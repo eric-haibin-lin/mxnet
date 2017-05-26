@@ -128,7 +128,7 @@ class SparsePrefetcherIter : public PrefetcherIter {
 
  protected:
   /*! \brief internal sparse batch loader */
-  std::unique_ptr<SparseIIterator<TBlobBatch> > sparse_loader_;
+  SparseIIterator<TBlobBatch>* sparse_loader_;
 
  private:
   inline void CopyFromTo(TBlob dst, const TBlob src) {

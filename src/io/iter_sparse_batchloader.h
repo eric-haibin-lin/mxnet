@@ -181,4 +181,4 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
 };  // class BatchLoader
 }  // namespace io
 }  // namespace mxnet
-#endif  // MXNET_IO_ITER_BATCHLOADER_H_
+#endif  // MXNET_IO_ITER_SPARSE_BATCHLOADER_H_

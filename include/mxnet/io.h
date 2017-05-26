@@ -52,10 +52,9 @@ template<typename DType>
 class SparseIIterator : public IIterator<DType> {
  public:
   /*! \brief storage type of the data or label */
-  virtual const NDArrayStorageType GetStorageType(bool is_data) const { return kDefaultStorage; }
+  virtual const NDArrayStorageType GetStorageType(bool is_data) const = 0;
   /*! \brief shape of the data or label */
-  // TODO move to virutal
-  virtual const TShape GetShape(bool is_data) const { return mshadow::Shape1(9); }
+  virtual const TShape GetShape(bool is_data) const = 0;
 };  // class SparseIIterator
 
 /*! \brief a single data instance */
