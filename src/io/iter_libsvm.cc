@@ -8,8 +8,8 @@
 #include <dmlc/logging.h>
 #include <dmlc/parameter.h>
 #include <dmlc/data.h>
-#include "./iter_prefetcher.h"
-#include "./iter_batchloader.h"
+#include "./iter_sparse_prefetcher.h"
+#include "./iter_sparse_batchloader.h"
 
 namespace mxnet {
 namespace io {
@@ -38,7 +38,7 @@ struct LibSVMIterParam : public dmlc::Parameter<LibSVMIterParam> {
   }
 };
 
-class LibSVMIter: public IIterator<DataInst> {
+class LibSVMIter: public SparseIIterator<DataInst> {
  public:
   LibSVMIter() {}
   virtual ~LibSVMIter() {}
@@ -168,8 +168,8 @@ MXNET_REGISTER_IO_ITER(LibSVMIter)
 .add_arguments(BatchParam::__FIELDS__())
 .add_arguments(PrefetcherParam::__FIELDS__())
 .set_body([]() {
-    return new PrefetcherIter(
-        new BatchLoader(
+    return new SparsePrefetcherIter(
+        new SparseBatchLoader(
             new LibSVMIter()));
   });
 

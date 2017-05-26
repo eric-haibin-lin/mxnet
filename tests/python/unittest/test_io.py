@@ -89,20 +89,13 @@ def test_NDArrayIter():
             assert(labelcount[i] == 100)
 
 if __name__ == "__main__":
-    """
-    test_NDArrayIter()
-    test_MNISTIter()
-    test_Cifar10Rec()
-    """
-    data_train = mx.io.LibSVMIter(data_libsvm="/home/ubuntu/svm/shuttle.scale.t", data_shape=(10, ), batch_size=2)
-    #data_train = mx.io.CSVIter(data_csv="/home/ubuntu/train.csv", data_shape=(28*28, ), batch_size=2)
-    print(data_train)
-    print(data_train.next())
-    print(data_train.next())
-    print(data_train.next())
-    print(data_train.next())
-    print(data_train.next())
-    print(data_train.getdata().asnumpy())
-    print(data_train.getdata().indices.asnumpy())
-    print(data_train.getdata().indptr.asnumpy())
-    print(data_train.getdata().values.asnumpy())
+    #test_NDArrayIter()
+    #test_MNISTIter()
+    #test_Cifar10Rec()
+    # https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multiclass/shuttle.scale.t
+    #data_train = mx.io.LibSVMIter(data_libsvm="/home/ubuntu/svm/shuttle.scale.t", data_shape=(10,), batch_size=5)
+    data_train = mx.io.CSVIter(data_csv="/home/ubuntu/train.csv", data_shape=(28*28, ), batch_size=2)
+    for batch in iter(data_train):
+        #print(data_train.getdata().asnumpy())
+        #break
+        pass

@@ -36,12 +36,6 @@ class IIterator : public dmlc::DataIter<DType> {
   virtual const DType &Value(void) const = 0;
   /*! \brief constructor */
   virtual ~IIterator(void) {}
-
-  // TODO(haibin) add commnet
-  virtual const NDArrayStorageType GetDataStorageType() const { return kDefaultStorage; }
-
-  virtual const NDArrayStorageType GetLabelStorageType() const { return kDefaultStorage; }
-
   /*! \brief store the name of each data, it could be used for making NDArrays */
   std::vector<std::string> data_names;
   /*! \brief set data name to each attribute of data */
@@ -49,6 +43,20 @@ class IIterator : public dmlc::DataIter<DType> {
     data_names.push_back(data_name);
   }
 };  // class IIterator
+
+/*!
+ * \brief iterator type
+ * \param DType data type
+ */
+template<typename DType>
+class SparseIIterator : public IIterator<DType> {
+ public:
+  /*! \brief storage type of the data or label */
+  virtual const NDArrayStorageType GetStorageType(bool is_data) const { return kDefaultStorage; }
+  /*! \brief shape of the data or label */
+  // TODO move to virutal
+  virtual const TShape GetShape(bool is_data) const { return mshadow::Shape1(9); }
+};  // class SparseIIterator
 
 /*! \brief a single data instance */
 struct DataInst {

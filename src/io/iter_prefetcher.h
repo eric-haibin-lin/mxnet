@@ -28,7 +28,8 @@ namespace io {
 class PrefetcherIter : public IIterator<DataBatch> {
  public:
   explicit PrefetcherIter(IIterator<TBlobBatch>* base)
-      : loader_(base), out_(nullptr) {}
+      : loader_(base), out_(nullptr) {
+  }
 
   ~PrefetcherIter() {
     while (recycle_queue_.size() != 0) {
@@ -58,49 +59,25 @@ class PrefetcherIter : public IIterator<DataBatch> {
           // allocate databatch
           *dptr = new DataBatch();
           (*dptr)->num_batch_padd = batch.num_batch_padd;
-          // (*dptr)->data.at(0) => data
-          // (*dptr)->data.at(1) => label
-          (*dptr)->data.resize(2);
+          (*dptr)->data.resize(batch.data.size());
           (*dptr)->index.resize(batch.batch_size);
-          size_t j = 0;
-          for (size_t i = 0; i < (*dptr)->data.size(); ++i) {
-            bool is_data = i == 0;
-            auto stype = this->GetStorageType(is_data);
-            auto dtype = param_.dtype ? param_.dtype.value() : batch.data[j].type_flag_;
-            if (stype == kDefaultStorage) {
-              (*dptr)->data.at(i) = NDArray(batch.data[j].shape_, Context::CPU(), false, dtype);
-            } else {
-              (*dptr)->data.at(i) = NDArray(stype, this->GetShape(is_data),
-                                            Context::CPU(), false, dtype);
-            }
-            j += NDArray::NumAuxData(stype) + 1;
+          for (size_t i = 0; i < batch.data.size(); ++i) {
+            auto dtype = param_.dtype
+                             ? param_.dtype.value()
+                             : batch.data[i].type_flag_;
+            (*dptr)->data.at(i) = NDArray(batch.data[i].shape_,
+                                          Context::CPU(), false,
+                                          dtype);
           }
         }
+        CHECK(batch.data.size() == (*dptr)->data.size());
         // copy data over
-        size_t j = 0;
-        for (size_t i = 0; i < (*dptr)->data.size(); ++i) {
-          auto& nd = ((*dptr)->data)[i];
-          auto stype = nd.storage_type();
-          auto& data_i = ((*dptr)->data)[i];
-          if (stype == kDefaultStorage) {
-            CopyFromTo(data_i.data(), batch.data[j]);
-          } else if (stype == kCSRStorage){
-            auto& values = batch.data[j];
-            auto& indices = batch.data[j + 1];
-            auto& indptr = batch.data[j + 2];
-            // allocate memory
-            CHECK_EQ(indices.shape_.Size(),values.shape_.Size());
-            nd.CheckAndAllocAuxData(csr::kIdx, indices.shape_);
-            nd.CheckAndAllocData(values.shape_);
-            nd.CheckAndAllocAuxData(csr::kIndPtr, indptr.shape_);
-            // copy values, indices and indptr
-            CopyFromTo(data_i.data(), values);
-            CopyFromTo(data_i.aux_data(csr::kIdx), indices);
-            CopyFromTo(data_i.aux_data(csr::kIndPtr), indptr);
-          } else {
-            LOG(FATAL) << "Storage type not implemented: " << stype;
-          }
-          j += NDArray::NumAuxData(stype) + 1;
+        for (size_t i = 0; i < batch.data.size(); ++i) {
+          CHECK_EQ((*dptr)->data.at(i).shape(), batch.data[i].shape_);
+          MSHADOW_TYPE_SWITCH(batch.data[i].type_flag_, DType, {
+              mshadow::Copy(((*dptr)->data)[i].data().FlatTo2D<cpu, DType>(),
+                        batch.data[i].FlatTo2D<cpu, DType>());
+          });
           (*dptr)->num_batch_padd = batch.num_batch_padd;
         }
         if (batch.inst_index) {
@@ -137,35 +114,19 @@ class PrefetcherIter : public IIterator<DataBatch> {
     return *out_;
   }
 
-  virtual const NDArrayStorageType GetStorageType(bool is_data) const {
-    return loader_->GetStorageType(is_data);
-  }
-
-  virtual const TShape GetShape(bool is_data) const {
-    return loader_->GetShape(is_data);
-  }
-
  protected:
   /*! \brief prefetcher parameters */
   PrefetcherParam param_;
-  /*! \brief internal batch loader */
-  std::unique_ptr<IIterator<TBlobBatch> > loader_;
+  /*! \brief backend thread */
+  dmlc::ThreadedIter<DataBatch> iter_;
 
  private:
+  /*! \brief internal batch loader */
+  std::unique_ptr<IIterator<TBlobBatch> > loader_;
   /*! \brief output data */
   DataBatch *out_;
   /*! \brief queue to be recycled */
   std::queue<DataBatch*> recycle_queue_;
-  /*! \brief backend thread */
-  dmlc::ThreadedIter<DataBatch> iter_;
-  /*! \brief storage type of NDArray */
-
-  inline void CopyFromTo(TBlob dst, const TBlob src) {
-    MSHADOW_TYPE_SWITCH(src.type_flag_, DType, {
-      mshadow::Copy(dst.FlatTo1D<cpu, DType>(), src.FlatTo1D<cpu, DType>());
-    });
-  }
-
 };
 }  // namespace io
 }  // namespace mxnet
