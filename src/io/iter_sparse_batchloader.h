@@ -31,10 +31,10 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
 
   inline void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
     BatchLoader::Init(kwargs);
-    datastype_ = sparse_base_->GetStorageType(true);
+    data_stype_ = sparse_base_->GetStorageType(true);
     label_stype_ = sparse_base_->GetStorageType(false);
     if (param.round_batch == 0) {
-      LOG(FATAL) << "CSR batch loader doesn't support round_batch == false";
+      LOG(FATAL) << "sparse batch loader doesn't support round_batch == false yet";
     }
   }
 
@@ -43,13 +43,10 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
   }
 
   virtual bool Next(void) {
-    if (param.round_batch == 0) {
-      LOG(FATAL) << "CSR batch loader doesn't support round_batch == false";
-    }
     out.num_batch_padd = 0;
     out.batch_size = param.batch_size;
     this->head = 0;
-    // if overflow from previous round, directly return false, until before first is called
+    // if overflown from previous round, directly return false, until before first is called
     if (num_overflow != 0) return false;
     index_t top = 0;
     inst_cache_.clear();
@@ -122,23 +119,28 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
   }
 
  private:
-  // TODO comments
-  /*! \brief base iterator */
+  /*! \brief base sparse iterator */
   SparseIIterator<DataInst> *sparse_base_;
-  /*! \brief unit size */
+  /*! \brief data instances */
   std::vector<DataInst> inst_cache_;
-  NDArrayStorageType datastype_;
+  /*! \brief data storage type */
+  NDArrayStorageType data_stype_;
+  /*! \brief data label type */
   NDArrayStorageType label_stype_;
+  /*! \brief tensor offset for slicing */
   std::vector<size_t> offsets_;
 
+  // check whether ith position is the indptr tensor for a CSR tensor
   inline bool IsIndPtr(size_t i) {
-    auto datanum_aux = NDArray::NumAuxData(datastype_);
+    auto data_num_aux = NDArray::NumAuxData(data_stype_);
     auto label_num_aux = NDArray::NumAuxData(label_stype_);
-    if (i == datanum_aux && datastype_ == kCSRStorage) {
+    auto label_indptr_offset = data_num_aux + 1 + label_num_aux;
+    // data indptr
+    if (i == data_num_aux && data_stype_ == kCSRStorage) {
       return true;
     }
-    if (i == datanum_aux + 1 + label_num_aux &&
-        label_stype_ == kCSRStorage && datastype_ == kCSRStorage) {
+    // label indptr
+    if (i == label_indptr_offset && label_stype_ == kCSRStorage && data_stype_ == kCSRStorage) {
       return true;
     }
     return false;
@@ -146,7 +148,7 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
 
   // initialize the data holder by using from the batch
   inline void InitDataFromBatch() {
-    CHECK(datastype_ == kCSRStorage || label_stype_ == kCSRStorage);
+    CHECK(data_stype_ == kCSRStorage || label_stype_ == kCSRStorage);
     CHECK(inst_cache_.size() > 0);
     out.data.clear();
     offsets_.clear();
@@ -158,7 +160,7 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
     // accumulate the memory required for a batch
     for (size_t i = 0; i < total_size; ++i) {
       size_t size = 0;
-      // vec_sizes for indptr
+      // vec_size for indptr
       if (IsIndPtr(i)) {
         size = param.batch_size + 1;
       } else {

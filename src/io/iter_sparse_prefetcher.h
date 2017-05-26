@@ -46,32 +46,33 @@ class SparsePrefetcherIter : public PrefetcherIter {
           // (*dptr)->data.at(1) => label
           (*dptr)->data.resize(2);
           (*dptr)->index.resize(batch.batch_size);
-          size_t j = 0;
+          size_t data_iter = 0;
           for (size_t i = 0; i < (*dptr)->data.size(); ++i) {
             bool is_data = i == 0;
             auto stype = this->GetStorageType(is_data);
-            auto dtype = param_.dtype ? param_.dtype.value() : batch.data[j].type_flag_;
+            auto dtype = param_.dtype ? param_.dtype.value() : batch.data[data_iter].type_flag_;
             if (stype == kDefaultStorage) {
-              (*dptr)->data.at(i) = NDArray(batch.data[j].shape_, Context::CPU(), false, dtype);
+              (*dptr)->data.at(i) = NDArray(batch.data[data_iter].shape_,
+                                            Context::CPU(), false, dtype);
             } else {
               (*dptr)->data.at(i) = NDArray(stype, this->GetShape(is_data),
                                             Context::CPU(), false, dtype);
             }
-            j += NDArray::NumAuxData(stype) + 1;
+            data_iter += NDArray::NumAuxData(stype) + 1;
           }
         }
         // copy data over
-        size_t j = 0;
+        size_t data_iter = 0;
         for (size_t i = 0; i < (*dptr)->data.size(); ++i) {
           auto& nd = ((*dptr)->data)[i];
           auto stype = nd.storage_type();
           auto& data_i = ((*dptr)->data)[i];
           if (stype == kDefaultStorage) {
-            CopyFromTo(data_i.data(), batch.data[j]);
+            CopyFromTo(data_i.data(), batch.data[data_iter]);
           } else if (stype == kCSRStorage){
-            auto& values = batch.data[j];
-            auto& indices = batch.data[j + 1];
-            auto& indptr = batch.data[j + 2];
+            auto& values = batch.data[data_iter];
+            auto& indices = batch.data[data_iter + 1];
+            auto& indptr = batch.data[data_iter + 2];
             // allocate memory
             CHECK_EQ(indices.shape_.Size(),values.shape_.Size());
             nd.CheckAndAllocAuxData(csr::kIdx, indices.shape_);
@@ -84,7 +85,7 @@ class SparsePrefetcherIter : public PrefetcherIter {
           } else {
             LOG(FATAL) << "Storage type not implemented: " << stype;
           }
-          j += NDArray::NumAuxData(stype) + 1;
+          data_iter += NDArray::NumAuxData(stype) + 1;
           (*dptr)->num_batch_padd = batch.num_batch_padd;
         }
         if (batch.inst_index) {
@@ -116,11 +117,10 @@ class SparsePrefetcherIter : public PrefetcherIter {
     return sparse_loader_->GetShape(is_data);
   }
 
- protected:
+ private:
   /*! \brief internal sparse batch loader */
   SparseIIterator<TBlobBatch>* sparse_loader_;
 
- private:
   inline void CopyFromTo(TBlob dst, const TBlob src) {
     MSHADOW_TYPE_SWITCH(src.type_flag_, DType, {
       mshadow::Copy(dst.FlatTo1D<cpu, DType>(), src.FlatTo1D<cpu, DType>());
