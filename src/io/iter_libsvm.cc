@@ -169,10 +169,12 @@ class LibSVMIter: public SparseIIterator<DataInst> {
 DMLC_REGISTER_PARAMETER(LibSVMIterParam);
 
 MXNET_REGISTER_IO_ITER(LibSVMIter)
-.describe(R"code(Returns the LibSVM file iterator.
+.describe(R"code(Returns the LibSVM file iterator. This iterator is experimental and
+should be used with care.
 
-The input data is in libsvm format. Example input can be downloaded at
-`https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/multiclass/shuttle.scale.t`
+The input data is similar to libsvm file format, except that the indices are expected to be
+zero-based instead of one-based. Details of the libsvm format are available at
+`https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/`
 
 In this function, the `data_shape` parameter is used to set the shape of each line of the data.
 The dimension of both `data_shape` and `label_shape` are expected to be 1.
@@ -191,18 +193,57 @@ If ``data_libsvm = 'data/'`` is set, then all the files in this directory will b
 Examples::
 
   // Contents of libsvm file ``data.t``.
+  1.0 0:0.5 2:1.2
+  -2.0
+  -3.0 0:0.6 1:2.4 2:1.2
+  4 2:-1.2
 
-  // Creates a `LibSVMIter` with `batch_size`=2.
+  // Creates a `LibSVMIter` with `batch_size`=3.
   LibSVMIter = mx.io.LibSVMIter(data_libsvm = 'data.t', data_shape = (3,),
-  batch_size = 2)
+  batch_size = 3)
 
-  // Two batches read from the above iterator are as follows:
-  [[ 1.  2.  3.]
-  [ 2.  3.  4.]]
-  [[ 3.  4.  5.]
-  [ 4.  5.  6.]]
+  // The first batch (data and label)
+  [[ 0.5         0.          1.2 ]
+   [ 0.          0.          0.  ]
+   [ 0.6         2.4         1.2 ]]
 
-  // TODO(haibin) example for both data and label
+  [ 1. -2. -3.]
+
+  // The second batch (data and label)
+  [[ 0.          0.         -1.2 ]
+   [ 0.5         0.          1.2 ]
+   [ 0.          0.          0. ]]
+
+  [ 4.  1. -2.]
+
+  // Contents of libsvm file ``label.t``
+  1.0
+  -2.0 0:0.125
+  -3.0 2:1.2
+  4 1:1.0 2:-1.2
+
+  // Creates a `LibSVMIter` with specified label file
+  LibSVMIter = mx.io.LibSVMIter(data_libsvm = 'data.t', data_shape = (3,),
+  label_libsvm = 'label.t', label_shape = (3,), batch_size = 3)
+
+  // Two batches of data read from the above iterator are as follows(data and label):
+  // The first batch
+  [[ 0.5         0.          1.2       ]
+   [ 0.          0.          0.        ]
+   [ 0.6         2.4         1.2      ]]
+
+  [[ 0.          0.          0.        ]
+   [ 0.125       0.          0.        ]
+   [ 0.          0.          1.2      ]]
+
+  // The second batch
+  [[ 0.          0.         -1.2       ]
+   [ 0.5         0.          1.2       ]
+   [ 0.          0.          0.        ]]
+
+  [[ 0.          1.         -1.2       ]
+   [ 0.          0.          0.        ]
+   [ 0.125       0.          0.        ]]
 
 )code" ADD_FILELINE)
 .add_arguments(LibSVMIterParam::__FIELDS__())

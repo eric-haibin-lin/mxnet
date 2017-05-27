@@ -79,7 +79,6 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
           // indptr tensor
           if (IsIndPtr(i)) {
             auto indptr = data[i].get<cpu, 1, IType>();
-            CHECK_NE(unit_size, 0);
             if (j == 0) indptr[0] = 0;
             indptr[j + 1] = indptr[j] + (IType) unit_size;
             offsets_[i] = j;
