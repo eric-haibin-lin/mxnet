@@ -55,57 +55,86 @@ def test_dot_real():
         result.wait_to_read()
 
     end = time.time()
-    duration = end - start
-    print(size / duration, duration, num_batch, num_batch / duration)
+    cost = end - start
+    print(size / cost, cost, num_batch, num_batch / cost)
 
 def test_dot_synthetic():
     """benchmark mx.nd.dot(sparse_ndarray, dense_ndarray) with given density.
     `t_sparse` is the time cost of dot(csr, dns), while `t_dense` is the time cost
     of dot(dns, dns), with the same matrix except that it is in default storage type.
     """
-    def bench_dot(m, k, n, density, ctx):
-        set_default_context(ctx)
-        weight = mx.nd.random_uniform(low=0, high=1, shape=(k, n))
-        weight = weight.copyto(ctx)
-        data_shape = (m, k)
+    def measure_cost(repeat, f, *args, **kwargs):
+       # start bench
+       start = time.time()
+       results = []
+       for i in range(repeat):
+           results.append(f(*args, **kwargs))
+       for result in results:
+           result.wait_to_read()
+       end = time.time()
+       diff = end - start
+       return diff / repeat
 
+    def bench_dot_forward(m, k, n, density, ctx, repeat):
+        set_default_context(ctx)
+        dns = mx.nd.random_uniform(shape=(k, n)).copyto(ctx)
+        data_shape = (m, k)
         csr_data = rand_ndarray(data_shape, 'csr', density)
         dns_data = csr_data.to_dense()
-        num_iter = 50
 
         data = [dns_data, csr_data]
-        durations = []
+        costs = []
         for d in data:
-            weight.wait_to_read()
+            dns.wait_to_read()
             d.wait_to_read()
-            # start bench
-            start = time.time()
-            results = []
-            for i in range(num_iter):
-                results.append(mx.nd.dot(d, weight))
-            for result in results:
-                result.wait_to_read()
-            end = time.time()
-            duration = end - start
-            durations.append(duration / num_iter)
-        ratio = durations[1] / durations[0]
+            cost = measure_cost(repeat, mx.nd.dot, d, dns)
+            costs.append(cost / repeat)
+        ratio = costs[1] / costs[0]
         fmt = "%0.1f\t\t%s\t%d\t%d\t%d\t%0.6f\t%0.5f\t%0.2f"
-        print(fmt % (density * 100, str(ctx), n, m, k, durations[1], durations[0], ratio))
+        print(fmt % (density * 100, str(ctx), n, m, k, costs[1], costs[0], ratio))
+
+    def bench_dot_backward(m, k, n, density, ctx, repeat):
+        set_default_context(ctx)
+        dns = mx.nd.random_uniform(shape=(m, n)).copyto(ctx)
+        data_shape = (m, k)
+        csr_data = rand_ndarray(data_shape, 'csr', density)
+        dns_data = csr_data.to_dense()
+
+        data = [dns_data, csr_data]
+        costs = []
+        for d in data:
+            dns.wait_to_read()
+            d.wait_to_read()
+            cost = measure_cost(repeat, mx.nd.dot, d, dns, transpose_a=True)
+            costs.append(cost)
+        ratio = costs[1] / costs[0]
+        fmt = "%0.1f\t\t%s\t%d\t%d\t%d\t%0.6f\t%0.5f\t%0.2f"
+        print(fmt % (density * 100, str(ctx), n, m, k, costs[1], costs[0], ratio))
+
 
     print("A = sparse NDArray of shape(m, k)")
     print("B = dense NDArray of shape(k, n)")
+    print("dot_forward\tdot(csr, dns)")
     print('density(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
     # TODO(haibin) make these runtime options
     m = 512
-    k = [50000, 500000]
-    n = [50, 500]
-    density = [0.1, 0.05, 0.01, 0.005, 0.001]
+    k = [50000, 100000]
+    n = [50, 100]
+    density = [0.05, 0.02, 0.01, 0.005, 0.001]
+    num_repeat = 1
     # contexts = [mx.cpu(), mx.gpu(0)]
     contexts = [mx.cpu()]
     for i in range(2):
         for ctx in contexts:
             for den in density:
-                bench_dot(m, k[i], n[i], den, ctx)
+                bench_dot_forward(m, k[i], n[i], den, ctx, num_repeat)
+
+    print("dot_backward\tdot(csr.T, dns)")
+    print('density(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
+    for i in range(2):
+        for ctx in contexts:
+            for den in density:
+                bench_dot_backward(m, k[i], n[i], den, ctx, num_repeat)
 
 if __name__ == "__main__":
     test_dot_real()
