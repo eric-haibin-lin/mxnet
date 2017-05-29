@@ -44,9 +44,8 @@ ifeq ($(DEV), 1)
 endif
 
 # CFLAGS for debug
-# FIXME(haibin) temporarily turn on -DDMLC_LOG_FATAL_THROW for debug
 ifeq ($(DEBUG), 1)
-	CFLAGS += -g -O0 -DDMLC_LOG_FATAL_THROW=1
+	CFLAGS += -g -O0
 else
 	CFLAGS += -O3 -DNDEBUG=1
 endif
