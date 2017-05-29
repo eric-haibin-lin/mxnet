@@ -89,7 +89,7 @@ def test_dot_synthetic():
             duration = end - start
             durations.append(duration / num_iter)
         ratio = durations[1] / durations[0]
-        fmt = "%0.1f\t%s\t%d\t%d\t%d\t%0.6f\t%0.5f\t%0.2f"
+        fmt = "%0.1f\t\t%s\t%d\t%d\t%d\t%0.6f\t%0.5f\t%0.2f"
         print(fmt % (density * 100, str(ctx), n, m, k, durations[1], durations[0], ratio))
 
     print("A = sparse NDArray of shape(m, k)")
@@ -97,14 +97,15 @@ def test_dot_synthetic():
     print('density(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
     # TODO(haibin) make these runtime options
     m = 512
-    k = 50000
-    n = 50
+    k = [50000, 500000]
+    n = [50, 500]
     density = [0.1, 0.05, 0.01, 0.005, 0.001]
     # contexts = [mx.cpu(), mx.gpu(0)]
     contexts = [mx.cpu()]
-    for ctx in contexts:
-        for den in density:
-            bench_dot(m, k, n, den, ctx)
+    for i in range(2):
+        for ctx in contexts:
+            for den in density:
+                bench_dot(m, k[i], n[i], den, ctx)
 
 if __name__ == "__main__":
     test_dot_real()
