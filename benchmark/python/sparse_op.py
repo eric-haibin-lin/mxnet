@@ -83,11 +83,13 @@ def test_dot_synthetic():
                 result.wait_to_read()
             end = time.time()
             duration = end - start
-            durations.append(duration)
+            durations.append(duration / num_iter)
         ratio = durations[1] / durations[0]
-        print("%0.1f\t%s\t%d\t%d\t%d\t%0.2f" % (density * 100, str(ctx), n, m, k, ratio))
+        fmt = "%0.1f\t%s\t%d\t%d\t%d\t%0.6f\t%0.5f\t%0.2f"
+        print(fmt % (density * 100, str(ctx), n, m, k, durations[1], durations[0], ratio))
 
-    print('nnz(%)\tcontext\tn\tm\tk\tt_sparse/t_dense')
+    print('nnz(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
+    # TODO(haibin) make these runtime options
     m = 512
     k = 50000
     n = 50
