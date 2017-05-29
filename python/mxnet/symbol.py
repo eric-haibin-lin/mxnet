@@ -1416,7 +1416,7 @@ class Symbol(SymbolBase):
             shared_buffer_names = []
             shared_buffer_handles = []
             for k, v in shared_buffer.items():
-                assert(v.storage_type == 'default_storage'), \
+                assert(v.storage_type == 'default'), \
                     "shared_buffer is expected to only contain NDArrays with default storage"
                 shared_buffer_names.append(c_str(k))
                 shared_buffer_handles.append(v.handle)

@@ -495,11 +495,11 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     """Creates a row sparse array with a set of tensor slices at given indices.
 
     A SparseNDArray with `row_sparse` storage is typically used to represent a subset of a larger
-    NDArray  with `default_storage` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
+    NDArray  with `default` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
     in indices are the indices in the first dimension of the slices that have been extracted from
     the larger NDArray. The indices are expected to be sorted in ascending order.
 
-    The corresponding NDArray ``dense`` with `default_storage` represented by a ``rsp``
+    The corresponding NDArray ``dense`` with `default` represented by a ``rsp``
     SparseNDArray with `row_sparse` storage has
 
     ``dense[rsp.indices[i], :, :, :, ...] = rsp.values[i, :, :, :, ...]``
@@ -558,7 +558,7 @@ def to_dense(source):
     SparseNDArray
         The dense array with default storage
     """
-    return ndarray.cast_storage(source, storage_type='default_storage')
+    return ndarray.cast_storage(source, storage_type='default')
 
 def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
     """Return a new array of given shape and type, filled with zeros.
@@ -604,7 +604,7 @@ def _ndarray_cls(handle):
     stype = _storage_type(handle)
     # TODO(haibin) in the long run, we want to have CSRNDArray and RowSparseNDArray which
     # inherit from SparseNDArray
-    return NDArray(handle) if stype == 'default_storage' else SparseNDArray(handle)
+    return NDArray(handle) if stype == 'default' else SparseNDArray(handle)
 
 # pylint: enable=too-many-locals, invalid-name
 def _init_ndarray_module(ndarray_class, root_namespace):

@@ -58,8 +58,8 @@ def check_ctx_group_sparse(lhs_stype, rhs_stype):
             assert arr.context == group2ctx['stage2']
 
 def test_ctx_group_sparse():
-    check_ctx_group_sparse('default_storage', 'default_storage')
-    check_ctx_group_sparse('default_storage', 'row_sparse')
+    check_ctx_group_sparse('default', 'default')
+    check_ctx_group_sparse('default', 'row_sparse')
     check_ctx_group_sparse('row_sparse', 'row_sparse')
 
 if __name__ == '__main__':

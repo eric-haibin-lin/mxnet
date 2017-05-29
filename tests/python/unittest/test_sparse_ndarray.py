@@ -20,7 +20,7 @@ def check_sparse_nd_elemwise_binary(shapes, storage_types, f, g):
     for i, storage_type in enumerate(storage_types):
         if storage_type == 'row_sparse':
             nd, _ = rand_sparse_ndarray(shapes[i], storage_type)
-        elif storage_type == 'default_storage':
+        elif storage_type == 'default':
             nd = mx.nd.array(random_arrays(shapes[i]), dtype = np.float32)
         else:
             assert(False)
@@ -36,9 +36,9 @@ def test_sparse_nd_elemwise_add():
     for i in range(num_repeats):
         shape = [rand_shape_2d()] * 2
         assert_fcompex(check_sparse_nd_elemwise_binary,
-                       shape, ['default_storage'] * 2, op, g)
+                       shape, ['default'] * 2, op, g)
         assert_fcompex(check_sparse_nd_elemwise_binary,
-                       shape, ['default_storage', 'row_sparse'], op, g)
+                       shape, ['default', 'row_sparse'], op, g)
         assert_fcompex(check_sparse_nd_elemwise_binary,
                        shape, ['row_sparse', 'row_sparse'], op, g)
 
@@ -49,8 +49,8 @@ def test_sparse_nd_elementwise_fallback():
     op = mx.nd.add_n
     for i in range(num_repeats):
         shape = [rand_shape_2d()] * 2
-        check_sparse_nd_elemwise_binary(shape, ['default_storage'] * 2, op, g)
-        check_sparse_nd_elemwise_binary(shape, ['default_storage', 'row_sparse'], op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default'] * 2, op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default', 'row_sparse'], op, g)
         check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
 
 def test_sparse_nd_zeros():
@@ -77,9 +77,9 @@ def test_sparse_nd_copy():
         assert np.sum(np.abs(from_nd.asnumpy() != to_nd.asnumpy())) == 0.0
 
     check_sparse_nd_copy('row_sparse', 'row_sparse')
-    check_sparse_nd_copy('row_sparse', 'default_storage')
-    check_sparse_nd_copy('default_storage', 'row_sparse')
-    check_sparse_nd_copy('default_storage', 'csr')
+    check_sparse_nd_copy('row_sparse', 'default')
+    check_sparse_nd_copy('default', 'row_sparse')
+    check_sparse_nd_copy('default', 'csr')
 
 def check_sparse_nd_prop_rsp():
     storage_type = 'row_sparse'
@@ -132,7 +132,7 @@ def test_sparse_nd_setitem():
     shape = rand_shape_2d()
     for stype in ['row_sparse', 'csr']:
         # ndarray assignment
-        check_sparse_nd_setitem(stype, shape, rand_ndarray(shape, 'default_storage'))
+        check_sparse_nd_setitem(stype, shape, rand_ndarray(shape, 'default'))
         check_sparse_nd_setitem(stype, shape, rand_ndarray(shape, stype))
         # numpy assignment
         check_sparse_nd_setitem(stype, shape, np.ones(shape))

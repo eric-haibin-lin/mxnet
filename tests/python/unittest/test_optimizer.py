@@ -30,8 +30,8 @@ def test_lr_wd_mult():
     assert not mx.test_utils.almost_equal(args1['fc2_weight'], args2['fc2_weight'], 1e-1)
 
 
-def compare_optimizer(opt1, opt2, shape, w_stype='default_storage', g_stype='default_storage'):
-    if w_stype == 'default_storage':
+def compare_optimizer(opt1, opt2, shape, w_stype='default', g_stype='default'):
+    if w_stype == 'default':
         w2 = mx.random.uniform(shape=shape, ctx=default_context())
         w1 = w2.copyto(default_context())
     elif w_stype == 'row_sparse':
@@ -39,7 +39,7 @@ def compare_optimizer(opt1, opt2, shape, w_stype='default_storage', g_stype='def
         w1 = rand_ndarray(shape, w_stype).to_dense()
     else:
         raise Exception("type not supported yet")
-    if g_stype == 'default_storage':
+    if g_stype == 'default':
         g2 = mx.random.uniform(shape=shape, ctx=default_context())
         g1 = g2.copyto(default_context())
     elif g_stype == 'row_sparse':
@@ -230,7 +230,7 @@ def test_sparse_sgd():
               {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03, 'momentum': 0.9},
               {'rescale_grad': 0.8, 'wd': 0.05, 'momentum': 0.9}]
     for kwarg in kwargs:
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, w_stype='default_storage', g_stype='row_sparse')
+        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, w_stype='default', g_stype='row_sparse')
 
 # ADAM
 

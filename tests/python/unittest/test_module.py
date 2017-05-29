@@ -259,7 +259,7 @@ def test_monitor():
     assert(mon_result_counts == [2, 2, 1, 6, 6, 4])
 
 def test_fm_module():
-    def fm_model(k, feature_dim, storage_type='default_storage'):
+    def fm_model(k, feature_dim, storage_type='default'):
          initializer = mx.initializer.Normal(sigma=0.01)
          x = mx.symbol.Variable("data", storage_type=storage_type)
          v = mx.symbol.Variable("v", shape=(feature_dim, k), init=initializer)
@@ -310,7 +310,7 @@ def test_fm_module():
     metric = mx.metric.create('MSE')
     # train 5 epoch, i.e. going over the data iter one pass
     # TODO(haibin) test with row_sparse instead
-    storage_type_dict = {'v' : 'default_storage'}
+    storage_type_dict = {'v' : 'default'}
 
     for epoch in range(10):
         train_iter.reset()

@@ -206,12 +206,10 @@ struct relu_grad {
 }  // namespace kernel_launch_op
 
 struct CastStorageParam : public dmlc::Parameter<CastStorageParam> {
-  // use int for enumeration
-  // TODO(haibin) add enum for storage_type. Probably also aux-types
   int storage_type;
   DMLC_DECLARE_PARAMETER(CastStorageParam) {
     DMLC_DECLARE_FIELD(storage_type)
-    .add_enum("default_storage", kDefaultStorage)
+    .add_enum("default", kDefaultStorage)
     .add_enum("row_sparse", kRowSparseStorage)
     .add_enum("csr", kCSRStorage)
     .describe("Output storage type.");

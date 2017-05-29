@@ -28,9 +28,9 @@ def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_
 
 def test_elemwise_add_ex():
     shape = rand_shape_2d()
-    check_elemwise_add_ex('default_storage', 'default_storage', shape)
-    check_elemwise_add_ex('default_storage', 'row_sparse', shape)
-    check_elemwise_add_ex('row_sparse', 'default_storage', shape)
+    check_elemwise_add_ex('default', 'default', shape)
+    check_elemwise_add_ex('default', 'row_sparse', shape)
+    check_elemwise_add_ex('row_sparse', 'default', shape)
     check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
                           lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
@@ -69,11 +69,11 @@ def test_elemwise_add_ex_multiple_stages():
     exec_test.backward(out_grads=exec_test.outputs)
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
-# TODO(haibin) also add test for backward pass
+# TODO(haibin) also add test for backward pass. Check if exception is thrown
 def test_cast_storage_ex():
     def test_rsp_to_dns(shape):
         rsp, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse')
-        dns_out = mx.nd.cast_storage(rsp, storage_type='default_storage')
+        dns_out = mx.nd.cast_storage(rsp, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())
         if row_idx is not None:
             for k, v in enumerate(row_idx):
@@ -81,9 +81,9 @@ def test_cast_storage_ex():
         assert same(dns_out.asnumpy(), dns_expected)
 
     def test_dns_to_rsp(shape):
-        dns_in = rand_ndarray(shape, 'default_storage')
+        dns_in = rand_ndarray(shape, 'default')
         rsp_out = mx.nd.cast_storage(mx.nd.array(dns_in, dtype=default_dtype()), storage_type='row_sparse')
-        ret = mx.nd.cast_storage(rsp_out, storage_type='default_storage')
+        ret = mx.nd.cast_storage(rsp_out, storage_type='default')
         assert same(ret.asnumpy(), dns_in.asnumpy())
 
     def test_csr_to_dns(shape):
@@ -95,7 +95,7 @@ def test_cast_storage_ex():
     def test_dns_to_csr(dns_in):
         dns_in = np.array(dns_in)
         csr_out = mx.nd.cast_storage(mx.nd.array(dns_in, dtype=default_dtype()), storage_type='csr')
-        ret = mx.nd.cast_storage(csr_out, storage_type='default_storage')
+        ret = mx.nd.cast_storage(csr_out, storage_type='default')
         assert same(ret.asnumpy(), dns_in)
 
     shape = rand_shape_2d()
@@ -106,11 +106,11 @@ def test_cast_storage_ex():
 
 def test_sparse_dot():
     def test_dot_csr_dns(csr_shape, dns_shape, trans_csr):
-        dns1 = rand_ndarray(csr_shape, 'default_storage')
-        dns2 = rand_ndarray(dns_shape, 'default_storage')
+        dns1 = rand_ndarray(csr_shape, 'default')
+        dns2 = rand_ndarray(dns_shape, 'default')
         csr = mx.nd.cast_storage(dns1, storage_type='csr')
         out = mx.nd.dot(csr, dns2, transpose_a=trans_csr)
-        assert out.storage_type == 'default_storage'
+        assert out.storage_type == 'default'
         out_expected = mx.nd.dot(dns1, dns2, transpose_a=trans_csr)
         out_np = out_expected.asnumpy()
         backward_trans = not trans_csr
@@ -119,7 +119,7 @@ def test_sparse_dot():
 
         # test symbolic forward
         lhs = mx.symbol.Variable('lhs', storage_type='csr')
-        rhs = mx.symbol.Variable('rhs', storage_type='default_storage')
+        rhs = mx.symbol.Variable('rhs', storage_type='default')
         test = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
         location = {'lhs': csr, 'rhs': dns2}
         expected = {'rhs': rhs_backward_grad}
