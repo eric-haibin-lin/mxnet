@@ -100,7 +100,7 @@ double EvaluateWorloads(const std::vector<Workload>& workloads,
   return dmlc::GetTime() - t;
 }
 
-/*TEST(Engine, RandSumExpr) {
+TEST(Engine, RandSumExpr) {
   std::vector<Workload> workloads;
   int num_repeat = 5;
   const int num_engine = 4;
@@ -134,11 +134,11 @@ double EvaluateWorloads(const std::vector<Workload>& workloads,
   LOG(INFO) << "NaiveEngine\t\t"  << t[1] << " sec";
   LOG(INFO) << "ThreadedEnginePooled\t" << t[2] << " sec";
   LOG(INFO) << "ThreadedEnginePerDevice\t" << t[3] << " sec";
-}*/
+}
 
 void Foo(mxnet::RunContext, int i) { printf("The fox says %d\n", i); }
 
-/*TEST(Engine, basics) {
+TEST(Engine, basics) {
   auto&& engine = mxnet::Engine::Get();
   auto&& var = engine->NewVariable();
   std::vector<mxnet::Engine::OprHandle> oprs;
@@ -235,4 +235,4 @@ void Foo(mxnet::RunContext, int i) { printf("The fox says %d\n", i); }
   var = nullptr;
   oprs.clear();
   LOG(INFO) << "All pass";
-}*/
+}
