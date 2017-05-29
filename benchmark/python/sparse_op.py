@@ -8,25 +8,33 @@ import pickle as pickle
 import time
 import sys
 
-def test_dot_real(dataset):
+def get_avazu(data_dir):
+    if not os.path.isdir(data_dir):
+        os.system("mkdir " + data_dir)
+    os.chdir(data_dir)
+    if (not os.path.exists('avazu-app.t')):
+        import urllib, zipfile
+        zippath = os.path.join(data_dir, "avazu-app.t.bz2")
+        url = "https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/avazu-app.t.bz2"
+        urllib.urlretrieve(url, zippath)
+        # decompress
+        os.system("bzip2 -d avazu-app.t.bz2")
+    os.chdir("..")
+
+def test_dot_real():
     def get_iter(path, data_shape, batch_size):
         data_train = mx.io.LibSVMIter(data_libsvm=path,
                                       data_shape=data_shape,
                                       batch_size=batch_size)
         data_iter = iter(data_train)
         return data_iter
-    # TODO(haibin) add script downloading dataset
-    batch_size = 512
-    if dataset == 'train':
-        size = 2858375979 >> 20
-        path = "/home/ubuntu/svm/avazu-app"
-    elif dataset == 'test':
-        size = 336490781 >> 20
-        path = "/home/ubuntu/svm/avazu-app.t"
-    else:
-        raise Exception('unknown dataset')
+    data_dir = os.path.join(os.getcwd(), 'data')
+    get_avazu(data_dir)
+    path = os.path.join(data_dir, 'avazu-app.t')
+    size = 336490781 >> 20
 
     # model
+    batch_size = 512
     feature_dim = 1000000
     data_shape = (feature_dim, )
     train_iter = get_iter(path, data_shape, batch_size)
@@ -91,5 +99,5 @@ def test_dot_synthetic():
             bench_dot(m, k, n, den, ctx)
 
 if __name__ == "__main__":
-    #test_dot_real('test')
+    test_dot_real()
     test_dot_synthetic()
