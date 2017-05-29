@@ -59,6 +59,10 @@ def test_dot_real():
     print(size / duration, duration, num_batch, num_batch / duration)
 
 def test_dot_synthetic():
+    """benchmark mx.nd.dot(sparse_ndarray, dense_ndarray) with given density.
+    `t_sparse` is the time cost of dot(csr, dns), while `t_dense` is the time cost
+    of dot(dns, dns), with the same matrix except that it is in default storage type.
+    """
     def bench_dot(m, k, n, density, ctx):
         set_default_context(ctx)
         weight = mx.nd.random_uniform(low=0, high=1, shape=(k, n))
@@ -88,7 +92,9 @@ def test_dot_synthetic():
         fmt = "%0.1f\t%s\t%d\t%d\t%d\t%0.6f\t%0.5f\t%0.2f"
         print(fmt % (density * 100, str(ctx), n, m, k, durations[1], durations[0], ratio))
 
-    print('nnz(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
+    print("A = sparse NDArray of shape(m, k)")
+    print("B = dense NDArray of shape(k, n)")
+    print('density(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
     # TODO(haibin) make these runtime options
     m = 512
     k = 50000
