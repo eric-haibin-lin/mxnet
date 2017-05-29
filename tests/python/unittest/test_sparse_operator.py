@@ -27,13 +27,12 @@ def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_
 
 
 def test_elemwise_add_ex():
-    shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+    shape = rand_shape_2d()
     check_elemwise_add_ex('default_storage', 'default_storage', shape)
-    # TODO(haibin/jun) enable these tests when Dns -> Rsp (compact) is implemented.
-    #check_elemwise_add_ex('default_storage', 'row_sparse', shape)
-    #check_elemwise_add_ex('row_sparse', 'default_storage', shape)
-    #check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
-    #                      lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    check_elemwise_add_ex('default_storage', 'row_sparse', shape)
+    check_elemwise_add_ex('row_sparse', 'default_storage', shape)
+    check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
+                          lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 # TODO(haibin) randomize this test
@@ -99,19 +98,12 @@ def test_cast_storage_ex():
         ret = mx.nd.cast_storage(csr_out, storage_type='default_storage')
         assert same(ret.asnumpy(), dns_in)
 
-    shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+    shape = rand_shape_2d()
     test_rsp_to_dns(shape)
     test_dns_to_rsp(shape)
     test_csr_to_dns((4, 4))
     test_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
 
-
-# TODO(junwu): The backward of the operator dot cannot be tested for now
-# since the backend function CopyFromTo does not support taking two arguments
-# of the different storage types. Will add backward test after removing this
-# restriction on CopyFromTo(@haibin). Nevertheless, both backward and forward use
-# the same impl function of dot(csr, dns) = rsp and it has been tested
-# in the forward test cases as the following.
 def test_sparse_dot():
     def test_dot_csr_dns(csr_shape, dns_shape, trans_csr):
         dns1 = rand_ndarray(csr_shape, 'default_storage')
@@ -128,24 +120,18 @@ def test_sparse_dot():
         # test symbolic forward
         lhs = mx.symbol.Variable('lhs', storage_type='csr')
         rhs = mx.symbol.Variable('rhs', storage_type='default_storage')
-        # TODO(haibin) since backward op is not fully implemented, here we add a dense zero ndarray
-        # so that the output gradient is dense.
-        zeros = mx.symbol.Variable('zero', storage_type='default_storage')
-
-        sym_dot = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
-        test = mx.symbol.elemwise_add(sym_dot, zeros)
-        location = {'lhs': csr, 'rhs': dns2, 'zero': mx.nd.zeros(out_expected.shape)}
-        expected = {'rhs': rhs_backward_grad, 'zero': out_np}
-        # dot(lhs, rhs) + zeros
+        test = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
+        location = {'lhs': csr, 'rhs': dns2}
+        expected = {'rhs': rhs_backward_grad}
+        # dot(lhs, rhs)
         check_symbolic_forward(test, location, [out_expected.asnumpy()], rtol=1e-3, atol=1e-4)
         check_symbolic_backward(test, location, [out_np], expected,
-                                grad_req={'lhs': 'null', 'rhs': 'write', 'zero': 'write'},
+                                grad_req={'lhs': 'null', 'rhs': 'write'},
                                 rtol=1e-3, atol=1e-4)
 
-    lhs_shape = (rnd.randint(1, 10), rnd.randint(1, 10))
+    lhs_shape = rand_shape_2d()
     test_dot_csr_dns(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), False)
     test_dot_csr_dns(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), True)
-
 
 def test_sparse_embedding():
     in_dim = 10
@@ -190,9 +176,5 @@ def test_sparse_slice():
     check_csr_slice(shape, False)
 
 if __name__ == '__main__':
-    test_elemwise_add_ex()
-    test_elemwise_add_ex_multiple_stages()
-    test_cast_storage_ex()
-    test_sparse_dot()
-    test_sparse_embedding()
-    test_sparse_slice()
+    import nose
+    nose.runmodule()

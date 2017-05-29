@@ -11,9 +11,6 @@ def assert_fcompex(f, *args, **kwargs):
     f(*args, **kwargs)
     mx.test_utils.set_env_var("MXNET_EXEC_STORAGE_FALLBACK", prev_val)
 
-def rand_shape_2d():
-    return (rnd.randint(1, 10), rnd.randint(1, 10))
-
 def sparse_nd_ones(shape, stype):
     return mx.nd.cast_storage(mx.nd.ones(shape), storage_type=stype)
 

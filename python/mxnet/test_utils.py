@@ -101,6 +101,9 @@ def rand_ndarray(shape, storage_type, density=None):
         arr, _ = rand_sparse_ndarray(shape, storage_type, density=density)
     return arr
 
+def rand_shape_2d():
+    return (rnd.randint(1, 10), rnd.randint(1, 10))
+
 def np_reduce(dat, axis, keepdims, numpy_reduce_func):
     """Compatible reduce for old version of NumPy.
 
