@@ -7,7 +7,6 @@ import os, gzip
 import pickle as pickle
 import time
 import sys
-from common import get_data
 
 def test_dot_real(dataset):
     def get_iter(path, data_shape, batch_size):
@@ -16,7 +15,7 @@ def test_dot_real(dataset):
                                       batch_size=batch_size)
         data_iter = iter(data_train)
         return data_iter
-
+    # TODO(haibin) add script downloading dataset
     batch_size = 512
     if dataset == 'train':
         size = 2858375979 >> 20
@@ -52,8 +51,10 @@ def test_dot_real(dataset):
     print(size / duration, duration, num_batch, num_batch / duration)
 
 def test_dot_synthetic():
-    def bench_dot(m, k, n, density):
+    def bench_dot(m, k, n, density, ctx):
+        set_default_context(ctx)
         weight = mx.nd.random_uniform(low=0, high=1, shape=(k, n))
+        weight = weight.copyto(ctx)
         data_shape = (m, k)
 
         csr_data = rand_ndarray(data_shape, 'csr', density)
@@ -76,15 +77,18 @@ def test_dot_synthetic():
             duration = end - start
             durations.append(duration)
         ratio = durations[1] / durations[0]
-        print("%0.2f\t%d\t%d\t%d\t%0.3f" % (density, n, m, k, ratio))
+        print("%0.1f\t%s\t%d\t%d\t%d\t%0.2f" % (density * 100, str(ctx), n, m, k, ratio))
 
-    print('density\tn\tm\tk\tt_sparse/t_dense')
+    print('nnz(%)\tcontext\tn\tm\tk\tt_sparse/t_dense')
     m = 512
     k = 50000
     n = 50
-    density = [0.8, 0.5, 0.2, 0.1, 0.01, 0.001]
-    for den in density:
-        bench_dot(m, k, n, den)
+    density = [0.1, 0.05, 0.01, 0.005, 0.001]
+    # contexts = [mx.cpu(), mx.gpu(0)]
+    contexts = [mx.cpu()]
+    for ctx in contexts:
+        for den in density:
+            bench_dot(m, k, n, den, ctx)
 
 if __name__ == "__main__":
     #test_dot_real('test')
