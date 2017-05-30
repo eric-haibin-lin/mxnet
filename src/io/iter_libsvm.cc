@@ -132,13 +132,13 @@ class LibSVMIter: public SparseIIterator<DataInst> {
   inline TBlob AsDataBlob(const dmlc::Row<uint32_t>& row) {
     const real_t* ptr = row.value;
     TShape shape(mshadow::Shape1(row.length));
-    return TBlob(reinterpret_cast<real_t*>(ptr), shape, cpu::kDevMask);
+    return TBlob((real_t*) ptr, shape, cpu::kDevMask);  // NOLINT(*)
   }
 
   inline TBlob AsIdxBlob(const dmlc::Row<uint32_t>& row) {
     const uint32_t* ptr = row.index;
     TShape shape(mshadow::Shape1(row.length));
-    return TBlob(reinterpret_cast<int32_t*>(ptr), shape, cpu::kDevMask, CSR_IDX_DTYPE);
+    return TBlob((int32_t*) ptr, shape, cpu::kDevMask, CSR_IDX_DTYPE);  // NOLINT(*)
   }
 
   inline TBlob AsIndPtrPlaceholder(const dmlc::Row<uint32_t>& row) {
@@ -147,7 +147,7 @@ class LibSVMIter: public SparseIIterator<DataInst> {
 
   inline TBlob AsScalarLabelBlob(const dmlc::Row<uint32_t>& row) {
     const real_t* ptr = row.label;
-    return TBlob(reinterpret_cast<real_t*>(ptr), mshadow::Shape1(1), cpu::kDevMask);
+    return TBlob((real_t*) ptr, mshadow::Shape1(1), cpu::kDevMask);  // NOLINT(*)
   }
 
   LibSVMIterParam param_;
