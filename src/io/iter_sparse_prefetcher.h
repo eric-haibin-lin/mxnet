@@ -35,6 +35,8 @@ class SparsePrefetcherIter : public PrefetcherIter {
 
   virtual void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
     PrefetcherIter::InitParams(kwargs);
+    // use the kwarg to init batch loader
+    sparse_loader_->Init(kwargs);
     iter.Init([this](DataBatch **dptr) {
         if (!sparse_loader_->Next()) return false;
         const TBlobBatch& batch = sparse_loader_->Value();

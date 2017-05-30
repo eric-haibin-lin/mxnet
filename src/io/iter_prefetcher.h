@@ -44,8 +44,6 @@ class PrefetcherIter : public IIterator<DataBatch> {
     std::vector<std::pair<std::string, std::string> > kwargs_left;
     // init image rec param
     kwargs_left = param_.InitAllowUnknown(kwargs);
-    // use the kwarg to init batch loader
-    loader_->Init(kwargs);
     // maximum prefetch threaded iter internal size
     const int kMaxPrefetchBuffer = 16;
     // init thread iter
@@ -54,6 +52,8 @@ class PrefetcherIter : public IIterator<DataBatch> {
 
   virtual void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
     InitParams(kwargs);
+    // use the kwarg to init batch loader
+    loader_->Init(kwargs);
     iter.Init([this](DataBatch **dptr) {
         if (!loader_->Next()) return false;
         const TBlobBatch& batch = loader_->Value();

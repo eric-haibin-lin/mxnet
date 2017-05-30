@@ -91,19 +91,23 @@ def test_NDArrayIter():
 
 def test_libsvm():
     #TODO(haibin) automatic the test instead of hard coded test
-    with open('data.t', 'w') as fout:
+    cwd = os.getcwd()
+    data_path = os.path.join(cwd, 'data.t')
+    label_path = os.path.join(cwd, 'label.t')
+    with open(data_path, 'w') as fout:
         fout.write('1.0 0:0.5 2:1.2\n')
         fout.write('-2.0\n')
         fout.write('-3.0 0:0.6 1:2.4 2:1.2\n')
         fout.write('4 2:-1.2\n')
 
-    with open('label.t', 'w') as fout:
+    with open(label_path, 'w') as fout:
         fout.write('1.0\n')
         fout.write('-2.0 0:0.125\n')
         fout.write('-3.0 2:1.2\n')
         fout.write('4 1:1.0 2:-1.2\n')
 
-    f = ("/home/ubuntu/svm/data.t", "/home/ubuntu/svm/label.t", (3,), (3,), 3)
+    data_dir = os.path.join(os.getcwd(), 'data')
+    f = (data_path, label_path, (3,), (3,), 3)
     data_train = mx.io.LibSVMIter(data_libsvm=f[0],
                                   label_libsvm=f[1],
                                   data_shape=f[2],
