@@ -31,6 +31,7 @@ def test_dot_real():
     data_dir = os.path.join(os.getcwd(), 'data')
     get_avazu(data_dir)
     path = os.path.join(data_dir, 'avazu-app.t')
+    # TODO(haibin) get file size automatically
     size = 336490781 >> 20
 
     # model
@@ -116,12 +117,13 @@ def test_dot_synthetic():
     print("B = dense NDArray of shape(k, n)")
     print("dot_forward\tdot(csr, dns)")
     print('density(%)\tcontext\tn\tm\tk\tt_sparse\tt_dense\tt_sparse/t_dense')
+
     # TODO(haibin) make these runtime options
     m = 512
     k = [50000, 100000]
     n = [50, 100]
     density = [0.05, 0.02, 0.01, 0.005, 0.001]
-    num_repeat = 1
+    num_repeat = 10
     # contexts = [mx.cpu(), mx.gpu(0)]
     contexts = [mx.cpu()]
     for i in range(2):
