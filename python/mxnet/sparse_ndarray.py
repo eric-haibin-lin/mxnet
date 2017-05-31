@@ -30,16 +30,15 @@ from .ndarray import NDArray, _storage_type, _make_ndarray_function
 # pylint: disable=unused-import
 try:
     if int(_os.environ.get("MXNET_ENABLE_CYTHON", True)) == 0:
-        #TODO remove some import?
-        from ._ctypes.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
+        from ._ctypes.ndarray import NDArrayBase, _set_ndarray_class
     elif _sys.version_info >= (3, 0):
-        from ._cy3.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
+        from ._cy3.ndarray import NDArrayBase, _set_ndarray_class
     else:
-        from ._cy2.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
+        from ._cy2.ndarray import NDArrayBase, _set_ndarray_class
 except ImportError:
     if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
-    from ._ctypes.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
+    from ._ctypes.ndarray import NDArrayBase, _set_ndarray_class
 
 # pylint: enable=unused-import
 _STORAGE_AUX_TYPES = {
@@ -80,7 +79,8 @@ def _new_alloc_handle(storage_type, shape, ctx, delay_alloc, dtype, aux_types, a
 
 class SparseNDArray(NDArray):
     """An array object representing a multidimensional, homogeneous array of
-fixed-size items, stored in sparse format.
+fixed-size items, stored in sparse format. See CSRNDArray and RowSparseNDArray
+for more details.
 
     """
 
@@ -228,7 +228,8 @@ fixed-size items, stored in sparse format.
 
     def _slice(self, start, stop):
         """Returns a read-only SparseNDArray slice that shares memory with current one.
-        To create a writable slice, please use ``mx.nd.slice`` instead.
+        To create a writable slice, please use ``mx.nd.slice`` instead. Currently only
+        `csr` storage type is supported.
 
         Parameters
         ----------
@@ -263,7 +264,7 @@ fixed-size items, stored in sparse format.
         stop = mx_uint(stop) if stop else mx_uint(self.shape[0])
 
         check_call(_LIB.MXNDArraySliceEx(self.handle, start, stop, handle))
-        ret = SparseNDArray(handle=handle, writable=False)
+        ret = _ndarray_cls(handle=handle, writable=False)
         return ret
 
     def _at(self, idx):
@@ -281,14 +282,14 @@ fixed-size items, stored in sparse format.
         Returns
         -------
         numpy.dtype
-            This NDArray's data type.
+            This SparseNDArray's aux data type.
         """
         aux_type = ctypes.c_int()
         check_call(_LIB.MXNDArrayGetAuxType(self.handle, i, ctypes.byref(aux_type)))
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
-    def _values(self):
+    def values(self):
         """The values array of the SparseNDArray. This is a read-only view of the values array.
         They reveal internal implementation details and should be used with care.
 
@@ -299,38 +300,6 @@ fixed-size items, stored in sparse format.
         """
         return self._data()
 
-    @property
-    def _indices(self):
-        """The indices array of the SparseNDArray. This is a read-only view of the indices array.
-        They reveal internal implementation details and should be used with care.
-
-        Returns
-        -------
-        NDArray
-            This SparseNDArray's indices array.
-        """
-        stype = self.storage_type
-        if stype == 'row_sparse':
-            return self._aux_data(0)
-        elif stype == 'csr':
-            return self._aux_data(1)
-        raise Exception("unknown storage type " + stype)
-
-    @property
-    def _indptr(self):
-        """The indptr array of the SparseNDArray with `csr` storage type.
-        This is a read-only view of the indptr array.
-        They reveal internal implementation details and should be used with care.
-
-        Returns
-        -------
-        NDArray
-            This SparseNDArray's indptr array.
-        """
-        stype = self.storage_type
-        if stype == 'csr':
-            return self._aux_data(0)
-        raise Exception("unknown storage type " + stype)
 
     @property
     def _num_aux(self):
@@ -389,7 +358,7 @@ fixed-size items, stored in sparse format.
                 return
             return _internal._copyto(self, out=other)
         elif isinstance(other, Context):
-            hret = SparseNDArray(_new_alloc_handle(self.storage_type, self.shape, other,
+            hret = _ndarray_cls(_new_alloc_handle(self.storage_type, self.shape, other,
                                                    True, self.dtype, self.aux_types))
             return _internal._copyto(self, out=hret)
         else:
@@ -414,6 +383,66 @@ fixed-size items, stored in sparse format.
         check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
         return NDArray(hdl, writable)
 
+class CSRNDArray(SparseNDArray):
+    """A CSRNDArray represents a NDArray as three separate arrays: `values`,
+    `indptr` and `indices`. It uses the standard CSR representation where the column indices for
+    row i are stored in indices[indptr[i]:indptr[i+1]] and their corresponding values are stored
+    in values[indptr[i]:indptr[i+1]].
+
+    """
+
+    @property
+    def indices(self):
+        """The indices array of the SparseNDArray. This is a read-only view of the indices array.
+        They reveal internal implementation details and should be used with care.
+
+        Returns
+        -------
+        NDArray
+            This SparseNDArray's indices array.
+        """
+        return self._aux_data(1)
+
+    @property
+    def indptr(self):
+        """The indptr array of the SparseNDArray with `csr` storage type.
+        This is a read-only view of the indptr array.
+        They reveal internal implementation details and should be used with care.
+
+        Returns
+        -------
+        NDArray
+            This SparseNDArray's indptr array.
+        """
+        return self._aux_data(0)
+
+class RowSparseNDArray(SparseNDArray):
+    """A RowSparseNDArray is typically used to represent a subset of a larger
+    NDArray  with `default` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
+    in indices are the indices in the first dimension of the slices that have been extracted from
+    the larger NDArray. The indices are expected to be sorted in ascending order.
+
+    The corresponding NDArray ``dense`` with `default` storage represented by a ``rsp``
+    RowSparseNDArray
+
+    ``dense[rsp.indices[i], :, :, :, ...] = rsp.values[i, :, :, :, ...]``
+
+    RowSparseNDArray is used principally in the definition of gradients for operations
+    that have sparse gradients (e.g. SparseEmbedding).
+    """
+
+    @property
+    def indices(self):
+        """The indices array of the SparseNDArray. This is a read-only view of the indices array.
+        They reveal internal implementation details and should be used with care.
+
+        Returns
+        -------
+        NDArray
+            This SparseNDArray's indices array.
+        """
+        return self._aux_data(0)
+
 def _prepare_src_array(src, dtype, default_dtype):
     if isinstance(src, NDArray):
         dtype = src.dtype if dtype is None else dtype
@@ -428,11 +457,6 @@ def _prepare_src_array(src, dtype, default_dtype):
 
 def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, indices_type=None):
     """Creates a 2D array with compressed sparse row format.
-
-    A SparseNDArray with `csr` storage represents a NDArray as three separate arrays: `values`,
-    `indptr` and `indices`. It uses the standard CSR representation where the column indices for
-    row i are stored in indices[indptr[i]:indptr[i+1]] and their corresponding values are stored
-    in values[indptr[i]:indptr[i+1]].
 
     Parameters
     ----------
@@ -458,8 +482,8 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
 
     Returns
     -------
-    SparseNDArray
-        An `SparseNDArray` with the `csr` storage representation.
+    CSRNDArray
+        A `CSRNDArray` with the `csr` storage representation.
     """
     storage_type = 'csr'
     # context
@@ -480,7 +504,7 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
     assert(indptr.ndim == 1)
     assert(indices.ndim == 1)
     assert(len(shape) == 2)
-    result = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
+    result = CSRNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
                                              [indptr_type, indices_type], aux_shapes))
     # assign indptr, indices and values
     values_ref = result._data(True)
@@ -493,19 +517,6 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
 
 def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     """Creates a row sparse array with a set of tensor slices at given indices.
-
-    A SparseNDArray with `row_sparse` storage is typically used to represent a subset of a larger
-    NDArray  with `default` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
-    in indices are the indices in the first dimension of the slices that have been extracted from
-    the larger NDArray. The indices are expected to be sorted in ascending order.
-
-    The corresponding NDArray ``dense`` with `default` represented by a ``rsp``
-    SparseNDArray with `row_sparse` storage has
-
-    ``dense[rsp.indices[i], :, :, :, ...] = rsp.values[i, :, :, :, ...]``
-
-    `row_sparse` SparseNDArray is used principally in the definition of gradients for operations
-    that have sparse gradients (e.g. SparseEmbedding).
 
     Parameters
     ----------
@@ -525,8 +536,8 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
 
     Returns
     -------
-    SparseNDArray
-        An `SparseNDArray` with the `row_sparse` storage representation.
+    RowSparseNDArray
+        An `RowSparseNDArray` with the `row_sparse` storage representation.
     """
     storage_type = 'row_sparse'
     # context
@@ -541,7 +552,7 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     # verify shapes
     assert(values.ndim == len(shape))
     assert(indices.ndim == 1)
-    result = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
+    result = RowSparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
                                              [indices_type], [indices.shape]))
     # assign indices and values
     values_ref = result._data(True)
@@ -555,7 +566,7 @@ def to_dense(source):
 
     Returns
     -------
-    SparseNDArray
+    NDArray
         The dense array with default storage
     """
     return ndarray.cast_storage(source, storage_type='default')
@@ -597,16 +608,19 @@ def zeros(storage_type, shape, ctx=None, dtype=None, aux_types=None):
         else:
             raise Exception("unknown storage type")
     assert(len(aux_types) == len(_STORAGE_AUX_TYPES[storage_type]))
-    out = SparseNDArray(_new_alloc_handle(storage_type, shape, ctx, True, dtype, aux_types))
+    out = _ndarray_cls(_new_alloc_handle(storage_type, shape, ctx, True, dtype, aux_types))
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, out=out)
 
 def _ndarray_cls(handle, writable=True):
     stype = _storage_type(handle)
-    # TODO(haibin) in the long run, we want to have CSRNDArray and RowSparseNDArray which
-    # inherit from SparseNDArray
     if stype == 'default':
-        return NDArray(handle, writable)
-    return SparseNDArray(handle, writable)
+        return NDArray(handle, writable=writable)
+    elif stype == 'csr':
+        return CSRNDArray(handle, writable=writable)
+    elif stype == 'row_sparse':
+        return RowSparseNDArray(handle, writable=writable)
+    else:
+        raise Exception("unknown storage type")
 
 # pylint: enable=too-many-locals, invalid-name
 def _init_ndarray_module(ndarray_class, root_namespace):

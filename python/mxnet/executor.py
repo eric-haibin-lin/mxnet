@@ -11,7 +11,7 @@ from .base import _LIB
 from .base import mx_uint, NDArrayHandle, ExecutorHandle
 from .base import check_call, c_array, py_str
 from .ndarray import NDArray
-from .sparse_ndarray import SparseNDArray, _STORAGE_TYPE_STR_TO_ID
+from .sparse_ndarray import _ndarray_cls
 from . import ndarray as nd
 
 # those functions are not used here, we just import them to keep backward compatibility
@@ -92,16 +92,7 @@ class Executor(object):
         check_call(_LIB.MXExecutorOutputs(self.handle,
                                           ctypes.byref(out_size), ctypes.byref(handles)))
         num_output = out_size.value
-        outputs = []
-        for i in range(num_output):
-            storage_type = ctypes.c_int(0)
-            check_call(_LIB.MXNDArrayGetStorageType(ctypes.cast(handles[i], NDArrayHandle),
-                                                    ctypes.byref(storage_type)))
-            assert(storage_type != _STORAGE_TYPE_STR_TO_ID['undefined'])
-            output = NDArray(NDArrayHandle(handles[i])) \
-                if storage_type.value == _STORAGE_TYPE_STR_TO_ID['default'] \
-                else  SparseNDArray(NDArrayHandle(handles[i]))
-            outputs.append(output)
+        outputs = [_ndarray_cls(NDArrayHandle(handles[i])) for i in range(num_output)]
         return outputs
 
     def forward(self, is_train=False, **kwargs):
