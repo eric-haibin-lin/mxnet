@@ -359,7 +359,7 @@ for more details.
             return _internal._copyto(self, out=other)
         elif isinstance(other, Context):
             hret = _ndarray_cls(_new_alloc_handle(self.storage_type, self.shape, other,
-                                                   True, self.dtype, self.aux_types))
+                                                  True, self.dtype, self.aux_types))
             return _internal._copyto(self, out=hret)
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
@@ -505,7 +505,7 @@ def csr(values, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, 
     assert(indices.ndim == 1)
     assert(len(shape) == 2)
     result = CSRNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
-                                             [indptr_type, indices_type], aux_shapes))
+                                          [indptr_type, indices_type], aux_shapes))
     # assign indptr, indices and values
     values_ref = result._data(True)
     indptr_ref = result._aux_data(0, True)
@@ -553,7 +553,7 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     assert(values.ndim == len(shape))
     assert(indices.ndim == 1)
     result = RowSparseNDArray(_new_alloc_handle(storage_type, shape, ctx, False, dtype,
-                                             [indices_type], [indices.shape]))
+                                                [indices_type], [indices.shape]))
     # assign indices and values
     values_ref = result._data(True)
     indices_ref = result._aux_data(0, True)
