@@ -47,6 +47,20 @@ class KVStoreLocal : public KVStore {
     }
   }
 
+
+  void InitEx(const std::vector<int>& keys,
+              const std::vector<NDArray>& values,
+              const std::vector<NDArrayStorageType>& stypes) override {
+    for (size_t i = 0; i < keys.size(); ++i) {
+      CHECK(local_.find(keys[i]) == local_.end())
+          << "duplicate init of key " << keys[i];
+      // values stored in kvstore are always of default storage
+      CHECK_EQ(values[i].storage_type(), kDefaultStorage);
+      local_[keys[i]] = values[i].Copy(pinned_ctx_);
+      comm_->InitEx(keys[i], stypes[i], values[i].shape(), values[i].dtype());
+    }
+  }
+
   void Push(const std::vector<int>& keys,
             const std::vector<NDArray>& values,
             int priority) override {
@@ -67,7 +81,11 @@ class KVStoreLocal : public KVStore {
         }
         updater_(key, merged,  &local);
       } else {
-        local = merged;
+        if (merged.storage_type() != local.storage_type()) {
+          local = merged.Copy(local.ctx());
+        } else {
+          local = merged;
+        }
       }
     }
   }

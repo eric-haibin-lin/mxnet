@@ -849,17 +849,9 @@ class BaseModule(object):
         """
         raise NotImplementedError()
 
-    def update(self, storage_type_dict=None):
+    def update(self):
         """Updates parameters according to the installed optimizer and the gradients computed
-        in the previous forward-backward batch. The storage type of parameters is casted according
-        to `storage_type_dict`, if provided.
-
-        Parameters
-        ----------
-        storage_type_dict: dict of str to str
-            Defaults to ``None``. Desired storage types of parameters for parameter update. If the
-            parameter gradient is not of desired storage type, its storage type will be casted
-            before the update.
+        in the previous forward-backward batch.
 
         Examples
         --------
@@ -940,7 +932,8 @@ class BaseModule(object):
         raise NotImplementedError()
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
-                       optimizer_params=(('learning_rate', 0.01),), force_init=False):
+                       optimizer_params=(('learning_rate', 0.01),), force_init=False,
+                       grad_stypes=None):
         """Installs and initializes optimizers.
 
         Parameters
@@ -955,6 +948,10 @@ class BaseModule(object):
         force_init : bool
             Defaults to ``False``, indicates whether to force re-initializing an optimizer
             if it is already installed.
+        grad_stypes: dict of str to str
+            Defaults ``None``. Desired storage types of gradients for parameter update. If the
+            parameter gradient is not of desired storage type, its storage type will be casted
+            before the update.
 
         Examples
         --------

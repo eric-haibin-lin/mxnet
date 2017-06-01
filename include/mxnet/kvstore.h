@@ -63,6 +63,28 @@ class KVStore {
    */
   virtual void Init(const std::vector<int>& keys,
                     const std::vector<NDArray>& values) = 0;
+
+  /*!
+   * \brief Initialize a list of key-value pair to the store, with specified
+   * storage types for the gradients.
+   *
+   * One must initalize the key before \ref Push and \ref Pull, and a key
+   * should be only initialized once
+   *
+   * It returns after data have been initialized successfully.
+   *
+   * For multiple workers, all workers must call \ref Init. But only worker 0
+   * (get_rank() == 0)'s values are used for initialization. So others' values
+   * can be empty (but not keys). This function blocks until all workers are
+   * finished. That means, any worker can push and pull on the keys now.
+   *
+   * \param keys a list of unique keys
+   * \param values a list of values
+   * \param stypes a list of storage types for the gradients
+   */
+  virtual void InitEx(const std::vector<int>& keys,
+                      const std::vector<NDArray>& values,
+                      const std::vector<NDArrayStorageType>& stypes) = 0;
   /*!
    * \brief push a list of key-value pairs into the store
    *

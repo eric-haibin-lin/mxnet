@@ -681,6 +681,24 @@ int MXKVStoreInit(KVStoreHandle handle,
   API_END();
 }
 
+int MXKVStoreInitEx(KVStoreHandle handle,
+                  mx_uint num,
+                  const int* keys,
+                  NDArrayHandle* vals,
+                  const int* stypes) {
+  API_BEGIN();
+  std::vector<int> v_keys(num);
+  std::vector<NDArray> v_vals(num);
+  std::vector<NDArrayStorageType> v_stypes(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = *static_cast<NDArray*>(vals[i]);
+    v_stypes[i] = static_cast<NDArrayStorageType>(stypes[i]);
+  }
+  static_cast<KVStore*>(handle)->InitEx(v_keys, v_vals, v_stypes);
+  API_END();
+}
+
 int MXKVStorePush(KVStoreHandle handle,
                   mx_uint num,
                   const int* keys,

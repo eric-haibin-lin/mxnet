@@ -5,6 +5,7 @@ from __future__ import absolute_import
 import ctypes
 import pickle
 from .ndarray import NDArray
+from .sparse_ndarray import _STORAGE_TYPE_STR_TO_ID
 from .base import _LIB
 from .base import check_call, c_array, c_str, string_types, mx_uint, py_str
 from .base import NDArrayHandle, KVStoreHandle
@@ -35,6 +36,20 @@ def _ctype_key_value(keys, vals):
             c_vals += c_val_i
         return (c_array(ctypes.c_int, c_keys), c_array(NDArrayHandle, c_vals))
 
+def _ctype_stype(stypes):
+    """
+    Returns ctype arrays for the storage type args. For internal use.
+    """
+    if stypes is None:
+        return None
+    if isinstance(stypes, str):
+        return c_array(ctypes.c_int, [_STORAGE_TYPE_STR_TO_ID[stypes]])
+    assert(isinstance(stypes, list))
+    c_stypes = []
+    for stype in stypes:
+        assert(isinstance(stype, str))
+        c_stypes.append(_STORAGE_TYPE_STR_TO_ID[stype])
+    return c_array(ctypes.c_int, c_stypes)
 
 def _updater_wrapper(updater):
     """A wrapper for the user-defined handle."""
@@ -65,7 +80,7 @@ class KVStore(object):
     def __del__(self):
         check_call(_LIB.MXKVStoreFree(self.handle))
 
-    def init(self, key, value):
+    def init(self, key, value, grad_stype=None):
         """ Initializes a single or a sequence of key-value pairs into the store.
 
         For each key, one must `init` it before calling `push` or `pull`.
@@ -79,6 +94,8 @@ class KVStore(object):
             The keys.
         value : NDArray or sequence of NDArray
             Values corresponding to the keys.
+        storage_type : str or sequence of str, optional
+            The storage type of the gradient.
 
         Examples
         --------
@@ -97,8 +114,13 @@ class KVStore(object):
         >>> kv.init(keys, [mx.nd.ones(shape)]*len(keys))
         """
         ckeys, cvals = _ctype_key_value(key, value)
-        check_call(_LIB.MXKVStoreInit(
-            self.handle, mx_uint(len(ckeys)), ckeys, cvals))
+        cstypes = _ctype_stype(grad_stype)
+        if cstypes is None:
+            check_call(_LIB.MXKVStoreInit(self.handle, mx_uint(len(ckeys)), ckeys, cvals))
+        else:
+            assert(len(cstypes) == len(ckeys))
+            check_call(_LIB.MXKVStoreInitEx(self.handle, mx_uint(len(ckeys)),
+                                            ckeys, cvals, cstypes))
 
     def push(self, key, value, priority=0):
         """ Pushes a single or a sequence of key-value pairs into the store.

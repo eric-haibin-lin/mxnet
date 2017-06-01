@@ -110,7 +110,7 @@ class PythonModule(BaseModule):
         """
         pass
 
-    def update(self, storage_type_dict=None):
+    def update(self):
         """Updates parameters according to the installed optimizer and the gradients computed
         in the previous forward-backward batch. Currently we do nothing here. Subclass should
         override this method if contains parameters.
@@ -196,7 +196,8 @@ class PythonModule(BaseModule):
         raise NotImplementedError()
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
-                       optimizer_params=(('learning_rate', 0.01),), force_init=False):
+                       optimizer_params=(('learning_rate', 0.01),), force_init=False,
+                       grad_stypes=None):
         """Installs and initializes optimizers. By default we do nothing. Subclass should
         override this method if needed.
 
@@ -212,6 +213,10 @@ class PythonModule(BaseModule):
         force_init : bool
             Default `False`, indicating whether we should force re-initializing the
             optimizer in the case an optimizer is already installed.
+        grad_stypes: dict of str to str
+            Defaults ``None``. Desired storage types of gradients for parameter update. If the
+            parameter gradient is not of desired storage type, its storage type will be casted
+            before the update.
         """
         pass
 

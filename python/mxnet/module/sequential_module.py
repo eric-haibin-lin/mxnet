@@ -275,7 +275,7 @@ class SequentialModule(BaseModule):
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
                        optimizer_params=(('learning_rate', 0.01),),
-                       force_init=False):
+                       force_init=False, grad_stypes=None):
         """Installs and initializes optimizers.
 
         Parameters
@@ -290,6 +290,10 @@ class SequentialModule(BaseModule):
         force_init : bool
             Default ``False``, indicating whether we should force re-initializing the
             optimizer in the case an optimizer is already installed.
+        grad_stypes: dict of str to str
+            Defaults ``None``. Desired storage types of gradients for parameter update. If the
+            parameter gradient is not of desired storage type, its storage type will be casted
+            before the update.
         """
         assert self.binded and self.params_initialized
         if self.optimizer_initialized and not force_init:
@@ -301,6 +305,7 @@ class SequentialModule(BaseModule):
                                   optimizer_params=optimizer_params, force_init=force_init)
 
         self.optimizer_initialized = True
+        self._grad_stypes = grad_stype
 
     def forward(self, data_batch, is_train=None):
         """Forward computation.
@@ -344,14 +349,14 @@ class SequentialModule(BaseModule):
 
             out_grads = module.get_input_grads()
 
-    def update(self, storage_type_dict=None):
+    def update(self):
         """Updates parameters according to installed optimizer and the gradient computed
         in the previous forward-backward cycle.
         """
         assert self.binded and self.params_initialized and self.optimizer_initialized
 
         for module in self._modules:
-            module.update(storage_type_dict=storage_type_dict)
+            module.update()
 
     def get_outputs(self, merge_multi_context=True):
         """Gets outputs from a previous forward computation.

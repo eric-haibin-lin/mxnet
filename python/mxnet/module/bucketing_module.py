@@ -334,7 +334,7 @@ class BucketingModule(BaseModule):
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
                        optimizer_params=(('learning_rate', 0.01),),
-                       force_init=False):
+                       force_init=False, grad_stypes=None):
         """Installs and initializes optimizers.
 
         Parameters
@@ -356,7 +356,7 @@ class BucketingModule(BaseModule):
             return
 
         self._curr_module.init_optimizer(kvstore, optimizer, optimizer_params,
-                                         force_init=force_init)
+                                         force_init=force_init, grad_stypes=grad_stypes)
         for mod in self._buckets.values():
             if mod is not self._curr_module:
                 mod.borrow_optimizer(self._curr_module)
@@ -399,13 +399,13 @@ class BucketingModule(BaseModule):
         assert self.binded and self.params_initialized
         self._curr_module.backward(out_grads=out_grads)
 
-    def update(self, storage_type_dict=None):
+    def update(self):
         """Updates parameters according to installed optimizer and the gradient computed
         in the previous forward-backward cycle.
         """
         assert self.binded and self.params_initialized and self.optimizer_initialized
         self._params_dirty = True
-        self._curr_module.update(storage_type_dict=storage_type_dict)
+        self._curr_module.update()
 
     def get_outputs(self, merge_multi_context=True):
         """Gets outputs from a previous forward computation.
