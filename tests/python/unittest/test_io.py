@@ -89,6 +89,7 @@ def test_NDArrayIter():
         else:
             assert(labelcount[i] == 100)
 
+'''
 def test_libsvm():
     #TODO(haibin) automatic the test instead of hard coded test
     cwd = os.getcwd()
@@ -121,9 +122,10 @@ def test_libsvm():
         expected = first.asnumpy() if i == 0 else second.asnumpy()
         assert_almost_equal(data_train.getdata().asnumpy(), expected)
         i += 1
+'''
 
 if __name__ == "__main__":
     test_NDArrayIter()
     test_MNISTIter()
     test_Cifar10Rec()
-    test_libsvm()
+    # test_libsvm()

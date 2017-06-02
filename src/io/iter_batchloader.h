@@ -32,9 +32,9 @@ class BatchLoader : public IIterator<TBlobBatch> {
 
   inline void Init(const std::vector<std::pair<std::string, std::string> >& kwargs) {
     std::vector<std::pair<std::string, std::string> > kwargs_left;
-    // init batch param_, it could have similar param_ with
+    // init batch param, it could have similar param with
     kwargs_left = param_.InitAllowUnknown(kwargs);
-    // Init space for out_
+    // Init space for out
     out_.inst_index = new unsigned[param_.batch_size];
     out_.batch_size = param_.batch_size;
     out_.data.clear();
@@ -112,9 +112,9 @@ class BatchLoader : public IIterator<TBlobBatch> {
   }
 
  protected:
-  /*! \brief batch param_eters */
+  /*! \brief batch parameters */
   BatchParam param_;
-  /*! \brief out_put data */
+  /*! \brief output data */
   TBlobBatch out_;
   /*! \brief on first */
   int head_;
