@@ -274,31 +274,36 @@ void PushFCompute(const FCompute& fn,
                   const std::vector<Resource>& requested,
                   const std::vector<NDArray>& ndinputs,
                   const std::vector<NDArray>& ndoutputs) {
+  using namespace common;
   bool is_train = AutogradRuntime::Get()->IsTraining();
   Engine::Get()->PushAsync(
     [ctx, attrs, fn, ndinputs, ndoutputs, requested, is_train](
         RunContext rctx,
         engine::CallbackOnComplete on_complete) {
       std::vector<TBlob> input_blobs, output_blobs;
-      std::vector<NDArray> tmps;
+      std::vector<NDArray> temp_in;
+      std::vector<NDArray> temp_out;
       OpContext opctx{is_train, rctx,
                       engine::CallbackOnComplete(),
                       requested};
       if (ctx.dev_mask() == gpu::kDevMask) {
 #if MXNET_USE_CUDA
-        common::GetInputBlobs<gpu>(ndinputs, &input_blobs, &tmps, opctx);
-        common::GetOutputBlobs<gpu>(ndoutputs, &output_blobs);
+        GetDefaultBlobs<gpu>(ndinputs, &input_blobs, &temp_in, opctx);
+        GetDefaultBlobs<gpu>(ndoutputs, &output_blobs, &temp_out, opctx);
+        std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
+        fn(attrs, opctx, input_blobs, req, output_blobs);
+        // cast to original storage type, if necessary
+        CastNonDefaultStorage<gpu>(ndoutputs, temp_out, opctx);
+        rctx.get_stream<gpu>()->Wait();
 #else
         LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
       } else {
-        common::GetInputBlobs<cpu>(ndinputs, &input_blobs, &tmps, opctx);
-        common::GetOutputBlobs<cpu>(ndoutputs, &output_blobs);
-      }
-      std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
-      fn(attrs, opctx, input_blobs, req, output_blobs);
-      if (ctx.dev_mask() == gpu::kDevMask) {
-        rctx.get_stream<gpu>()->Wait();
+        GetDefaultBlobs<cpu>(ndinputs, &input_blobs, &temp_in, opctx);
+        GetDefaultBlobs<cpu>(ndoutputs, &output_blobs, &temp_out, opctx);
+        std::vector<OpReqType> req(output_blobs.size(), kWriteTo);
+        fn(attrs, opctx, input_blobs, req, output_blobs);
+        CastNonDefaultStorage<cpu>(ndoutputs, temp_out, opctx);
       }
       on_complete();
     }, ctx, read_vars, write_vars, FnProperty::kNormal,

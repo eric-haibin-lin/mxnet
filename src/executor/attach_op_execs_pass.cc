@@ -29,28 +29,32 @@ namespace exec {
 class ForwardOpExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
+    using namespace common;
     op_ctx.run_ctx = rctx;
 
-    // TODO(haibin) ForwardOp is stateful. If any input ndarray has non-default storage,
+    // If any input ndarray contains non-default storage,
     // we need to cast it to default storage and setup the tblobs again. For example,
-    // if any of the input ndarray chagnes, the updated value won't be reflected in the temporary
-    // ndarray with default storage. This is not efficient and should be improved later.
-    in_data_.clear(); out_data_.clear(); aux_data_.clear(); tmps_.clear();
+    // if any of the input ndarray changes, the updated value won't be reflected in the temporary
+    // ndarray with default storage.
+    in_data_.clear(); out_data_.clear(); aux_data_.clear();
+    temp_in_.clear(); temp_out_.clear(); temp_aux_.clear();
     if (is_gpu) {
 #if MXNET_USE_CUDA
-      common::GetInputBlobs<gpu>(in_array_, &in_data_, &tmps_, op_ctx);
-      common::GetInputBlobs<gpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
-      common::GetOutputBlobs<gpu>(out_array, &out_data_);
+      GetDefaultBlobs<gpu>(in_array_, &in_data_, &temp_in_, op_ctx);
+      GetDefaultBlobs<gpu>(aux_array_, &aux_data_, &temp_aux_, op_ctx);
+      GetDefaultBlobs<gpu>(out_array, &out_data_, &temp_out_, op_ctx);
+      op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
+      CastNonDefaultStorage<gpu>(out_array_, temp_out_, op_ctx);
 #else
       LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
     } else {
-      common::GetInputBlobs<cpu>(in_array_, &in_data_, &tmps_, op_ctx);
-      common::GetInputBlobs<cpu>(aux_array_, &aux_data_, &tmps_, op_ctx);
-      common::GetOutputBlobs<cpu>(out_array, &out_data_);
+      GetDefaultBlobs<cpu>(in_array_, &in_data_, &temp_in_, op_ctx);
+      GetDefaultBlobs<cpu>(aux_array_, &aux_data_, &temp_aux_, op_ctx);
+      GetDefaultBlobs<cpu>(out_array, &out_data_, &temp_out_, op_ctx);
+      op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
+      CastNonDefaultStorage<cpu>(out_array, temp_out_, op_ctx);
     }
-
-    op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
 #if MKL_EXPERIMENTAL == 1
     mkl_tblobs_prv_to_cpu(in_data_);
     mkl_tblobs_prv_to_cpu(out_data_);
@@ -82,13 +86,14 @@ class ForwardOpExecutor : public OpExecutor {
   std::shared_ptr<Operator> op_;
   std::vector<uint32_t> aux_index_;
   std::vector<TBlob> in_data_, out_data_, aux_data_;
-  std::vector<NDArray> in_array_, aux_array_, tmps_;
+  std::vector<NDArray> in_array_, aux_array_, temp_in_, temp_aux_, temp_out_;
 };
 
 // backward executor
 class BackwardOpExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
+    // TODO(haibin) support storage fallback for BackwardOpExecutor
     op_ctx.run_ctx = rctx;
     op_->Backward(op_ctx, out_grad_, in_data_, out_data_,
                   req, in_grad_, aux_data_);
@@ -157,25 +162,29 @@ class BackwardOpExecutor : public OpExecutor {
 class FComputeExecutor : public OpExecutor {
  public:
   void Run(RunContext rctx, bool is_gpu) override {
+    using namespace common;
     op_ctx.run_ctx = rctx;
     // setup blobs
-    // TODO(haibin) we should avoid repeating this if it's known that all inputs are in
-    // default-storage.
+    // TODO(haibin) avoid repeating this if all inputs are already in default-storage.
     {
-      in_data_.clear(); out_data_.clear(), tmp_nds_.clear();
+      in_data_.clear(); out_data_.clear();
+      temp_in_.clear(); temp_out_.clear();
       if (is_gpu) {
 #if MXNET_USE_CUDA
-        common::GetInputBlobs<gpu>(in_array, &in_data_, &tmp_nds_, op_ctx);
-        common::GetOutputBlobs<gpu>(out_array, &out_data_);
+        GetDefaultBlobs<gpu>(in_array, &in_data_, &temp_in_, op_ctx);
+        GetDefaultBlobs<gpu>(out_array, &out_data_, &temp_out_, op_ctx);
+        fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
+        CastNonDefaultStorage<gpu>(out_array, temp_out_, op_ctx);
 #else
         LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
       } else {
-        common::GetInputBlobs<cpu>(in_array, &in_data_, &tmp_nds_, op_ctx);
-        common::GetOutputBlobs<cpu>(out_array, &out_data_);
+        GetDefaultBlobs<cpu>(in_array, &in_data_, &temp_in_, op_ctx);
+        GetDefaultBlobs<cpu>(out_array, &out_data_, &temp_out_, op_ctx);
+        fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
+        CastNonDefaultStorage<cpu>(out_array, temp_out_, op_ctx);
       }
     }
-    fcompute_(attrs_, op_ctx, in_data_, req, out_data_);
 #if MKL_EXPERIMENTAL == 1
     mkl_tblobs_prv_to_cpu(in_data_);
     mkl_tblobs_prv_to_cpu(out_data_);
@@ -193,7 +202,7 @@ class FComputeExecutor : public OpExecutor {
   FCompute fcompute_;
   NodeAttrs attrs_;
   std::vector<TBlob> in_data_, out_data_;
-  std::vector<NDArray> tmp_nds_;
+  std::vector<NDArray> temp_in_, temp_out_;
 };
 
 // fcomputend executor

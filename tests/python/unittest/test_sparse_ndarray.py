@@ -265,6 +265,12 @@ def test_sparse_nd_negate():
     # we compute (-arr)
     assert_almost_equal(npy, arr.asnumpy())
 
+def test_sparse_nd_output_fallback():
+    shape = (10, 10)
+    out = mx.sparse_nd.zeros('row_sparse', shape)
+    mx.nd.random_normal(shape=shape, out=out)
+    assert(np.sum(out.asnumpy()) != 0)
+
 if __name__ == '__main__':
     import nose
     nose.runmodule()
