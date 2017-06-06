@@ -98,11 +98,12 @@ NNVM_REGISTER_OP(SparseEmbedding)
   })
 .set_attr<nnvm::FInferShape>("FInferShape", EmbeddingOpShape)
 .set_attr<nnvm::FInferType>("FInferType", EmbeddingOpType)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseEmbeddingForwardStorageType)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
   })
-.set_attr<FCompute>("FCompute<cpu>", EmbeddingOpForward<cpu>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, SparseEmbeddingOpForwardEx<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
   [](const nnvm::NodePtr& n, const std::vector<nnvm::NodeEntry>& ograds) {
     return MakeNonlossGradNode("_backward_SparseEmbedding", n, ograds,
