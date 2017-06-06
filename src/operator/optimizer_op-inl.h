@@ -112,32 +112,34 @@ struct SGDDnsRspKernel {
 
 template<typename xpu>
 inline void SGDUpdateDnsRspImpl(const SGDParam& param,
-                        const OpContext &ctx,
-                        const std::vector<NDArray> &inputs,
-                        const std::vector<OpReqType> &req,
-                        const std::vector<NDArray> &outputs) {
+                                const OpContext &ctx,
+                                const TBlob weight,
+                                const NDArray grad,
+                                const std::vector<OpReqType> &req,
+                                TBlob *out) {
   using namespace mshadow;
   using namespace mshadow::expr;
   using namespace mshadow_op;
+  using namespace mxnet_op;
   Stream<xpu>* s = ctx.get_stream<xpu>();
-  auto &weight = inputs[0];
-  auto &grad = inputs[1];
-  auto &out = outputs[0];
-  CHECK_EQ(weight.storage_type(), kDefaultStorage);
   CHECK_EQ(grad.storage_type(), kRowSparseStorage);
-  if (!grad.storage_initialized()) return;
-
-  MSHADOW_REAL_TYPE_SWITCH(weight.dtype(), DType, {
+  // if gradients are zeros, no weights are updated
+  if (!grad.storage_initialized() || req[0] == kNullOp) return;
+  auto out_req = req[0];
+  // TODO(haibin) this is a temporary solution, due to the fact that imperative_invoke only
+  // feed in kWriteTo as req for all operators.
+  // For sgd-update we don't want to zero out the output values as usual, when req == kWriteTo
+  if (out_req == kWriteTo) out_req = kWriteInplace;
+  MSHADOW_REAL_TYPE_SWITCH(weight.type_flag_, DType, {
     MSHADOW_INT_TYPE_SWITCH(grad.aux_type(rowsparse::kIdx), IType, {
-      MXNET_ASSIGN_REQ_SWITCH(req[0], req_type, {
-        auto weight_data = weight.data().FlatTo2D<xpu, DType>(s);
-        auto grad_idx = grad.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-        auto grad_val = grad.data().FlatTo2D<xpu, DType>(s);
-        auto out_data = out.data().FlatTo2D<xpu, DType>(s);
+      MXNET_ASSIGN_REQ_SWITCH(out_req, req_type, {
+        auto weight_data = weight.dptr<DType>();
+        auto grad_idx = grad.aux_data(rowsparse::kIdx).dptr<IType>();
+        auto grad_val = grad.data().dptr<DType>();
         auto num_rows = grad.aux_shape(rowsparse::kIdx)[0];
-        auto width = weight.shape().ProdShape(1, weight.shape().ndim());
-        mxnet_op::Kernel<SGDDnsRspKernel<req_type>, xpu>::Launch(s, num_rows, width,
-          out_data.dptr_, weight_data.dptr_, grad_idx.dptr_, grad_val.dptr_,
+        auto width = weight.shape_.ProdShape(1, weight.ndim());
+        Kernel<SGDDnsRspKernel<req_type>, xpu>::Launch(s, num_rows, width,
+          out->dptr<DType>(), weight_data, grad_idx, grad_val,
           static_cast<DType>(param.clip_gradient),
           static_cast<DType>(param.lr), static_cast<DType>(param.wd),
           static_cast<DType>(param.rescale_grad));
@@ -159,7 +161,17 @@ inline void SGDUpdateEx(const nnvm::NodeAttrs& attrs,
   auto weight_stype = inputs[0].storage_type();
   auto grad_stype = inputs[1].storage_type();
   if (weight_stype == kDefaultStorage && grad_stype == kRowSparseStorage) {
-    SGDUpdateDnsRspImpl<xpu>(param, ctx, inputs, req, outputs);
+    TBlob out = outputs[0].data();
+    SGDUpdateDnsRspImpl<xpu>(param, ctx, inputs[0].data(), inputs[1], req, &out);
+  } else if (weight_stype == kRowSparseStorage && grad_stype == kRowSparseStorage) {
+    if (inputs[0].storage_shape()[0] == inputs[0].shape()[0]) {
+      // reuse dns rsp implementation when storage_shape == shape
+      TBlob out = outputs[0].data();
+      SGDUpdateDnsRspImpl<xpu>(param, ctx, inputs[0].data(), inputs[1], req, &out);
+    } else {
+      LOG(FATAL) << "SGDUpdate for RowSparse weights is only implemented when "
+                 << "weights.values.shape == weights.shape";
+    }
   } else if (weight_stype == kDefaultStorage && grad_stype == kDefaultStorage) {
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDUpdate<xpu>, "SGDUpdate");
   }
