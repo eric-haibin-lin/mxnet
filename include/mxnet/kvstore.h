@@ -63,7 +63,6 @@ class KVStore {
    */
   virtual void Init(const std::vector<int>& keys,
                     const std::vector<NDArray>& values) = 0;
-
   /*!
    * \brief push a list of key-value pairs into the store
    *

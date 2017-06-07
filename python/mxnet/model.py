@@ -77,12 +77,10 @@ def _create_kvstore(kvstore, num_device, arg_params, name2idx=None):
     return (kv, update_on_kvstore)
 
 def _initialize_kvstore(kvstore, param_arrays, arg_params, param_names,
-                        update_on_kvstore, grad_stypes=None):
+                        update_on_kvstore):
     """Initialize kvstore"""
     for idx, param_on_devs in enumerate(param_arrays):
-        name = param_names[idx]
-        grad_stype = None if grad_stypes is None or name not in grad_stypes else grad_stypes[name]
-        kvstore.init(idx, arg_params[name], grad_stype=grad_stype)
+        kvstore.init(idx, arg_params[param_names[idx]])
 
         if update_on_kvstore:
             kvstore.pull(idx, param_on_devs, priority=-idx)

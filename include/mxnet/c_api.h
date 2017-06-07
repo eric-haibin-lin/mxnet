@@ -1339,7 +1339,6 @@ MXNET_DLL int MXKVStoreCreate(const char *type,
  * \return 0 when success, -1 when failure happens
  */
 MXNET_DLL int MXKVStoreFree(KVStoreHandle handle);
-
 /*!
  * \brief Init a list of (key,value) pairs in kvstore
  * \param handle handle to the kvstore
