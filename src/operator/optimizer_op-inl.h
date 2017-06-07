@@ -113,9 +113,9 @@ struct SGDDnsRspKernel {
 template<typename xpu>
 inline void SGDUpdateDnsRspImpl(const SGDParam& param,
                                 const OpContext &ctx,
-                                const TBlob weight,
-                                const NDArray grad,
-                                const OpReqType req,
+                                const TBlob& weight,
+                                const NDArray& grad,
+                                const OpReqType& req,
                                 TBlob *out) {
   using namespace mshadow;
   using namespace mshadow::expr;
@@ -147,10 +147,10 @@ inline void SGDUpdateDnsRspImpl(const SGDParam& param,
 
 template<typename xpu>
 inline void SGDUpdateRspRspImpl(const SGDParam& param,
-                                const OpContext &ctx,
-                                const NDArray weight,
-                                const NDArray grad,
-                                const OpReqType req,
+                                const OpContext& ctx,
+                                const NDArray& weight,
+                                const NDArray& grad,
+                                const OpReqType& req,
                                 NDArray *out) {
   if (weight.storage_shape()[0] == weight.shape()[0] &&
       out->storage_shape()[0] == out->shape()[0]) {
@@ -288,11 +288,11 @@ struct SGDMomDnsRspDnsKernel {
 
 template<typename xpu>
 inline void SGDMomUpdateDnsRspDnsImpl(const SGDMomParam& param,
-                                      const OpContext &ctx,
-                                      const TBlob weight,
-                                      const NDArray grad,
-                                      const TBlob mom,
-                                      const OpReqType req,
+                                      const OpContext& ctx,
+                                      const TBlob& weight,
+                                      const NDArray& grad,
+                                      const TBlob& mom,
+                                      const OpReqType& req,
                                       TBlob *out) {
   using namespace mxnet_op;
   using namespace rowsparse;
@@ -323,11 +323,11 @@ inline void SGDMomUpdateDnsRspDnsImpl(const SGDMomParam& param,
 
 template<typename xpu>
 inline void SGDMomUpdateRspRspRspImpl(const SGDMomParam& param,
-                                      const OpContext &ctx,
-                                      const NDArray weight,
-                                      const NDArray grad,
-                                      const NDArray mom,
-                                      const OpReqType req,
+                                      const OpContext& ctx,
+                                      const NDArray& weight,
+                                      const NDArray& grad,
+                                      const NDArray& mom,
+                                      const OpReqType& req,
                                       NDArray *out) {
   using namespace mshadow;
   using namespace mshadow::expr;

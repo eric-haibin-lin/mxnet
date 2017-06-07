@@ -643,7 +643,7 @@ struct DotCsrTransDnsDnsByRowBlocks {
 template<typename xpu>
 void DotCsrDnsDnsImpl(const OpContext& ctx,
                       const NDArray& lhs,
-                      const TBlob rhs,
+                      const TBlob& rhs,
                       const OpReqType req,
                       const bool trans_lhs,
                       TBlob* ret) {
