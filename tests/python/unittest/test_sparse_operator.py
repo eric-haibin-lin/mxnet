@@ -65,8 +65,7 @@ def test_elemwise_add_ex_multiple_stages():
     exec_test.backward(out_grads=exec_test.outputs)
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
-
-# TODO(haibin) also add test for backward pass. Check if exception is thrown
+# TODO(haibin) also add test for backward pass.
 def test_cast_storage_ex():
     def test_rsp_to_dns(shape):
         rsp, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse')
@@ -118,7 +117,7 @@ def test_sparse_dot():
         lhs = mx.symbol.Variable('lhs', storage_type='csr')
         rhs = mx.symbol.Variable('rhs', storage_type='default')
         test = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
-        location = {'lhs': csr, 'rhs': dns2}
+        location = {'lhs': csr, 'rhs': dns2.to_rsp()}
         expected = {'rhs': rhs_backward_grad}
         # dot(lhs, rhs)
         check_symbolic_forward(test, location, [out_expected.asnumpy()], rtol=1e-3, atol=1e-4)
