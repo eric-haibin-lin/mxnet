@@ -44,7 +44,7 @@ class ForwardOpExecutor : public OpExecutor {
       GetDefaultBlobs<gpu>(aux_array_, &aux_data_, &temp_aux_, op_ctx);
       GetDefaultBlobs<gpu>(out_array, &out_data_, &temp_out_, op_ctx);
       op_->Forward(op_ctx, in_data_, req, out_data_, aux_data_);
-      CastNonDefaultStorage<gpu>(out_array_, temp_out_, op_ctx);
+      CastNonDefaultStorage<gpu>(out_array, temp_out_, op_ctx);
 #else
       LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
