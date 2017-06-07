@@ -101,34 +101,36 @@ def test_cast_storage_ex():
     test_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
 
 def test_sparse_dot():
-    def test_dot_csr_dns(csr_shape, dns_shape, trans_csr):
-        dns1 = rand_ndarray(csr_shape, 'default')
-        dns2 = rand_ndarray(dns_shape, 'default')
-        csr = mx.nd.cast_storage(dns1, storage_type='csr')
-        out = mx.nd.dot(csr, dns2, transpose_a=trans_csr)
+    def test_dot_csr(lhs_shape, rhs_shape, rhs_stype, trans_lhs):
+        lhs_dns = rand_ndarray(lhs_shape, 'default')
+        lhs_nd = mx.nd.cast_storage(lhs_dns, storage_type='csr')
+        rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=1)
+        rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.to_dense()
+        out = mx.nd.dot(lhs_nd, rhs_dns, transpose_a=trans_lhs)
         assert out.storage_type == 'default'
-        out_expected = mx.nd.dot(dns1, dns2, transpose_a=trans_csr)
+        out_expected = mx.nd.dot(lhs_dns, rhs_dns, transpose_a=trans_lhs)
         out_np = out_expected.asnumpy()
-        backward_trans = not trans_csr
-        rhs_backward_grad = mx.nd.dot(dns1, out_expected, transpose_a=backward_trans).asnumpy()
+        backward_trans = not trans_lhs
+        rhs_backward_grad = mx.nd.dot(lhs_dns, out_expected, transpose_a=backward_trans).asnumpy()
         assert_almost_equal(out.asnumpy(), out_np, rtol=1e-4, atol=1e-5)
 
         # test symbolic forward
         lhs = mx.symbol.Variable('lhs', storage_type='csr')
-        rhs = mx.symbol.Variable('rhs', storage_type='default')
-        test = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
-        location = {'lhs': csr, 'rhs': dns2.to_rsp()}
+        rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
+        test = mx.symbol.dot(lhs, rhs, transpose_a=trans_lhs)
+        location = {'lhs': lhs_nd, 'rhs': rhs_nd}
         expected = {'rhs': rhs_backward_grad}
-        # dot(lhs, rhs)
-        check_symbolic_forward(test, location, [out_expected.asnumpy()], rtol=1e-3, atol=1e-4)
+        check_symbolic_forward(test, location, [out_np], rtol=1e-3, atol=1e-4)
+        # test symbolic backward
         check_symbolic_backward(test, location, [out_np], expected,
                                 grad_req={'lhs': 'null', 'rhs': 'write'},
                                 rtol=1e-3, atol=1e-4)
 
     lhs_shape = rand_shape_2d()
-    test_dot_csr_dns(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), False)
-    test_dot_csr_dns(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), True)
-
+    test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'default', False)
+    test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'default', True)
+    test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
+    test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
 
 def test_sparse_embedding():
     in_dim = 10
