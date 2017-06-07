@@ -86,11 +86,11 @@ def _initialize_kvstore(kvstore, param_arrays, arg_params, param_names,
             kvstore.pull(idx, param_on_devs, priority=-idx)
 
 def _update_params_on_kvstore(param_arrays, grad_arrays, kvstore,
-                              stype_dict=None, param_names=None):
+                              grad_stypes=None, param_names=None):
     """Perform update of param_arrays from grad_arrays on kvstore.
        If `param_names` is None or kvstore doesn't have a `name2idx` dictionary,
        the index of a param is determined by the order it appears in `param_arrays`. """
-    stype_dict = {} if stype_dict is None else stype_dict
+    grad_stypes = {} if grad_stypes is None else grad_stypes
     for i, pair in enumerate(zip(param_arrays, grad_arrays)):
         arg_list, grad_list = pair
         if grad_list[0] is None:
@@ -100,9 +100,9 @@ def _update_params_on_kvstore(param_arrays, grad_arrays, kvstore,
             name = param_names[i]
             index = index if name not in kvstore.name2idx else kvstore.name2idx[name]
             # cast storage type if stype doesn't match
-            if name in stype_dict:
+            if name in grad_stypes:
                 for i, grad in enumerate(grad_list):
-                    stype = stype_dict[name]
+                    stype = grad_stypes[name]
                     if grad_list[i].storage_type != stype:
                         grad_list[i] = nd.cast_storage(grad, stype)
         # push gradient, priority is negative index
@@ -111,17 +111,17 @@ def _update_params_on_kvstore(param_arrays, grad_arrays, kvstore,
         kvstore.pull(index, arg_list, priority=-index)
 
 def _update_params(param_arrays, grad_arrays, updater, num_device,
-                   kvstore=None, stype_dict=None, param_names=None):
+                   kvstore=None, grad_stypes=None, param_names=None):
     """Perform update of param_arrays from grad_arrays not on kvstore."""
-    stype_dict = {} if stype_dict is None else stype_dict
+    grad_stypes = {} if grad_stypes is None else grad_stypes
     for i, pair in enumerate(zip(param_arrays, grad_arrays)):
         arg_list, grad_list = pair
         if grad_list[0] is None:
             continue
         # cast storage type if stype doesn't match
-        if param_names is not None and param_names[i] in stype_dict:
+        if param_names is not None and param_names[i] in grad_stypes:
             for i, grad in enumerate(grad_list):
-                stype = stype_dict[param_names[i]]
+                stype = grad_stypes[param_names[i]]
                 if grad_list[i].storage_type != stype:
                     grad_list[i] = nd.cast_storage(grad, stype)
         index = i

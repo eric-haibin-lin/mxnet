@@ -67,7 +67,11 @@ class KVStoreLocal : public KVStore {
         }
         updater_(key, merged,  &local);
       } else {
-        local = merged;
+        if (merged.storage_type() != local.storage_type()) {
+          local = merged.Copy(local.ctx());
+        } else {
+          local = merged;
+        }
       }
     }
   }
