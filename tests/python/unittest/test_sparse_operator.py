@@ -181,7 +181,7 @@ def test_sparse_retain():
         num_rows = shape[0]
         rsp, _ = rand_sparse_ndarray(shape=shape, storage_type='row_sparse', density=0.5)
         length = np.random.randint(1, num_rows + 1)
-        idx = random_sample(range(0, num_rows), length)
+        idx = random_sample(list(range(0, num_rows)), length)
         idx.sort()
         dns = rsp.asnumpy()
         tensor_retained_expected = np.zeros(shape)
@@ -196,7 +196,6 @@ def test_sparse_retain():
         idx = mx.symbol.Variable('indices')
         sym = mx.sym.sparse_retain(data=data, indices=idx)
         check_numeric_gradient(sym, [rsp, indices], grad_nodes=['data'], grad_stype_dict={'data': 'row_sparse'})
-
 
 
 if __name__ == '__main__':
