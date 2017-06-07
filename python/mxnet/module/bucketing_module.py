@@ -334,7 +334,7 @@ class BucketingModule(BaseModule):
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
                        optimizer_params=(('learning_rate', 0.01),),
-                       force_init=False, grad_stypes=None):
+                       force_init=False):
         """Installs and initializes optimizers.
 
         Parameters
@@ -356,7 +356,7 @@ class BucketingModule(BaseModule):
             return
 
         self._curr_module.init_optimizer(kvstore, optimizer, optimizer_params,
-                                         force_init=force_init, grad_stypes=grad_stypes)
+                                         force_init=force_init)
         for mod in self._buckets.values():
             if mod is not self._curr_module:
                 mod.borrow_optimizer(self._curr_module)

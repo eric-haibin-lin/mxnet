@@ -310,7 +310,7 @@ def test_module_fm():
     # initialize parameters by uniform random numbers
     mod.init_params(initializer=mx.init.Uniform(scale=.1))
     # use Sparse SGD with learning rate 0.1 to train
-    mod.init_optimizer(optimizer='sgd', grad_stypes=grad_stypes)
+    mod.init_optimizer(optimizer='sgd')
     # use accuracy as the metric
     metric = mx.metric.create('MSE')
     # train 5 epoch, i.e. going over the data iter one pass

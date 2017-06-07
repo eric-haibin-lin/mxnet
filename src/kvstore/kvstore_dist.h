@@ -79,12 +79,6 @@ class KVStoreDist : public KVStoreLocal {
     }
   }
 
-  void InitEx(const std::vector<int>& keys,
-              const std::vector<NDArray>& values,
-              const std::vector<NDArrayStorageType>& stypes) override {
-    LOG(FATAL) << "Not implemented yet";
-  }
-
   void Push(const std::vector<int>& keys,
             const std::vector<NDArray>& values,
             int priority) override {

@@ -1339,21 +1339,6 @@ MXNET_DLL int MXKVStoreCreate(const char *type,
  * \return 0 when success, -1 when failure happens
  */
 MXNET_DLL int MXKVStoreFree(KVStoreHandle handle);
-/*!
- * \brief Init a list of (key,value) pairs in kvstore
-          with specified storage types for gradients
- * \param handle handle to the kvstore
- * \param num the number of key-value pairs
- * \param keys the list of keys
- * \param vals the list of values
- * \param stypes the list of storage types
- * \return 0 when success, -1 when failure happens
- */
-MXNET_DLL int MXKVStoreInitEx(KVStoreHandle handle,
-                            mx_uint num,
-                            const int* keys,
-                            NDArrayHandle* vals,
-                            const int* stypes);
 
 /*!
  * \brief Init a list of (key,value) pairs in kvstore

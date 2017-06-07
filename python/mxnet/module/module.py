@@ -430,8 +430,7 @@ class Module(BaseModule):
         self._exec_group.reshape(self._data_shapes, self._label_shapes)
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
-                       optimizer_params=(('learning_rate', 0.01),), force_init=False,
-                       grad_stypes=None):
+                       optimizer_params=(('learning_rate', 0.01),), force_init=False):
         """Installs and initializes optimizers.
 
         Parameters
@@ -446,10 +445,6 @@ class Module(BaseModule):
         force_init : bool
             Default ``False``, indicating whether we should force re-initializing the
             optimizer in the case an optimizer is already installed.
-        grad_stypes: dict of str to str
-            Defaults ``None``. Desired storage types of gradients for parameter update. If the
-            parameter gradient is not of desired storage type, its storage type will be casted
-            before the update.
         """
         assert self.binded and self.params_initialized
 
@@ -499,7 +494,6 @@ class Module(BaseModule):
         self._kvstore = kvstore
         self._update_on_kvstore = update_on_kvstore
         self._updater = None
-        self._grad_stypes = grad_stypes
 
         if kvstore:
             # copy initialized local parameters to kvstore
@@ -507,8 +501,7 @@ class Module(BaseModule):
                                 param_arrays=self._exec_group.param_arrays,
                                 arg_params=self._arg_params,
                                 param_names=self._param_names,
-                                update_on_kvstore=update_on_kvstore,
-                                grad_stypes=grad_stypes)
+                                update_on_kvstore=update_on_kvstore)
         if update_on_kvstore:
             kvstore.set_optimizer(self._optimizer)
         else:
@@ -533,7 +526,6 @@ class Module(BaseModule):
         self._kvstore = shared_module._kvstore
         self._update_on_kvstore = shared_module._update_on_kvstore
         self._updater = shared_module._updater
-        self._grad_stype = shared_module._grad_stype
         self.optimizer_initialized = True
 
     def forward(self, data_batch, is_train=None):

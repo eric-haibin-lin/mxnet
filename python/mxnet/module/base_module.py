@@ -932,8 +932,7 @@ class BaseModule(object):
         raise NotImplementedError()
 
     def init_optimizer(self, kvstore='local', optimizer='sgd',
-                       optimizer_params=(('learning_rate', 0.01),), force_init=False,
-                       grad_stypes=None):
+                       optimizer_params=(('learning_rate', 0.01),), force_init=False)
         """Installs and initializes optimizers.
 
         Parameters
@@ -948,10 +947,6 @@ class BaseModule(object):
         force_init : bool
             Defaults to ``False``, indicates whether to force re-initializing an optimizer
             if it is already installed.
-        grad_stypes: dict of str to str
-            Defaults ``None``. Desired storage types of gradients for parameter update. If the
-            parameter gradient is not of desired storage type, its storage type will be casted
-            before the update.
 
         Examples
         --------
