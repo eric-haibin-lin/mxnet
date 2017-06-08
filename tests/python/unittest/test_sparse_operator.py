@@ -137,18 +137,20 @@ def test_sparse_embedding():
     out_dim = 4
     batch = 24
 
-    data = mx.sym.Variable("data", dtype=np.int32)
+    data = mx.sym.Variable("data", storage_type='csr')
     embed = mx.sym.SparseEmbedding(data=data, input_dim=in_dim, output_dim=out_dim, name="embed")
     exe_test = embed.simple_bind(default_context(), grad_req={'data': 'null', 'embed_weight': 'write'},
-                                 data=(batch,))
+                                 data=(batch, in_dim))
+
     arg_map = dict(zip(embed.list_arguments(), exe_test.arg_arrays))
     grad_map = dict(zip(embed.list_arguments(), exe_test.grad_arrays))
     np_data = np.random.randint(low=0, high=in_dim, size=batch)
     np_weight = np.random.uniform(-0.01, 0.01, arg_map["embed_weight"].shape)
     np_onehot = np.zeros((batch, in_dim))
     np_onehot[np.arange(batch), np_data] = 1.0
+    nd_onehot = mx.nd.array(np_onehot).to_csr()
     # forward
-    arg_map["data"][:] = np_data
+    arg_map["data"][:] = nd_onehot
     arg_map["embed_weight"][:] = np_weight
     exe_test.forward(is_train=True)
     assert_almost_equal(exe_test.outputs[0].asnumpy(), np.dot(np_onehot, np_weight))
@@ -200,5 +202,7 @@ def test_sparse_retain():
 
 
 if __name__ == '__main__':
-    import nose
-    nose.runmodule()
+    #import nose
+    #nose.runmodule()
+    for i in range(100):
+        test_sparse_embedding()

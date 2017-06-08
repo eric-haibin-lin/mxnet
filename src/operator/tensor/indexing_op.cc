@@ -105,7 +105,7 @@ The gradient of an embedding matrix has the form of gradient vectors that are on
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"data", "weight"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", DotShape)
+.set_attr<nnvm::FInferShape>("FInferShape", SparseEmbeddingForwardShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseEmbeddingForwardStorageType)
 .set_attr<FResourceRequest>("FResourceRequest",

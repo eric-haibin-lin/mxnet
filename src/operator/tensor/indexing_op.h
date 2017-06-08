@@ -9,7 +9,6 @@
 
 #include <dmlc/logging.h>
 #include <dmlc/parameter.h>
-#include <dmlc/omp.h>
 #include <mxnet/operator.h>
 #include <mxnet/operator_util.h>
 #include <map>
@@ -257,9 +256,27 @@ inline bool SparseEmbeddingForwardStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), 2U);
   CHECK_EQ(out_attrs->size(), 1U);
   // TODO(haibin) use type_assign
-  in_attrs->at(embedding::kData) = kDefaultStorage;
+  TYPE_ASSIGN_CHECK(*in_attrs, embedding::kData, kCSRStorage);
   in_attrs->at(embedding::kWeight) = kRowSparseStorage;
   out_attrs->at(embedding::kOut) = kDefaultStorage;
+  return true;
+}
+
+inline bool SparseEmbeddingForwardShape(const nnvm::NodeAttrs& attrs,
+                                        std::vector<TShape> *in_attrs,
+                                        std::vector<TShape> *out_attrs) {
+  using namespace mshadow;
+  const EmbeddingParam& param = nnvm::get<EmbeddingParam>(attrs.parsed);
+  const TShape &dshape = (*in_attrs)[embedding::kData];
+  CHECK_EQ(dshape.ndim(), 2)
+           << "SparseEmbedding shape error: data is expected to be 2D.";
+  SHAPE_ASSIGN_CHECK(*in_attrs, embedding::kWeight,
+                     Shape2(param.input_dim, param.output_dim));
+  out_attrs->clear();
+  std::vector<index_t> buf(2);
+  buf[0] = dshape[0];
+  buf[1] = param.output_dim;
+  out_attrs->emplace_back(buf.begin(), buf.end());
   return true;
 }
 
@@ -384,7 +401,7 @@ inline bool SparseEmbeddingBackwardStorageType(const nnvm::NodeAttrs& attrs,
                                                std::vector<int> *in_attrs,
                                                std::vector<int> *out_attrs) {
   CHECK_EQ((*in_attrs)[0], kDefaultStorage);
-  CHECK_EQ((*in_attrs)[1], kDefaultStorage);
+  CHECK_EQ((*in_attrs)[1], kCSRStorage);
   // TODO(haibin) use type_assign(&attr, val)
   (*out_attrs)[0] = kRowSparseStorage;
   (*out_attrs)[1] = kDefaultStorage;
@@ -406,7 +423,7 @@ void SparseEmbeddingBackwardEx(const nnvm::NodeAttrs& attrs,
   auto idx_stype = inputs[1].storage_type();
   auto grad_stype = inputs[0].storage_type();
   auto output_stype = outputs[1].storage_type();
-  if (idx_stype == kDefaultStorage && grad_stype == kDefaultStorage &&
+  if (idx_stype == kCSRStorage && grad_stype == kDefaultStorage &&
       output_stype == kDefaultStorage) {
     TBlob ret = outputs[1].data();
     DotCsrDnsDnsImpl<xpu>(ctx, inputs[1], inputs[0].data(), req[1], true, &ret);
