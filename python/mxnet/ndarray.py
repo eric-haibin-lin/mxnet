@@ -1000,7 +1000,7 @@ def empty(shape, ctx=None, dtype=mx_real_t):
         ctx = Context.default_ctx
     return NDArray(handle=_new_alloc_handle(shape, ctx, False, dtype))
 
-def zeros(shape, ctx=None, dtype=mx_real_t, **kwargs):
+def zeros(shape, ctx=None, dtype=None, **kwargs):
     """Returns a new array filled with all zeros, with the given shape and type.
 
     Parameters
@@ -1029,10 +1029,11 @@ def zeros(shape, ctx=None, dtype=mx_real_t, **kwargs):
     # pylint: disable= unused-argument
     if ctx is None:
         ctx = Context.default_ctx
+    dtype = mx_real_t if dtype is None else dtype
     return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access
 
-def ones(shape, ctx=None, dtype=mx_real_t, **kwargs):
+def ones(shape, ctx=None, dtype=None, **kwargs):
     """Returns a new array filled with all ones, with the given shape and type.
 
     Parameters
@@ -1062,6 +1063,7 @@ def ones(shape, ctx=None, dtype=mx_real_t, **kwargs):
     # pylint: disable= unused-argument
     if ctx is None:
         ctx = Context.default_ctx
+    dtype = mx_real_t if dtype is None else dtype
     # pylint: disable= no-member, protected-access
     return _internal._ones(shape=shape, ctx=ctx, dtype=dtype)
     # pylint: enable= no-member, protected-access
