@@ -9,6 +9,8 @@
 #include <limits>
 #include <vector>
 #include <tuple>
+#include <thread>
+#include <dmlc/omp.h>
 #include "mxnet/ndarray.h"
 namespace mxnet {
 namespace kvstore {
@@ -118,7 +120,34 @@ class CommCPU : public Comm {
     }
   }
 
+  template<typename RandomIt>
+  static void ParallelSort(RandomIt first, RandomIt last, size_t num_threads) {
+    ParallelSort(first, last, num_threads,
+                 std::less<typename std::iterator_traits<RandomIt>::value_type>());
+  }
+
+  template<typename RandomIt, typename Compare>
+  static void ParallelSort(RandomIt first, RandomIt last, size_t num_threads, Compare comp) {
+    const auto num = std::distance(first, last);
+    size_t grainsize = std::max(num / num_threads + 5, static_cast<size_t>(1024*16));
+    ParallelSortHelper(first, num, grainsize, comp);
+  }
+
  private:
+
+  template<typename RandomIt, typename Compare>
+  static void ParallelSortHelper(RandomIt first, size_t len,
+                                 size_t grainsize, const Compare& comp) {
+    if (len < grainsize) {
+      std::sort(first, first+len, comp);
+    } else {
+      std::thread thr(ParallelSortHelper<RandomIt, Compare>, first, len/2, grainsize, comp);
+      ParallelSortHelper(first+len/2, len - len/2, grainsize, comp);
+      thr.join();
+      std::inplace_merge(first, first+len/2, first+len, comp);
+    }
+  }
+
   // reduce sum into val[0]
   inline void ReduceSumCPU(const std::vector<NDArray> &in_data) {
     MSHADOW_TYPE_SWITCH(in_data[0].dtype(), DType, {
@@ -130,6 +159,115 @@ class CommCPU : public Comm {
       }
       size_t total = in_data[0].shape().Size();
       ReduceSumCPUImpl(dptr, total);
+    });
+  }
+
+  template<typename DType, typename IType>
+  void ReduceSumCPUExImpl(const std::vector<NDArray>& nds,
+                          const std::vector<IType>& uniq_row_idx,
+                          const int nthreads, NDArray* out) {
+#pragma omp parallel num_threads(nthreads)
+    {
+      const size_t nnr = uniq_row_idx.size();
+      const int num_threads = omp_get_num_threads();
+      size_t row_block_len = (nnr + num_threads  - 1) / num_threads;
+      const size_t row_block_start = omp_get_thread_num() * row_block_len;
+      if (row_block_start < nnr) {
+        const size_t row_block_end = std::min(row_block_start+row_block_len, nnr);
+
+        auto out_values = out->data().FlatTo2D<cpu, DType>();
+        auto out_indices = out->aux_data(rowsparse::kIdx).FlatTo1D<cpu, IType>();
+        for (size_t i = row_block_start; i < row_block_end; ++i) {
+          out_indices[i] = uniq_row_idx[i];
+        }
+        for (const auto& nd : nds) {
+          if (nd.storage_initialized()) {
+            const auto nd_indices = nd.aux_data(rowsparse::kIdx).FlatTo1D<cpu, IType>();
+            const auto nd_values = nd.data().FlatTo2D<cpu, DType>();
+            const auto nd_num_rows = nd.aux_shape(rowsparse::kIdx).Size();
+            const IType* nd_indices_start = &nd_indices[0];
+            const IType* nd_indices_end = nd_indices_start + nd_num_rows;
+            const IType* row_idx_ptr = std::lower_bound(nd_indices_start, nd_indices_end,
+                                                        out_indices[row_block_start]);
+            // skip this nd if all of its row indices are smaller than out_indices[row_block_start]
+            // or current row block is not covered by [*row_idx_ptr, nd_indices_end). 
+            if (nd_indices_end == row_idx_ptr || *row_idx_ptr > out_indices[row_block_end-1]) {
+              continue;
+            }
+            for (size_t irow = row_block_start;
+                 irow < row_block_end && row_idx_ptr != nd_indices_end;) {
+              if (out_indices[irow] == *row_idx_ptr) {
+                auto out_value_cur_row = out_values[irow];
+                const auto offset = std::distance(nd_indices_start, row_idx_ptr);
+                auto nd_value_cur_row = nd_values[offset];
+                for (size_t j = 0; j < nd_value_cur_row.shape_[0]; ++j) {
+                  out_value_cur_row[j] += nd_value_cur_row[j];
+                }
+                ++irow;
+                ++row_idx_ptr;
+              } else if (out_indices[irow] < *row_idx_ptr) {
+                ++irow;
+              } else {
+                ++row_idx_ptr;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /*!
+   * \brief Given a vector of ndarrays, generate a index vector containing
+   * all the unique row indices of the ndarrays.
+   */
+  template<typename IType>
+  void GetUniqueRspRowIdx(const std::vector<NDArray>& nds,
+                          std::vector<IType>* uniq_row_idx) {
+    using namespace rowsparse;
+    size_t total_num_rows = 0;
+    for (const auto& nd : nds) {
+      CHECK_EQ(nd.storage_type(), kRowSparseStorage);
+      if (nd.storage_initialized()) {
+        total_num_rows += nd.aux_shape(kIdx).Size();
+      }
+    }
+
+    uniq_row_idx->resize(total_num_rows);
+    int nthreads = omp_get_max_threads();
+    size_t offset = 0;
+    for (const auto& nd : nds) {
+      if (nd.storage_initialized()) {
+        const IType* nd_row_idx = nd.aux_data(kIdx).dptr<IType>();
+        const size_t num_rows = nd.aux_shape(kIdx).Size();
+#pragma omp parallel for num_threads(nthreads)
+        for (size_t i = 0; i < num_rows; ++i) {
+          (*uniq_row_idx)[offset+i] = nd_row_idx[i];
+        }
+        offset += num_rows;
+      }
+    }
+
+    ParallelSort(uniq_row_idx->begin(), uniq_row_idx->end(), nthreads);
+    auto it = std::unique(uniq_row_idx->begin(), uniq_row_idx->end());
+    uniq_row_idx->resize(std::distance(uniq_row_idx->begin(), it));
+  }
+
+  void ReduceSumCPUEx(const std::vector<NDArray>& nds, NDArray* out) {
+    if (nds.empty()) return;
+    using namespace rowsparse;
+    CHECK_EQ(out->storage_type(), kRowSparseStorage)
+      << "Expected row sparse storage type ("
+      << out->storage_type() << " given)";
+
+    MSHADOW_TYPE_SWITCH(out->dtype(), DType, {
+      MSHADOW_INT_TYPE_SWITCH(out->aux_type(kIdx), IType, {
+        std::vector<IType> uniq_row_idx;
+        GetUniqueRspRowIdx(nds, &uniq_row_idx);
+        out->CheckAndAlloc({mshadow::Shape1(uniq_row_idx.size())});
+        out->data().FlatTo2D<cpu, DType>() = static_cast<DType>(0);
+        ReduceSumCPUExImpl<DType, IType>(nds, uniq_row_idx, omp_get_max_threads(), out);
+      });
     });
   }
 
