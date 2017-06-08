@@ -213,7 +213,7 @@ void SparseEmbeddingForwardRspImpl(const nnvm::NodeAttrs& attrs,
                                    NDArray *out) {
   if (weight.storage_shape()[0] == weight.shape()[0]) {
     TBlob out_blob = out->data();
-    // forward to dns implementation when storage_shape == shape
+    // forward to dns implementation when storage_shape equals shape
     bool transpose_a = false;
     DotCsrRspDnsImpl<xpu>(ctx, data, weight, req, transpose_a, &out_blob);
   } else {
@@ -224,10 +224,10 @@ void SparseEmbeddingForwardRspImpl(const nnvm::NodeAttrs& attrs,
 
 template<typename xpu>
 void SparseEmbeddingForwardEx(const nnvm::NodeAttrs& attrs,
-                                const OpContext& ctx,
-                                const std::vector<NDArray>& inputs,
-                                const std::vector<OpReqType>& req,
-                                const std::vector<NDArray>& outputs) {
+                              const OpContext& ctx,
+                              const std::vector<NDArray>& inputs,
+                              const std::vector<OpReqType>& req,
+                              const std::vector<NDArray>& outputs) {
   CHECK_EQ(req[embedding::kOut], kWriteTo);
   CHECK_EQ(inputs.size(), 2U);
   CHECK_EQ(outputs.size(), 1U);
@@ -255,16 +255,16 @@ inline bool SparseEmbeddingForwardStorageType(const nnvm::NodeAttrs& attrs,
                                               std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), 2U);
   CHECK_EQ(out_attrs->size(), 1U);
-  // TODO(haibin) use type_assign
-  TYPE_ASSIGN_CHECK(*in_attrs, embedding::kData, kCSRStorage);
+  STORAGE_TYPE_ASSIGN_CHECK(*in_attrs, embedding::kData, kCSRStorage);
+  STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, embedding::kOut, kDefaultStorage);
+  // override the default storage type generated in nnvm
   in_attrs->at(embedding::kWeight) = kRowSparseStorage;
-  out_attrs->at(embedding::kOut) = kDefaultStorage;
   return true;
 }
 
-inline bool SparseEmbeddingForwardShape(const nnvm::NodeAttrs& attrs,
-                                        std::vector<TShape> *in_attrs,
-                                        std::vector<TShape> *out_attrs) {
+inline bool SparseEmbeddingShape(const nnvm::NodeAttrs& attrs,
+                                 std::vector<TShape> *in_attrs,
+                                 std::vector<TShape> *out_attrs) {
   using namespace mshadow;
   const EmbeddingParam& param = nnvm::get<EmbeddingParam>(attrs.parsed);
   const TShape &dshape = (*in_attrs)[embedding::kData];
@@ -420,14 +420,14 @@ void SparseEmbeddingBackwardEx(const nnvm::NodeAttrs& attrs,
   // CHECK_EQ(req[embedding::kData], kNullOp)
   //   << "Embedding layer doesn't support calculate data gradient" << req[0] << " " << req[1];
   // CHECK_NE(req[1], kWriteInplace) << "DotBackwardEx does not support WriteInplace";
-  auto idx_stype = inputs[1].storage_type();
+
+  auto data_stype = inputs[1].storage_type();
   auto grad_stype = inputs[0].storage_type();
   auto output_stype = outputs[1].storage_type();
-  if (idx_stype == kCSRStorage && grad_stype == kDefaultStorage &&
+  if (data_stype == kCSRStorage && grad_stype == kDefaultStorage &&
       output_stype == kDefaultStorage) {
     TBlob ret = outputs[1].data();
     DotCsrDnsDnsImpl<xpu>(ctx, inputs[1], inputs[0].data(), req[1], true, &ret);
-    //DotBackwardCsrRspDns<xpu>(attrs, ctx, inputs, req, outputs);
   } else {
     LOG(FATAL) << "Not supported dot backward for sparse input(s) with sparse gradients";
   }

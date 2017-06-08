@@ -200,9 +200,6 @@ def test_sparse_retain():
         sym = mx.sym.sparse_retain(data=data, indices=idx)
         check_numeric_gradient(sym, [rsp, indices], grad_nodes=['data'], grad_stype_dict={'data': 'row_sparse'})
 
-
 if __name__ == '__main__':
-    #import nose
-    #nose.runmodule()
-    for i in range(100):
-        test_sparse_embedding()
+    import nose
+    nose.runmodule()
