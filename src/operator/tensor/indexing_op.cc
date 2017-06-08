@@ -127,7 +127,6 @@ NNVM_REGISTER_OP(_backward_SparseEmbedding)
 .set_num_inputs(2)
 .set_num_outputs(2)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseEmbeddingBackwardStorageType)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SparseEmbeddingBackwardEx<cpu>);
 
 NNVM_REGISTER_OP(take)

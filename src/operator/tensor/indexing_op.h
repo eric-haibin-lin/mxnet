@@ -392,22 +392,6 @@ void EmbeddingOpBackward(const nnvm::NodeAttrs& attrs,
   });
 }
 
-/*
- * for sparse embedding, the storage type for weight gradient is row_sparse.
- * we don't care about the storage type for data gradient, since it is not
- * differentiable.
- */
-inline bool SparseEmbeddingBackwardStorageType(const nnvm::NodeAttrs& attrs,
-                                               std::vector<int> *in_attrs,
-                                               std::vector<int> *out_attrs) {
-  CHECK_EQ((*in_attrs)[0], kDefaultStorage);
-  CHECK_EQ((*in_attrs)[1], kCSRStorage);
-  // TODO(haibin) use type_assign(&attr, val)
-  (*out_attrs)[0] = kRowSparseStorage;
-  (*out_attrs)[1] = kDefaultStorage;
-  return true;
-}
-
 template<typename xpu>
 void SparseEmbeddingBackwardEx(const nnvm::NodeAttrs& attrs,
                                  const OpContext& ctx,
