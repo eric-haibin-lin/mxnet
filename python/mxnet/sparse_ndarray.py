@@ -42,8 +42,8 @@ except ImportError:
 
 # pylint: enable=unused-import
 _STORAGE_AUX_TYPES = {
-    'row_sparse': [np.int32],
-    'csr': [np.int32, np.int32]
+    'row_sparse': [np.int64],
+    'csr': [np.int32, np.int64]
 }
 
 def _new_alloc_handle(storage_type, shape, ctx, delay_alloc, dtype, aux_types, aux_shapes=None):
@@ -548,7 +548,7 @@ def row_sparse(values, indices, shape, ctx=None, dtype=None, indices_type=None):
     indices, indices_type = _prepare_src_array(indices, indices_type,
                                                _STORAGE_AUX_TYPES[storage_type][0])
     # verify types
-    assert('int' in str(indices_type) or 'long' in str(indices_type))
+    assert('int' in str(indices_type))
     # verify shapes
     assert(values.ndim == len(shape))
     assert(indices.ndim == 1)

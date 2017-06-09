@@ -41,8 +41,8 @@ def test_elemwise_add_ex_multiple_stages():
 
     val1 = mx.nd.array([[5, 10]]);
     val2 = mx.nd.array([[5, 10]]);
-    idx1 = mx.nd.array([0], dtype=np.int32);
-    idx2 = mx.nd.array([1], dtype=np.int32);
+    idx1 = mx.nd.array([0], dtype=np.int64);
+    idx2 = mx.nd.array([1], dtype=np.int64);
     sp_nd1 = mx.sparse_nd.row_sparse(val1, idx1, shape)
     sp_nd2 = mx.sparse_nd.row_sparse(val2, idx2, shape)
     ds_nd = mx.nd.array(ds_np)
@@ -136,7 +136,7 @@ def test_sparse_embedding():
     out_dim = 4
     batch = 24
 
-    data = mx.sym.Variable("data", dtype=np.int32)
+    data = mx.sym.Variable("data", dtype=np.int64)
     embed = mx.sym.SparseEmbedding(data=data, input_dim=in_dim, output_dim=out_dim, name="embed")
     exe_test = embed.simple_bind(default_context(), grad_req={'data': 'null', 'embed_weight': 'write'},
                                  data=(batch,))

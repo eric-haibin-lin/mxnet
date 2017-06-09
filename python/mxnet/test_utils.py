@@ -90,10 +90,10 @@ def rand_sparse_ndarray(shape, storage_type, density=None):
         indices = np.argwhere(idx_sample < density).flatten()
         if indices.shape[0] == 0:
             result = mx.sparse_nd.zeros('row_sparse', shape)
-            return result, (np.array([]), np.array([], dtype='int32'))
+            return result, (np.array([]), np.array([], dtype='int64'))
         # generate random values
         val = rnd.rand(indices.shape[0], num_cols)
-        arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int32)
+        arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int64)
         return arr, (val, indices)
     elif storage_type == 'csr':
         assert(len(shape) == 2)
