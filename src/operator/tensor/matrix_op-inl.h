@@ -712,7 +712,7 @@ void DotCsrRspDnsImpl(const OpContext& ctx,
     DotCsrDnsDnsImpl<xpu>(ctx, lhs, rhs.data(), req, trans_lhs, ret);
   } else {
     LOG(FATAL) << "Dot for RowSparse rhs is only implemented for "
-               << "RowSparse rhs with all rows containing non-zeros."
+               << "RowSparse rhs with all rows containing non-zeros. "
                << "Expects rhs.values.shape[0] (" << rhs.storage_shape()[0]
                << ") == rhs.shape[0] (" << rhs.shape()[0] << ").";
   }
@@ -742,7 +742,10 @@ void DotBackwardCsrRspDns(const nnvm::NodeAttrs& attrs,
     TBlob ret = outputs[1].data();
     DotCsrDnsDnsImpl<xpu>(ctx, inputs[1], inputs[0].data(), req[1], !param.transpose_a, &ret);
   } else {
-    LOG(FATAL) << "Dot for RowSparse rhs is only implemented for rhs.values.shape == rhs.shape";
+    LOG(FATAL) << "Dot for RowSparse rhs is only implemented for "
+               << "RowSparse rhs with all rows containing non-zeros. "
+               << "Expects rhs.values.shape[0] (" << rhs.storage_shape()[0]
+               << ") == rhs.shape[0] (" << rhs.shape()[0] << ").";
   }
 }
 
