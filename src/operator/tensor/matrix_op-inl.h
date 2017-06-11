@@ -711,7 +711,10 @@ void DotCsrRspDnsImpl(const OpContext& ctx,
     // reuse csr dns implementation when storage_shape == shape for rhs
     DotCsrDnsDnsImpl<xpu>(ctx, lhs, rhs.data(), req, trans_lhs, ret);
   } else {
-    LOG(FATAL) << "Dot for RowSparse rhs is only implemented for rhs.values.shape == rhs.shape";
+    LOG(FATAL) << "Dot for RowSparse rhs is only implemented for "
+               << "RowSparse rhs with all rows containing non-zeros."
+               << "Expects rhs.values.shape[0] (" << rhs.storage_shape()[0]
+               << ") == rhs.shape[0] (" << rhs.shape()[0] << ").";
   }
 }
 
