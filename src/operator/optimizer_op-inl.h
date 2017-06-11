@@ -145,6 +145,73 @@ inline void SGDUpdateDnsRspImpl(const SGDParam& param,
   });
 }
 
+/*! \brief kernel for sparse sgd
+ */
+template<int req>
+struct SGDRspDnsKernel {
+  template<typename DType>
+  MSHADOW_XINLINE static void Map(int i, size_t num_cols, DType* out, const DType* weight,
+                                  const DType *grad, const DType clip_gradient, const DType lr,
+                                  const DType wd, const DType rescale_grad) {
+    bool contains_non_zeros = false;
+    index_t j = 0;
+    index_t offset = i * num_cols;
+    for (; j < num_cols; ++j) {
+      if (grad[offset + j] != 0) {
+        contains_non_zeros = true;
+        break;
+      }
+    }
+    if (!contains_non_zeros) return;
+    for (index_t j = 0; j < num_cols; j++) {
+      auto index = offset + j;
+      if (clip_gradient >= 0.0f) {
+        KERNEL_ASSIGN(out[index], req, (1.f - lr * wd) * weight[index] -
+                     (lr) * mshadow_op::clip::Map(rescale_grad * grad[index], clip_gradient));
+      } else {
+        KERNEL_ASSIGN(out[index], req, (1.f - lr * wd) * weight[index] -
+                      (lr * rescale_grad) * grad[index]);
+      }
+    }
+  }
+};
+
+template<typename xpu>
+inline void SGDUpdateRspDnsImpl(const SGDParam& param,
+                                const OpContext &ctx,
+                                const NDArray& weight,
+                                const TBlob& grad,
+                                const OpReqType req,
+                                NDArray *out) {
+  using namespace mshadow;
+  using namespace mxnet_op;
+  using namespace rowsparse;
+  CHECK(weight.storage_shape()[0] == weight.shape()[0] &&
+        out->storage_shape()[0] != out->shape()[0])
+        << "SGDUpdate for RowSparse weights is only implemented for "
+        << "RowSparse weights with all rows containing non-zeros. "
+        << "Expects weights.values.shape[0] (" << weight.storage_shape()[0]
+        << ") == weights.shape[0] (" << weight.shape()[0] << ").";
+  Stream<xpu>* s = ctx.get_stream<xpu>();
+  CHECK_EQ(weight.storage_type(), kRowSparseStorage);
+  if (req == kNullOp) return;
+  CHECK(weight.storage_initialized());
+
+  MSHADOW_TYPE_SWITCH(weight.dtype(), DType, {
+    MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
+      auto weight_data = weight.data().dptr<DType>();
+      auto grad_data = grad.dptr<DType>();
+      auto num_rows = weight.aux_shape(kIdx)[0];
+      auto num_cols = weight.shape().ProdShape(1, weight.shape().ndim());
+      Kernel<SGDRspDnsKernel<req_type>, xpu>::Launch(s, num_rows, num_cols,
+        out->data().dptr<DType>(), weight_data, grad_data,
+        static_cast<DType>(param.clip_gradient),
+        static_cast<DType>(param.lr), static_cast<DType>(param.wd),
+        static_cast<DType>(param.rescale_grad));
+    });
+  });
+}
+
 template<typename xpu>
 inline void SGDUpdateRspRspImpl(const SGDParam& param,
                                 const OpContext& ctx,
@@ -188,6 +255,9 @@ inline void SGDUpdateEx(const nnvm::NodeAttrs& attrs,
   } else if (weight_stype == kRowSparseStorage && grad_stype == kRowSparseStorage) {
     NDArray out = outputs[0];
     SGDUpdateRspRspImpl<xpu>(param, ctx, inputs[0], inputs[1], req[0], &out);
+  } else if (weight_stype == kRowSparseStorage && grad_stype == kDefaultStorage) {
+    NDArray out = outputs[0];
+    SGDUpdateRspDnsImpl<xpu>(param, ctx, inputs[0], inputs[1].data(), req[0], &out);
   } else if (weight_stype == kDefaultStorage && grad_stype == kDefaultStorage) {
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDUpdate<xpu>, "SGDUpdate");
   }
