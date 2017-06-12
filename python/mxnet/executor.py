@@ -140,7 +140,6 @@ class Executor(object):
                 "Calling forward the second time after forward(is_train=True) "
                 "without calling backward first. Is this intended?", stacklevel=2)
         self._output_dirty = is_train
-
         return self.outputs
 
     def backward(self, out_grads=None):
@@ -214,6 +213,7 @@ class Executor(object):
             if not isinstance(obj, NDArray):
                 raise TypeError("inputs must be NDArray")
         ndarray = c_array(NDArrayHandle, [item.handle for item in out_grads])
+
         check_call(_LIB.MXExecutorBackward(
             self.handle,
             mx_uint(len(out_grads)),

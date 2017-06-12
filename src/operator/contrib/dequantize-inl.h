@@ -46,7 +46,6 @@ void DequantizeCompute(const nnvm::NodeAttrs& attrs,
   using namespace mxnet_op;
   Stream<xpu> *s = ctx.get_stream<xpu>();
 
-  const DequantizeParam& param = nnvm::get<DequantizeParam>(attrs.parsed);
   // for now, only supports dequantize from float to uint8
   typedef float   DstDType;
   typedef uint8_t SrcDType;
@@ -64,7 +63,6 @@ void DequantizeCompute(const nnvm::NodeAttrs& attrs,
 inline bool DequantizeShape(const nnvm::NodeAttrs& attrs,
                           std::vector<TShape> *in_attrs,
                           std::vector<TShape> *out_attrs) {
-  const DequantizeParam& param = nnvm::get<DequantizeParam>(attrs.parsed);
   CHECK_EQ(in_attrs->size(), 3U);
   CHECK_EQ(out_attrs->size(), 1U);
 
@@ -80,7 +78,6 @@ inline bool DequantizeShape(const nnvm::NodeAttrs& attrs,
 inline bool DequantizeType(const nnvm::NodeAttrs& attrs,
                          std::vector<int> *in_attrs,
                          std::vector<int> *out_attrs) {
-  const DequantizeParam& param = nnvm::get<DequantizeParam>(attrs.parsed);
   CHECK_EQ(in_attrs->size(), 3U);
   CHECK_EQ(out_attrs->size(), 1U);
   CHECK_EQ((*in_attrs)[0], mshadow::kUint8)

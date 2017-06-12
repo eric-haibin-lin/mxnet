@@ -11,15 +11,16 @@ namespace op {
 MXNET_OPERATOR_REGISTER_BINARY(elemwise_add)
 .add_alias("_add").add_alias("_plus").add_alias("_Plus")
 .describe("Adds arguments element-wise.")
-.set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::plus>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryComputeEx<cpu, mshadow::op::plus>)
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::plus>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::plus>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_add"})
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
 
 // specialized gradient add function to do add to optimization
 // this must differ from elemwise_add to prevent add to optimization in forward pass.
 MXNET_OPERATOR_REGISTER_BINARY(_grad_add)
-.set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::plus>);
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::plus>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::plus>);
 
 NNVM_REGISTER_OP(_backward_add)
 .set_num_inputs(1)
@@ -29,16 +30,19 @@ NNVM_REGISTER_OP(_backward_add)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}, {0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseNone<cpu, mshadow_op::identity,
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseNone<cpu, mshadow_op::identity,
                                                                 mshadow_op::identity>)
 .set_attr<FComputeEx>(FCOMP_EX_CPU,
-                      BinaryBackwardUseNoneEx<cpu, mshadow_op::identity, mshadow_op::identity>)
+                      BinaryOp::BinaryBackwardUseNoneEx<cpu, mshadow_op::identity,
+                        mshadow_op::identity>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
-MXNET_OPERATOR_REGISTER_BINARY(_sub)
-.add_alias("_minus").add_alias("_Minus")
-.set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::minus>)
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_sub"});
+MXNET_OPERATOR_REGISTER_BINARY(elemwise_sub)
+.add_alias("_sub").add_alias("_minus").add_alias("_Minus")
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::minus>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::minus>)
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_sub"})
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
 
 NNVM_REGISTER_OP(_backward_sub)
 .set_num_inputs(1)
@@ -48,12 +52,16 @@ NNVM_REGISTER_OP(_backward_sub)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}, {0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseNone<cpu, mshadow_op::identity,
-                                                                mshadow_op::negation>);
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseNone<cpu,
+  mshadow_op::identity, mshadow_op::negation>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::BinaryBackwardUseNoneEx<cpu,
+  mshadow_op::identity, mshadow_op::negation>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
-MXNET_OPERATOR_REGISTER_BINARY(_mul)
-.add_alias("_Mul")
-.set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::mul>)
+MXNET_OPERATOR_REGISTER_BINARY(elemwise_mul)
+.add_alias("_mul").add_alias("_Mul")
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::mul>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::mul>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mul"});
 
 NNVM_REGISTER_OP(_backward_mul)
@@ -64,12 +72,13 @@ NNVM_REGISTER_OP(_backward_mul)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseIn<cpu, mshadow_op::right,
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::right,
                                                               mshadow_op::left>);
 
-MXNET_OPERATOR_REGISTER_BINARY(_div)
-.add_alias("_Div")
-.set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::div>)
+MXNET_OPERATOR_REGISTER_BINARY(elemwise_div)
+.add_alias("_div").add_alias("_Div")
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::div>)
+//.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::div>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_div"});
 
 NNVM_REGISTER_OP(_backward_div)
@@ -80,7 +89,7 @@ NNVM_REGISTER_OP(_backward_div)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", BinaryBackwardUseIn<cpu, mshadow_op::div_grad,
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::div_grad,
                                                               mshadow_op::div_rgrad>);
 
 }  // namespace op

@@ -15,70 +15,337 @@
 #include "../elemwise_op_common.h"
 #include "../special_functions-inl.h"
 #include "../mxnet_op.h"
-#include "./broadcast_reduce-inl.h"
 
 namespace mxnet {
 namespace op {
-template<typename xpu, typename op>
-void UnaryLaunch(const nnvm::NodeAttrs& attrs,
-                 const OpContext& ctx,
-                 const std::vector<TBlob>& inputs,
-                 const std::vector<OpReqType>& req,
-                 const std::vector<TBlob>& outputs) {
-  using namespace mshadow;
-  using namespace mxnet_op;
-  Stream<xpu> *s = ctx.get_stream<xpu>();
 
-  CHECK_EQ(inputs.size(), 1U);
-  CHECK_EQ(outputs.size(), 1U);
-  MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-    Kernel<op, xpu>::Launch(s, outputs[0].Size(),
-      outputs[0].dptr<DType>(), inputs[0].dptr<DType>());
-  });
-}
+//template<typename OP, int Req>
+//struct UnaryOpMapper {
+//  template<typename DType>
+//  MSHADOW_XINLINE static void Map(int i, DType* out, const DType* in) {
+//    KERNEL_ASSIGN(out[i], Req, OP::Map(in[i]));
+//  }
+//};
+
+class OpBase {
+ protected:
+  /*! \brief Copy blob data */
+  template<typename xpu>
+  static void CopyBlob(mshadow::Stream<xpu> *s,
+                       const TBlob& dest_blob, const OpReqType reqi, const TBlob& src_blob) {
+    using namespace mshadow;
+    using namespace mshadow::expr;
+    CHECK_EQ(src_blob.type_flag_, dest_blob.type_flag_);
+    CHECK_EQ(src_blob.shape_, dest_blob.shape_);
+    MSHADOW_TYPE_SWITCH(src_blob.type_flag_, DType, {
+      mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s));
+    });
+  }
+
+  /*! \brief Copy the geometry-related blobs (row sparse indexes, etc.) */
+  template<typename xpu>
+  static inline void CopyGeometryBlobs(mshadow::Stream<xpu> *s,
+                                       const NDArray *dest,
+                                       const OpReqType reqi,
+                                       const NDArray &src) {
+    CHECK_EQ(src.aux_shape_count(), dest->aux_shape_count());
+    // My assumption is that the geometry blobs are not large enough to justify an omp loop here,
+    // since the thread synchronizationc calls for each fork will take longer
+    // than copying a few floats
+    for(size_t i = 0, n = src.aux_shape_count(); i < n; ++i) {
+      const TBlob src_blob = src.aux_data(i);
+      const TBlob dest_blob = dest->aux_data(i);
+      CopyBlob<xpu>(s, dest_blob, reqi, src_blob);
+    }
+  }
+
+  /*! \brief Infer the output storage geometry */
+  template<int n_in, int n_out>
+  static bool InitStorageGeometry(const nnvm::NodeAttrs& attrs,
+                                  const std::vector<NDArray>& inputs,
+                                  const std::vector<NDArray>& outputs) {
+    CHECK_EQ(inputs.size(), static_cast<size_t>(n_in))
+      << " in operator " << attrs.name;
+    CHECK_EQ(outputs.size(), static_cast<size_t>(n_out))
+      << " in operator " << attrs.name;
+    CHECK(n_in > 0 && n_out > 0);
+    if(!shape_is_none(inputs[0].storage_shape())) {
+      NDArray *output = nullptr;
+      for(size_t i = 0, n = inputs.size(); i < n; ++i) {
+        const NDArray& input = inputs[i];
+        const TShape& ishape = input.storage_shape();
+        if(i < n_out) {
+          output = const_cast<NDArray *>(&outputs[i]);
+        }
+        TShape sshape = output->storage_shape();
+        CHECK(shape_assign(&sshape, ishape));
+        output->SetStorageShape(sshape);
+        CHECK_EQ(output->storage_type(), input.storage_type());
+        CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
+        for(size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
+          TShape ashape = output->aux_shape(j);
+          CHECK(shape_assign(&ashape, input.aux_shape(j)));
+          output->SetAuxShape(j, ashape);
+        }
+      }
+      return true;
+    } else {
+      CHECK(false); // implement when necessary
+    }
+    return false;
+  }
+
+  /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
+  template<typename xpu, typename FComputer>
+  static inline void MapToFCompute(const nnvm::NodeAttrs &attrs,
+                                   const OpContext &ctx,
+                                   const std::vector<NDArray> &inputs,
+                                   const std::vector<OpReqType> &req,
+                                   const std::vector<NDArray> &outputs,
+                                   FComputer computer) {
+    std::vector<TBlob> in_blobs, out_blobs;
+    in_blobs.reserve(inputs.size());
+    out_blobs.reserve(outputs.size());
+    for(size_t i = 0, n = inputs.size(); i < n; ++i) {
+      TBlob blob = inputs[i].data();
+      in_blobs.emplace_back(std::move(inputs[i].data()));
+    }
+    for(size_t i = 0, n = outputs.size(); i < n; ++i) {
+      const NDArray& o = outputs[i];
+      TBlob blob = o.data();
+      out_blobs.emplace_back(std::move(outputs[i].data()));
+    }
+    computer(attrs, ctx, in_blobs, req, out_blobs);
+  };
+
+};
+
+/*! \brief Unary operator class */
+class UnaryOp : public OpBase {
+  /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
+  template<typename xpu, typename FComputer>
+  static inline void MapToFCompute(const nnvm::NodeAttrs &attrs,
+                                   const OpContext &ctx,
+                                   const std::vector<NDArray> &inputs,
+                                   const std::vector<OpReqType> &req,
+                                   const std::vector<NDArray> &outputs,
+                                   FComputer computer) {
+    // Copy over geometry
+    InitStorageGeometry<1, 1>(attrs, inputs, outputs);
+    CHECK_EQ(inputs.size(), outputs.size()); // need to figure out what to do for binary type
+    CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
+    CHECK_EQ(inputs[0].storage_type(), outputs[0].storage_type());
+    CopyGeometryBlobs<xpu>(ctx.get_stream<xpu>(), &outputs[0], req[0], inputs[0]);
+    OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, computer);
+  }
+
+ public:
+//  /*! \brief Infer basic input->output non-default storage geometry for operations
+//   * that have predictable output shapes based upon the input shapes (and visa versa)
+//   */
+//  template<int n_in, int n_out>
+//  static bool FInferStorageGeometry(const nnvm::NodeAttrs& attrs,
+//                                    std::vector<TShape> *in_storage_shapes,
+//                                    std::vector<std::vector<TShape>> *in_aux_shapes,
+//                                    std::vector<std::vector<int>> *in_aux_types,
+//                                    std::vector<TShape> *out_storage_shapes,
+//                                    std::vector<std::vector<TShape>> *out_aux_shapes,
+//                                    std::vector<std::vector<int>> *out_aux_types) {
+//    CHECK_EQ(in_storage_shapes->size(), static_cast<size_t>(n_in))
+//      << " in operator " << attrs.name;
+//    CHECK_EQ(out_storage_shapes->size(), static_cast<size_t>(n_out))
+//      << " in operator " << attrs.name;
+//    // More sanity testing
+//    CHECK_EQ(in_storage_shapes->size(), in_aux_shapes->size());
+//    CHECK_EQ(in_aux_types->size(), in_aux_shapes->size());
+//    CHECK_EQ(out_storage_shapes->size(), out_aux_shapes->size());
+//    CHECK_EQ(out_aux_types->size(), out_aux_shapes->size());
+//    if(ElemwiseShape<n_in, n_out>(attrs, in_storage_shapes, out_storage_shapes)) {
+//      for (size_t i = 0, n = in_storage_shapes->size(); i < n; ++i) {
+//        if(!shape_is_none((*in_storage_shapes)[i])) {
+//          std::vector<TShape>& ias = (*in_aux_shapes)[i];
+//          std::vector<TShape>& oas = (*out_aux_shapes)[i];
+//          std::vector<int>& iat = (*in_aux_types)[i];
+//          std::vector<int>& oat = (*out_aux_types)[i];
+//          if(ias.empty()) {
+//            ias = oas;
+//            iat = oat;
+//            return true;
+//          } else if(oas.empty()) {
+//            oas = ias;
+//            oat = iat;
+//            return true;
+//          }
+//          bool have_direction = false;
+//          bool assign_output = false;
+//          for(size_t j = 0, nj = ias.size(); j < nj; ++j) {
+//            if(shape_is_none(oas[j])) {
+//              CHECK(!have_direction || assign_output);
+//              CHECK(shape_assign(&oas[j], ias[j]));
+//              CHECK(type_assign(&oat[j], iat[j]));
+//              have_direction = true;
+//              assign_output = true;
+//            } else {
+//              CHECK(!have_direction || !assign_output);
+//              CHECK(shape_assign(&ias[j], oas[j]));
+//              CHECK(type_assign(&iat[j], oat[j]));
+//              have_direction = true;
+//            }
+//          }
+//        }
+//      }
+//      return true;
+//    } else {
+//      return false;
+//    }
+//    return false;
+//  }
+
+  template<typename xpu, typename OP>
+  static void Compute(const nnvm::NodeAttrs& attrs,
+                      const OpContext& ctx,
+                      const std::vector<TBlob>& inputs,
+                      const std::vector<OpReqType>& req,
+                      const std::vector<TBlob>& outputs) {
+    using namespace mshadow;
+    using namespace mshadow::expr;
+    Stream<xpu> *s = ctx.get_stream<xpu>();
+    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+      Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);
+      ASSIGN_DISPATCH(out, req[0], F<OP>(inputs[0].FlatTo1D<xpu, DType>(s)));
+    });
+  }
+
+  template<typename xpu, typename OP>
+  static void ComputeEx(const nnvm::NodeAttrs& attrs,
+                        const OpContext& ctx,
+                        const std::vector<NDArray>& inputs,
+                        const std::vector<OpReqType>& req,
+                        const std::vector<NDArray>& outputs) {
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute<xpu, OP>);
+  }
+
+  template<typename xpu, typename op>
+  static void Launch(const nnvm::NodeAttrs& attrs,
+                     const OpContext& ctx,
+                     const std::vector<TBlob>& inputs,
+                     const std::vector<OpReqType>& req,
+                     const std::vector<TBlob>& outputs) {
+    using namespace mshadow;
+    using namespace mxnet_op;
+    Stream<xpu> *s = ctx.get_stream<xpu>();
+
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+      Kernel<op, xpu>::Launch(s, outputs[0].Size(),
+                              outputs[0].dptr<DType>(), inputs[0].dptr<DType>());
+    });
+  }
+
+  template<typename xpu, typename OP>
+  static void LaunchEx(const nnvm::NodeAttrs& attrs,
+                       const OpContext& ctx,
+                       const std::vector<NDArray>& inputs,
+                       const std::vector<OpReqType>& req,
+                       const std::vector<NDArray>& outputs) {
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
+  }
+
+  template<typename xpu>
+  static void IdentityCompute(const nnvm::NodeAttrs& attrs,
+                       const OpContext& ctx,
+                       const std::vector<TBlob>& inputs,
+                       const std::vector<OpReqType>& req,
+                       const std::vector<TBlob>& outputs) {
+    using namespace mshadow;
+    using namespace mshadow::expr;
+    Stream<xpu> *s = ctx.get_stream<xpu>();
+    if (req[0] == kNullOp) return;
+    if (req[0] == kWriteInplace) {
+      CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
+    }
+    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+      Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);
+      ASSIGN_DISPATCH(out, req[0], F<mshadow_op::identity>(inputs[0].FlatTo1D<xpu, DType>(s)));
+    });
+  }
+
+  template<typename xpu>
+  static void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
+                                const OpContext& ctx,
+                                const std::vector<NDArray>& inputs,
+                                const std::vector<OpReqType>& req,
+                                const std::vector<NDArray>& outputs) {
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, IdentityCompute<xpu>);
+  }
+
+//  /*! \brief Forward pass */
+//  template<typename xpu>
+//  static void Forward(const nnvm::NodeAttrs& attrs,
+//                      const OpContext& ctx,
+//                      const std::vector<TBlob>& inputs,
+//                      const std::vector<OpReqType>& req,
+//                      const std::vector<TBlob>& outputs) {
+//    CHECK_EQ(inputs.size(), 1U);
+//    CHECK_EQ(outputs.size(), 1U);
+//
+//    if (!inputs[0].Size()) {
+//      return;
+//    }
+//  }
+  /*! \brief Backward pass */
+//  template<typename xpu>
+//  static void Backward(const nnvm::NodeAttrs& attrs,
+//                       const OpContext& ctx,
+//                       const std::vector<TBlob>& inputs,
+//                       const std::vector<OpReqType>& req,
+//                       const std::vector<TBlob>& outputs) {
+//    CHECK_EQ(inputs.size(), 1U);
+//    CHECK_EQ(outputs.size(), 1U);
+//    if (!inputs[0].Size()) {
+//      return;
+//    }
+//  }
+  /*! \brief Infer output storage type from output */
+//  static bool ForwardInferStorageType(const nnvm::NodeAttrs& attrs,
+//                                      std::vector<int> *in_attrs,
+//                                      std::vector<int> *out_attrs) {
+//    CHECK_EQ(in_attrs->size(), 1U);
+//    CHECK_EQ(out_attrs->size(), 1U);
+//    CHECK_NE(in_attrs->at(0), kUndefinedStorage);
+//    out_attrs->at(0) = in_attrs->at(0);
+//    return true;
+//  }
+  /*! \brief Infer input storage type from input */
+//  static bool BackwardInferStorageType(const nnvm::NodeAttrs& attrs,
+//                                       std::vector<int> *in_attrs,
+//                                       std::vector<int> *out_attrs) {
+//    CHECK_EQ(in_attrs->size(), 1U);
+//    CHECK_EQ(out_attrs->size(), 1U);
+//    CHECK_NE(out_attrs->at(0), kUndefinedStorage);
+//    in_attrs->at(0) = out_attrs->at(0);
+//    return true;
+//  }
+
+};
 
 template<typename GRAD_OP>
 struct unary_bwd {
   template<typename DType>
   MSHADOW_XINLINE static DType Map(DType a, DType b) {
-    return DType(a*GRAD_OP::Map(b));
+    std::cout << "unary_bwd::Map( a = " << a << ", b = " << b << " )" << std::endl << std::flush;
+    const DType res = a*GRAD_OP::Map(b);
+    std::cout << "unary_bwd::Map( a = " << a << ", b = " << b << " ) -> " << res << std::endl << std::flush;
+    return res;
   }
 };
-
-template<typename xpu, typename OP>
-void UnaryCompute(const nnvm::NodeAttrs& attrs,
-                  const OpContext& ctx,
-                  const std::vector<TBlob>& inputs,
-                  const std::vector<OpReqType>& req,
-                  const std::vector<TBlob>& outputs) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-    Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);
-    ASSIGN_DISPATCH(out, req[0], F<OP>(inputs[0].FlatTo1D<xpu, DType>(s)));
-  });
-}
-
-
-template<typename xpu>
-void IdentityCompute(const nnvm::NodeAttrs& attrs,
-                     const OpContext& ctx,
-                     const std::vector<TBlob>& inputs,
-                     const std::vector<OpReqType>& req,
-                     const std::vector<TBlob>& outputs) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (req[0] == kNullOp) return;
-  if (req[0] == kWriteInplace) {
-    CHECK_EQ(inputs[0].dptr_, outputs[0].dptr_); return;
-  }
-  MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-    Tensor<xpu, 1, DType> out = outputs[0].FlatTo1D<xpu, DType>(s);
-    ASSIGN_DISPATCH(out, req[0], F<mshadow_op::identity>(inputs[0].FlatTo1D<xpu, DType>(s)));
-  });
-}
 
 template<typename xpu>
 void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
@@ -209,10 +476,10 @@ struct CastStorageParam : public dmlc::Parameter<CastStorageParam> {
   int storage_type;
   DMLC_DECLARE_PARAMETER(CastStorageParam) {
     DMLC_DECLARE_FIELD(storage_type)
-    .add_enum("default", kDefaultStorage)
-    .add_enum("row_sparse", kRowSparseStorage)
-    .add_enum("csr", kCSRStorage)
-    .describe("Output storage type.");
+      .add_enum("default", kDefaultStorage)
+      .add_enum("row_sparse", kRowSparseStorage)
+      .add_enum("csr", kCSRStorage)
+      .describe("Output storage type.");
   }
 };
 
@@ -578,6 +845,21 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   .set_num_outputs(1)                                               \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)     \
+  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>) \
+  .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
+    [](const NodeAttrs& attrs){                                     \
+      return std::vector<std::pair<int, int> >{{0, 0}};             \
+    })                                                              \
+  .add_argument("data", "NDArray-or-Symbol", "The input array.")
+
+/*! \brief Unary operator which always has a dense result */
+#define MXNET_OPERATOR_REGISTER_UNARY_DR(name)                      \
+  NNVM_REGISTER_OP(name)                                            \
+  .set_num_inputs(1)                                                \
+  .set_num_outputs(1)                                               \
+  .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
+  .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)     \
+  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>) \
   .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
     [](const NodeAttrs& attrs){                                     \
       return std::vector<std::pair<int, int> >{{0, 0}};             \

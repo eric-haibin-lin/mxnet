@@ -192,7 +192,7 @@ void Reduce(Stream<cpu> *s, const TBlob& small, const OpReqType req,
             const Tensor<cpu, 1, char>& workspace, const TBlob& big) {
   if (req == kNullOp) return;
   Shape<ndim> rshape, rstride;
-  int mdim = diff(small.shape_.get<ndim>(), big.shape_.get<ndim>(), &rshape, &rstride);
+  diff(small.shape_.get<ndim>(), big.shape_.get<ndim>(), &rshape, &rstride);
   int N = small.shape_.Size(), M = rshape.Size();
   seq_reduce_compute<Reducer, ndim, DType, OP>(
     N, M, req == kAddTo, big.dptr<DType>(), small.dptr<DType>(), big.shape_.get<ndim>(),

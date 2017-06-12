@@ -183,7 +183,7 @@ class NDArray {
     return shape_;
   }
   /*!
-   * \return the shape of underlying chunk which stores the NDArray values. 
+   * \return the shape of underlying chunk which stores the NDArray values.
    *  For default storage, it is the same as shape(). For row-sparse storage, it is the shape of
    *  the tensor which stores the non-zero values.
    */
@@ -205,6 +205,14 @@ class NDArray {
   inline void SetStorageShape(const TShape& sshape) {
     CHECK(storage_type() != kDefaultStorage);
     ptr_->storage_shape = sshape;
+  }
+
+  /*!
+   * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
+   */
+  inline size_t aux_shape_count() const {
+    CHECK(ptr_ && storage_type() != kDefaultStorage);
+    return ptr_->aux_shapes.size();
   }
 
   /*!

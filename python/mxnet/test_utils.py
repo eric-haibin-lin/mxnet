@@ -566,8 +566,11 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
                          "Got %d inputs and %d locations"%(len(inps), len(location)))
     assert len(executor.outputs) == 1
 
+    print("calling forward()")
     executor.forward(is_train=True)
+    print("calling backward()")
     executor.backward()
+    print("returned from backward()")
     symbolic_grads = {k:executor.grad_dict[k].asnumpy() for k in grad_nodes}
 
     numeric_gradients = numeric_grad(executor, location_npy, aux_states_npy,
@@ -649,6 +652,9 @@ def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
     executor.forward(is_train=False)
 
     outputs = [x.asnumpy() for x in executor.outputs]
+    print('outputs:')
+    for t in executor.outputs:
+        print(t.asnumpy())
     for output_name, expect, output in zip(sym.list_outputs(), expected, outputs):
         assert_almost_equal(expect, output, rtol, atol,
                             ("EXPECTED_%s"%output_name, "FORWARD_%s"%output_name))
@@ -715,6 +721,11 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     aux_states = _parse_aux_states(sym=sym, aux_states=aux_states, ctx=ctx)
     if isinstance(expected, (list, tuple)):
         expected = {k:v for k, v in zip(sym.list_arguments(), expected)}
+
+    # print('expected:')
+    # for ex in expected:
+    #     print(ex)
+
     args_grad_npy = {k:_rng.normal(size=v.shape) for k, v in expected.items()}
     # args_grad_data should be casted to storage type if hinted
     # TODO(haibin) this is a temporary solution for testing. remove later
@@ -729,6 +740,8 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
             args_grad_data[k] = out
         else:
             args_grad_data[k] = nd
+            print("-----")
+            print(nd.asnumpy())
 
     if isinstance(grad_req, str):
         grad_req = {k:grad_req for k in sym.list_arguments()}
@@ -745,9 +758,25 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
         out_grads = {k:mx.nd.array(v, ctx=ctx) for k, v in out_grads.items()}
     else:
         assert out_grads is None
+
+    if out_grads is not None:
+        print("out_grads:")
+        for og in out_grads:
+            print(og.asnumpy())
+
     executor.backward(out_grads)
 
+    print("EXPECTED in_grads:")
+    for k, v in expected.items():
+        print(k)
+        print(v)
+
     grads = {k: v.asnumpy() for k, v in args_grad_data.items()}
+    print("ACTUAL in_grads:")
+    for k, v in grads.items():
+        print(k)
+        print(v)
+
     for name in expected:
         if grad_req[name] == 'write':
             assert_almost_equal(expected[name], grads[name], rtol, atol,

@@ -91,7 +91,7 @@ If the argument `reverse` is set to 1, then the special values are inferred from
 .set_attr<nnvm::FInferShape>("FInferShape", ReshapeShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_copy"})
-.set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
+.set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
 .set_attr<nnvm::FInplaceOption>("FInplaceOption",
   [](const NodeAttrs& attrs) {
     return std::vector<std::pair<int, int> >{{0, 0}};
@@ -130,7 +130,7 @@ Example::
 .set_attr<nnvm::FInferShape>("FInferShape", FlattenShape)
 .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{ "_backward_copy" })
-.set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
+.set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
 .set_attr<nnvm::FInplaceOption>("FInplaceOption",
   [](const NodeAttrs& attrs) {
   return std::vector<std::pair<int, int> >{{0, 0}};
@@ -212,7 +212,7 @@ will return a new array with shape ``(2,1,3,4)``.
     return std::vector<std::pair<int, int> >{{0, 0}};
   })
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_copy"})
-.set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
+.set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
 .add_argument("data", "NDArray-or-Symbol", "Source input")
 .add_arguments(ExpandDimParam::__FIELDS__());
 
@@ -632,5 +632,6 @@ NNVM_REGISTER_OP(_backward_reverse)
   return std::vector<ResourceRequest> {ResourceRequest::kTempSpace};
 })
 .set_attr<FCompute>("FCompute<cpu>", ReverseOpForward<cpu>);
+
 }  // namespace op
 }  // namespace mxnet

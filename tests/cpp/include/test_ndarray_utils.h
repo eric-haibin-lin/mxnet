@@ -7,7 +7,7 @@
 #ifndef TESTS_CPP_INCLUDE_TEST_NDARRAY_UTILS_H_
 #define TESTS_CPP_INCLUDE_TEST_NDARRAY_UTILS_H_
 
-/*#include <unistd.h>
+#include <unistd.h>
 #include <dmlc/logging.h>
 #include <cstdio>
 #include <gtest/gtest.h>
@@ -103,7 +103,7 @@ NDArray Convert(NDArrayStorageType type, NDArray src) {
         op::CastStorageComputeEx<cpu>({}, op_ctx, inputs, {}, outputs);
       } else if (src.storage_type() == kDefaultStorage) {
         std::vector<TBlob> inputs({src.data()}), outputs({converted.data()});
-        op::IdentityCompute<cpu>({}, op_ctx, inputs, {kWriteTo}, outputs);
+        op::UnaryOp::IdentityCompute<cpu>({}, op_ctx, inputs, {kWriteTo}, outputs);
       } else {
         LOG(FATAL) << "unsupported storage type";
       }
@@ -111,5 +111,5 @@ NDArray Convert(NDArrayStorageType type, NDArray src) {
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   converted.WaitToRead();
   return converted;
-}*/
+}
 #endif  // TESTS_CPP_INCLUDE_TEST_NDARRAY_UTILS_H_

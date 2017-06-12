@@ -124,6 +124,30 @@ void SetContext(Context* p_ctx,
     ctx = Context::CPU();
   }
 }
+
+/*! \brief Retuen reference to indexed item in vector if the vector is large enough.
+ * Otherwise, return an object to a blank (default) static object
+ * This allows us to not waste time and resources allocating vectors whose items won't be used
+ * @tparam Object
+ * @param vec Potential vector of objects
+ * @param i Potential index into the vector
+ * @return reference to the appropriate object
+ */
+template<typename Object>
+inline const Object& IndexedOrBlank(const std::vector<Object>& vec, const int i) {
+  static Object blank;
+  return i < vec.size() ? vec[i] : blank;
+}
+
+//struct StorageGeometry {
+//  TShape              data_shape_;
+//  struct Aux {
+//    TShape  aux_shape_;
+//    int     type_;
+//  };
+//  std::vector<Aux> aux_;
+//};
+
 // Set the shape, dtype and storage type
 void SetShapeType(const nnvm::Op* op,
                   const nnvm::NodeAttrs& attrs,
@@ -136,6 +160,7 @@ void SetShapeType(const nnvm::Op* op,
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
   static auto& inferstorage = nnvm::Op::GetAttr<nnvm::FInferStorageType>("FInferStorageType");
+  //static auto& inferstoragegeometry = nnvm::Op::GetAttr<nnvm::FInferStorageGeometry>("FInferStorageGeometry");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;
@@ -146,9 +171,11 @@ void SetShapeType(const nnvm::Op* op,
   for (auto& i : ndinputs) {
     in_shapes.emplace_back(i.shape());
   }
+
   for (auto& i : ndoutputs) {
     out_shapes.emplace_back(i.shape());
   }
+
   CHECK(infershape.count(op))
     << "Operator " << op->name << " is missing FInferShape attribute";
   CHECK(infershape[op](attrs, &in_shapes, &out_shapes));
@@ -158,7 +185,9 @@ void SetShapeType(const nnvm::Op* op,
   std::vector<int>& in_types = ret->arg_types;
   std::vector<int>& out_types = ret->out_types;
   in_types.clear();
+  in_types.reserve(ndinputs.size());
   out_types.clear();
+  out_types.reserve(ndoutputs.size());
 
   for (auto& i : ndinputs) {
     in_types.push_back(i.dtype());
@@ -175,7 +204,9 @@ void SetShapeType(const nnvm::Op* op,
   auto& in_storage_types = ret->arg_storage_types;
   auto& out_storage_types = ret->out_storage_types;
   in_storage_types.clear();
+  in_storage_types.reserve(ndinputs.size());
   out_storage_types.clear();
+  out_storage_types.reserve(ndoutputs.size());
 
   for (auto& i : ndinputs) {
     in_storage_types.push_back(i.storage_type());
@@ -192,19 +223,68 @@ void SetShapeType(const nnvm::Op* op,
 #endif
   }
 
-  bool contains_non_default = common::ContainsNonDefaultStorage(in_storage_types);
-  contains_non_default |= common::ContainsNonDefaultStorage(out_storage_types);
-  int kNonDefaultStorage = -2;
+//  std::vector<TShape> in_ss, out_ss;
+//  std::vector<std::vector<TShape>> in_aux_storage_shapes, out_aux_storage_shapes;
+//  std::vector<std::vector<int>> in_aux_storage_types, out_aux_storage_types;
+
+//  // See if the output storage and/or aux shapes are already known (ie unary, some binary, etc.)
+//  if (inferstoragegeometry.count(op)) {
+//
+//    const size_t inputSize = ndinputs.size();
+//    in_ss.resize(inputSize);
+//    in_aux_storage_shapes.resize(inputSize);
+//    in_aux_storage_types.resize(inputSize);
+//
+//    const size_t outputSize = ndoutputs.size();
+//    out_ss.resize(outputSize);
+//    out_aux_storage_shapes.resize(outputSize);
+//    out_aux_storage_types.resize(outputSize);
+//
+//    auto ndarray_reader = [](const std::vector<NDArray>& puts,
+//                             std::vector<TShape>& ss,
+//                             std::vector<std::vector<TShape>>& aux_ss) {
+//      for (size_t o = 0, no = puts.size(); o < no; ++o) {
+//        const NDArray& i = puts[o];
+//        if (i.storage_type() != kDefaultStorage) {
+//          if(!i.is_none()) {
+//            ss[o] = i.storage_shape();
+//            std::vector<TShape> &shapeVect = aux_ss[o];
+//            shapeVect.resize(i.aux_shape_count());
+//            for (size_t x = 0, n = i.aux_shape_count(); x < n; ++x) {
+//              shapeVect[x] = i.aux_shape(x);
+//            }
+//          }
+//        }
+//      }
+//    };
+//
+//    ndarray_reader(ndinputs,  in_ss,  in_aux_storage_shapes);
+//    ndarray_reader(ndoutputs, out_ss, out_aux_storage_shapes);
+//
+//    CHECK(inferstoragegeometry[op](attrs,
+//                                 &in_ss, &in_aux_storage_shapes, &in_aux_storage_types,
+//                                 &out_ss, &out_aux_storage_shapes, &out_aux_storage_types));
+//    CHECK_LE(out_ss.size(), ndoutputs.size());
+//    CHECK_LE(out_aux_storage_shapes.size(), ndoutputs.size());
+//    CHECK_EQ(out_aux_storage_types.size(), out_aux_storage_shapes.size());
+//  }
+
+  const bool contains_non_default = common::ContainsNonDefaultStorage(in_storage_types)
+                              || common::ContainsNonDefaultStorage(out_storage_types);
+  const int kNonDefaultStorage = kUndefinedStorage - 1;
   *dispatch_stype = contains_non_default ? kNonDefaultStorage : kDefaultStorage;
 
   for (int i = 0; i < infered_num_outputs; ++i) {
-    NDArrayStorageType storage_type = static_cast<NDArrayStorageType>(out_storage_types[i]);
+    const NDArrayStorageType storage_type = static_cast<NDArrayStorageType>(out_storage_types[i]);
     if (ndoutputs[i].is_none()) {
       // If failed to infer the storage type, assume the output storage is dense
       if (storage_type == kDefaultStorage || out_storage_types[i] == kUndefinedStorage) {
         ndoutputs[i] = NDArray(out_shapes[i], ctx, true, out_types[i]);
       } else {
-        ndoutputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i]);
+        ndoutputs[i] = NDArray(storage_type, out_shapes[i], ctx, true, out_types[i] /*,
+                               std::vector<int>(),
+                               IndexedOrBlank(out_aux_storage_shapes, i),
+                               IndexedOrBlank(out_ss, i)*/);
       }
     } else {
       CHECK_EQ(ndoutputs[i].shape(), out_shapes[i])
@@ -569,7 +649,6 @@ int MXAutogradBackward(mx_uint num_output,
                        NDArrayHandle *ograd_handles,
                        int retain_graph) {
   API_BEGIN();
-  MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
 
   std::vector<NDArray> outputs, ograds;
   outputs.reserve(num_output);
