@@ -233,7 +233,8 @@ The resulting array's *k*-th dimension contains elements
 from the *k*-th dimension of the input array with the open range ``[b_k, e_k)``.
 
 For an input array of non-default storage type(e.g. `csr` or `row_sparse`), it only supports
-slicing on the first dimension.
+slicing on the first dimension. For `row_sparse` inputs, it only support slicing a single row.
+e.g. ``slice(x, begin=2, end=3)``
 
 Example::
 
