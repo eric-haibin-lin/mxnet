@@ -177,6 +177,16 @@ def test_sparse_slice():
     check_csr_slice(shape, True)
     check_csr_slice(shape, False)
 
+    def check_rsp_slice(shape):
+        storage_type = 'row_sparse'
+        B, _ = rand_sparse_ndarray(shape, storage_type)
+        np = B.asnumpy()
+        begin = rnd.randint(0, B.shape[0] - 1)
+        end = begin + 1
+        nd_slice = mx.nd.crop(B, begin=begin, end=end)
+        assert same(nd_slice.asnumpy(), np[begin:end]), (nd_slice.asnumpy(), np[begin:end])
+    check_rsp_slice(shape)
+
 
 def test_sparse_retain():
     for _ in range(10):
