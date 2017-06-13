@@ -19,15 +19,6 @@
 #include "./elemwise_op_common.h"
 #include "mxnet_op.h"
 
-#define CHECK_RSP_ALL_ROWS_NON_ZERO(rsp, func, param)                              \
-  {                                                                                \
-    CHECK(rsp.storage_shape()[0] == rsp.shape()[0]) << func                        \
-          << " for RowSparse " << param << " is only implemented for "             \
-          << "RowSparse " << param << " with all rows containing non-zeros. "      \
-          << "Expects " << param << ".values.shape[0] (" << rsp.storage_shape()[0] \
-          << ") == " << param << ".shape[0] (" << rsp.shape()[0] << ").";          \
-  }
-
 namespace mxnet {
 namespace op {
 struct SGDParam : public dmlc::Parameter<SGDParam> {
@@ -172,14 +163,15 @@ struct SGDRspDnsKernel {
       }
     }
     if (!contains_non_zeros) return;
+    const DType rate = 1.f - lr * wd;
     for (index_t j = 0; j < num_cols; j++) {
       auto index = offset + j;
       if (clip_gradient >= 0.0f) {
-        KERNEL_ASSIGN(out[index], req, (1.f - lr * wd) * weight[index] -
-                     (lr) * mshadow_op::clip::Map(rescale_grad * grad[index], clip_gradient));
+        KERNEL_ASSIGN(out[index], req, rate * weight[index] -
+                      lr * mshadow_op::clip::Map(rescale_grad * grad[index], clip_gradient));
       } else {
-        KERNEL_ASSIGN(out[index], req, (1.f - lr * wd) * weight[index] -
-                      (lr * rescale_grad) * grad[index]);
+        KERNEL_ASSIGN(out[index], req, rate * weight[index] -
+                      lr * rescale_grad * grad[index]);
       }
     }
   }
@@ -333,21 +325,22 @@ struct SGDMomDnsRspDnsKernel {
   template<typename DType, typename IType>
   MSHADOW_XINLINE static void Map(int i, size_t width, DType* out_data,
     DType* mom_data, const DType* weight_data, const IType* grad_idx,
-    const DType* grad_data, const DType param_clip_gradient, const DType param_momentum,
-    const DType param_lr, const DType param_wd, const DType param_rescale_grad) {
+    const DType* grad_data, const DType clip_gradient, const DType momentum,
+    const DType lr, const DType wd, const DType rescale_grad) {
+    const DType rate = lr * wd;
     for (size_t j = 0; j < width; j++) {
       uint64_t data_i = grad_idx[i] * width + j;
       uint64_t grad_i = i * width + j;
-      if (param_clip_gradient >= 0.0f) {
-        mom_data[data_i] = param_momentum * mom_data[data_i]
-                - param_lr * param_wd * weight_data[data_i]
-                - param_lr *
-                mshadow_op::clip::Map(param_rescale_grad * grad_data[grad_i],
-                                      param_clip_gradient);
+      if (clip_gradient >= 0.0f) {
+        mom_data[data_i] = momentum * mom_data[data_i]
+                - rate * weight_data[data_i]
+                - lr *
+                mshadow_op::clip::Map(rescale_grad * grad_data[grad_i],
+                                      clip_gradient);
       } else {
-        mom_data[data_i] = param_momentum * mom_data[data_i]
-                  - param_lr * param_wd * weight_data[data_i]
-                  - param_lr * param_rescale_grad * grad_data[grad_i];
+        mom_data[data_i] = momentum * mom_data[data_i]
+                  - rate * weight_data[data_i]
+                  - lr * rescale_grad * grad_data[grad_i];
       }
       KERNEL_ASSIGN(out_data[data_i], req, weight_data[data_i] + mom_data[data_i]);
     }
@@ -406,13 +399,14 @@ struct SGDMomRspDnsKernel {
       }
     }
     if (!contains_non_zeros) return;
+    const DType rate = lr * wd;
     for (index_t j = 0; j < num_cols; j++) {
       auto index = offset + j;
       if (clip_gradient >= 0.0f) {
-        mom[index] = momentum * mom[index] - lr * wd * weight[index]
+        mom[index] = momentum * mom[index] - rate * weight[index]
                    - lr * mshadow_op::clip::Map(rescale_grad * grad[index], clip_gradient);
       } else {
-        mom[index] = momentum * mom[index] - lr * wd * weight[index]
+        mom[index] = momentum * mom[index] - rate * weight[index]
                    - lr * rescale_grad * grad[index];
       }
       KERNEL_ASSIGN(out[index], req, weight[index] + mom[index]);
