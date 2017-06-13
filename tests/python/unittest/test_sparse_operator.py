@@ -404,4 +404,4 @@ if __name__ == '__main__':
     #import nose
     #nose.runmodule()
     check_binary_ops()
-    test_sparse_mathematical_core()
+    #test_sparse_mathematical_core()
