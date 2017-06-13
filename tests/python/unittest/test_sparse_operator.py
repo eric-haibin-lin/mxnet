@@ -1,6 +1,70 @@
 from mxnet.test_utils import *
 
 def check_binary_ops():
+    # def test_simple_binary_op(name, lhs_stype, rhs_stype, shape,
+    #                           forward_mxnet_call, forward_numpy_call, backward_numpy_call,
+    #                           lhs_grad_stype=None, rhs_grad_stype=None,
+    #                           data_init=5., grad_init=2.):
+    #     lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
+    #     rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
+    #     if lhs_grad_stype is not None:
+    #         lhs._set_attr(grad_stype_hint=str(lhs_grad_stype))
+    #     if rhs_grad_stype is not None:
+    #         rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
+    #
+    #     lhs_nd = rand_ndarray(shape, 'default')
+    #     lhs_nd[0][0] = 2
+    #     if lhs_stype is not None and lhs_stype != 'default':
+    #         lhs_nd = mx.nd.cast_storage(lhs_nd, storage_type=lhs_stype)
+    #
+    #     rhs_nd = rand_ndarray(shape, 'default')
+    #     rhs_nd[0][0] = 3
+    #     if rhs_stype is not None and rhs_stype != 'default':
+    #         rhs_nd = mx.nd.cast_storage(rhs_nd, storage_type=rhs_stype)
+    #
+    #     lhs_np = lhs_nd.asnumpy()
+    #     rhs_np = rhs_nd.asnumpy()
+    #
+    #     print("lhs input:")
+    #     print(lhs_np)
+    #     print("rhs input:")
+    #     print(rhs_np)
+    #
+    #     npout = forward_numpy_call(lhs_np, rhs_np)
+    #     out_grad = mx.nd.empty(shape)
+    #     out_grad[:] = grad_init
+    #     npout_grad = out_grad.asnumpy()
+    #
+    #     ingrad_lhs_np, ingrad_rhs_np = backward_numpy_call(out_grad, lhs_np, rhs_np)
+    #     ingrad_lhs = ingrad_lhs_np
+    #     ingrad_rhs = ingrad_rhs_np
+    #
+    #     print(ingrad_lhs_np)
+    #     print(ingrad_rhs_np)
+    #
+    #     if lhs_grad_stype is not None and lhs_grad_stype != 'default':
+    #         ingrad_lhs = mx.nd.cast_storage(ingrad_lhs, storage_type=lhs_grad_stype)
+    #     if rhs_grad_stype is not None and rhs_grad_stype != 'default':
+    #         ingrad_rhs = mx.nd.cast_storage(ingrad_rhs, storage_type=rhs_grad_stype)
+    #
+    #     #npout_grad = npout_grad * temp
+    #
+    #     #test = forward_mxnet_call(lhs_np, rhs_np)
+    #
+    #     exe_test = test.bind(default_context(), args=[lhs_np, rhs_np], args_grad=[out_grad])
+    #     exe_test.forward(is_train=True)
+    #     out = exe_test.outputs[0].asnumpy()
+    #     assert_almost_equal(out, npout)
+    #
+    #     exe_test.backward(out_grad)
+    #     #arr_grad = arr_grad.asnumpy()
+    #
+    #     # print(name)
+    #     # print(arr_grad)
+    #     # print(npout_grad)
+    #
+    #     assert_almost_equal(arr_grad, npout_grad)
+
     def test_binary_op(name, lhs_stype, rhs_stype, shape,
                        forward_mxnet_call, forward_numpy_call, backward_numpy_call,
                        lhs_grad_stype, rhs_grad_stype):
@@ -11,25 +75,31 @@ def check_binary_ops():
         if rhs_grad_stype is not None:
             rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
 
-        lhs_nd = rand_ndarray(shape, lhs_stype)
-        #lhs_nd[0][0] = 2
-        rhs_nd = rand_ndarray(shape, rhs_stype)
-        #rhs_nd[0][0] = 3
+        lhs_nd = rand_ndarray(shape, 'default')
+        lhs_nd[0][0] = 2
+        if lhs_stype is not None and lhs_stype != 'default':
+            lhs_nd = mx.nd.cast_storage(lhs_nd, storage_type=lhs_stype)
+
+        rhs_nd = rand_ndarray(shape, 'default')
+        rhs_nd[0][0] = 3
+        if rhs_stype is not None and rhs_stype != 'default':
+            rhs_nd = mx.nd.cast_storage(rhs_nd, storage_type=rhs_stype)
+
         lhs_np = lhs_nd.asnumpy()
         rhs_np = rhs_nd.asnumpy()
 
-        # print("lhs input:")
-        # print(lhs_np)
-        # print("rhs input:")
-        # print(rhs_np)
+        print("lhs input:")
+        print(lhs_np)
+        print("rhs input:")
+        print(rhs_np)
 
         out_np = forward_numpy_call(lhs_np, rhs_np)
         test = forward_mxnet_call(lhs, rhs)
         out_grad = np.ones(shape)
         ingrad_lhs_np, ingrad_rhs_np = backward_numpy_call(out_grad, lhs_np, rhs_np)
 
-        # print(ingrad_lhs_np)
-        # print(ingrad_rhs_np)
+        print(ingrad_lhs_np)
+        print(ingrad_rhs_np)
 
         location = {'lhs': lhs_nd, 'rhs': rhs_nd}
         check_symbolic_forward(test, location, [out_np])
@@ -37,11 +107,11 @@ def check_binary_ops():
         check_symbolic_backward(test, location, [out_grad], [ingrad_lhs_np, ingrad_rhs_np])
 
     def test_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
-        test_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
-                          lambda l, r: mx.sym.elemwise_add(l, r),
-                          lambda l, r: l + r,
-                          lambda outg, l, r: (outg, outg),
-                          lhs_grad_stype, rhs_grad_stype)
+        # test_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
+        #                   lambda l, r: mx.sym.elemwise_add(l, r),
+        #                   lambda l, r: l + r,
+        #                   lambda outg, l, r: (outg, outg),
+        #                   lhs_grad_stype, rhs_grad_stype)
         # test_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
         #                lambda l, r: mx.sym.elemwise_sub(l, r),
         #                lambda l, r: l - r,
@@ -52,18 +122,18 @@ def check_binary_ops():
         #                lambda l, r: l * r,
         #                lambda outg, l, r: (r, l),
         #                lhs_grad_stype, rhs_grad_stype)
-        # test_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
-        #                lambda l, r: mx.sym.elemwise_div(l, r),
-        #                lambda l, r: l / r,
-        #                lambda outg, l, r: (1/r, -l/(r*r)),
-        #                lhs_grad_stype, rhs_grad_stype)
+        test_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
+                       lambda l, r: mx.sym.elemwise_div(l, r),
+                       lambda l, r: l / r,
+                       lambda outg, l, r: (1/r, -l/(r*r)),
+                       lhs_grad_stype, rhs_grad_stype)
 
-    #shape = (1, 1)
-    shape = rand_shape_2d()
-    test_binary_ops('default', 'default', shape)
-    test_binary_ops('default', 'row_sparse', shape)
-    test_binary_ops('row_sparse', 'default', shape)
-    #test_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    shape = (1, 1)
+    #shape = rand_shape_2d()
+    # test_binary_ops('default', 'default', shape)
+    # test_binary_ops('default', 'row_sparse', shape)
+    # test_binary_ops('row_sparse', 'default', shape)
+    test_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
@@ -334,4 +404,4 @@ if __name__ == '__main__':
     #import nose
     #nose.runmodule()
     check_binary_ops()
-    #test_sparse_mathematical_core()
+    test_sparse_mathematical_core()

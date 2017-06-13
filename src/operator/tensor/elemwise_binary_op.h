@@ -26,11 +26,26 @@ class BinaryOp : public OpBase
   struct BinaryOpMapping
   {
     template<typename DType>
-    MSHADOW_XINLINE static void Map(int i, DType *out, const DType *lhs,
+    MSHADOW_XINLINE static void Map(int i, DType *out,
+                                    const DType *lhs,
                                     const DType *rhs) {
       KERNEL_ASSIGN(out[i], Req, OP::Map(lhs[i], rhs[i]));
     }
+    // int N, Args... args
+//    template<typename ...Args>
+//    MSHADOW_XINLINE static void Map(int i, Args... args) {
+//      OP::Map(i, args...);
+//    }
   };
+
+//  template<typename OP, int Req, typename DType>
+//  struct BinaryOpMapping3
+//  {
+//    MSHADOW_XINLINE static void Map(int i, DType *out,
+//                                    const DType *out_grad, const DType *in) {
+//      OP::Map(i, out, out_grad, in);
+//    }
+//  };
 
   /*! \brief For sparse, assume missing rvalue is 0 */
   template<typename OP, int Req>
@@ -51,6 +66,17 @@ class BinaryOp : public OpBase
       KERNEL_ASSIGN(out[i], Req, OP::Map(DType(0), rhs[i]));
     }
   };
+
+//  template<typename OP, int Req, typename SrcType, typename DestType>
+//  struct BinaryOpSimpleMapper
+//  {
+//    template<typename DType>
+//    MSHADOW_XINLINE static void Map(int i, SrcType *out, const SrcType *rhs) {
+//      SrcType val = OP::Map(rhs[i]);
+//      KERNEL_ASSIGN(out[i], Req, OP::Map(DType(0), rhs[i]));
+//    }
+//  };
+
 
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
@@ -309,6 +335,25 @@ class BinaryOp : public OpBase
     });
   }
 
+//  template<typename xpu, typename OP, typename DType>
+//  static inline void Compute3_(const nnvm::NodeAttrs &attrs,
+//                              const OpContext &ctx,
+//                              const std::vector<TBlob> &inputs,
+//                              const std::vector<OpReqType> &req,
+//                              const std::vector<TBlob> &outputs) {
+//    using namespace mxnet_op;
+//    if (req[0] == kNullOp) return;
+//    Stream<xpu> *s = ctx.get_stream<xpu>();
+//    int size = static_cast<int>((outputs[0].Size() + DataType<DType>::kLanes - 1)
+//                                / DataType<DType>::kLanes);
+//    DType *out_dptr = outputs[0].dptr<DType>();
+//    const DType * lhs_dptr = inputs[0].dptr<DType>();
+//    const DType * rhs_dptr = inputs[1].dptr<DType>();
+//    MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+//      Kernel<BinaryOpMapping3<OP, Req, DType>, xpu>::Launch(s, size, out_dptr, lhs_dptr, rhs_dptr);
+//    });
+//  }
+
   template<typename xpu, typename OP>
   static inline void Compute(const nnvm::NodeAttrs &attrs,
                              const OpContext &ctx,
@@ -319,6 +364,17 @@ class BinaryOp : public OpBase
       Compute_<xpu, OP, DType>(attrs, ctx, inputs, req, outputs);
     });
   }
+
+//  template<typename xpu, typename OP>
+//  static inline void Compute3(const nnvm::NodeAttrs &attrs,
+//                             const OpContext &ctx,
+//                             const std::vector<TBlob> &inputs,
+//                             const std::vector<OpReqType> &req,
+//                             const std::vector<TBlob> &outputs) {
+//    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+//      Compute3_<xpu, OP, DType>(attrs, ctx, inputs, req, outputs);
+//    });
+//  }
 
   template<typename xpu, typename OP>
   static inline void ComputeEx(const nnvm::NodeAttrs &attrs,
@@ -333,6 +389,9 @@ class BinaryOp : public OpBase
     // If any input is dense, fallback to FCompute
     // TODO(haibin) implement dns + rsp in a separate kernel
     if (common::ContainsDefaultStorage(inputs)) {
+#ifndef NDEBUG
+      std::cout << "Casting operation to dense" << std::endl << std::flush;
+#endif
       FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                            Compute<xpu, OP>, "Compute");
       return;
@@ -359,18 +418,41 @@ class BinaryOp : public OpBase
                      const std::vector<TBlob> &inputs,
                      const std::vector<OpReqType> &req,
                      const std::vector<TBlob> &outputs) {
-    using namespace mshadow;
-    using namespace mxnet_op;
-    Stream<xpu> *s = ctx.get_stream<xpu>();
-
+//    using namespace mshadow;
+//    using namespace mxnet_op;
+//    Stream<xpu> *s = ctx.get_stream<xpu>();
+//
     CHECK_EQ(inputs.size(), 2U);
     CHECK_EQ(outputs.size(), 1U);
-    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-      Kernel<OP, xpu>::Launch(s, outputs[0].Size(),
-                              outputs[0].dptr<DType>(),
-                              inputs[0].dptr<DType>(), inputs[1].dptr<DType>());
-    });
+//    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+//      Kernel<OP, xpu>::Launch(s, outputs[0].Size(),
+//                              outputs[0].dptr<DType>(),
+//                              inputs[0].dptr<DType>(), inputs[1].dptr<DType>());
+//    });
+    Compute<xpu, OP>(attrs, ctx, inputs, req, outputs);
   }
+
+//  template<typename xpu, typename OP>
+//  static void Launch3(const nnvm::NodeAttrs &attrs,
+//                     const OpContext &ctx,
+//                     const std::vector<TBlob> &inputs,
+//                     const std::vector<OpReqType> &req,
+//                     const std::vector<TBlob> &outputs) {
+//    using namespace mshadow;
+//    using namespace mxnet_op;
+//    Stream<xpu> *s = ctx.get_stream<xpu>();
+//
+//    CHECK_EQ(inputs.size(), 2U);
+//    CHECK_EQ(outputs.size(), 1U);
+//    MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
+//    MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+//      Kernel <BinaryOpMapping3<OP, Req, DType>, xpu> ::Launch(s, outputs[0].Size(),
+//                                                       outputs[0].dptr<DType>(),
+//                                                       inputs[0].dptr<DType>(),
+//                                                       inputs[1].dptr<DType>());
+//      });
+//    });
+//  }
 
   template<typename xpu, typename OP>
   static void LaunchEx(const nnvm::NodeAttrs &attrs,
@@ -378,19 +460,30 @@ class BinaryOp : public OpBase
                        const std::vector<NDArray> &inputs,
                        const std::vector<OpReqType> &req,
                        const std::vector<NDArray> &outputs) {
-    CHECK_EQ(inputs.size(), 2U);
-    CHECK_EQ(outputs.size(), 1U);
-    //OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, UnaryOp::Compute<xpu, OP>);
-    CHECK(false); // won't handle inconsistencies between input and output shapes.
-                  // Need something similar to out RspRspElemwiseBinaryOp to just handle
-                  // the intersections
+    ComputeEx<xpu, OP>(attrs, ctx, inputs, req, outputs);
+//    CHECK_EQ(inputs.size(), 2U);
+//    CHECK_EQ(outputs.size(), 1U);
+//    OpBase::MapToFCompute<xpu, BinaryOpMapping3<xpu, OP>>(
+//      attrs, ctx, inputs, req, outputs, Compute<xpu, BinaryOpMapping3<xpu, OP> >);
   }
+
+//  template<typename xpu, typename OP>
+//  static void LaunchEx3(const nnvm::NodeAttrs &attrs,
+//                       const OpContext &ctx,
+//                       const std::vector<NDArray> &inputs,
+//                       const std::vector<OpReqType> &req,
+//                       const std::vector<NDArray> &outputs) {
+//    //ComputeEx<xpu, OP>(attrs, ctx, inputs, req, outputs);
+////    CHECK_EQ(inputs.size(), 2U);
+////    CHECK_EQ(outputs.size(), 1U);
+//    OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute3<xpu, OP>);
+//  }
 
   template<typename OP, int Req>
   struct BinaryOpBackwardUseNone
   {
     template<typename DType>
-    MSHADOW_XINLINE static void Map(int i, DType *igrad, const DType *ograd) {
+    /*MSHADOW_XINLINE*/ static void Map(int i, DType *igrad, const DType *ograd) {
       KERNEL_ASSIGN(igrad[i], Req, OP::Map(ograd[i]));
     }
   };
@@ -484,22 +577,31 @@ class BinaryOp : public OpBase
     using namespace mshadow::expr;
     auto stype = inputs[0].storage_type();
     CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
-    //LaunchEx<xpu, LOP>(attrs, ctx, { inputs[0] }, req, outputs);
-    //LaunchEx<xpu, ROP>(attrs, ctx, { inputs[1] }, req, outputs);
-    //BinaryBackwardUseNoneRsp<xpu, LOP, ROP>(attrs, ctx, inputs, req, outputs);
+#if 0
+    BinaryBackwardUseNoneRsp<xpu, LOP, ROP>(attrs, ctx, inputs, req, outputs);
+#else
+    MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+      UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<LOP, Req>>(attrs, ctx, { inputs },
+                                                                req, { outputs[0] });
+    });
+    MXNET_ASSIGN_REQ_SWITCH(req[1], Req, {
+      UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<ROP, Req>>(attrs, ctx, { inputs },
+                                                                req, { outputs[1] });
+    });
+#endif
     // TODO(haibin) fallback for kDefaultStorage
   }
 
-  template<typename xpu, typename LOP, typename ROP>
-  static inline void BinaryBackwardUseNoneWithHalf2(const nnvm::NodeAttrs &attrs,
-                                      const OpContext &ctx,
-                                      const std::vector<TBlob> &inputs,
-                                      const std::vector<OpReqType> &req,
-                                      const std::vector<TBlob> &outputs) {
-    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
-      BinaryBackwardUseNone_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
-    });
-  }
+//  template<typename xpu, typename LOP, typename ROP>
+//  static inline void BinaryBackwardUseNoneWithHalf2(const nnvm::NodeAttrs &attrs,
+//                                      const OpContext &ctx,
+//                                      const std::vector<TBlob> &inputs,
+//                                      const std::vector<OpReqType> &req,
+//                                      const std::vector<TBlob> &outputs) {
+//    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
+//      BinaryBackwardUseNone_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
+//    });
+//  }
 
   template<typename OP, int Req>
   struct BinaryOpBackwardUseIn
@@ -546,31 +648,30 @@ class BinaryOp : public OpBase
     });
   }
 
-  template<typename xpu, typename LOP, typename ROP>
-  static inline void BinaryBackwardUseInWithHalf2(const nnvm::NodeAttrs &attrs,
-                                    const OpContext &ctx,
-                                    const std::vector<TBlob> &inputs,
-                                    const std::vector<OpReqType> &req,
-                                    const std::vector<TBlob> &outputs) {
-    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
-      BinaryBackwardUseIn_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
-    });
-  }
+//  template<typename xpu, typename LOP, typename ROP>
+//  static inline void BinaryBackwardUseInWithHalf2(const nnvm::NodeAttrs &attrs,
+//                                    const OpContext &ctx,
+//                                    const std::vector<TBlob> &inputs,
+//                                    const std::vector<OpReqType> &req,
+//                                    const std::vector<TBlob> &outputs) {
+//    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
+//      BinaryBackwardUseIn_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
+//    });
+//  }
 
 };  // class BinaryOp
 
-template<typename GRAD_OP>
-struct binary_bwd {
-  template<typename DType>
-  MSHADOW_XINLINE static DType Map(DType a, DType b) {
-    std::cout << "binary_bwd::Map( a = " << a << ", b = " << b << " )" << std::endl << std::flush;
-    //const DType res = a*GRAD_OP::Map(b);
-    const DType res = GRAD_OP::Map(a, b);
-    std::cout << "binary_bwd::Map( a = " << a << ", b = " << b << " ) -> " << res << std::endl << std::flush;
-    return res;
-  }
-};
-
+//template<typename GRAD_OP>
+//struct binary_bwd {
+//  template<typename DType>
+//  MSHADOW_XINLINE static DType Map(DType a, DType b) {
+//    std::cout << "binary_bwd::Map( a = " << a << ", b = " << b << " )" << std::endl << std::flush;
+//    //const DType res = a*GRAD_OP::Map(b);
+//    const DType res = GRAD_OP::Map(a, b);
+//    std::cout << "binary_bwd::Map( a = " << a << ", b = " << b << " ) -> " << res << std::endl << std::flush;
+//    return res;
+//  }
+//};
 
 #define MXNET_OPERATOR_REGISTER_BINARY(name)                        \
   NNVM_REGISTER_OP(name)                                            \

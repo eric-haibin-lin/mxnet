@@ -169,7 +169,7 @@ void BinaryAddRspRsp() {
       inputs.push_back(input_nd0);
       inputs.push_back(input_nd1);
       outputs.push_back(output);
-                            op::BinaryOp::ComputeRspRsp<cpu, mshadow::op::plus>({}, op_ctx, inputs, req, outputs);
+      op::BinaryOp::ComputeRspRsp<cpu, mshadow::op::plus>({}, op_ctx, inputs, req, outputs);
     }, input_nd0.ctx(), const_vars, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 

@@ -22,8 +22,10 @@ MXNET_OPERATOR_REGISTER_UNARY(relu)
 
 
 MXNET_OPERATOR_REGISTER_BINARY(_backward_relu)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, kernel_launch_op::relu_grad>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::LaunchEx<cpu, kernel_launch_op::relu_grad>);
+//.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, kernel_launch_op::relu_grad>)
+//.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::LaunchEx<cpu, kernel_launch_op::relu_grad>);
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, kernel_launch_op::relu_grad>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, kernel_launch_op::relu_grad>);
 
 // sigmoid
 MXNET_OPERATOR_REGISTER_UNARY_DR(sigmoid)
@@ -39,8 +41,7 @@ MXNET_OPERATOR_REGISTER_UNARY_DR(sigmoid)
 
 
 MXNET_OPERATOR_REGISTER_BINARY(_backward_sigmoid)
-.set_attr<FCompute>("FCompute<cpu>",
-                    BinaryOp::Launch<cpu, kernel_launch_op::sigmoid_grad>);
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, kernel_launch_op::sigmoid_grad>);
 
 
 // copy

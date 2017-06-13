@@ -377,11 +377,15 @@ struct sigmoid {
   }
 };
 struct sigmoid_grad {
+//  template<typename DType>
+//  MSHADOW_XINLINE static void Map(int i, DType *out,
+//                                  const DType *out_grad, const DType *in) {
+//    DType x = in[i];
+//    out[i] = out_grad[i] * DType(x * (DType(1.0f) - x));
+//  }
   template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType *out,
-                                  const DType *out_grad, const DType *in) {
-    DType x = in[i];
-    out[i] = out_grad[i] * DType(x * (DType(1.0f) - x));
+  MSHADOW_XINLINE static DType Map(DType out_grad, DType in) {
+    return out_grad * DType(in * (DType(1.0f) - in));
   }
 };
 /*! \brief Rectified Linear Operation */
@@ -394,10 +398,16 @@ struct relu {
   }
 };
 struct relu_grad {
+//  template<typename DType>
+//  MSHADOW_XINLINE static void Map(int i,
+//                                  DType *out,
+//                                  const DType *out_grad,
+//                                  const DType *in) {
+//    out[i] = out_grad[i] * DType(in[i] > DType(0.0f) ? DType(1.0f) : DType(0.0f));
+//  }
   template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType *out,
-                                  const DType *out_grad, const DType *in) {
-    out[i] = out_grad[i] * DType(in[i] > DType(0.0f) ? DType(1.0f) : DType(0.0f));
+  MSHADOW_XINLINE static DType Map(DType out_grad, DType in) {
+    return out_grad * DType(in > DType(0.0f) ? DType(1.0f) : DType(0.0f));
   }
 };
 }  // namespace kernel_launch_op
@@ -458,7 +468,7 @@ struct MarkRspRowIdx {
   }
 };
 
-struct CopyDnsToRsp{
+struct CopyDnsToRsp {
   // i represents the row index of the matrix data
   template<typename DType, typename RType>
   MSHADOW_XINLINE static void Map(int i, RType* row_idx, DType* rsp_data,
