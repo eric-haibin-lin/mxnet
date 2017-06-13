@@ -42,6 +42,28 @@ class OpBase {
     });
   }
 
+  /*! \brief Allocate geometry-related blob data for sparse tensors */
+  static void AllocateGeometry(const NDArray *dest, const NDArray* clone_from = nullptr) {
+    if (clone_from) {
+      const TShape ishape = clone_from->storage_shape();
+      TShape sshape = dest->storage_shape();
+      CHECK(shape_assign(&sshape, ishape));
+      dest->CheckAndAllocData(sshape);
+      CHECK_EQ(dest->storage_type(), clone_from->storage_type());
+      for(size_t i = 0, n = clone_from->aux_shape_count(); i < n; ++i) {
+        TShape ashape = dest->aux_shape(i);
+        CHECK(shape_assign(&ashape, clone_from->aux_shape(i)));
+        dest->CheckAndAllocAuxData(i, ashape);
+      }
+      DCHECK_EQ(dest->aux_shape_count(), clone_from->aux_shape_count());
+    } else {
+      for (size_t i = 0, n = dest->aux_shape_count(); i < n; ++i) {
+        dest->CheckAndAllocAuxData(i, dest->aux_shape(i));
+      }
+      dest->CheckAndAllocData(dest->storage_shape());
+    }
+  }
+
   /*! \brief Copy the geometry-related blobs (row sparse indexes, etc.) */
   template<typename xpu>
   static inline void CopyGeometryBlobs(mshadow::Stream<xpu> *s,
@@ -50,7 +72,7 @@ class OpBase {
                                        const NDArray &src) {
     CHECK_EQ(src.aux_shape_count(), dest->aux_shape_count());
     // My assumption is that the geometry blobs are not large enough to justify an omp loop here,
-    // since the thread synchronizationc calls for each fork will take longer
+    // since the thread synchronization calls for each fork will take longer
     // than copying a few floats
     for(size_t i = 0, n = src.aux_shape_count(); i < n; ++i) {
       const TBlob src_blob = src.aux_data(i);
@@ -58,6 +80,46 @@ class OpBase {
       CopyBlob<xpu>(s, dest_blob, reqi, src_blob);
     }
   }
+
+  template<typename xpu>
+  static inline void CopyNDArray(mshadow::Stream<xpu> *s,
+                                 const NDArray& dest,
+                                 const OpReqType reqi,
+                                 const NDArray& src) {
+    DCHECK_NE(dest.storage_type(), kDefaultStorage);
+    DCHECK_EQ(dest.storage_type(), src.storage_type());
+    AllocateGeometry(&dest, &src);
+    CopyGeometryBlobs(s, &dest, reqi, src);
+    CopyBlob(s, dest.data(), reqi, src.data());
+  }
+
+  /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
+  template<typename xpu, typename FComputer>
+  static inline void MapToFCompute(const nnvm::NodeAttrs &attrs,
+                                   const OpContext &ctx,
+                                   const std::vector<NDArray> &inputs,
+                                   const std::vector<OpReqType> &req,
+                                   const std::vector<NDArray> &outputs,
+                                   FComputer computer) {
+    std::vector<TBlob> in_blobs, out_blobs;
+    in_blobs.reserve(inputs.size());
+    out_blobs.reserve(outputs.size());
+    for(size_t i = 0, n = inputs.size(); i < n; ++i) {
+      TBlob blob = inputs[i].data();
+      in_blobs.emplace_back(std::move(inputs[i].data()));
+    }
+    for(size_t i = 0, n = outputs.size(); i < n; ++i) {
+      const NDArray& o = outputs[i];
+      TBlob blob = o.data();
+      out_blobs.emplace_back(std::move(outputs[i].data()));
+    }
+    computer(attrs, ctx, in_blobs, req, out_blobs);
+  };
+
+};
+
+/*! \brief Unary operator class */
+class UnaryOp : public OpBase {
 
   /*! \brief Infer the output storage geometry */
   template<int n_in, int n_out>
@@ -103,104 +165,18 @@ class OpBase {
                                    const std::vector<OpReqType> &req,
                                    const std::vector<NDArray> &outputs,
                                    FComputer computer) {
-    std::vector<TBlob> in_blobs, out_blobs;
-    in_blobs.reserve(inputs.size());
-    out_blobs.reserve(outputs.size());
-    for(size_t i = 0, n = inputs.size(); i < n; ++i) {
-      TBlob blob = inputs[i].data();
-      in_blobs.emplace_back(std::move(inputs[i].data()));
-    }
-    for(size_t i = 0, n = outputs.size(); i < n; ++i) {
-      const NDArray& o = outputs[i];
-      TBlob blob = o.data();
-      out_blobs.emplace_back(std::move(outputs[i].data()));
-    }
-    computer(attrs, ctx, in_blobs, req, out_blobs);
-  };
-
-};
-
-/*! \brief Unary operator class */
-class UnaryOp : public OpBase {
-  /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
-  template<typename xpu, typename FComputer>
-  static inline void MapToFCompute(const nnvm::NodeAttrs &attrs,
-                                   const OpContext &ctx,
-                                   const std::vector<NDArray> &inputs,
-                                   const std::vector<OpReqType> &req,
-                                   const std::vector<NDArray> &outputs,
-                                   FComputer computer) {
     // Copy over geometry
     InitStorageGeometry<1, 1>(attrs, inputs, outputs);
     CHECK_EQ(inputs.size(), outputs.size()); // need to figure out what to do for binary type
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
     CHECK_EQ(inputs[0].storage_type(), outputs[0].storage_type());
+    AllocateGeometry(&outputs[0], &inputs[0]);
     CopyGeometryBlobs<xpu>(ctx.get_stream<xpu>(), &outputs[0], req[0], inputs[0]);
+    outputs[0].CheckAndAllocData(inputs[0].storage_shape());
     OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, computer);
   }
 
  public:
-//  /*! \brief Infer basic input->output non-default storage geometry for operations
-//   * that have predictable output shapes based upon the input shapes (and visa versa)
-//   */
-//  template<int n_in, int n_out>
-//  static bool FInferStorageGeometry(const nnvm::NodeAttrs& attrs,
-//                                    std::vector<TShape> *in_storage_shapes,
-//                                    std::vector<std::vector<TShape>> *in_aux_shapes,
-//                                    std::vector<std::vector<int>> *in_aux_types,
-//                                    std::vector<TShape> *out_storage_shapes,
-//                                    std::vector<std::vector<TShape>> *out_aux_shapes,
-//                                    std::vector<std::vector<int>> *out_aux_types) {
-//    CHECK_EQ(in_storage_shapes->size(), static_cast<size_t>(n_in))
-//      << " in operator " << attrs.name;
-//    CHECK_EQ(out_storage_shapes->size(), static_cast<size_t>(n_out))
-//      << " in operator " << attrs.name;
-//    // More sanity testing
-//    CHECK_EQ(in_storage_shapes->size(), in_aux_shapes->size());
-//    CHECK_EQ(in_aux_types->size(), in_aux_shapes->size());
-//    CHECK_EQ(out_storage_shapes->size(), out_aux_shapes->size());
-//    CHECK_EQ(out_aux_types->size(), out_aux_shapes->size());
-//    if(ElemwiseShape<n_in, n_out>(attrs, in_storage_shapes, out_storage_shapes)) {
-//      for (size_t i = 0, n = in_storage_shapes->size(); i < n; ++i) {
-//        if(!shape_is_none((*in_storage_shapes)[i])) {
-//          std::vector<TShape>& ias = (*in_aux_shapes)[i];
-//          std::vector<TShape>& oas = (*out_aux_shapes)[i];
-//          std::vector<int>& iat = (*in_aux_types)[i];
-//          std::vector<int>& oat = (*out_aux_types)[i];
-//          if(ias.empty()) {
-//            ias = oas;
-//            iat = oat;
-//            return true;
-//          } else if(oas.empty()) {
-//            oas = ias;
-//            oat = iat;
-//            return true;
-//          }
-//          bool have_direction = false;
-//          bool assign_output = false;
-//          for(size_t j = 0, nj = ias.size(); j < nj; ++j) {
-//            if(shape_is_none(oas[j])) {
-//              CHECK(!have_direction || assign_output);
-//              CHECK(shape_assign(&oas[j], ias[j]));
-//              CHECK(type_assign(&oat[j], iat[j]));
-//              have_direction = true;
-//              assign_output = true;
-//            } else {
-//              CHECK(!have_direction || !assign_output);
-//              CHECK(shape_assign(&ias[j], oas[j]));
-//              CHECK(type_assign(&iat[j], oat[j]));
-//              have_direction = true;
-//            }
-//          }
-//        }
-//      }
-//      return true;
-//    } else {
-//      return false;
-//    }
-//    return false;
-//  }
-
   template<typename xpu, typename OP>
   static void Compute(const nnvm::NodeAttrs& attrs,
                       const OpContext& ctx,
@@ -286,54 +262,56 @@ class UnaryOp : public OpBase {
     MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, IdentityCompute<xpu>);
   }
 
-//  /*! \brief Forward pass */
-//  template<typename xpu>
-//  static void Forward(const nnvm::NodeAttrs& attrs,
-//                      const OpContext& ctx,
-//                      const std::vector<TBlob>& inputs,
-//                      const std::vector<OpReqType>& req,
-//                      const std::vector<TBlob>& outputs) {
-//    CHECK_EQ(inputs.size(), 1U);
-//    CHECK_EQ(outputs.size(), 1U);
-//
-//    if (!inputs[0].Size()) {
-//      return;
-//    }
-//  }
-  /*! \brief Backward pass */
-//  template<typename xpu>
-//  static void Backward(const nnvm::NodeAttrs& attrs,
-//                       const OpContext& ctx,
-//                       const std::vector<TBlob>& inputs,
-//                       const std::vector<OpReqType>& req,
-//                       const std::vector<TBlob>& outputs) {
-//    CHECK_EQ(inputs.size(), 1U);
-//    CHECK_EQ(outputs.size(), 1U);
-//    if (!inputs[0].Size()) {
-//      return;
-//    }
-//  }
-  /*! \brief Infer output storage type from output */
-//  static bool ForwardInferStorageType(const nnvm::NodeAttrs& attrs,
-//                                      std::vector<int> *in_attrs,
-//                                      std::vector<int> *out_attrs) {
-//    CHECK_EQ(in_attrs->size(), 1U);
-//    CHECK_EQ(out_attrs->size(), 1U);
-//    CHECK_NE(in_attrs->at(0), kUndefinedStorage);
-//    out_attrs->at(0) = in_attrs->at(0);
-//    return true;
-//  }
-  /*! \brief Infer input storage type from input */
-//  static bool BackwardInferStorageType(const nnvm::NodeAttrs& attrs,
-//                                       std::vector<int> *in_attrs,
-//                                       std::vector<int> *out_attrs) {
-//    CHECK_EQ(in_attrs->size(), 1U);
-//    CHECK_EQ(out_attrs->size(), 1U);
-//    CHECK_NE(out_attrs->at(0), kUndefinedStorage);
-//    in_attrs->at(0) = out_attrs->at(0);
-//    return true;
-//  }
+  template<typename xpu>
+  static void IdentityComputeFirstItemsEx(const nnvm::NodeAttrs& attrs,
+                                          const OpContext& ctx,
+                                          const std::vector<NDArray>& inputs,
+                                          const std::vector<OpReqType>& req,
+                                          const std::vector<NDArray>& outputs) {
+    using namespace mshadow;
+    using namespace mshadow::expr;
+    CHECK_EQ(inputs.size(), 2);
+    CHECK_EQ(outputs.size(), 1);
+#if 0
+  size_t rhs_idx = 1;
+  NDArrayStorageType stype = inputs[rhs_idx].storage_type();
+  if (stype == kRowSparseStorage) {
+    IdentityComputeRsp<xpu>(attrs, ctx, inputs, req, outputs);
+  } else {
+    LOG(FATAL) << "Not implemented yet";
+  }
+#else
+    OpBase::CopyNDArray(ctx.get_stream<xpu>(), outputs[0], req[0], inputs[0]);
+#endif
+  }
 
+//  template<typename xpu>
+//  static void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
+//                                 const OpContext& ctx,
+//                                 const std::vector<NDArray>& inputs,
+//                                 const std::vector<OpReqType>& req,
+//                                 const std::vector<NDArray>& outputs) {
+//    using namespace mshadow;
+//    using namespace mshadow::expr;
+//    Stream<xpu> *s = ctx.get_stream<xpu>();
+//    auto &input = inputs[0];
+//    auto &output = outputs[0];
+//    CHECK_NE(req[0], kNullOp) << "kNullOp in IdentityComputeEx not supported yet";
+//    CHECK_NE(req[0], kWriteInplace) << "kWriteInplace in IdentityComputeEx not supported yet";
+//    if (!input.storage_initialized()) return;
+//    TShape shape = input.aux_shape(rowsparse::kIdx);
+//    output.CheckAndAlloc({shape});
+//    MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+//      MSHADOW_TYPE_SWITCH(output.aux_type(rowsparse::kIdx), AuxType, {
+//        auto out_d = output.data().FlatTo1D<xpu, DType>(s);
+//        auto out_aux = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+//        auto in_aux = input.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
+//        ASSIGN_DISPATCH(out_d, req[0],
+//                        F<mshadow_op::identity>(input.data().FlatTo1D<xpu, DType>(s)));
+//        ASSIGN_DISPATCH(out_aux, req[0], F<mshadow_op::identity>(in_aux));
+//      });
+//    });
+//  }
 };
 
 template<typename GRAD_OP>
@@ -346,54 +324,6 @@ struct unary_bwd {
     return res;
   }
 };
-
-template<typename xpu>
-void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
-                     const OpContext& ctx,
-                     const std::vector<NDArray>& inputs,
-                     const std::vector<OpReqType>& req,
-                     const std::vector<NDArray>& outputs) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  auto &input = inputs[0];
-  auto &output = outputs[0];
-  CHECK_NE(req[0], kNullOp) << "kNullOp in IdentityComputeEx not supported yet";
-  CHECK_NE(req[0], kWriteInplace) << "kWriteInplace in IdentityComputeEx not supported yet";
-  if (!input.storage_initialized()) return;
-  TShape shape = input.aux_shape(rowsparse::kIdx);
-  output.CheckAndAlloc({shape});
-  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(output.aux_type(rowsparse::kIdx), AuxType, {
-      auto out_d = output.data().FlatTo1D<xpu, DType>(s);
-      auto out_aux = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      auto in_aux = input.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-      ASSIGN_DISPATCH(out_d, req[0],
-                      F<mshadow_op::identity>(input.data().FlatTo1D<xpu, DType>(s)));
-      ASSIGN_DISPATCH(out_aux, req[0], F<mshadow_op::identity>(in_aux));
-    });
-  });
-}
-
-template<typename xpu>
-void IdentityLikeRhsComputeEx(const nnvm::NodeAttrs& attrs,
-                     const OpContext& ctx,
-                     const std::vector<NDArray>& inputs,
-                     const std::vector<OpReqType>& req,
-                     const std::vector<NDArray>& outputs) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  CHECK_EQ(inputs.size(), 2);
-  CHECK_EQ(outputs.size(), 1);
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  size_t rhs_idx = 1;
-  NDArrayStorageType stype = inputs[rhs_idx].storage_type();
-  if (stype == kRowSparseStorage) {
-    IdentityComputeRsp<xpu>(attrs, ctx, inputs, req, outputs);
-  } else {
-    LOG(FATAL) << "Not implemented yet";
-  }
-}
 
 struct CastParam : public dmlc::Parameter<CastParam> {
   // use int for enumeration

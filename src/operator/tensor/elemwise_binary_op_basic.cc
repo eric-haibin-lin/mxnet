@@ -77,8 +77,8 @@ NNVM_REGISTER_OP(_backward_mul)
 
 MXNET_OPERATOR_REGISTER_BINARY(elemwise_div)
 .add_alias("_div").add_alias("_Div")
+// For divide, we will always auto-convert to dense since the sparse 0's will generate nans
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::div>)
-//.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::div>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_div"});
 
 NNVM_REGISTER_OP(_backward_div)

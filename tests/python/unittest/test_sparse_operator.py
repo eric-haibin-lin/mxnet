@@ -12,9 +12,9 @@ def check_binary_ops():
             rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
 
         lhs_nd = rand_ndarray(shape, lhs_stype)
-        lhs_nd[0][0] = 2
+        #lhs_nd[0][0] = 2
         rhs_nd = rand_ndarray(shape, rhs_stype)
-        rhs_nd[0][0] = 3
+        #rhs_nd[0][0] = 3
         lhs_np = lhs_nd.asnumpy()
         rhs_np = rhs_nd.asnumpy()
 
@@ -36,7 +36,7 @@ def check_binary_ops():
         check_numeric_gradient(test, location)
         check_symbolic_backward(test, location, [out_grad], [ingrad_lhs_np, ingrad_rhs_np])
 
-    def do_test(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
+    def test_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
         test_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
                           lambda l, r: mx.sym.elemwise_add(l, r),
                           lambda l, r: l + r,
@@ -58,12 +58,12 @@ def check_binary_ops():
         #                lambda outg, l, r: (1/r, -l/(r*r)),
         #                lhs_grad_stype, rhs_grad_stype)
 
-    shape = (1, 1)
-    #shape = rand_shape_2d()
-    #do_test('default', 'default', shape)
-    #do_test('default', 'row_sparse', shape)
-    #do_test('row_sparse', 'default', shape)
-    do_test('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    #shape = (1, 1)
+    shape = rand_shape_2d()
+    test_binary_ops('default', 'default', shape)
+    test_binary_ops('default', 'row_sparse', shape)
+    test_binary_ops('row_sparse', 'default', shape)
+    #test_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
@@ -197,27 +197,6 @@ def test_sparse_dot():
     test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
     test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
 
-# coolivie: Binary
-# def check_elemwise_sqrt_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
-#     lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
-#     rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
-#     if lhs_grad_stype is not None:
-#         lhs._set_attr(grad_stype_hint=str(lhs_grad_stype))
-#     if rhs_grad_stype is not None:
-#         rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
-#
-#     lhs_nd = rand_ndarray(shape, lhs_stype)
-#     rhs_nd = rand_ndarray(shape, rhs_stype)
-#     lhs_np = lhs_nd.asnumpy()
-#     rhs_np = rhs_nd.asnumpy()
-#
-#     # out_np = lhs_np + rhs_np
-#     # test = mx.symbol.sqrt(lhs, rhs)
-#     # location = {'lhs': lhs_nd, 'rhs': rhs_nd}
-#     # check_symbolic_forward(test, location, [out_np])
-#     # check_numeric_gradient(test, location)
-#     # check_symbolic_backward(test, location, [out_np], [out_np, out_np])
-
 def test_sparse_mathematical_core():
     def mathematical_core(name, stype,
                           forward_mxnet_call, forward_numpy_call, backward_numpy_call,
@@ -231,14 +210,12 @@ def test_sparse_mathematical_core():
         arr_data = mx.nd.array(data_tmp)
 
         if stype != 'default':
-            arr_data = mx.nd.cast_storage(arr_data, storage_type=grad_stype)
+            arr_data = mx.nd.cast_storage(arr_data, storage_type=stype)
 
         arr_grad = mx.nd.empty(shape)
         arr_grad[:] = 3
         if grad_stype is not None and grad_stype != 'default':
             arr_grad = mx.nd.cast_storage(arr_grad, storage_type=grad_stype)
-
-        testval = arr_data + arr_grad
 
         test = forward_mxnet_call(data)
         exe_test = test.bind(default_context(), args=[arr_data], args_grad=[arr_grad])
@@ -252,12 +229,16 @@ def test_sparse_mathematical_core():
         npout_grad = out_grad.asnumpy()
         temp = backward_numpy_call(data_tmp)
         npout_grad = npout_grad * temp
+
+        if grad_stype is not None and grad_stype != 'default':
+            out_grad = mx.nd.cast_storage(out_grad, storage_type=grad_stype)
+
         exe_test.backward(out_grad)
         arr_grad = arr_grad.asnumpy()
 
-        print(name)
-        print(arr_grad)
-        print(npout_grad)
+        # print(name)
+        # print(arr_grad)
+        # print(npout_grad)
 
         assert_almost_equal(arr_grad, npout_grad)
 
@@ -266,117 +247,20 @@ def test_sparse_mathematical_core():
         mathematical_core("sqrt", stype,
                           lambda x: mx.sym.sqrt(x),
                           lambda x: np.sqrt(x),
-                          lambda x: 1.0/(2.0 * np.sqrt(x)), grad_stype)
+                          lambda x: 1.0/(2.0 * np.sqrt(x)),
+                          grad_stype)
         # rsqrt
-        # mathematical_core("rsqrt", 'default',
-        #                   lambda x: mx.sym.rsqrt(x),
-        #                   lambda x: 1 / np.sqrt(x),
-        #                   lambda x: -(1.0 / (2.0 * x * np.sqrt(x))))
+        mathematical_core("rsqrt", stype,
+                          lambda x: mx.sym.rsqrt(x),
+                          lambda x: 1 / np.sqrt(x),
+                          lambda x: -(1.0 / (2.0 * x * np.sqrt(x))),
+                          grad_stype)
 
-    #check_mathematical_core('default')
+    check_mathematical_core('default')
     #check_mathematical_core('csr', 'csr')
-    #check_mathematical_core('row_sparse')
-    #check_mathematical_core('row_sparse', 'default')
+    check_mathematical_core('row_sparse')
+    check_mathematical_core('row_sparse', 'default')
     check_mathematical_core('row_sparse', 'row_sparse')
-
-def test_sparse_sqrt():
-    def check_elemwise_sqrt_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
-        ltmp = mx.symbol.Variable('ltmp', storage_type=rhs_stype)
-        rvalue = mx.symbol.Variable('rvalue', storage_type=rhs_stype)
-        lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
-        if rhs_grad_stype is not None:
-            rvalue._set_attr(grad_stype_hint=str(rvalue_grad_stype))
-        if lhs_grad_stype is not None:
-            lhs._set_attr(grad_stype_hint=str(lhs_grad_stype))
-
-        # random matrix
-        rhs_nd = rand_ndarray(shape, rhs_stype)
-        print(rhs_nd.asnumpy())
-
-        # take absolute value of the random matrix
-        rvalue_abs = mx.symbol.abs(rvalue)
-        rvalue_abs = rvalue_abs.eval(ctx=mx.cpu(), rvalue=rhs_nd)
-        rvalue_abs = rvalue_abs[0]  # return us a list
-        rvalue_abs_numpy = rvalue_abs.asnumpy()
-        print('input:')
-        print(rvalue_abs_numpy)
-
-        # Numpy sqrt
-        out_sqrt_numpy = np.sqrt(rvalue_abs_numpy)
-        print('expected output:')
-        print(out_sqrt_numpy)
-
-        # mxnet sqrt
-        sym_sqrt = mx.symbol.sqrt(rvalue)
-        rvalue_sqrt_sym = sym_sqrt.eval(ctx=mx.cpu(), rvalue=rvalue_abs)
-        rvalue_sqrt_sym = rvalue_sqrt_sym[0]  # return us a list
-        print(rvalue_sqrt_sym.asnumpy())
-
-        # re-init symbolic sqrt
-        sym_sqrt = mx.symbol.sqrt(rvalue)
-        location = {'rvalue': rvalue_abs_numpy}
-        # location = {'rvalue': rvalue_nd, 'rhs': rhs_nd}
-
-        #sym_sqrt = mx.symbol.sqrt(rvalue)
-        check_symbolic_forward(sym_sqrt, location, [out_sqrt_numpy])
-        print(out_sqrt_numpy)
-        check_numeric_gradient(sym_sqrt, location)
-        out_grad = out_sqrt_numpy / 25
-        check_symbolic_backward(sym_sqrt, location, [out_grad], [out_sqrt_numpy])
-        #check_symbolic_backward(sym_sqrt, location, [out_np], [out_np, out_np])
-
-    def test_elemwise_sqrt_ex(shape):
-        check_elemwise_sqrt_ex('default', 'default', shape)
-        # check_elemwise_sqrt_ex('default', 'row_sparse', shape)
-        # check_elemwise_sqrt_ex('row_sparse', 'default', shape)
-        # check_elemwise_sqrt_ex('row_sparse', 'row_sparse', shape,
-        #                       lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
-
-    def test_sqrt_csr_dns(csr_shape, dns_shape, trans_csr):
-        dns1 = rand_ndarray(csr_shape, 'default')
-        dns2 = rand_ndarray(dns_shape, 'default')
-
-        # print(dns2.asnumpy())
-        # dns_sqrt_dns = mx.nd.sqrt(dns2)
-        # print(dns_sqrt_dns.asnumpy())
-        # print("=============")
-
-        print(dns1.asnumpy())
-        csr = mx.nd.cast_storage(dns1, storage_type='csr')
-        csr_sqrt = mx.nd.sqrt(csr)
-        print(csr_sqrt.asnumpy())
-        # redense = mx.nd.cast_storage(csr, storage_type='default')
-        # print(redense.asnumpy())
-        print("=============")
-
-        # out = mx.nd.dot(csr, dns2, transpose_a=trans_csr)
-        # assert out.storage_type == 'default'
-        # out_expected = mx.nd.dot(dns1, dns2, transpose_a=trans_csr)
-        # out_np = out_expected.asnumpy()
-        # backward_trans = not trans_csr
-        # rhs_backward_grad = mx.nd.dot(dns1, out_expected, transpose_a=backward_trans).asnumpy()
-        # assert_almost_equal(out.asnumpy(), out_np, rtol=1e-4, atol=1e-5)
-        #
-        # # test symbolic forward
-        # lhs = mx.symbol.Variable('lhs', storage_type='csr')
-        # rhs = mx.symbol.Variable('rhs', storage_type='default')
-        # test = mx.symbol.dot(lhs, rhs, transpose_a=trans_csr)
-        # location = {'lhs': csr, 'rhs': dns2}
-        # expected = {'rhs': rhs_backward_grad}
-        # # dot(lhs, rhs)
-        # check_symbolic_forward(test, location, [out_expected.asnumpy()], rtol=1e-3, atol=1e-4)
-        # check_symbolic_backward(test, location, [out_np], expected,
-        #                         grad_req={'lhs': 'null', 'rhs': 'write'},
-        #                         rtol=1e-3, atol=1e-4)
-
-    #lhs_shape = rand_shape_2d()
-    lhs_shape = (2, 2)
-    test_elemwise_sqrt_ex(lhs_shape)
-    #test_sqrt_csr_dns(lhs_shape, (lhs_shape[1], 2), False)
-    #test_sqrt_csr_dns(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), False)
-    #test_sqrt_csr_dns(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), False)
-    #test_sqrt_csr_dns(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), True)
-
 
 def test_sparse_embedding():
     in_dim = 10
@@ -447,5 +331,7 @@ def test_sparse_retain():
         check_numeric_gradient(sym, [rsp, indices], grad_nodes=['data'], grad_stype_dict={'data': 'row_sparse'})
 
 if __name__ == '__main__':
-    import nose
-    nose.runmodule()
+    #import nose
+    #nose.runmodule()
+    check_binary_ops()
+    #test_sparse_mathematical_core()

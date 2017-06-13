@@ -62,9 +62,9 @@ class BinaryOp : public OpBase
     using namespace mxnet_op;
     using namespace mshadow::expr;
 
-    auto &lhs = inputs[0];
-    auto &rhs = inputs[1];
-    auto &output = outputs[0];
+    const NDArray &lhs = inputs[0];
+    const NDArray &rhs = inputs[1];
+    const NDArray *output = &outputs[0];
 
     bool init_l = lhs.storage_initialized();
     bool init_r = rhs.storage_initialized();
@@ -72,26 +72,36 @@ class BinaryOp : public OpBase
     if (!init_l && !init_r) return;
     // one of the input is zeros
     if (!init_l || !init_r) {
-      NDArray out(output);
+      NDArray out(*output);
       CopyFromToRspImpl<xpu, xpu>(!init_l ? rhs : lhs, &out, ctx.run_ctx);
       return;
     }
+
+    std::unique_ptr<NDArray> tempSparse;
+    if(output->storage_type() == kDefaultStorage) {
+      // Make a temporary sparse tensor for the output
+      NDArray *nd = new NDArray(lhs.storage_type(), lhs.shape(), lhs.ctx(), false,
+                                output->dtype());
+      tempSparse.reset(nd);
+      output = tempSparse.get();
+    }
+
     // Memory Estimation: This is (roughly) the number of result rows. We still
     // need to subtract the number of common rows
     const size_t num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
     const size_t num_rows_r = rhs.aux_shape(rowsparse::kIdx).Size();
-    output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
+    output->CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
 
     // Indices
     Tensor<xpu, 1, IType> indices_l = lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
     Tensor<xpu, 1, IType> indices_r = rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-    Tensor<xpu, 1, IType> indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+    Tensor<xpu, 1, IType> indices_out = output->aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
 
     // Data
     Tensor<xpu, 2, DType> data_l = lhs.data().FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> data_r = rhs.data().FlatTo2D<xpu, DType>(s);
-    Tensor<xpu, 2, DType> out = output.data().FlatTo2D<xpu, DType>(s);
+    Tensor<xpu, 2, DType> out = output->data().FlatTo2D<xpu, DType>(s);
 
     // TODO(coolivie) May need to build a list of operations and then do those in
     // parallel.  Problem with that, however, is that the memory allocation will be expensive
@@ -157,9 +167,14 @@ class BinaryOp : public OpBase
           s, rvalue.shape_.Size(), out[iter_out].dptr_, rvalue.dptr_);
       });
     }
-    nnvm::TShape new_shape = output.aux_shape(rowsparse::kIdx);
+    nnvm::TShape new_shape = output->aux_shape(rowsparse::kIdx);
     new_shape[0] -= num_common_rows;  // Reduce the first-dimension size by the number of common rows
-    output.SetAuxShape(rowsparse::kIdx, new_shape);
+    output->SetAuxShape(rowsparse::kIdx, new_shape);
+    if(tempSparse.get()) {
+      // Output is actually something else other than RSP,
+      // so cast out final RSP to the true output type
+      CastStorageComputeImpl(s, *tempSparse, outputs[0]);
+    }
   };
 
  public:

@@ -211,7 +211,7 @@ class NDArray {
    * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
    */
   inline size_t aux_shape_count() const {
-    CHECK(ptr_ && storage_type() != kDefaultStorage);
+    CHECK(storage_type() != kDefaultStorage);
     return ptr_->aux_shapes.size();
   }
 
@@ -763,6 +763,7 @@ class NDArray {
       dptr += byte_offset_;
     } else if (stype == kCSRStorage || stype == kRowSparseStorage) {
       shape = storage_shape();
+      dptr += byte_offset_;
     } else {
       LOG(FATAL) << "unknown storage type " << stype;
     }
@@ -819,7 +820,6 @@ inline void CopyFromToCsrImpl(const NDArray from, NDArray *to, RunContext ctx) {
   using namespace mshadow;
   CHECK_EQ(from.storage_type(), to->storage_type()) << "Copying with different storage type";
   // if source storage is not initialized, fill destination with zeros
-  auto s = ctx.get_stream<to_xpu>();
   if (!from.storage_initialized()) {
     // TODO(haibin) implement FillZerosCsrImpl
     // op::FillZerosCsrImpl<to_xpu>(s, to);
