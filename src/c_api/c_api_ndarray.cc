@@ -160,7 +160,6 @@ void SetShapeType(const nnvm::Op* op,
   static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
   static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
   static auto& inferstorage = nnvm::Op::GetAttr<nnvm::FInferStorageType>("FInferStorageType");
-  //static auto& inferstoragegeometry = nnvm::Op::GetAttr<nnvm::FInferStorageGeometry>("FInferStorageGeometry");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;
