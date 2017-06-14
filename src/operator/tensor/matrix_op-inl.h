@@ -1137,7 +1137,7 @@ void SliceCsrIndPtrImpl(const int begin, const int end, RunContext ctx,
  */
 template<typename xpu>
 void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
-                  const NDArray &in, OpReqType req, const NDArray &out) {
+                  const NDArray &in, OpReqType req, NDArray *out) {
   using namespace mshadow;
   using namespace mxnet_op;
   using namespace csr;
@@ -1149,9 +1149,9 @@ void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
   int begin = *param.begin[0];
   int end = *param.end[0];
   int indptr_len = end - begin + 1;
-  out.CheckAndAllocAuxData(kIndPtr, Shape1(indptr_len));
+  out->CheckAndAllocAuxData(kIndPtr, Shape1(indptr_len));
   if (!in.storage_initialized()) {
-    out.SetAuxShape(kIndPtr, Shape1(0));
+    out->SetAuxShape(kIndPtr, Shape1(0));
     return;
   }
   CHECK_EQ(in.aux_type(kIndPtr), in.aux_type(kIdx))
@@ -1160,22 +1160,82 @@ void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
   MSHADOW_INT_TYPE_SWITCH(in.aux_type(kIndPtr), IType, {
     MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
       auto in_indptr = in.aux_data(kIndPtr).dptr<IType>();
-      auto out_indptr = out.aux_data(kIndPtr).dptr<IType>();
+      auto out_indptr = out->aux_data(kIndPtr).dptr<IType>();
       SliceCsrIndPtrImpl<cpu, IType>(begin, end, ctx.run_ctx, in_indptr, out_indptr);
 
       // retrieve nnz (CPU implementation)
       int nnz = out_indptr[indptr_len - 1];
       // copy indices and values
-      out.CheckAndAllocAuxData(kIdx, Shape1(nnz));
-      out.CheckAndAllocData(Shape1(nnz));
+      out->CheckAndAllocAuxData(kIdx, Shape1(nnz));
+      out->CheckAndAllocData(Shape1(nnz));
       auto in_idx = in.aux_data(kIdx).dptr<IType>();
-      auto out_idx = out.aux_data(kIdx).dptr<IType>();
+      auto out_idx = out->aux_data(kIdx).dptr<IType>();
       auto in_data = in.data().dptr<DType>();
-      auto out_data = out.data().dptr<DType>();
+      auto out_data = out->data().dptr<DType>();
       int offset = in_indptr[begin];
       // this is also a CPU-only implementation
       memcpy(out_idx, in_idx + offset, nnz * sizeof(IType));
       memcpy(out_data, in_data + offset, nnz * sizeof(DType));
+    });
+  });
+}
+
+/*
+ * Slice a RowSparse NDArray
+ * Only implemented for CPU
+ */
+template<typename xpu>
+void SliceRspImpl(const SliceParam &param, const OpContext& ctx,
+                  const NDArray &in, OpReqType req, NDArray *out) {
+  using namespace mshadow;
+  using namespace mxnet_op;
+  using namespace rowsparse;
+  CHECK((std::is_same<xpu, cpu>::value)) << "Slice for RowSparse input only implemented for CPU";
+  if (req == kNullOp) return;
+  CHECK_NE(req, kAddTo) << "kAddTo for Slice on RowSparse input is not supported";
+  CHECK_NE(req, kWriteInplace) << "kWriteInplace for Slice on RowSparse input is not supported";
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  int begin = *param.begin[0];
+  int end = *param.end[0];
+  CHECK_EQ(end - begin, 1) << "Not implemented: RowSparse storage only supports slicing one row.";
+  int indices_len = end - begin;
+  if (!in.storage_initialized()) {
+    FillZerosRspImpl(s, out);
+    return;
+  }
+  MSHADOW_INT_TYPE_SWITCH(in.aux_type(kIdx), IType, {
+    MSHADOW_TYPE_SWITCH(in.dtype(), DType, {
+      auto in_idx = in.aux_data(kIdx).dptr<IType>();
+      // perform binary search for `begin`
+      int64_t in_nnr = in.aux_shape(kIdx)[0];
+      int64_t high = in_nnr - 1, low = 0;
+      int ret = -1;
+      while (high - low > 1) {
+        auto mid = low + (high - low) / 2;
+        if (in_idx[mid] > begin) {
+          high = mid;
+        } else if (in_idx[mid] == begin) {
+          ret = mid;
+          break;
+        } else {
+          low = mid;
+        }
+      }
+      if (in_idx[high] == begin) ret = high;
+      if (in_idx[low] == begin) ret = low;
+      if (ret == -1) {
+        // no result
+        FillZerosRspImpl(s, out);
+        return;
+      }
+      auto num_cols = out->shape().ProdShape(1, out->shape().ndim());
+      out->CheckAndAlloc({Shape1(1)});
+      auto out_idx = out->aux_data(kIdx).dptr<IType>();
+      out_idx[0] = 0;
+      auto in_data = in.data().dptr<DType>();
+      auto out_data = out->data().dptr<DType>();
+      // this is a CPU-only implementation
+      memcpy(out_data, in_data + ret * num_cols, num_cols * sizeof(DType));
     });
   });
 }
@@ -1193,7 +1253,11 @@ void SliceEx(const nnvm::NodeAttrs& attrs,
   CHECK_NE(in_stype, kDefaultStorage)
            << "SliceEx is not expected to execute for input with default storage type";
   if (in_stype == kCSRStorage) {
-    SliceCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);
+    NDArray output = outputs[0];
+    SliceCsrImpl<xpu>(param, ctx, inputs[0], req[0], &output);
+  } else if (in_stype == kRowSparseStorage) {
+    NDArray output = outputs[0];
+    SliceRspImpl<xpu>(param, ctx, inputs[0], req[0], &output);
   } else {
     LOG(FATAL) << "Slice not implemented for storage type" << in_stype;
   }
