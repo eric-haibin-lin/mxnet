@@ -44,6 +44,26 @@ namespace op {
 #define MXNET_CUDA_ONLY(__i$) ((void)0)
 #endif
 
+#if MXNET_USE_CUDA
+struct GPUStreamScope {
+  explicit inline GPUStreamScope(OpContext *opContext)
+    : opContext_(*opContext) {
+    CHECK_EQ(opContext_.run_ctx.stream == nullptr, true)
+      << "Invalid runtime context stream state";
+    opContext_.run_ctx.stream = mshadow::NewStream<gpu>(true, true);
+    CHECK_EQ(opContext_.run_ctx.stream != nullptr, true)
+      << "Unable to allocate a GPU stream";
+  }
+  inline ~GPUStreamScope() {
+    if (opContext_.run_ctx.stream) {
+      mshadow::DeleteStream<gpu>(static_cast<mshadow::Stream<gpu> *>(opContext_.run_ctx.stream));
+      opContext_.run_ctx.stream = nullptr;
+    }
+  }
+  OpContext& opContext_;
+};
+#endif  // MXNET_USE_CUDA
+
 /*!
  * \brief Manage test blobs and context, and universal logic
  * Create an operator from its "Prop" class and sets up the operator
@@ -52,24 +72,6 @@ namespace op {
  */
 template <typename DType, typename AccReal>
 class BasicOperatorData {
-  struct GPUStreamScope {
-    explicit inline GPUStreamScope(OpContext *opContext)
-    : opContext_(*opContext) {
-      CHECK_EQ(opContext_.run_ctx.stream == nullptr, true)
-        << "Invalid runtime context stream state";
-      opContext_.run_ctx.stream = mshadow::NewStream<gpu>(true, true);
-      CHECK_EQ(opContext_.run_ctx.stream != nullptr, true)
-        << "Unable to allocate a GPU stream";
-    }
-    inline ~GPUStreamScope() {
-      if (opContext_.run_ctx.stream) {
-        mshadow::DeleteStream<gpu>(static_cast<mshadow::Stream<gpu> *>(opContext_.run_ctx.stream));
-        opContext_.run_ctx.stream = nullptr;
-      }
-    }
-    OpContext& opContext_;
-  };
-
  public:
   /*! \brief Manage test blobs and context */
   BasicOperatorData(const bool isGPU, const TShape& topShape)

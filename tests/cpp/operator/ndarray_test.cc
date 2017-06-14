@@ -6,52 +6,49 @@
 */
 #include <unistd.h>
 #include <dmlc/logging.h>
-#include <cstdio>
 #include <gtest/gtest.h>
-#include <vector>
 #include <mxnet/operator_util.h>
-#include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
 #include "../src/executor/graph_executor.h"
 #include "../src/operator/tensor/elemwise_unary_op.h"
 #include "../src/operator/tensor/elemwise_binary_op.h"
 #include "test_ndarray_utils.h"
-
 int __static_result_putenv = putenv(const_cast<char *>("MXNET_ENGINE_TYPE=NaiveEngine"));
 #if 1
 using namespace mxnet;
+
 // Conversion Tests
 void CastDnsDnsTest() {
   Context ctx;
   TShape shape({2, 2});
-  NDArray nd = DnsND(shape, ctx, {});
-  auto nd_copy = Convert(kDefaultStorage, nd);
-  CheckDataRegion(nd_copy.data(), nd.data());
+  NDArray nd = test::DnsND(shape, ctx, {});
+  auto nd_copy = test::Convert(kDefaultStorage, nd);
+  test::CheckDataRegion(nd_copy.data(), nd.data());
 }
 
 void CastRspDnsTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({2, 2});
-  float v1 = RandFloat();
-  float v2 = RandFloat();
-  NDArray nd = RspND(shape, ctx, {0}, {v1, v2});
+  float v1 = test::RandFloat();
+  float v2 = test::RandFloat();
+  NDArray nd = test::RspND(shape, ctx, {0}, {v1, v2});
   // Dense ndarray
-  NDArray dense_nd = DnsND(shape, ctx, {v1, v2, 0, 0});
-  NDArray converted = Convert(kDefaultStorage, nd);
-  CheckDataRegion(converted.data(), dense_nd.data());
+  NDArray dense_nd = test::DnsND(shape, ctx, {v1, v2, 0, 0});
+  NDArray converted = test::Convert(kDefaultStorage, nd);
+  test::CheckDataRegion(converted.data(), dense_nd.data());
 }
 
 // NDArray function tests
 void SetValueTest() {
   Context ctx = Context::CPU();
   TShape data_shape({2, 2});
-  float v = RandFloat();
-  NDArray nd0 = DnsND(data_shape, ctx, {v, v, v, v});
+  float v = test::RandFloat();
+  NDArray nd0 = test::DnsND(data_shape, ctx, {v, v, v, v});
   NDArray nd1(data_shape, ctx, false);
   nd1 = v;
   nd1.WaitToRead();
-  CheckDataRegion(nd0.data(), nd1.data());
+  test::CheckDataRegion(nd0.data(), nd1.data());
 }
 
 // InferStorage
@@ -112,25 +109,25 @@ void CopyFromToRspDnsTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({2, 2});
-  NDArray nd = RspND(shape, ctx, {0}, {1, 1});
+  NDArray nd = test::RspND(shape, ctx, {0}, {1, 1});
   // Dense ndarray
-  NDArray dns_nd = DnsND(shape, ctx, {});
+  NDArray dns_nd = test::DnsND(shape, ctx, {});
   CopyFromTo(nd, &dns_nd);
   dns_nd.WaitToRead();
-  CheckDataRegion(nd.data(), dns_nd.data());
+  test::CheckDataRegion(nd.data(), dns_nd.data());
 }
 
 void CopyFromToRspRspReuseTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({3, 2});
-  NDArray nd = RspND(shape, ctx, {0}, {1,2});
+  NDArray nd = test::RspND(shape, ctx, {0}, {1,2});
   // Sparse ndarray with enough memory. It's expected to reuse the memory
-  NDArray dst_nd = RspND(shape, ctx, {0, 1, 2}, {6,6,6,6,6,6});
+  NDArray dst_nd = test::RspND(shape, ctx, {0, 1, 2}, {6,6,6,6,6,6});
   nd.WaitToRead();
   CopyFromTo(nd, &dst_nd);
   dst_nd.WaitToRead();
-  CheckDataRegion(nd.data(), dst_nd.data());
+  test::CheckDataRegion(nd.data(), dst_nd.data());
   CHECK_EQ(dst_nd.aux_shape(rowsparse::kIdx)[0], 1);
   CHECK_EQ(dst_nd.storage_shape()[0], 1);
   CHECK_EQ(dst_nd.storage_shape()[1], 2);
@@ -141,21 +138,21 @@ void CopyFromToRspRspFreeTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({3, 2});
-  NDArray nd = RspND(shape, ctx, {0, 1}, {1,1,1,1});
+  NDArray nd = test::RspND(shape, ctx, {0, 1}, {1,1,1,1});
   // Sparse ndarray with enough memory. It's expected to reuse the memory
-  NDArray dst_nd = RspND(shape, ctx, {0}, {2,2});
+  NDArray dst_nd = test::RspND(shape, ctx, {0}, {2,2});
   nd.WaitToRead();
   CopyFromTo(nd, &dst_nd);
   dst_nd.WaitToRead();
-  CheckDataRegion(nd.data(), dst_nd.data());
+  test::CheckDataRegion(nd.data(), dst_nd.data());
 }
 
 void BinaryAddRspRsp() {
   Context ctx = Context::CPU();
 
   TShape output_shape({4, 2});
-  NDArray input_nd0 = RspND(output_shape, ctx, {0, 1}, {10,10,10,10});
-  NDArray input_nd1 = RspND(output_shape, ctx, {0, 2}, {5,5,5,5});
+  NDArray input_nd0 = test::RspND(output_shape, ctx, {0, 1}, {10,10,10,10});
+  NDArray input_nd1 = test::RspND(output_shape, ctx, {0, 2}, {5,5,5,5});
 
   NDArray output(kRowSparseStorage, output_shape, ctx);
   std::vector<Engine::VarHandle> const_vars;
@@ -174,9 +171,9 @@ void BinaryAddRspRsp() {
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 
   // Check the data region of output ndarray
-  NDArray dense_output = DnsND(output_shape, ctx, {15, 15, 10, 10, 5, 5, 0, 0});
-  NDArray copy = Convert(kDefaultStorage, output);
-  CheckDataRegion(dense_output.data(), copy.data());
+  NDArray dense_output = test::DnsND(output_shape, ctx, {15, 15, 10, 10, 5, 5, 0, 0});
+  NDArray copy = test::Convert(kDefaultStorage, output);
+  test::CheckDataRegion(dense_output.data(), copy.data());
 }
 
 //void SparseEmbeddingBackwardTest() {
@@ -248,4 +245,33 @@ TEST(NDArray, infer_storage) {
 //  putenv("MXNET_ENGINE_TYPE=NaiveEngine");
 //  SparseEmbeddingBackwardTest();
 //}
+
+TEST(NDArray, ArrayStruct) {
+  typedef float DType;
+  const TShape shape({150, 250});
+  test::Array<DType> array(shape);  // shape is H, W
+  array[2][5] = 0.1;  // [x][y] <-- [col][row]
+  array[6][17] = 0.2;
+  array[6][52] = 0.3;
+  array[115][220] = 0.4;
+
+  Context ctx ; Context::CPU(-1);
+
+  const NDArray row_sparse = array.Save(ctx, kRowSparseStorage);
+  const NDArray csr = array.Save(ctx, kCSRStorage);
+
+  const NDArray dense_1 = test::Array<DType>::Convert(ctx, row_sparse, kDefaultStorage);
+  const NDArray dense_2 = test::Array<DType>::Convert(ctx, csr, kDefaultStorage);
+
+  const DType *p1 = dense_1.data().dptr<DType>();
+  const DType *p2 = dense_2.data().dptr<DType>();
+  CHECK_EQ(memcmp(p1, p2, dense_1.shape().Size() * sizeof(DType)), 0);
+  test::Array<DType> array1;
+  array1.Load(dense_1);
+  CHECK_EQ(test::Array<DType>::IsNear(array1[2][5], 0.1), true);
+  CHECK_EQ(test::Array<DType>::IsNear(array1[6][17], 0.2), true);
+  CHECK_EQ(test::Array<DType>::IsNear(array1[6][52], 0.3), true);
+  CHECK_EQ(test::Array<DType>::IsNear(array1[115][220], 0.4), true);
+}
+
 #endif
