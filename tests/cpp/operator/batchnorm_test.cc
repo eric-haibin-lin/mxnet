@@ -1317,7 +1317,7 @@ TEST(BATCH_NORM, TestChannelAxisSaveAndLoad) {
   typedef float AccReal;
 
   const std::vector<std::vector<DType>> myData =
-    { { 1.0f, 1.0f, 1.0, 1.0 },
+    { { 1.0f, 1.0f, 1.0f, 1.0f },
       { 2.0f, 2.0f, 2.0f, 2.0f },
       { 3.0f, 3.0f, 3.0f, 3.0f } };
 
