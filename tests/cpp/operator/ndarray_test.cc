@@ -274,4 +274,183 @@ TEST(NDArray, ArrayStruct) {
   CHECK_EQ(test::Array<DType>::IsNear(array1[115][220], 0.4), true);
 }
 
+struct TPosition : public TShape {
+  inline TPosition(const TShape& o) : TShape(o) {}
+};
+
+template<typename DType>
+class ArrayIterator {
+ public:
+  virtual DType *Begin() = 0;
+  virtual DType *Next() = 0;
+  virtual TPosition Position() const = 0;
+  virtual DType *Current() = 0;
+  virtual const DType *Current() const = 0;
+};
+
+template<typename DType, typename IType>
+class RowSparseArrayIterator : public ArrayIterator<DType> {
+
+ public:
+  RowSparseArrayIterator(const NDArray& array)
+  : array_(array)
+    , position_(array.shape().ndim())
+    , row_count_(array_.aux_shape(rowsparse::kIdx)[0])
+    , dptr_(array.data().dptr<DType>())  {
+    CHECK_EQ(array.storage_type(), kRowSparseStorage);
+    DCHECK_NE(array_.shape().Size(), 0);
+    DCHECK_GT(row_count_, 0);
+    for(size_t i = 0, n = position_.ndim(); i < n; ++i) {
+      position_[i] = 0;
+    }
+  }
+
+  DType *Begin() override {
+    for(size_t i = 0, n = position_.ndim(); i < n; ++i) {
+      position_[i] = 0;
+    }
+    dptr_ = array_.data().dptr<DType>();
+    return dptr_;
+  }
+
+  DType *Next() override {
+    CHECK_NE(dptr_, static_cast<DType *>(nullptr));
+    const int dim = position_.ndim();
+    const TShape &shape = array_.shape();
+    DCHECK_GT(dim, 1);
+    bool lastFlipped = true;
+    for (int i = dim - 1; i >= 0; --i) {
+      nnvm::dim_t curr = position_[i];
+      if (lastFlipped) {
+        ++curr;
+      }
+      const int limit = i ? shape[i] : row_count_;
+      if(curr >= limit) {
+        if (!i) {
+          return nullptr;
+        }
+        curr = 0;
+        CHECK_GT(i, 0);
+        lastFlipped = true;
+        position_[i] = curr;
+      } else {
+        position_[i] = curr;
+        break;
+      }
+    }
+    return dptr_++;
+  }
+
+  TPosition Position() const override {
+    TPosition pos = position_;
+    IType *it = array_.aux_data(rowsparse::kIdx).dptr<IType>();
+    pos[0] = it[position_[0]];
+    return pos;
+  }
+
+  DType *Current() { return dptr_; }
+  const DType *Current() const { return dptr_; }
+
+ private:
+  const NDArray& array_;
+  TPosition      position_;  // Use dim optimization characteristics
+                             // (ie up to 4 pos don't need new allocations)
+  const int      row_count_;
+  DType *        dptr_;
+
+};
+
+TEST(NDArray, SparseArrayIteratorRSP) {
+  typedef float DType;
+  const TShape shape({3, 2});
+  //const TShape shape({150, 55});
+  test::Array<DType> array(shape);  // shape is H, W
+//  array[2][5] = 0.1;  // [x][y] <-- [col][row]
+//  array[6][17] = 0.2;
+//  array[6][52] = 0.3;
+//  array[115][220] = 0.4;
+  array[1][0] = 0.1;
+  array[2][1] = 0.2;
+
+  const Context ctx = Context::CPU(-1);
+
+  const NDArray row_sparse = array.Save(ctx, kRowSparseStorage);
+
+  RowSparseArrayIterator<DType, int> rsp_iter(row_sparse);
+  do {
+    TPosition position = rsp_iter.Position();
+    std::cout << "( ";
+    for(size_t i = 0, n = position.ndim(); i < n; ++i) {
+      if(i) {
+        std::cout << ", ";
+      }
+      std::cout << position[i];
+    }
+    std::cout << " ): ";
+    const DType val = *rsp_iter.Current();
+    std::cout << val << std::endl << std::flush;
+  } while(rsp_iter.Next());
+}
+
+template<typename DType, typename IType>
+class CSRSparseArrayIterator : public ArrayIterator<DType> {
+ public:
+  CSRSparseArrayIterator(const NDArray& array)
+    : array_(array)
+      , position_(array.shape().ndim())
+      , dptr_(array.data().dptr<DType>())  {
+  }
+
+  virtual DType *Begin() {
+    return nullptr;
+  }
+  virtual DType *Next()  {
+    return nullptr;
+  }
+  virtual TPosition Position() const {
+    return position_;
+  }
+
+  virtual DType *Current() { return dptr_; }
+  virtual const DType *Current() const { return dptr_; }
+
+ private:
+  const NDArray& array_;
+  TPosition      position_;  // Use dim optimization characteristics
+                             // (ie up to 4 pos don't need new allocations)
+  DType *        dptr_;
+};
+
+TEST(NDArray, SparseArrayIteratorCSR) {
+  typedef float DType;
+  const TShape shape({3, 2});
+  //const TShape shape({150, 55});
+  test::Array<DType> array(shape);  // shape is H, W
+//  array[2][5] = 0.1;  // [x][y] <-- [col][row]
+//  array[6][17] = 0.2;
+//  array[6][52] = 0.3;
+//  array[115][220] = 0.4;
+  array[1][0] = 0.1;
+  array[2][1] = 0.2;
+
+  const Context ctx = Context::CPU(-1);
+
+  const NDArray csr = array.Save(ctx, kCSRStorage);
+
+  CSRSparseArrayIterator<DType, int> rsp_iter(csr);
+  do {
+    TPosition position = rsp_iter.Position();
+    std::cout << "( ";
+    for(size_t i = 0, n = position.ndim(); i < n; ++i) {
+      if(i) {
+        std::cout << ", ";
+      }
+      std::cout << position[i];
+    }
+    std::cout << " ): ";
+    const DType val = *rsp_iter.Current();
+    std::cout << val << std::endl << std::flush;
+  } while(rsp_iter.Next());
+}
+
 #endif

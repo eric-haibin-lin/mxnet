@@ -293,29 +293,6 @@ class BinaryOp : public OpBase
 #endif
   }
 
-//struct NDArrayIterator {
-//  NDArrayIterator(const NDArray& array)
-//    : array_(array) {}
-//
-// private:
-//  const NDArray& array_;
-//};
-//
-//template<typename Callback>
-//void IterateMatrix(NDArray& array, Callback callback) {
-//  switch(array.storage_type()) {
-//    case kRowSparseStorage:
-//
-//      break;
-//    case kCSRStorage:
-//      break;
-//    case kDefaultStorage:
-//      break;
-//    default:
-//      LOG(ERROR) << "Unknown storage type: " << array.storage_type();
-//  }
-//}
-
   template<typename xpu, typename OP, typename DType>
   static inline void Compute_(const nnvm::NodeAttrs &attrs,
                               const OpContext &ctx,
@@ -483,7 +460,7 @@ class BinaryOp : public OpBase
   struct BinaryOpBackwardUseNone
   {
     template<typename DType>
-    /*MSHADOW_XINLINE*/ static void Map(int i, DType *igrad, const DType *ograd) {
+    MSHADOW_XINLINE static void Map(int i, DType *igrad, const DType *ograd) {
       KERNEL_ASSIGN(igrad[i], Req, OP::Map(ograd[i]));
     }
   };
@@ -495,7 +472,6 @@ class BinaryOp : public OpBase
                               const std::vector<OpReqType> &req,
                               const std::vector<TBlob> &outputs) {
     using namespace mxnet_op;
-    std::cout << "BinaryBackwardUseNone_" << std::endl << std::flush;
     Stream<xpu> *s = ctx.get_stream<xpu>();
     const int size = static_cast<int>((outputs[0].Size() + DataType<DType>::kLanes - 1)
                                 / DataType<DType>::kLanes);
@@ -591,17 +567,6 @@ class BinaryOp : public OpBase
 #endif
     // TODO(haibin) fallback for kDefaultStorage
   }
-
-//  template<typename xpu, typename LOP, typename ROP>
-//  static inline void BinaryBackwardUseNoneWithHalf2(const nnvm::NodeAttrs &attrs,
-//                                      const OpContext &ctx,
-//                                      const std::vector<TBlob> &inputs,
-//                                      const std::vector<OpReqType> &req,
-//                                      const std::vector<TBlob> &outputs) {
-//    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
-//      BinaryBackwardUseNone_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
-//    });
-//  }
 
   template<typename OP, int Req>
   struct BinaryOpBackwardUseIn

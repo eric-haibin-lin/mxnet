@@ -19,14 +19,6 @@
 namespace mxnet {
 namespace op {
 
-//template<typename OP, int Req>
-//struct UnaryOpMapper {
-//  template<typename DType>
-//  MSHADOW_XINLINE static void Map(int i, DType* out, const DType* in) {
-//    KERNEL_ASSIGN(out[i], Req, OP::Map(in[i]));
-//  }
-//};
-
 class OpBase {
  protected:
   /*! \brief Copy blob data */
@@ -318,10 +310,7 @@ template<typename GRAD_OP>
 struct unary_bwd {
   template<typename DType>
   MSHADOW_XINLINE static DType Map(DType a, DType b) {
-    std::cout << "unary_bwd::Map( a = " << a << ", b = " << b << " )" << std::endl << std::flush;
-    const DType res = a*GRAD_OP::Map(b);
-    std::cout << "unary_bwd::Map( a = " << a << ", b = " << b << " ) -> " << res << std::endl << std::flush;
-    return res;
+    return a * GRAD_OP::Map(b);
   }
 };
 
