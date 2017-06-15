@@ -85,6 +85,24 @@ class OpBase {
     CopyBlob(s, dest.data(), reqi, src.data());
   }
 
+  /*! \brief Get NDArray's data blob, possibly reshaped if necessary to reflect actual
+   *         number of stored items */
+  static inline TBlob GetReshapedBlob(const NDArray& arr) {
+    TBlob blob = arr.data();
+    switch(arr.storage_type()) {
+      case kDefaultStorage:  // most common first
+        break;
+      case kRowSparseStorage:
+      case kCSRStorage:
+        blob.shape_ = arr.storage_shape();
+        break;
+      default:
+        LOG(FATAL) << "Unrecognized storage type: " << arr.storage_type();
+        break;
+    }
+    return blob;
+  }
+
   /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
   template<typename xpu, typename FComputer>
   static inline void MapToFCompute(const nnvm::NodeAttrs &attrs,
@@ -97,13 +115,10 @@ class OpBase {
     in_blobs.reserve(inputs.size());
     out_blobs.reserve(outputs.size());
     for(size_t i = 0, n = inputs.size(); i < n; ++i) {
-      TBlob blob = inputs[i].data();
-      in_blobs.emplace_back(std::move(inputs[i].data()));
+      in_blobs.emplace_back(std::move(GetReshapedBlob(inputs[i])));
     }
     for(size_t i = 0, n = outputs.size(); i < n; ++i) {
-      const NDArray& o = outputs[i];
-      TBlob blob = o.data();
-      out_blobs.emplace_back(std::move(outputs[i].data()));
+      out_blobs.emplace_back(std::move(GetReshapedBlob(outputs[i])));
     }
     computer(attrs, ctx, in_blobs, req, out_blobs);
   };
@@ -112,7 +127,6 @@ class OpBase {
 
 /*! \brief Unary operator class */
 class UnaryOp : public OpBase {
-
   /*! \brief Infer the output storage geometry */
   template<int n_in, int n_out>
   static bool InitStorageGeometry(const nnvm::NodeAttrs& attrs,
