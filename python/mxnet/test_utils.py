@@ -658,7 +658,7 @@ def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
     for output_name, expect, output in zip(sym.list_outputs(), expected, outputs):
         assert_almost_equal(expect, output, rtol, atol,
                             ("EXPECTED_%s"%output_name, "FORWARD_%s"%output_name))
-
+    return executor.outputs
 
 def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=None,
                             aux_states=None, grad_req='write', ctx=None):
@@ -768,8 +768,7 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
 
     print("EXPECTED in_grads:")
     for k, v in expected.items():
-        print(k)
-        print(v)
+        print(k, v)
 
     grads = {k: v.asnumpy() for k, v in args_grad_data.items()}
     print("ACTUAL in_grads:")
@@ -789,7 +788,7 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
                                 rtol, atol, ("EXPECTED_%s"%name, "BACKWARD_%s"%name))
         else:
             raise ValueError("Invalid grad_req %s for argument %s"%(grad_req[name], name))
-
+    return args_grad_data
 
 def check_speed(sym, location=None, ctx=None, N=20, grad_req=None, typ="whole",
                 **kwargs):

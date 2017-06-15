@@ -13,8 +13,8 @@ MXNET_OPERATOR_REGISTER_BINARY(elemwise_add)
 .describe("Adds arguments element-wise.")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::plus>)
 .set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::plus>)
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_add"})
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_add"});
 
 // specialized gradient add function to do add to optimization
 // this must differ from elemwise_add to prevent add to optimization in forward pass.
@@ -41,8 +41,8 @@ MXNET_OPERATOR_REGISTER_BINARY(elemwise_sub)
 .add_alias("_sub").add_alias("_minus").add_alias("_Minus")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::minus>)
 .set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::minus>)
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_sub"})
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_sub"});
 
 NNVM_REGISTER_OP(_backward_sub)
 .set_num_inputs(1)
@@ -62,6 +62,7 @@ MXNET_OPERATOR_REGISTER_BINARY(elemwise_mul)
 .add_alias("_mul").add_alias("_Mul")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::mul>)
 .set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeEx<cpu, mshadow::op::mul>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mul"});
 
 NNVM_REGISTER_OP(_backward_mul)
@@ -75,10 +76,11 @@ NNVM_REGISTER_OP(_backward_mul)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::right,
                                                               mshadow_op::left>);
 
+// For divide, we will always auto-convert to dense since the sparse 0's will generate nans
 MXNET_OPERATOR_REGISTER_BINARY(elemwise_div)
 .add_alias("_div").add_alias("_Div")
-// For divide, we will always auto-convert to dense since the sparse 0's will generate nans
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow::op::div>)
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::ComputeAsDense<cpu, mshadow::op::div>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_div"});
 
 NNVM_REGISTER_OP(_backward_div)

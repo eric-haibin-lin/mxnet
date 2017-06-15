@@ -423,6 +423,9 @@ void FCompExFallback(const nnvm::NodeAttrs& attrs,
                      const std::vector<NDArray>& outputs,
                      FCompute fcompute,
                      const std::string& fname) {
+#ifndef NDEBUG
+  std::cout << "FALLBACK TO DENSE (FCompExFallback)" << std::endl << std::flush;
+#endif
   using namespace common;
   std::vector<TBlob> in_blobs, out_blobs;
   std::vector<NDArray> temp_in, temp_out;

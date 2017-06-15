@@ -147,7 +147,8 @@ void CopyFromToRspRspFreeTest() {
   test::CheckDataRegion(nd.data(), dst_nd.data());
 }
 
-void BinaryAddRspRsp() {
+template<typename xpu, typename OP>
+void BinaryOpForwardRspRsp() {
   Context ctx = Context::CPU();
 
   TShape output_shape({4, 2});
@@ -166,7 +167,7 @@ void BinaryAddRspRsp() {
       inputs.push_back(input_nd0);
       inputs.push_back(input_nd1);
       outputs.push_back(output);
-      op::BinaryOp::ComputeRspRsp<cpu, mshadow::op::plus>({}, op_ctx, inputs, req, outputs);
+      op::BinaryOp::ComputeEx<xpu, OP>({}, op_ctx, inputs, req, outputs);
     }, input_nd0.ctx(), const_vars, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 
@@ -214,8 +215,11 @@ void BinaryAddRspRsp() {
 //  CheckDataRegion(converted.data(), expected.data());
 //}
 
-TEST(NDArray, binary_add) {
-  BinaryAddRspRsp();
+TEST(NDArray, BinaryOps) {
+  BinaryOpForwardRspRsp<cpu, mshadow::op::plus>();
+  BinaryOpForwardRspRsp<cpu, mshadow::op::minus>();
+  BinaryOpForwardRspRsp<cpu, mshadow::op::mul>();
+  BinaryOpForwardRspRsp<cpu, mshadow::op::div>();
 }
 
 TEST(NDArray, conversion) {

@@ -67,17 +67,6 @@ class BinaryOp : public OpBase
     }
   };
 
-//  template<typename OP, int Req, typename SrcType, typename DestType>
-//  struct BinaryOpSimpleMapper
-//  {
-//    template<typename DType>
-//    MSHADOW_XINLINE static void Map(int i, SrcType *out, const SrcType *rhs) {
-//      SrcType val = OP::Map(rhs[i]);
-//      KERNEL_ASSIGN(out[i], Req, OP::Map(DType(0), rhs[i]));
-//    }
-//  };
-
-
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
                                      const OpContext &ctx,
@@ -129,9 +118,6 @@ class BinaryOp : public OpBase
     Tensor<xpu, 2, DType> data_r = rhs.data().FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> out = output->data().FlatTo2D<xpu, DType>(s);
 
-    // TODO(coolivie) May need to build a list of operations and then do those in
-    // parallel.  Problem with that, however, is that the memory allocation will be expensive
-
     size_t iter_l = 0;
     size_t iter_r = 0;
     size_t iter_out = 0;
@@ -142,7 +128,6 @@ class BinaryOp : public OpBase
       if (idx_l == idx_r) {
         // Same row
         indices_out[iter_out] = idx_l;
-        //mshadow::Copy(out[iter_out], data_l[iter_l++], s);
         Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
         Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
         DCHECK_EQ(lvalue.shape_.Size(), rvalue.shape_.Size());
@@ -163,8 +148,6 @@ class BinaryOp : public OpBase
         // Right only
         indices_out[iter_out] = idx_r;
         Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
-        //mshadow::Copy(out[iter_out], data_r[iter_r++], s);
-        //ASSIGN_DISPATCH(out[iter_out], req[0], F<MissingLeftUnaryOP>(data_r[iter_r++]));
         MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
           Kernel<BinaryOpMissingLValue<OP, Req>, xpu>::Launch(
             s, rvalue.shape_.Size(), out[iter_out].dptr_, rvalue.dptr_);
@@ -176,8 +159,6 @@ class BinaryOp : public OpBase
     while (iter_l < num_rows_l) {
       indices_out[iter_out] = indices_l[iter_l];
       Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
-      //mshadow::Copy(out[iter_out++], data_l[iter_l++], s);
-      //ASSIGN_DISPATCH(out[iter_out], req[0], F<MissingRightUnaryOP>(data_l[iter_l++]));
       MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
         Kernel<BinaryOpMissingRValue<OP, Req>, xpu>::Launch(
           s, lvalue.shape_.Size(), out[iter_out].dptr_, lvalue.dptr_);
@@ -186,8 +167,6 @@ class BinaryOp : public OpBase
     while (iter_r < num_rows_r) {
       indices_out[iter_out] = indices_r[iter_r];
       Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
-      //mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
-      //ASSIGN_DISPATCH(out[iter_out], req[0], F<MissingLeftUnaryOP>(data_r[iter_r++]));
       MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
         Kernel<BinaryOpMissingLValue<OP, Req>, xpu>::Launch(
           s, rvalue.shape_.Size(), out[iter_out].dptr_, rvalue.dptr_);
@@ -203,7 +182,6 @@ class BinaryOp : public OpBase
     }
   };
 
- public:
   // Binary Compute between two row-sparse ndarray
   // This implementation only works on CPU
   template<typename xpu, typename OP>
@@ -212,87 +190,14 @@ class BinaryOp : public OpBase
                             const std::vector<NDArray> &inputs,
                             const std::vector<OpReqType> &req,
                             const std::vector<NDArray> &outputs) {
-#if 1
     MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
       MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
         RspRspElemwiseBinaryOp<xpu, DType, IType, OP>(attrs, ctx, inputs, req, outputs);
       })
     });
-#else
-    auto &lhs = inputs[0];
-    auto &rhs = inputs[1];
-    auto &output = outputs[0];
-
-    bool init_l = lhs.storage_initialized();
-    bool init_r = rhs.storage_initialized();
-    // both inputs are zeros
-    if (!init_l && !init_r) return;
-    // one of the input is zeros
-    if (!init_l || !init_r) {
-      NDArray out(output);
-      CopyFromToRspImpl<xpu, xpu>(!init_l ? rhs : lhs, &out, ctx.run_ctx);
-      return;
-    }
-    // Memory Estimation: This is (roughly) the number of result rows. We still
-    // need to subtract the number of common rows
-    unsigned int num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
-    unsigned int num_rows_r = rhs.aux_shape(rowsparse::kIdx).Size();
-    output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
-    mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
-
-    MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-      MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
-        // Indices
-        auto indices_l = lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-        auto indices_r = rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-        auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-        // Data
-        auto data_l = lhs.data().FlatTo2D<xpu, DType>(s);
-        auto data_r = rhs.data().FlatTo2D<xpu, DType>(s);
-        auto out = output.data().FlatTo2D<xpu, DType>(s);
-
-        // TODO(haibin) A more appropriate way: Copy to output, then apply ops
-        size_t iter_l = 0;
-        size_t iter_r = 0;
-        size_t iter_out = 0;
-        int32_t num_common_rows = 0;
-        while (iter_l < num_rows_l && iter_r < num_rows_r) {
-          auto idx_l = indices_l[iter_l];
-          auto idx_r = indices_r[iter_r];
-          if (idx_l == idx_r) {
-            // Same row
-            indices_out[iter_out] = idx_l;
-            mshadow::Copy(out[iter_out], data_l[iter_l++], s);
-            out[iter_out] += data_r[iter_r++];
-            num_common_rows++;
-          } else if (idx_l < idx_r) {
-            // Left only
-            indices_out[iter_out] = idx_l;
-            mshadow::Copy(out[iter_out], data_l[iter_l++], s);
-          } else {
-            // Right only
-            indices_out[iter_out] = idx_r;
-            mshadow::Copy(out[iter_out], data_r[iter_r++], s);
-          }
-          iter_out++;
-        }
-        // Copying over the rest of the rows
-        while (iter_l < num_rows_l) {
-          indices_out[iter_out] = indices_l[iter_l];
-          mshadow::Copy(out[iter_out++], data_l[iter_l++], s);
-        }
-        while (iter_r < num_rows_r) {
-          indices_out[iter_out] = indices_r[iter_r];
-          mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
-        }
-        auto new_shape = output.aux_shape(rowsparse::kIdx);
-        new_shape[0] -= num_common_rows;
-        output.SetAuxShape(rowsparse::kIdx, new_shape);
-      });
-    });
-#endif
   }
 
+ public:
   template<typename xpu, typename OP, typename DType>
   static inline void Compute_(const nnvm::NodeAttrs &attrs,
                               const OpContext &ctx,
@@ -354,6 +259,16 @@ class BinaryOp : public OpBase
 //  }
 
   template<typename xpu, typename OP>
+  static inline void ComputeAsDense(const nnvm::NodeAttrs &attrs,
+                                    const OpContext &ctx,
+                                    const std::vector<NDArray> &inputs,
+                                    const std::vector<OpReqType> &req,
+                                    const std::vector<NDArray> &outputs) {
+    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                         Compute<xpu, OP>, "Compute");
+  }
+
+  template<typename xpu, typename OP>
   static inline void ComputeEx(const nnvm::NodeAttrs &attrs,
                                const OpContext &ctx,
                                const std::vector<NDArray> &inputs,
@@ -367,7 +282,7 @@ class BinaryOp : public OpBase
     // TODO(haibin) implement dns + rsp in a separate kernel
     if (common::ContainsDefaultStorage(inputs)) {
 #ifndef NDEBUG
-      std::cout << "Casting operation to dense" << std::endl << std::flush;
+      std::cerr << "BinaryOp::ComputeEx(): Casting operation to dense" << std::endl << std::flush;
 #endif
       FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                            Compute<xpu, OP>, "Compute");
@@ -542,7 +457,6 @@ class BinaryOp : public OpBase
     });
   }
 
-  // Only implemented for _backward_add for now
   template<typename xpu, typename LOP, typename ROP>
   static inline void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs &attrs,
                                const OpContext &ctx,
