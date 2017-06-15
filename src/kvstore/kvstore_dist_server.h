@@ -19,6 +19,8 @@
 namespace mxnet {
 namespace kvstore {
 
+static const int kBatchPushPull = 1;
+static const int kDefaultPushPull = 0;
 static const int kStopServer = -1;
 static const int kSyncMode = -2;
 
@@ -133,9 +135,115 @@ class KVStoreDistServer {
     app->Response(recved);
   }
 
+  inline void MergeUpdates(const NDArray& recved, int key,
+                           std::unordered_set<int> *change_set) {
+    auto& merged = merge_buf_[key];
+    if (merged.is_none()) {
+      merged = NDArray(recved.shape(), Context());
+    }
+    if (change_set->find(key) == change_set->end()) {
+      CopyFromTo(recved, &merged, 0);
+    } else {
+      merged += recved;
+    }
+    change_set->insert(key);
+  }
+
+  void BatchDataHandle(const ps::KVMeta& req_meta,
+                       const ps::KVPairs<real_t>& req_data,
+                       ps::KVServer<real_t>* server) {
+    int master_key = DecodeKey(req_data.keys[0]);
+    CHECK_EQ(req_data.lens[0], 0);
+    CHECK_GT(req_data.lens.size(), 0);
+    auto unit_len = req_data.lens[1];
+    auto num_rows = req_data.lens.size() - 1;
+    CHECK_GT(unit_len, 0);
+    CHECK(req_meta.push) << "Batch pull not implemented.";
+    real_t* data = req_data.vals.data();
+    auto& stored = store_[master_key];
+    if (stored.is_none()) {
+      LOG(INFO) << "received initial push: " << master_key;
+      // initialization
+      size_t ds[] = {num_rows, (size_t) unit_len};
+      TShape dshape(ds, ds + 2);
+      CHECK_EQ(req_data.vals.size(), num_rows * unit_len);
+      TBlob recv_blob(data, dshape, cpu::kDevMask);  // NOLINT(*)
+      NDArray recved = NDArray(recv_blob, 0);
+      stored = NDArray(dshape, Context());
+      CopyFromTo(recved, &stored, 0);
+      stored.WaitToRead();
+      server->Response(req_meta);
+      return;
+    }
+    // synced push
+    if (sync_mode_) {
+      // TODO(haibin) decode once and cache result
+      LOG(INFO) << "received sync push: " << master_key;
+      size_t offset = 0;
+      auto& stored = store_[master_key];
+      // merge updates
+      auto& request_buf = request_buf_[master_key];
+      for (size_t i = 1; i <= num_rows; i++) {
+        int key = DecodeKey(req_data.keys[i]);
+        auto len = req_data.lens[i];
+        size_t ds[] = {(size_t)len};
+        TShape dshape(ds, ds + 1);
+        TBlob recv_blob(data, // NOLINT(*)
+                        dshape, cpu::kDevMask);
+        NDArray recved = NDArray(recv_blob, 0);
+        MergeUpdates(recved, key, &request_buf.change_set);
+        offset += len;
+      }
+      // perform updates
+      request_buf.requests.push_back(req_meta);
+      if (request_buf.requests.size() == (size_t) ps::NumWorkers()) {
+        // let the main thread to execute updater_, which is necessary for python
+        for (auto key : request_buf.change_set) {
+          // slice a row
+          auto row_id = key - master_key;
+          LOG(INFO) << "sliced " << row_id;
+          NDArray slice = stored.Slice(row_id, row_id + 1);
+          NDArray update = merge_buf_[key];
+          if (updater_) {
+            exec_.Exec([this, key, &update, &slice](){
+                CHECK(updater_);
+                updater_(key, update, &slice);
+              });
+          } else {
+            // if no updater, just copy
+            CopyFromTo(update, &slice);
+          }
+          slice.WaitToRead();
+        }
+        request_buf.change_set.clear();
+        LOG(INFO) << "RESPONSE SYNC to " << request_buf.requests.size() << " clients";
+        for (const auto& req : request_buf.requests) {
+          server->Response(req);
+        }
+        request_buf.requests.clear();
+      } else {
+        for (size_t i = 1; i <= num_rows; i++) {
+          int key = DecodeKey(req_data.keys[i]);
+          merge_buf_[key].WaitToRead();
+        }
+      }
+    } else {
+      // async push
+      LOG(INFO) << "received async push: " << master_key;
+      LOG(FATAL) << "Not implemented yet";
+    }
+  }
+
   void DataHandle(const ps::KVMeta& req_meta,
                   const ps::KVPairs<real_t>& req_data,
                   ps::KVServer<real_t>* server) {
+    LOG(INFO) << "req_meta.cmd " << req_meta.cmd << " req_meta.push " << req_meta.push
+        << " req_meta.sender " << req_meta.sender << " req_meta.timestamp " << req_meta.timestamp;
+    if (req_meta.cmd == kBatchPushPull) {
+      BatchDataHandle(req_meta, req_data, server);
+      return;
+    }
+    CHECK_EQ(req_meta.cmd, kDefaultPushPull);
     // do some check
     CHECK_EQ(req_data.keys.size(), (size_t)1);
     if (req_meta.push) {
@@ -164,37 +272,30 @@ class KVStoreDistServer {
       } else if (sync_mode_) {
         // synced push
         auto& merged = merge_buf_[key];
-        if (merged.array.is_none()) {
-          merged.array = NDArray(dshape, Context());
-        }
+        auto& request_buf = request_buf_[key];
 
-        if (merged.request.size() == 0) {
-          CopyFromTo(recved, &merged.array, 0);
-        } else {
-          merged.array += recved;
-        }
-
-        merged.request.push_back(req_meta);
-
-        if (merged.request.size() == (size_t)ps::NumWorkers()) {
-          // let the main thread to execute updater_, which is necessary for
-          // python
+        MergeUpdates(recved, key, &request_buf.change_set);
+        request_buf.requests.push_back(req_meta);
+        if (request_buf.requests.size() == (size_t) ps::NumWorkers()) {
+          CHECK_EQ(request_buf.change_set.size(), 1);
+          // let the main thread to execute updater_, which is necessary for python
           if (updater_) {
             exec_.Exec([this, key, &merged, &stored](){
                 CHECK(updater_);
-                updater_(key, merged.array, &stored);
+                updater_(key, merged, &stored);
               });
           } else {
             // if no updater, just copy
-            CopyFromTo(merged.array, &stored);
+            CopyFromTo(merged, &stored);
           }
-          for (const auto& req : merged.request) {
+          request_buf.change_set.clear();
+          for (const auto& req : request_buf.requests) {
             server->Response(req);
           }
-          merged.request.clear();
+          request_buf.requests.clear();
           stored.WaitToRead();
         } else {
-          merged.array.WaitToRead();
+          merged.WaitToRead();
         }
       } else {
         // async push
@@ -209,7 +310,7 @@ class KVStoreDistServer {
       // pull
       ps::KVPairs<real_t> response;
       CHECK(!stored.is_none()) << "init " << key << " first";
-      int len = stored.shape()[0];
+      auto len = stored.shape().Size();
       response.keys = req_data.keys;
       response.lens = {len};
       // TODO(mli) try to remove this CopyFrom
@@ -232,11 +333,12 @@ class KVStoreDistServer {
 
   std::unordered_map<int, NDArray> store_;
 
-  struct MergeBuf {
-    std::vector<ps::KVMeta> request;
-    NDArray array;
+  struct RequestBuf {
+    std::vector<ps::KVMeta> requests;
+    std::unordered_set<int> change_set;
   };
-  std::unordered_map<int, MergeBuf> merge_buf_;
+  std::unordered_map<int, NDArray> merge_buf_;
+  std::unordered_map<int, RequestBuf> request_buf_;
 
   Executor exec_;
 
