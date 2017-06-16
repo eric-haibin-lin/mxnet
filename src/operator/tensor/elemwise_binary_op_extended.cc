@@ -9,8 +9,8 @@
 namespace mxnet {
 namespace op {
 MXNET_OPERATOR_REGISTER_BINARY(_power)
-  .add_alias("_Power")
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow_op::power>)
+.add_alias("_Power")
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::power>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_power"});
 
 NNVM_REGISTER_OP(_backward_power)
@@ -25,8 +25,8 @@ NNVM_REGISTER_OP(_backward_power)
                                                               mshadow_op::power_rgrad>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_maximum)
-  .add_alias("_Maximum")
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow_op::maximum>)
+.add_alias("_Maximum")
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::maximum>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_maximum"});
 
 NNVM_REGISTER_OP(_backward_maximum)
@@ -41,8 +41,8 @@ NNVM_REGISTER_OP(_backward_maximum)
                                                               mshadow_op::lt>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_minimum)
-  .add_alias("_Minimum")
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow_op::minimum>)
+.add_alias("_Minimum")
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::minimum>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_minimum"});
 
 NNVM_REGISTER_OP(_backward_minimum)
@@ -57,11 +57,11 @@ NNVM_REGISTER_OP(_backward_minimum)
                                                               mshadow_op::gt>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_hypot)
-  .add_alias("_Hypot")
-  .describe(R"code(Given the "legs" of a right triangle, return its hypotenuse.
+.add_alias("_Hypot")
+.describe(R"code(Given the "legs" of a right triangle, return its hypotenuse.
 
 )code" ADD_FILELINE)
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Compute<cpu, mshadow_op::hypot>)
+.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::hypot>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_hypot" });
 
 NNVM_REGISTER_OP(_backward_hypot)
