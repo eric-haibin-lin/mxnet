@@ -209,6 +209,16 @@ class UnaryOp : public OpBase {
     MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute<xpu, OP>);
   }
 
+  template<typename xpu, typename OP>
+  static void ComputeAsDense(const nnvm::NodeAttrs& attrs,
+                            const OpContext& ctx,
+                            const std::vector<NDArray>& inputs,
+                            const std::vector<OpReqType>& req,
+                            const std::vector<NDArray>& outputs) {
+    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                         Compute<xpu, OP>, "ComputeAsDense");
+  }
+
   template<typename xpu, typename op>
   static void Launch(const nnvm::NodeAttrs& attrs,
                      const OpContext& ctx,
@@ -236,6 +246,19 @@ class UnaryOp : public OpBase {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
     MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
+  }
+
+  template<typename xpu, typename OP>
+  static void LaunchAsDense(const nnvm::NodeAttrs& attrs,
+                            const OpContext& ctx,
+                            const std::vector<NDArray>& inputs,
+                            const std::vector<OpReqType>& req,
+                            const std::vector<NDArray>& outputs) {
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                         Launch<xpu, OP>, "LaunchAsDense");
+
   }
 
   template<typename xpu>
@@ -380,12 +403,6 @@ struct sigmoid {
   }
 };
 struct sigmoid_grad {
-//  template<typename DType>
-//  MSHADOW_XINLINE static void Map(int i, DType *out,
-//                                  const DType *out_grad, const DType *in) {
-//    DType x = in[i];
-//    out[i] = out_grad[i] * DType(x * (DType(1.0f) - x));
-//  }
   template<typename DType>
   MSHADOW_XINLINE static DType Map(DType out_grad, DType in) {
     return out_grad * DType(in * (DType(1.0f) - in));
@@ -401,13 +418,6 @@ struct relu {
   }
 };
 struct relu_grad {
-//  template<typename DType>
-//  MSHADOW_XINLINE static void Map(int i,
-//                                  DType *out,
-//                                  const DType *out_grad,
-//                                  const DType *in) {
-//    out[i] = out_grad[i] * DType(in[i] > DType(0.0f) ? DType(1.0f) : DType(0.0f));
-//  }
   template<typename DType>
   MSHADOW_XINLINE static DType Map(DType out_grad, DType in) {
     return out_grad * DType(in > DType(0.0f) ? DType(1.0f) : DType(0.0f));
@@ -795,19 +805,38 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
     })                                                              \
   .add_argument("data", "NDArray-or-Symbol", "The input array.")
 
-/*! \brief Unary operator which always has a dense result */
 #define MXNET_OPERATOR_REGISTER_UNARY_DR(name)                      \
   NNVM_REGISTER_OP(name)                                            \
   .set_num_inputs(1)                                                \
   .set_num_outputs(1)                                               \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)     \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>) \
   .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
     [](const NodeAttrs& attrs){                                     \
       return std::vector<std::pair<int, int> >{{0, 0}};             \
     })                                                              \
   .add_argument("data", "NDArray-or-Symbol", "The input array.")
+
+#define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(__func$, __xpu$, __kernel$)        \
+  MXNET_OPERATOR_REGISTER_UNARY(__func$)                                        \
+  .set_attr<FCompute>("FCompute<cpu>", UnaryOp::Launch<__xpu$, __kernel$>)      \
+  .set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::LaunchEx<__xpu$, __kernel$>)
+
+#define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(__func$, __xpu$, __kernel$)     \
+  MXNET_OPERATOR_REGISTER_UNARY(__func$)                                        \
+  .set_attr<FCompute>("FCompute<cpu>", UnaryOp::Launch<__xpu$, __kernel$>)      \
+  .set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::LaunchAsDense<__xpu$, __kernel$>)
+
+#define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(__func$, __xpu$, __kernel$)       \
+  MXNET_OPERATOR_REGISTER_UNARY(__func$)                                        \
+  .set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<__xpu$, __kernel$>)     \
+  .set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::ComputeEx<__xpu$, __kernel$>)
+
+#define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(__func$, __xpu$, __kernel$)    \
+  MXNET_OPERATOR_REGISTER_UNARY_DR(__func$)                                     \
+  .set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<__xpu$, __kernel$>)     \
+  .set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::ComputeAsDense<__xpu$, __kernel$>)
+
 
 }  // namespace op
 }  // namespace mxnet

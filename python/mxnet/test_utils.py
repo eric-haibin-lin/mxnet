@@ -77,7 +77,8 @@ def random_sample(population, k):
 
 
 # TODO(haibin) also include types in arguments
-def rand_sparse_ndarray(shape, storage_type, density=None):
+def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
+                        rsp_indices=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     density = rnd.rand() if density is None else density
     if storage_type == 'row_sparse':
@@ -86,13 +87,19 @@ def rand_sparse_ndarray(shape, storage_type, density=None):
         prod = np.prod(shape)
         num_cols = int(prod / shape[0])
         # sample index
-        idx_sample = rnd.rand(shape[0])
-        indices = np.argwhere(idx_sample < density).flatten()
+        if rsp_indices is not None:
+            indices = rsp_indices
+            assert(len(indices) <= shape[0])
+        else:
+            idx_sample = rnd.rand(shape[0])
+            indices = np.argwhere(idx_sample < density).flatten()
         if indices.shape[0] == 0:
             result = mx.sparse_nd.zeros('row_sparse', shape)
             return result, (np.array([]), np.array([], dtype='int32'))
         # generate random values
         val = rnd.rand(indices.shape[0], num_cols)
+        if data_init is not None:
+            val.fill(data_init)
         arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int32)
         return arr, (val, indices)
     elif storage_type == 'csr':
@@ -171,12 +178,12 @@ def same(a, b):
     return np.array_equal(a, b)
 
 
-def almost_equal(a, b, rtol=None, atol=None):
+def almost_equal(a, b, rtol=None, atol=None, equal_nan=False):
     """Test if two numpy arrays are almost equal."""
-    return np.allclose(a, b, rtol=get_rtol(rtol), atol=get_atol(atol))
+    return np.allclose(a, b, rtol=get_rtol(rtol), atol=get_atol(atol), equal_nan=equal_nan)
 
 
-def assert_almost_equal(a, b, rtol=None, atol=None, names=('a', 'b')):
+def assert_almost_equal(a, b, rtol=None, atol=None, names=('a', 'b'), equal_nan=False):
     """Test that two numpy arrays are almost equal. Raise exception message if not.
 
     Parameters
@@ -189,7 +196,7 @@ def assert_almost_equal(a, b, rtol=None, atol=None, names=('a', 'b')):
     rtol = get_rtol(rtol)
     atol = get_atol(atol)
 
-    if almost_equal(a, b, rtol, atol):
+    if almost_equal(a, b, rtol, atol, equal_nan=equal_nan):
         return
 
     index, rel = find_max_violation(a, b, rtol, atol)

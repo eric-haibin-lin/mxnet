@@ -20,7 +20,8 @@ MXNET_OPERATOR_REGISTER_BINARY(elemwise_add)
 // this must differ from elemwise_add to prevent add to optimization in forward pass.
 MXNET_OPERATOR_REGISTER_BINARY(_grad_add)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow::op::plus>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::LaunchEx<cpu, mshadow::op::plus>);
+.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::LaunchEx<cpu, mshadow::op::plus>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
 
 NNVM_REGISTER_OP(_backward_add)
 .set_num_inputs(1)
@@ -73,8 +74,12 @@ NNVM_REGISTER_OP(_backward_mul)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::right,
-                                                              mshadow_op::left>);
+    mshadow_op::left>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::right,
+    mshadow_op::left>);
+;
 
 // For divide, we will always auto-convert to dense since the sparse 0's will generate nans
 MXNET_OPERATOR_REGISTER_BINARY(elemwise_div)
@@ -91,8 +96,11 @@ NNVM_REGISTER_OP(_backward_div)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::div_grad,
-                                                              mshadow_op::div_rgrad>);
-
+  mshadow_op::div_rgrad>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInExDense<cpu, mshadow_op::div_grad,
+  mshadow_op::div_rgrad>)
+;
 }  // namespace op
 }  // namespace mxnet

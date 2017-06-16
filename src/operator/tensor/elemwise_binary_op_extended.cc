@@ -11,6 +11,8 @@ namespace op {
 MXNET_OPERATOR_REGISTER_BINARY(_power)
 .add_alias("_Power")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::power>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, mshadow_op::power>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_power"});
 
 NNVM_REGISTER_OP(_backward_power)
@@ -21,12 +23,17 @@ NNVM_REGISTER_OP(_backward_power)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::power_grad,
-                                                              mshadow_op::power_rgrad>);
+                                                              mshadow_op::power_rgrad>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::power_grad,
+  mshadow_op::power_rgrad>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_maximum)
 .add_alias("_Maximum")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::maximum>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, mshadow_op::maximum>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_maximum"});
 
 NNVM_REGISTER_OP(_backward_maximum)
@@ -37,12 +44,17 @@ NNVM_REGISTER_OP(_backward_maximum)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::ge,
-                                                              mshadow_op::lt>);
+   mshadow_op::lt>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::ge,
+   mshadow_op::lt>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_minimum)
 .add_alias("_Minimum")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::minimum>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, mshadow_op::minimum>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_minimum"});
 
 NNVM_REGISTER_OP(_backward_minimum)
@@ -53,8 +65,11 @@ NNVM_REGISTER_OP(_backward_minimum)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::le,
-                                                              mshadow_op::gt>);
+                                                              mshadow_op::gt>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::le,
+  mshadow_op::gt>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_hypot)
 .add_alias("_Hypot")
@@ -62,6 +77,8 @@ MXNET_OPERATOR_REGISTER_BINARY(_hypot)
 
 )code" ADD_FILELINE)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::hypot>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, mshadow_op::hypot>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_hypot" });
 
 NNVM_REGISTER_OP(_backward_hypot)
@@ -72,8 +89,12 @@ NNVM_REGISTER_OP(_backward_hypot)
 [](const NodeAttrs& attrs) {
   return std::vector<std::pair<int, int> > {{0, 1}};
 })
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu,
-  mshadow_op::hypot_grad_left, mshadow_op::hypot_grad_right>);
+  mshadow_op::hypot_grad_left, mshadow_op::hypot_grad_right>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu,
+  mshadow_op::hypot_grad_left, mshadow_op::hypot_grad_right>)
+;
 
 }  // namespace op
 }  // namespace mxnet

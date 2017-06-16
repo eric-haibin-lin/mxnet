@@ -166,6 +166,7 @@ struct ElemwiseGradUseNone {
 };
 
 // TODO(haibin) this is a temporary function for debugging purpose. Remove later.
+#ifndef NDEBUG
 template <int dim, typename DType>
 void print_info(const mshadow::Tensor<cpu, dim, DType>& tensor, const std::string& name) {
   std::cout << "Tensor " << name << " with shape (";
@@ -179,7 +180,7 @@ void print_info(const mshadow::Tensor<cpu, dim, DType>& tensor, const std::strin
   for (int j = 0; j < len; j ++) std::cout << tensor.dptr_[j] << " ";
   std::cout << std::endl;
 }
-
+#endif  // NDEBUG
 
 }  // namespace op
 }  // namespace mxnet

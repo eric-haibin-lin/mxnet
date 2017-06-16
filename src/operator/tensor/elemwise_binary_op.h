@@ -244,6 +244,8 @@ class BinaryOp : public OpBase
                                    const std::vector<TBlob> &inputs,
                                    const std::vector<OpReqType> &req,
                                    const std::vector<TBlob> &outputs) {
+    DCHECK_EQ(outputs.size(), 2U);
+    DCHECK_EQ(inputs.size(), 3U);
     using namespace mxnet_op;
     if (req[0] == kNullOp && req[1] == kNullOp) return;
     Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -271,7 +273,7 @@ class BinaryOp : public OpBase
                                    const std::vector<OpReqType> &req,
                                    const std::vector<NDArray> &outputs) {
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                         Launch<xpu, OP>, "Compute");
+                         Launch<xpu, OP>, "LaunchAsDense");
   }
 
   template<typename xpu, typename OP>
@@ -397,13 +399,33 @@ class BinaryOp : public OpBase
 
   template<typename xpu, typename LOP, typename ROP>
   static inline void BinaryBackwardUseIn(const nnvm::NodeAttrs &attrs,
-                           const OpContext &ctx,
-                           const std::vector<TBlob> &inputs,
-                           const std::vector<OpReqType> &req,
-                           const std::vector<TBlob> &outputs) {
+                                         const OpContext &ctx,
+                                         const std::vector<TBlob> &inputs,
+                                         const std::vector<OpReqType> &req,
+                                         const std::vector<TBlob> &outputs) {
     MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
       BinaryBackwardUseIn_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
     });
+  }
+
+  template<typename xpu, typename LOP, typename ROP>
+  static inline void BinaryBackwardUseInEx(const nnvm::NodeAttrs &attrs,
+                                           const OpContext &ctx,
+                                           const std::vector<NDArray> &inputs,
+                                           const std::vector<OpReqType> &req,
+                                           const std::vector<NDArray> &outputs) {
+    OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs,
+                          BinaryBackwardUseIn<xpu, LOP, ROP>);
+  }
+
+  template<typename xpu, typename LOP, typename ROP>
+  static inline void BinaryBackwardUseInExDense(const nnvm::NodeAttrs &attrs,
+                                                const OpContext &ctx,
+                                                const std::vector<NDArray> &inputs,
+                                                const std::vector<OpReqType> &req,
+                                                const std::vector<NDArray> &outputs) {
+    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                               BinaryBackwardUseIn<xpu, LOP, ROP>, "BinaryBackwardUseInExDense");
   }
 };  // class BinaryOp
 
