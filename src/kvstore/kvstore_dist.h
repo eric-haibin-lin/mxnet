@@ -208,22 +208,26 @@ class KVStoreDist : public KVStoreLocal {
       // merge over devices
       int key = uniq_keys[i];
       const auto& vals = grouped_vals[i];
+      // no need to merge when init() is called
       NDArray merged = do_merge ? comm_->Reduce(key, vals, priority) : vals[0];
+      // for sparse updates, the storage_type of `merged` is assumed to be row_sparse
 
-      auto& send_buf = comm_buf_[key];
-      const auto storage_type = merged.storage_type();
-      if (merged.ctx().dev_mask() == cpu::kDevMask) {
+      // The merged gradient is not necessarily row sparse
+      auto& send_buf = merged.storage_type() == kDefaultStorage ? comm_buf_[key] : batch_comm_buf_[key];
+      if (merged.ctx().dev_mask() == cpu::kDevMask && merged.storage_type() == send_buf.storage_type()) {
         send_buf = merged;  // avoid memory copy
       } else {
         if (send_buf.is_none()) {
-          if (storage_type == kDefaultStorage) {
+          if (merged.storage_type() == kDefaultStorage) {
+            LOG(FATAL) << "Not reached";
             send_buf = NDArray(merged.shape(), pinned_ctx_, false, merged.dtype());
           } else {
-            send_buf = NDArray(storage_type, merged.shape(), pinned_ctx_, true, merged.dtype());
+            send_buf = NDArray(merged.storage_type(), merged.shape(), pinned_ctx_, true, merged.dtype());
           }
         }
         CopyFromTo(merged, &send_buf);
       }
+      const auto storage_type = send_buf.storage_type();
 
       // push to servers
       send_buf.WaitToRead();
@@ -410,6 +414,7 @@ class KVStoreDist : public KVStoreLocal {
   size_t bigarray_bound_;
   /// \brief send & recver buffer
   std::unordered_map<int, NDArray> comm_buf_;
+  std::unordered_map<int, NDArray> batch_comm_buf_;
 };
 
 }  // namespace kvstore
