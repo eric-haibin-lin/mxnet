@@ -16,11 +16,6 @@
 #include <mxnet/ndarray.h>
 #include <cstdlib>
 
-#include "../src/operator/tensor/elemwise_binary_op.h"
-#include "../src/operator/tensor/elemwise_unary_op.h"
-#include "../src/operator/optimizer_op-inl.h"
-#include "../src/operator/tensor/init_op.h"
-
 #include "test_util.h"
 #include "test_op.h"
 
