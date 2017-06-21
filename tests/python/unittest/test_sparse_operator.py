@@ -576,5 +576,5 @@ def test_sparse_retain():
 if __name__ == '__main__':
     #import nose
     #nose.runmodule()
-    #check_elemwise_binary_ops()
+    check_elemwise_binary_ops()
     test_sparse_mathematical_core()

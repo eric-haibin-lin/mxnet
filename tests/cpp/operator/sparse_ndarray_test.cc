@@ -434,7 +434,7 @@ TEST(NDArray, ArrayStruct) {
 }
 
 TEST(NDArray, sparse_embedding) {
-  putenv("MXNET_ENGINE_TYPE=NaiveEngine");
+  putenv(const_cast<char *>("MXNET_ENGINE_TYPE=NaiveEngine"));
   SparseEmbeddingBackwardTest();
 }
 
