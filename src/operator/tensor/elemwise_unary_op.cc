@@ -22,7 +22,7 @@ MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(relu, cpu, kernel_launch_op::relu)
 
 MXNET_OPERATOR_REGISTER_BINARY(_backward_relu)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, kernel_launch_op::relu_grad>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::LaunchEx<cpu, kernel_launch_op::relu_grad>);
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, kernel_launch_op::relu_grad>);
 
 // sigmoid
 MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(sigmoid, cpu, kernel_launch_op::sigmoid)
@@ -44,7 +44,7 @@ MXNET_OPERATOR_REGISTER_UNARY(_copy)
 .MXNET_DESCRIBE("Returns a copy of the input.")
 .add_alias("identity")
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::IdentityComputeEx<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::IdentityComputeEx<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_copy"});
 
 NNVM_REGISTER_OP(_backward_copy)
@@ -56,7 +56,7 @@ NNVM_REGISTER_OP(_backward_copy)
     return std::vector<std::pair<int, int> >{{0, 0}};
   })
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::IdentityComputeEx<cpu>);
+.set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::IdentityComputeEx<cpu>);
 
 MXNET_OPERATOR_REGISTER_UNARY(BlockGrad)
 .add_alias("stop_gradient")
@@ -87,7 +87,7 @@ Example::
 
 )code" ADD_FILELINE)
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::IdentityComputeEx<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::IdentityComputeEx<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", MakeZeroGradNodes);
 
 MXNET_OPERATOR_REGISTER_UNARY(make_loss)
@@ -99,7 +99,7 @@ MXNET_OPERATOR_REGISTER_UNARY(make_loss)
     return std::vector<std::string>{"loss"};
   })
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::IdentityComputeEx<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::IdentityComputeEx<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
   [](const nnvm::NodePtr& n, const std::vector<nnvm::NodeEntry>& ograds) {
     auto p = MakeNode("ones_like", n->attrs.name + "_backward",
@@ -123,7 +123,7 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 .set_attr<nnvm::FIgnoreInputs>("FIgnoreInputs",
     [](const NodeAttrs& attrs) { return std::vector<uint32_t>(1, 1); })
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
-.set_attr<FComputeEx>(FCOMP_EX_CPU, UnaryOp::IdentityComputeFirstItemsEx<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::IdentityComputeFirstItemsEx<cpu>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", IdentityAttrLikeRhsStorageType)
 .set_attr<nnvm::FGradient>(

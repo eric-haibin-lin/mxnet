@@ -68,7 +68,6 @@ NDArray NDArray::Slice(index_t begin, index_t end) const {
   CHECK_NE(storage_type(), kUndefinedStorage);
   if (storage_type() == kDefaultStorage) {
     NDArray ret = *this;
-    auto stype = storage_type();
     size_t length = shape_.ProdShape(1, shape_.ndim());
     MSHADOW_TYPE_SWITCH(ret.dtype(), DType, {
       ret.byte_offset_ += begin * length * sizeof(DType);
