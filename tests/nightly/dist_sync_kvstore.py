@@ -23,7 +23,7 @@ kv = mx.kv.create('dist_sync')
 kv.init(keys, [mx.nd.ones(shape)] * len(keys))
 kv.init(99, mx.nd.ones(big_shape))
 # init updater on servers
-kv.set_optimizer(mx.optimizer.create('test', rate))
+kv.set_optimizer(mx.optimizer.create('test', rescale_grad=rate))
 
 my_rank = kv.rank
 nworker = kv.num_workers
