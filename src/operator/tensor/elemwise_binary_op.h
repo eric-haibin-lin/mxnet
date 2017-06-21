@@ -33,7 +33,27 @@ struct BMap
 /*! Gather binary operator functions into BinaryOp class */
 class BinaryOp : public OpBase
 {
-  /*! \brief For sparse, assume missing rvalue is 0 */
+ public:
+  template<typename OP, int Req>
+  struct BinaryOpBackwardUseNone
+  {
+    template<typename DType>
+    MSHADOW_XINLINE static void Map(int i, DType *igrad, const DType *ograd) {
+      KERNEL_ASSIGN(igrad[i], Req, OP::Map(ograd[i]));
+    }
+  };
+
+  template<typename OP, int Req>
+  struct BinaryOpBackwardUseIn
+  {
+    template<typename DType>
+    MSHADOW_XINLINE static void Map(int i, DType *igrad,
+                                    const DType *ograd, const DType *lhs, const DType *rhs) {
+      KERNEL_ASSIGN(igrad[i], Req, ograd[i] * OP::Map(lhs[i], rhs[i]));
+    }
+  };
+
+/*! \brief For sparse, assume missing rvalue is 0 */
   template<typename OP, int Req>
   struct BinaryOpMissingRValue
   {
@@ -43,7 +63,7 @@ class BinaryOp : public OpBase
     }
   };
 
-  /*! \brief For sparse, assume missing lvalue is 0 */
+/*! \brief For sparse, assume missing lvalue is 0 */
   template<typename OP, int Req>
   struct BinaryOpMissingLValue
   {
@@ -53,6 +73,7 @@ class BinaryOp : public OpBase
     }
   };
 
+ private:
   // TODO(cjolivier01) Precompute parallelizing strategy
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
@@ -170,7 +191,7 @@ class BinaryOp : public OpBase
       // so cast out final RSP to the true output type
       CastStorageComputeImpl(s, *tempSparse, outputs[0]);
     }
-  };
+  }
 
   // Binary Compute between two row-sparse ndarray
   // This implementation only works on CPU
@@ -186,15 +207,6 @@ class BinaryOp : public OpBase
       })
     });
   }
-
-  template<typename OP, int Req>
-  struct BinaryOpBackwardUseNone
-  {
-    template<typename DType>
-    MSHADOW_XINLINE static void Map(int i, DType *igrad, const DType *ograd) {
-      KERNEL_ASSIGN(igrad[i], Req, OP::Map(ograd[i]));
-    }
-  };
 
   template<typename xpu, typename LOP, typename ROP, typename DType>
   static void BinaryBackwardUseNone_(const nnvm::NodeAttrs &attrs,
@@ -227,16 +239,6 @@ class BinaryOp : public OpBase
       });
     }
   }
-
-  template<typename OP, int Req>
-  struct BinaryOpBackwardUseIn
-  {
-    template<typename DType>
-    MSHADOW_XINLINE static void Map(int i, DType *igrad,
-                                    const DType *ograd, const DType *lhs, const DType *rhs) {
-      KERNEL_ASSIGN(igrad[i], Req, ograd[i] * OP::Map(lhs[i], rhs[i]));
-    }
-  };
 
   template<typename xpu, typename LOP, typename ROP, typename DType>
   static void BinaryBackwardUseIn_(const nnvm::NodeAttrs &attrs,

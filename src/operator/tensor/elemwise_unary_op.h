@@ -121,7 +121,7 @@ class OpBase {
       out_blobs.emplace_back(std::move(GetReshapedBlob(outputs[i])));
     }
     computer(attrs, ctx, in_blobs, req, out_blobs);
-  };
+  }
 
 };
 
