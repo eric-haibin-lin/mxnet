@@ -11,6 +11,7 @@
 #include "mxnet/engine.h"
 #include "ps/ps.h"
 #include "./kvstore_dist_server.h"
+#include "../operator/tensor/init_op.h"
 #if MKL_EXPERIMENTAL == 1
 #include <mkl_memory.h>
 #include "../operator/mkl/mkl_memory-inl.h"
@@ -97,10 +98,17 @@ class KVStoreDist : public KVStoreLocal {
       // use the same array for merging to guarantee that pull always happens
       // after the previous push on this key
       auto& recv_buf = comm_buf_[key];
+      const auto storage_type = grouped_vals[i][0]->storage_type();
       if (recv_buf.is_none()) {
         // it may happen for the first time a no-rank-0 worker pull the weight.
-        recv_buf = NDArray(
-          grouped_vals[i][0]->shape(), pinned_ctx_, false, grouped_vals[i][0]->dtype());
+        if (storage_type == kDefaultStorage) {
+          recv_buf = NDArray(grouped_vals[i][0]->shape(), pinned_ctx_,
+                             false, grouped_vals[i][0]->dtype());
+        } else {
+          recv_buf = NDArray(storage_type, grouped_vals[i][0]->shape(),
+                             pinned_ctx_, true, grouped_vals[i][0]->dtype());
+          op::FillRspWithDnsZeros<mshadow::cpu>(nullptr, &recv_buf);
+        }
       }
 #if MKL_EXPERIMENTAL == 1
       mkl_set_tblob_eager_mode(recv_buf.data());
@@ -116,7 +124,7 @@ class KVStoreDist : public KVStoreLocal {
         // issue pull, false means no delete
         auto vals = new ps::SArray<real_t>(data, size, false);
         CHECK_NOTNULL(ps_worker_)->ZPull(
-        pskv.keys, vals, &pskv.lens, 0, [vals, cb](){ delete vals; cb(); });
+        pskv.keys, vals, &pskv.lens, kDefaultPushPull, [vals, cb](){ delete vals; cb(); });
       };
 
       CHECK_NOTNULL(Engine::Get())->PushAsync(
@@ -127,7 +135,6 @@ class KVStoreDist : public KVStoreLocal {
           FnProperty::kNormal,
           priority,
           PROFILER_MESSAGE("KVStoreDistPull"));
-
       comm_->Broadcast(key, recv_buf, grouped_vals[i], priority);
     }
   }
@@ -198,20 +205,29 @@ class KVStoreDist : public KVStoreLocal {
     GroupKVPairs(keys, values, &uniq_keys, &grouped_vals);
 
     for (size_t i = 0; i < uniq_keys.size(); ++i) {
-      // merge over devcies
+      // merge over devices
       int key = uniq_keys[i];
       const auto& vals = grouped_vals[i];
+      // no need to merge when init() is called
       NDArray merged = do_merge ? comm_->Reduce(key, vals, priority) : vals[0];
+      // for sparse updates, the storage_type of `merged` is assumed to be row_sparse
 
-      auto& send_buf = comm_buf_[key];
-      if (merged.ctx().dev_mask() == cpu::kDevMask) {
+      // The merged gradient is not necessarily row sparse
+      auto& send_buf = merged.storage_type() == kDefaultStorage ? comm_buf_[key] : batch_comm_buf_[key];
+      if (merged.ctx().dev_mask() == cpu::kDevMask && merged.storage_type() == send_buf.storage_type()) {
         send_buf = merged;  // avoid memory copy
       } else {
         if (send_buf.is_none()) {
-          send_buf = NDArray(merged.shape(), pinned_ctx_, false, merged.dtype());
+          if (merged.storage_type() == kDefaultStorage) {
+            LOG(FATAL) << "Not reached";
+            send_buf = NDArray(merged.shape(), pinned_ctx_, false, merged.dtype());
+          } else {
+            send_buf = NDArray(merged.storage_type(), merged.shape(), pinned_ctx_, true, merged.dtype());
+          }
         }
         CopyFromTo(merged, &send_buf);
       }
+      const auto storage_type = send_buf.storage_type();
 
       // push to servers
       send_buf.WaitToRead();
@@ -220,24 +236,53 @@ class KVStoreDist : public KVStoreLocal {
       mkl_set_tblob_eager_mode(send_buf.data());
 #endif
       real_t* data = static_cast<real_t*>(send_buf.data().dptr_);
-      auto push_to_servers =
-          [this, key, data, size](RunContext rctx, Engine::CallbackOnComplete cb) {
-         // convert to ps keys
-        PSKV& pskv = EncodeKey(key, size);
+      if (storage_type == kDefaultStorage) {
+        auto push_to_servers =
+            [this, key, data, size](RunContext rctx, Engine::CallbackOnComplete cb) {
+           // convert to ps keys
+          PSKV& pskv = EncodeKey(key, size);
 
-        // do push. false means no delete
-        ps::SArray<real_t> vals(data, size, false);
-        CHECK_NOTNULL(ps_worker_)->ZPush(
-        pskv.keys, vals, pskv.lens, 0, [cb]() { cb(); });
-      };
-      Engine::Get()->PushAsync(
-          push_to_servers,
-          pinned_ctx_,
-          {send_buf.var()},
-          {},
-          FnProperty::kNormal,
-          priority,
-          PROFILER_MESSAGE("KVStoreDistPush"));
+          // do push. false means no delete
+          ps::SArray<real_t> vals(data, size, false);
+          CHECK_NOTNULL(ps_worker_)->ZPush(
+          pskv.keys, vals, pskv.lens, kDefaultPushPull, [cb]() { cb(); });
+        };
+        Engine::Get()->PushAsync(
+            push_to_servers,
+            pinned_ctx_,
+            {send_buf.var()},
+            {},
+            FnProperty::kNormal,
+            priority,
+            PROFILER_MESSAGE("KVStoreDistPush"));
+      } else {
+        using namespace rowsparse;
+        CHECK_EQ(storage_type, kRowSparseStorage);
+        if (!send_buf.storage_initialized()) return;
+        size_t num_rows = send_buf.aux_shape(kIdx).Size();
+        const auto offsets = send_buf.aux_data(kIdx).dptr<int32_t>();
+        const auto unit_len = send_buf.shape().ProdShape(1, send_buf.shape().ndim());
+        auto push_to_servers =
+            [this, key, data, size, num_rows, offsets, unit_len](RunContext rctx,
+                                                                 Engine::CallbackOnComplete cb) {
+           // convert to ps keys
+          PSKV& pskv = BatchEncodeKey(key, size, num_rows, offsets, unit_len);
+
+          LOG(INFO) << "push_to_servers lens: " << pskv.lens << " keys: " << pskv.keys;
+          // do push. false means no delete
+          ps::SArray<real_t> vals(data, size, false);
+          CHECK_NOTNULL(ps_worker_)->ZPush(
+          pskv.keys, vals, pskv.lens, kBatchPushPull, [cb]() { cb(); LOG(INFO) << "push done";});
+        };
+        Engine::Get()->PushAsync(
+            push_to_servers,
+            pinned_ctx_,
+            {send_buf.var()},
+            {},
+            FnProperty::kNormal,
+            priority,
+            PROFILER_MESSAGE("KVStoreDistPush"));
+      }
     }
   }
 
@@ -264,11 +309,53 @@ class KVStoreDist : public KVStoreLocal {
    * \brief cache all key partitions
    */
   std::unordered_map<int, PSKV> ps_kv_;
+  /**
+   * \brief cache all key partitions for batch push
+   */
+  std::unordered_map<int, PSKV> ps_batch_kv_;
 
   /**
    * \brief serizelize EncodeKey
    */
   std::mutex mu_;
+  /**
+   * \brief serizelize BatchEncodeKey
+   */
+  std::mutex batch_mu_;
+
+  // TODO(haibin) update indices type
+  inline PSKV& BatchEncodeKey(int key, size_t size, int64_t num_rows,
+                              int32_t *offsets, size_t unit_len) {
+    batch_mu_.lock();
+    PSKV& pskv = ps_batch_kv_[key];
+    batch_mu_.unlock();
+    pskv.keys.clear();
+    pskv.lens.clear();
+    // TODO(haibin) cache this information
+    auto krs = ps::Postoffice::Get()->GetServerKeyRanges();
+    int num_servers = krs.size();
+    CHECK_GT(num_servers, 0);
+
+    // a simple heuristic for load balance
+    // shard the keys
+    if (size < bigarray_bound_) {
+      // send it to a single random picked server
+      int server = (key * 9973) % num_servers;
+      ps::Key master_key = krs[server].begin() + key;
+      pskv.keys.push_back(master_key);
+      pskv.lens.push_back(0);
+      for (int64_t i = 0; i < num_rows; i++) {
+        ps::Key ps_key = krs[server].begin() + key + offsets[i];
+        CHECK_LT(ps_key, krs[server].end());
+        pskv.keys.push_back(ps_key);
+        pskv.lens.push_back(unit_len);
+      }
+      pskv.size = size;
+    } else {
+      LOG(FATAL) << "Not implemented";
+    }
+    return pskv;
+  }
 
   /**
    * \brief convert to keys in ps
@@ -327,6 +414,7 @@ class KVStoreDist : public KVStoreLocal {
   size_t bigarray_bound_;
   /// \brief send & recver buffer
   std::unordered_map<int, NDArray> comm_buf_;
+  std::unordered_map<int, NDArray> batch_comm_buf_;
 };
 
 }  // namespace kvstore

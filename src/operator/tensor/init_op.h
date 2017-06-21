@@ -113,6 +113,27 @@ inline bool InitType(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+// Fill the indices and values of a RowSparse NDArray to represent a zeros NDArray,
+// instead of the usual compact representation.
+template<typename xpu>
+inline void FillRspWithDnsZeros(mshadow::Stream<xpu> *s, NDArray *out) {
+  using namespace rowsparse;
+  using namespace mshadow::expr;
+  using namespace mshadow;
+  using namespace mxnet_op;
+  CHECK_EQ(out->storage_type(), kRowSparseStorage);
+  MSHADOW_REAL_TYPE_SWITCH(out->dtype(), DType, {
+    MSHADOW_INT_TYPE_SWITCH(out->aux_type(kIdx), IType, {
+      auto num_rows = out->shape()[0];
+      out->CheckAndAlloc({Shape1(num_rows)});
+      auto idx = out->aux_data(kIdx).FlatTo1D<xpu, IType>(s);
+      auto val = out->data();
+      Kernel<set_zero, xpu>::Launch(s, val.Size(), val.dptr<DType>());
+      ASSIGN_DISPATCH(idx, kWriteTo, range<IType>(0, num_rows, 1, 1))
+    });
+  });
+}
+
 template<typename xpu, int value>
 void FillCompute(const nnvm::NodeAttrs& attrs,
                  const OpContext& ctx,
