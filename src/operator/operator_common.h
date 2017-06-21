@@ -426,7 +426,7 @@ void FCompExFallback(const nnvm::NodeAttrs& attrs,
 #ifndef NDEBUG
   std::cout << "FALLBACK TO DENSE (FCompExFallback)" << std::endl << std::flush;
 #endif
-  using namespace common;
+  using namespace mxnet::common;
   std::vector<TBlob> in_blobs, out_blobs;
   std::vector<NDArray> temp_in, temp_out;
   GetDefaultBlobs<xpu>(inputs, &in_blobs, &temp_in, ctx, true);

@@ -186,7 +186,7 @@ NNVM_REGISTER_OP(cast_storage)
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
 // _backward pass
 // .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"})
-.set_attr<FComputeEx>(FCOMP_EX_CPU, CastStorageComputeEx<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", CastStorageComputeEx<cpu>)
 .add_argument("data", "NDArray-or-Symbol", "The input.")
 .add_arguments(CastStorageParam::__FIELDS__());
 

@@ -13,7 +13,12 @@
 #include <typeinfo>
 #include "../mxnet_op.h"
 #include "../mshadow_op.h"
+<<<<<<< HEAD
 #include "elemwise_unary_op.h"
+=======
+#include "../elemwise_op_common.h"
+#include "../../common/utils.h"
+>>>>>>> jun/refactor_sparse
 
 namespace mxnet {
 namespace op {
@@ -239,6 +244,7 @@ class BinaryOp : public OpBase
       });
     }
   }
+<<<<<<< HEAD
 
   template<typename xpu, typename LOP, typename ROP, typename DType>
   static void BinaryBackwardUseIn_(const nnvm::NodeAttrs &attrs,
@@ -326,6 +332,103 @@ class BinaryOp : public OpBase
         return;
       }
       ComputeRspRsp<xpu, OP>(attrs, ctx, inputs, req, outputs);
+=======
+}
+
+// TODO(haibin) This is a single-thread inefficient implementation
+// Binary Compute between two row-sparse ndarray
+// This implementation only works on CPU
+template<typename xpu, typename OP>
+void BinaryComputeRspRsp(const nnvm::NodeAttrs& attrs,
+                         const OpContext& ctx,
+                         const std::vector<NDArray>& inputs,
+                         const std::vector<OpReqType>& req,
+                         const std::vector<NDArray>& outputs) {
+  auto &lhs = inputs[0];
+  auto &rhs = inputs[1];
+  auto &output = outputs[0];
+
+  bool init_l = lhs.storage_initialized();
+  bool init_r = rhs.storage_initialized();
+  // both inputs are zeros
+  if (!init_l && !init_r) return;
+  // Memory Estimation: This is (roughly) the number of result rows. We still
+  // need to subtract the number of common rows
+  unsigned int num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
+  unsigned int num_rows_r = rhs.aux_shape(rowsparse::kIdx).Size();
+  output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
+  mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
+  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+    MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
+      // Indices
+      auto indices_l = lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto indices_r = rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      auto indices_out = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      // Data
+      auto data_l = lhs.data().FlatTo2D<xpu, DType>(s);
+      auto data_r = rhs.data().FlatTo2D<xpu, DType>(s);
+      auto out = output.data().FlatTo2D<xpu, DType>(s);
+
+      // TODO(haibin) A more appropriate way: Copy to output, then apply ops
+      size_t iter_l = 0;
+      size_t iter_r = 0;
+      size_t iter_out = 0;
+      int32_t num_common_rows = 0;
+      while (iter_l < num_rows_l && iter_r < num_rows_r) {
+        auto idx_l = indices_l[iter_l];
+        auto idx_r = indices_r[iter_r];
+        if (idx_l == idx_r) {
+          // Same row
+          indices_out[iter_out] = idx_l;
+          mshadow::Copy(out[iter_out], data_l[iter_l++], s);
+          out[iter_out] += data_r[iter_r++];
+          num_common_rows++;
+        } else if (idx_l < idx_r) {
+          // Left only
+          indices_out[iter_out] = idx_l;
+          mshadow::Copy(out[iter_out], data_l[iter_l++], s);
+        } else {
+          // Right only
+          indices_out[iter_out] = idx_r;
+          mshadow::Copy(out[iter_out], data_r[iter_r++], s);
+        }
+        iter_out++;
+      }
+      // Copying over the rest of the rows
+      while (iter_l < num_rows_l) {
+        indices_out[iter_out] = indices_l[iter_l];
+        mshadow::Copy(out[iter_out++], data_l[iter_l++], s);
+      }
+      while (iter_r < num_rows_r) {
+        indices_out[iter_out] = indices_r[iter_r];
+        mshadow::Copy(out[iter_out++], data_r[iter_r++], s);
+      }
+      auto new_shape = output.aux_shape(rowsparse::kIdx);
+      new_shape[0] -= num_common_rows;
+      output.set_aux_shape(rowsparse::kIdx, new_shape);
+    });
+  });
+}
+
+template<typename xpu, typename OP>
+void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
+                         const OpContext& ctx,
+                         const std::vector<NDArray>& inputs,
+                         const std::vector<OpReqType>& req,
+                         const std::vector<NDArray>& outputs) {
+  using namespace mshadow;
+  using namespace mshadow::expr;
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  CHECK_EQ(inputs.size(), 2);
+  CHECK_EQ(outputs.size(), 1);
+  if (typeid(OP) == typeid(mshadow::op::plus)) {
+    // If any input is dense, fallback to FCompute
+    // TODO(haibin) implement dns + rsp in a separate kernel
+    if (mxnet::common::ContainsDefaultStorage(inputs)) {
+      FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                           BinaryCompute<xpu, OP>, "BinaryCompute");
+      return;
+>>>>>>> jun/refactor_sparse
     }
   }
 

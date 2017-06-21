@@ -9,7 +9,6 @@
 #include <mxnet/operator_util.h>
 #include <vector>
 #include <utility>
-#include <numeric>
 #include "../mxnet_op.h"
 #include "../mshadow_op.h"
 #include "../elemwise_op_common.h"
@@ -147,13 +146,13 @@ class UnaryOp : public OpBase {
         }
         TShape sshape = output->storage_shape();
         CHECK(shape_assign(&sshape, ishape));
-        output->SetStorageShape(sshape);
+        output->set_storage_shape(sshape);
         CHECK_EQ(output->storage_type(), input.storage_type());
         CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
         for(size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
           TShape ashape = output->aux_shape(j);
           CHECK(shape_assign(&ashape, input.aux_shape(j)));
-          output->SetAuxShape(j, ashape);
+          output->set_aux_shape(j, ashape);
         }
       }
       return true;
@@ -523,7 +522,7 @@ inline void CastStorageDnsRspImpl(mshadow::Stream<cpu>* s, const TBlob& dns, NDA
           dns.dptr<DType>(), num_cols);
       index_t nnr = 0;
       nnr = std::accumulate(row_idx, row_idx+num_rows, nnr);
-      rsp->SetAuxShape(rowsparse::kIdx, mshadow::Shape1(nnr));
+      rsp->set_aux_shape(rowsparse::kIdx, mshadow::Shape1(nnr));
       if (0 == nnr) return;
       rsp->CheckAndAllocData(mshadow::Shape2(nnr, num_cols));
       mshadow::Tensor<cpu, 2, DType> dns_data = dns.FlatTo2D<cpu, DType>(s);
@@ -739,43 +738,6 @@ inline bool CastStorageInferStorageType(const nnvm::NodeAttrs& attrs,
     << "dst ndarray's storage type must be specified";
   TYPE_ASSIGN_CHECK(*out_attrs, 0, param.storage_type);
   return true;
-}
-
-// TODO(junwu) Implement GPU version for these functions
-// and move them to a .cuh file
-#ifdef __CUDACC__
-inline void CastStorageDnsRspImpl(mshadow::Stream<gpu>* s, const TBlob& dns, NDArray* rsp) {
-  LOG(FATAL) << "CastStorageDnsRspImpl gpu version is not implemented.";
-}
-
-inline void CastStorageDnsCsrImpl(mshadow::Stream<gpu>* s, const TBlob& dns, NDArray* csr) {
-  LOG(FATAL) << "CastStorageDnsCsrImpl gpu version is not implemented.";
-}
-#endif
-
-template<typename xpu>
-void CastStorageComputeImpl(mshadow::Stream<xpu>* s,
-                            const NDArray& input,
-                            const NDArray& output) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  const auto src_stype = input.storage_type();
-  const auto dst_stype = output.storage_type();
-  if (src_stype == kRowSparseStorage && dst_stype == kDefaultStorage) {
-    TBlob ret = output.data();
-    CastStorageRspDnsImpl<xpu>(s, input, &ret);
-  } else if (src_stype == kDefaultStorage && dst_stype == kRowSparseStorage) {
-    NDArray ret = output;  // get rid of the const qualifer
-    CastStorageDnsRspImpl(s, input.data(), &ret);
-  } else if (src_stype == kDefaultStorage && dst_stype == kCSRStorage) {
-    NDArray ret = output;  // get rid of the const qualifer
-    CastStorageDnsCsrImpl(s, input.data(), &ret);
-  } else if (src_stype == kCSRStorage && dst_stype == kDefaultStorage) {
-    TBlob ret = output.data();
-    CastStorageCsrDnsImpl<xpu>(s, input, &ret);
-  } else {
-    LOG(FATAL) << "Not implemented";
-  }
 }
 
 template<typename xpu>
