@@ -448,6 +448,11 @@ class BinaryOp : public OpBase
   .add_argument("lhs", "NDArray-or-Symbol", "first input")          \
   .add_argument("rhs", "NDArray-or-Symbol", "second input")
 
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH(__func$, __xpu$, __kernel$)        \
+  MXNET_OPERATOR_REGISTER_BINARY(__func$)                                        \
+  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<__xpu$, __kernel$>)      \
+  .set_attr<FComputeEx>(FCOMP_EX_CPU, BinaryOp::LaunchEx<__xpu$, __kernel$>)
+
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_OPERATOR_TENSOR_ELEMWISE_BINARY_OP_H_
