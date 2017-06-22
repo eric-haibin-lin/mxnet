@@ -138,7 +138,6 @@ class KVStoreDistServer {
   void DataHandleEx(const ps::KVMeta& req_meta,
                     const ps::KVPairs<real_t>& req_data,
                     ps::KVServer<real_t>* server) {
-    LOG(INFO) << "req_meta.cmd " << req_meta.cmd << " req_meta.push " << req_meta.push;
     if (req_meta.cmd == kRowSparsePushPull) {
       DataHandleRowSparse(req_meta, req_data, server);
     } else {
@@ -166,16 +165,16 @@ class KVStoreDistServer {
                        const ps::KVPairs<real_t>& req_data,
                        ps::KVServer<real_t>* server) {
     int master_key = DecodeKey(req_data.keys[0]);
+    auto num_rows = req_data.keys.size() - 1;
     if (req_meta.push) {
       CHECK_EQ(req_data.lens[0], 0);
       CHECK_GT(req_data.lens.size(), 0);
       auto unit_len = req_data.lens[1];
-      auto num_rows = req_data.lens.size() - 1;
       CHECK_GT(unit_len, 0);
       real_t* data = req_data.vals.data();
       auto& stored = store_[master_key];
       if (stored.is_none()) {
-        LOG(INFO) << "received initial push: " << master_key;
+        // LOG(INFO) << "initial push: " << master_key << " size = " << num_rows * unit_len;
         // initialization
         size_t ds[] = {num_rows, (size_t) unit_len};
         TShape dshape(ds, ds + 2);
@@ -190,13 +189,13 @@ class KVStoreDistServer {
       }
       // synced push
       if (sync_mode_) {
-        // TODO(haibin) decode once and cache result
-        LOG(INFO) << "received sync push: " << master_key;
+        // LOG(INFO) << "sync push: " << master_key;
         size_t offset = 0;
         auto& stored = store_[master_key];
         // merge updates
         auto& request_buf = request_buf_[master_key];
         for (size_t i = 1; i <= num_rows; i++) {
+          // TODO(haibin) decode once and cache result
           int key = DecodeKey(req_data.keys[i]);
           auto len = req_data.lens[i];
           size_t ds[] = {(size_t)len};
@@ -214,8 +213,7 @@ class KVStoreDistServer {
           for (auto key : request_buf.change_set) {
             // slice a row
             auto row_id = key - master_key;
-            LOG(INFO) << "sliced " << row_id;
-            NDArray slice = stored.Slice(row_id, row_id + 1);
+            NDArray slice = stored.At(row_id);
             NDArray update = merge_buf_[key];
             if (updater_) {
               exec_.Exec([this, key, &update, &slice](){
@@ -229,7 +227,7 @@ class KVStoreDistServer {
             slice.WaitToRead();
           }
           request_buf.change_set.clear();
-          LOG(INFO) << "RESPONSE SYNC to " << request_buf.requests.size() << " clients";
+          // LOG(INFO) << "RESPONSE SYNC to " << request_buf.requests.size() << " clients";
           for (const auto& req : request_buf.requests) {
             server->Response(req);
           }
@@ -242,24 +240,49 @@ class KVStoreDistServer {
         }
       } else {
         // async push
-        LOG(INFO) << "received async push: " << master_key;
-        LOG(FATAL) << "Not implemented yet";
+        auto& stored = store_[master_key];
+        for (size_t i = 1; i <= num_rows; i++) {
+          int key = DecodeKey(req_data.keys[i]);
+          auto row_id = key - master_key;
+          auto len = req_data.lens[i];
+          size_t ds[] = {(size_t)len};
+          TShape dshape(ds, ds + 1);
+          TBlob recv_blob(data, // NOLINT(*)
+                          dshape, cpu::kDevMask);
+          NDArray recved = NDArray(recv_blob, 0);
+          NDArray slice = stored.At(row_id);
+          exec_.Exec([this, key, &recved, &slice](){
+              CHECK(updater_);
+              updater_(key, recved, &slice);
+            });
+        }
+        server->Response(req_meta);
+        stored.WaitToRead();
       }
     } else {
       // pull
-      // TODO concat and merge
       ps::KVPairs<real_t> response;
       auto& stored = store_[master_key];
+      CHECK(!stored.is_none()) << "init " << master_key << " first";
       auto shape = stored.shape();
       auto unit_len = shape.ProdShape(1, shape.ndim());
-      CHECK(!stored.is_none()) << "init " << master_key << " first";
-      auto len = stored.shape().Size();
+      const float* data = stored.data().dptr<float>();
+      auto len = unit_len * num_rows;
+      // LOG(INFO) << "received pull: " << len;
+      // concat response values
+      response.vals.resize(len);
+      for (size_t i = 1; i <= num_rows; i++) {
+        int key = DecodeKey(req_data.keys[i]);
+        const auto src = data + key * unit_len;
+        auto begin = (i - 1) * unit_len;
+        auto end = i * unit_len;
+        response.vals.segment(begin, end).CopyFrom(src, unit_len);
+      }
+      // setup response
       response.keys = req_data.keys;
       std::vector<int> lens(req_data.keys.size(), unit_len);
       lens[0] = 0;
       response.lens.CopyFrom(lens.begin(), lens.end());
-      // TODO(mli) try to remove this CopyFrom
-      response.vals.CopyFrom(static_cast<const float*>(stored.data().dptr_), len);
       server->Response(req_meta, response);
     }
   }

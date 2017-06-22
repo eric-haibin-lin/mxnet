@@ -60,27 +60,36 @@ def test_sync_push_pull():
 
 def test_sync_push_pull_row_sparse():
     kv, my_rank, nworker = init_kv_rsp()
-    nrepeat = 1
-    #time.sleep(6)
-    #print('done init')
+    nrepeat = 2
+
+    v = mx.nd.zeros(shape)
+    my_row = my_rank % shape[0]
+    for col in range(shape[1]):
+        v[my_row][col] = my_rank + 1
 
     for i in range(nrepeat):
-        v = mx.nd.ones(shape)*(my_rank+1)
         kv.push('9', v.to_rsp())
         # kv.push(99, mx.nd.ones(big_shape)*(my_rank+1))
 
-    num = (nworker + 1 ) * nworker * rate / 2 * nrepeat + 1
-    #print("expect ", num)
-    #num = 1
-    val = mx.nd.zeros(shape).to_rsp()
-    #time.sleep(2)
+    # pull a subset of rows this worker is interested in
+    val = v.copyto(mx.cpu()).to_rsp()
     kv.pull('9', out = val)
-    #print(val)
 
-    check_diff_to_scalar(val, num)
+    expected =  mx.nd.zeros(shape)
+    # initial value
+    for col in range(shape[1]):
+        expected[my_row][col] = 1
+    # apply updates from workers
+    for rank in range(nworker):
+        row = rank % shape[0]
+        if row != my_row:
+            continue
+        for col in range(shape[1]):
+            expected[my_row][col] += (rank + 1) * rate * nrepeat
+    #print("expect ", expected.asnumpy())
 
-    print('done')
-
+    check_diff_to_scalar(val, expected)
+    # print('done')
     #val2 = mx.nd.zeros(big_shape)
     #kv.pull(99, out = val2)
     #check_diff_to_scalar(val2, num)
