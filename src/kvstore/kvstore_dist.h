@@ -148,36 +148,6 @@ class KVStoreDist : public KVStoreLocal {
     }
   }
 
-  void PullRowSparse(int key, NDArray *recv_buf, const TBlob indices, int priority) {
-#if MKL_EXPERIMENTAL == 1
-    mkl_set_tblob_eager_mode(recv_buf->data());
-#endif
-    real_t* data = static_cast<real_t*>(recv_buf->data().dptr_);
-    using namespace rowsparse;
-    size_t num_rows = indices.shape_.Size();
-    const auto offsets = indices.dptr<int64_t>();
-    const auto unit_len = recv_buf->shape().ProdShape(1, recv_buf->shape().ndim());
-    auto pull_from_servers = [this, key, data, num_rows, offsets, unit_len]
-                             (RunContext rctx, Engine::CallbackOnComplete cb) {
-      size_t size = num_rows * unit_len;
-       // convert to ps keys in row sparse format
-      PSKV& pskv = EncodeRowSparseKey(key, size, num_rows, offsets, unit_len);
-      if (this->row_sparse_verbose_) LOG(INFO) << "pull lens: " << pskv.lens << " keys: " << pskv.keys;
-      auto vals = new ps::SArray<real_t>(data, size, false);
-      CHECK_NOTNULL(ps_worker_)->ZPull(pskv.keys, vals, &pskv.lens, kRowSparsePushPull, [vals, cb]() {
-        delete vals; cb();
-      });
-    };
-    CHECK_NOTNULL(Engine::Get())->PushAsync(
-        pull_from_servers,
-        pinned_ctx_,
-        {},
-        {recv_buf->var()},
-        FnProperty::kNormal,
-        priority,
-        PROFILER_MESSAGE("KVStoreDistRowSparsePull"));
-  }
-
   void set_updater(const Updater& updater) override {
     CHECK(updater) << "invalid updater";
     if (IsServerNode()) {
@@ -268,13 +238,13 @@ class KVStoreDist : public KVStoreLocal {
       }
 
       // push to servers
-      send_buf.WaitToRead();
-      size_t size = send_buf.shape().Size();
-#if MKL_EXPERIMENTAL == 1
-      mkl_set_tblob_eager_mode(send_buf.data());
-#endif
-      real_t* data = static_cast<real_t*>(send_buf.data().dptr_);
       if (storage_type == kDefaultStorage) {
+        send_buf.WaitToRead();
+        size_t size = send_buf.shape().Size();
+#if MKL_EXPERIMENTAL == 1
+        mkl_set_tblob_eager_mode(send_buf.data());
+#endif
+        real_t* data = static_cast<real_t*>(send_buf.data().dptr_);
         auto push_to_servers =
             [this, key, data, size](RunContext rctx, Engine::CallbackOnComplete cb) {
            // convert to ps keys
@@ -293,33 +263,75 @@ class KVStoreDist : public KVStoreLocal {
             priority,
             PROFILER_MESSAGE("KVStoreDistDefaultPush"));
       } else if (storage_type == kRowSparseStorage) {
-        using namespace rowsparse;
-        if (!send_buf.storage_initialized()) return;
-        size_t num_rows = send_buf.aux_shape(kIdx).Size();
-        const auto offsets = send_buf.aux_data(kIdx).dptr<int64_t>();
-        const auto unit_len = send_buf.shape().ProdShape(1, send_buf.shape().ndim());
-        auto push_to_servers = [this, key, data, size, num_rows, offsets, unit_len]
-                               (RunContext rctx, Engine::CallbackOnComplete cb) {
-           // convert to ps keys in row sparse format
-          PSKV& pskv = EncodeRowSparseKey(key, size, num_rows, offsets, unit_len);
-          if (this->row_sparse_verbose_) LOG(INFO) << "push lens: " << pskv.lens << " keys: " << pskv.keys;
-          ps::SArray<real_t> vals(data, size, false);
-          CHECK_NOTNULL(ps_worker_)->ZPush(pskv.keys, vals, pskv.lens, kRowSparsePushPull, [cb]() {
-            cb();
-         });
-        };
-        Engine::Get()->PushAsync(
-            push_to_servers,
-            pinned_ctx_,
-            {send_buf.var()},
-            {},
-            FnProperty::kNormal,
-            priority,
-            PROFILER_MESSAGE("KVStoreDistRowSparsePush"));
+        PushRowSparse(key, send_buf, priority);
       } else {
         LOG(FATAL) << "unknown storage type";
       }
     }
+  }
+
+  // pull row sparse weight into `recv_buf` based on indices given by `indices`
+  void PullRowSparse(int key, NDArray *recv_buf, const TBlob indices, int priority) {
+#if MKL_EXPERIMENTAL == 1
+    mkl_set_tblob_eager_mode(recv_buf->data());
+#endif
+    real_t* data = static_cast<real_t*>(recv_buf->data().dptr_);
+    using namespace rowsparse;
+    size_t num_rows = indices.shape_.Size();
+    const auto offsets = indices.dptr<int64_t>();
+    const auto unit_len = recv_buf->shape().ProdShape(1, recv_buf->shape().ndim());
+    auto pull_from_servers = [this, key, data, num_rows, offsets, unit_len]
+                             (RunContext rctx, Engine::CallbackOnComplete cb) {
+      size_t size = num_rows * unit_len;
+       // convert to ps keys in row sparse format
+      PSKV& pskv = EncodeRowSparseKey(key, size, num_rows, offsets, unit_len);
+      if (this->row_sparse_verbose_) LOG(INFO) << "pull lens: " << pskv.lens << " keys: " << pskv.keys;
+      auto vals = new ps::SArray<real_t>(data, size, false);
+      CHECK_NOTNULL(ps_worker_)->ZPull(pskv.keys, vals, &pskv.lens, kRowSparsePushPull, [vals, cb]() {
+        delete vals; cb();
+      });
+    };
+    CHECK_NOTNULL(Engine::Get())->PushAsync(
+        pull_from_servers,
+        pinned_ctx_,
+        {},
+        {recv_buf->var()},
+        FnProperty::kNormal,
+        priority,
+        PROFILER_MESSAGE("KVStoreDistRowSparsePull"));
+  }
+
+  // push row sparse gradient
+  void PushRowSparse(int key, const NDArray &send_buf, int priority) {
+    using namespace rowsparse;
+    send_buf.WaitToRead();
+    size_t size = send_buf.shape().Size();
+#if MKL_EXPERIMENTAL == 1
+    mkl_set_tblob_eager_mode(send_buf.data());
+#endif
+    real_t* data = static_cast<real_t*>(send_buf.data().dptr_);
+    if (!send_buf.storage_initialized()) return;
+    size_t num_rows = send_buf.aux_shape(kIdx).Size();
+    const auto offsets = send_buf.aux_data(kIdx).dptr<int64_t>();
+    const auto unit_len = send_buf.shape().ProdShape(1, send_buf.shape().ndim());
+    auto push_to_servers = [this, key, data, size, num_rows, offsets, unit_len]
+                           (RunContext rctx, Engine::CallbackOnComplete cb) {
+       // convert to ps keys in row sparse format
+      PSKV& pskv = EncodeRowSparseKey(key, size, num_rows, offsets, unit_len);
+      if (this->row_sparse_verbose_) LOG(INFO) << "push lens: " << pskv.lens << " keys: " << pskv.keys;
+      ps::SArray<real_t> vals(data, size, false);
+      CHECK_NOTNULL(ps_worker_)->ZPush(pskv.keys, vals, pskv.lens, kRowSparsePushPull, [cb]() {
+        cb();
+      });
+    };
+    Engine::Get()->PushAsync(
+        push_to_servers,
+        pinned_ctx_,
+        {send_buf.var()},
+        {},
+        FnProperty::kNormal,
+        priority,
+        PROFILER_MESSAGE("KVStoreDistRowSparsePush"));
   }
 
   /**
@@ -345,20 +357,9 @@ class KVStoreDist : public KVStoreLocal {
    * \brief cache all key partitions
    */
   std::unordered_map<int, PSKV> ps_kv_;
-  // TODO remove me?
-  /**
-   * \brief cache all key partitions for batch push
-   */
-  std::unordered_map<int, PSKV> ps_rsp_kv_;
-
 
   /**
-   * \brief serizelize EncodeRowSparseKey
-   */
-  std::mutex rsp_mu_;
-
-  /**
-   * \brief serizelize EncodeKey
+   * \brief serizelize EncodeRowSparseKey and EncodeKey
    */
   std::mutex mu_;
 
@@ -407,9 +408,9 @@ class KVStoreDist : public KVStoreLocal {
 
   inline PSKV& EncodeRowSparseKey(int key, size_t size, int64_t num_rows,
                                   int64_t *offsets, size_t unit_len) {
-    rsp_mu_.lock();
-    PSKV& pskv = ps_rsp_kv_[key];
-    rsp_mu_.unlock();
+    mu_.lock();
+    PSKV& pskv = ps_kv_[key];
+    mu_.unlock();
     pskv.keys.clear();
     pskv.lens.clear();
     // TODO(haibin) cache this information

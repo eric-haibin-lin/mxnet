@@ -86,5 +86,5 @@ def test_sync_push_pull_row_sparse():
     #check_diff_to_scalar(val2, num)
 
 if __name__ == "__main__":
-    #test_sync_push_pull()
+    test_sync_push_pull()
     test_sync_push_pull_row_sparse()

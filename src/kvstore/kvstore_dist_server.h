@@ -94,7 +94,7 @@ class KVStoreDistServer {
     static_cast<ps::SimpleApp*>(ps_server_)->set_request_handle(
         std::bind(&KVStoreDistServer::CommandHandle, this, _1, _2));
     ps_server_->set_request_handle(
-        std::bind(&KVStoreDistServer::DataHandle, this, _1, _2, _3));
+        std::bind(&KVStoreDistServer::DataHandleEx, this, _1, _2, _3));
     sync_mode_ = false;
   }
 
@@ -135,6 +135,18 @@ class KVStoreDistServer {
     app->Response(recved);
   }
 
+  void DataHandleEx(const ps::KVMeta& req_meta,
+                    const ps::KVPairs<real_t>& req_data,
+                    ps::KVServer<real_t>* server) {
+    LOG(INFO) << "req_meta.cmd " << req_meta.cmd << " req_meta.push " << req_meta.push;
+    if (req_meta.cmd == kRowSparsePushPull) {
+      DataHandleRowSparse(req_meta, req_data, server);
+    } else {
+      DataHandleDefault(req_meta, req_data, server);
+    }
+    return;
+  }
+
   inline void MergeUpdates(const NDArray& recved, int key,
                            std::unordered_set<int> *change_set) {
     auto& merged = merge_buf_[key];
@@ -144,13 +156,13 @@ class KVStoreDistServer {
     if (change_set->find(key) == change_set->end()) {
       CopyFromTo(recved, &merged, 0);
     } else {
-      // TODO send row sparse gradient NDArray
+      // TODO(haibin) handle row sparse gradient NDArray with `ReduceSumCPUExParallel`
       merged += recved;
     }
     change_set->insert(key);
   }
 
-  void RowSparseDataHandle(const ps::KVMeta& req_meta,
+  void DataHandleRowSparse(const ps::KVMeta& req_meta,
                        const ps::KVPairs<real_t>& req_data,
                        ps::KVServer<real_t>* server) {
     int master_key = DecodeKey(req_data.keys[0]);
@@ -252,16 +264,10 @@ class KVStoreDistServer {
     }
   }
 
-  // TODO rename to DataHandleEx
-  void DataHandle(const ps::KVMeta& req_meta,
-                  const ps::KVPairs<real_t>& req_data,
-                  ps::KVServer<real_t>* server) {
-    if (req_meta.cmd == kRowSparsePushPull) {
-      RowSparseDataHandle(req_meta, req_data, server);
-      return;
-    }
+  void DataHandleDefault(const ps::KVMeta& req_meta,
+                         const ps::KVPairs<real_t> &req_data,
+                         ps::KVServer<real_t>* server) {
     CHECK_EQ(req_meta.cmd, kDefaultPushPull);
-
     // do some check
     CHECK_EQ(req_data.keys.size(), (size_t)1);
     if (req_meta.push) {
