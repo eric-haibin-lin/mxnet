@@ -10,6 +10,27 @@
 namespace mxnet {
 namespace exec {
 
+template<typename AttrType>
+nnvm::Graph InitAttrVector(nnvm::Graph&& g,
+                           const std::string& attr_input_name,
+                           std::vector<AttrType>* attr_vec) {
+  const AttrVector& attr_args= g.GetAttr<AttrVector>(attr_input_name);
+  CHECK_LE(attr_args.size(), idx.input_nodes().size())
+      << "More provided shapes than number of arguments.";
+  for (size_t i = 0; i < attr_args.size(); ++i) {
+    (*attr_vec)[idx.entry_id(idx.input_nodes()[i], 0)] = attr_args[i];
+  }
+
+  // specialize for attr_input_name = "storage_type_inputs"
+  // populate ctx for 
+  if (attr_input_name == "storage_type_inputs") {
+  }
+
+  // erase the provided arguments
+  g.attrs.erase(attr_input_name);
+  return g;
+}
+
 template<typename AttrType, typename IsNone, typename FDefault>
 nnvm::Graph InferAttr(nnvm::Graph &&ret,
                       const AttrType empty_val,
