@@ -11,7 +11,7 @@
 #include "mxnet/engine.h"
 #include "ps/ps.h"
 #include "./kvstore_dist_server.h"
-#include "../operator/optimizer_op-inl.h"
+#include "../operator/tensor/init_op.h"
 #if MKL_EXPERIMENTAL == 1
 #include <mkl_memory.h>
 #include "../operator/mkl/mkl_memory-inl.h"
@@ -109,7 +109,7 @@ class KVStoreDist : public KVStoreLocal {
           recv_buf = NDArray(storage_type, grouped_vals[i][0]->shape(),
                              pinned_ctx_, true, grouped_vals[i][0]->dtype());
           // initialize the buffer with sufficient memory
-          op::InitDnsZeros<mshadow::cpu>(nullptr, &recv_buf);
+          op::FillDnsZerosRspImpl<mshadow::cpu>(nullptr, &recv_buf);
         }
       }
       if (storage_type == kDefaultStorage) {
@@ -231,7 +231,7 @@ class KVStoreDist : public KVStoreLocal {
           } else {
             send_buf = NDArray(storage_type, merged.shape(), pinned_ctx_, true, merged.dtype());
             // initialize the buffer with sufficient memory
-            op::InitDnsZeros<mshadow::cpu>(nullptr, &send_buf);
+            op::FillDnsZerosRspImpl<mshadow::cpu>(nullptr, &send_buf);
           }
         }
         CopyFromTo(merged, &send_buf);
