@@ -29,8 +29,8 @@ update is applied only to rows whose gradient has non-zero entries.
 .set_num_inputs(2)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<SGDParam>)
-.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
-.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)
+.set_attr<FInferShape>("FInferShape", ElemwiseShape<2, 1>)
+.set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)
 .set_attr<FCompute>("FCompute<cpu>", SGDUpdate<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SGDUpdateEx<cpu>)
 .add_argument("weight", "NDArray-or-Symbol", "Weight")
@@ -63,8 +63,8 @@ only rows whose gradients contain non-zero entries are updated (for both weight 
 .set_num_inputs(3)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<SGDMomParam>)
-.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<3, 1>)
-.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<3, 1>)
+.set_attr<FInferShape>("FInferShape", ElemwiseShape<3, 1>)
+.set_attr<FInferType>("FInferType", ElemwiseType<3, 1>)
 .set_attr<nnvm::FMutateInputs>("FMutateInputs",
   [](const nnvm::NodeAttrs& attrs) {
     return std::vector<uint32_t>{2};
@@ -100,8 +100,8 @@ It updates the weights using::
 .set_num_inputs(4)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<AdamParam>)
-.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<4, 1>)
-.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<4, 1>)
+.set_attr<FInferShape>("FInferShape", ElemwiseShape<4, 1>)
+.set_attr<FInferType>("FInferType", ElemwiseType<4, 1>)
 .set_attr<nnvm::FMutateInputs>("FMutateInputs",
   [](const nnvm::NodeAttrs& attrs) {
     return std::vector<uint32_t>{2, 3};
@@ -152,8 +152,8 @@ Hinton suggests the momentum term :math:`\gamma` to be 0.9 and the learning rate
 .set_num_inputs(3)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<RMSPropParam>)
-.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<3, 1>)
-.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<3, 1>)
+.set_attr<FInferShape>("FInferShape", ElemwiseShape<3, 1>)
+.set_attr<FInferType>("FInferType", ElemwiseType<3, 1>)
 .set_attr<nnvm::FMutateInputs>("FMutateInputs",
   [](const nnvm::NodeAttrs &attrs) {
     return std::vector<uint32_t>{2};
@@ -191,8 +191,8 @@ to be 0.9 and the learning rate :math:`\eta` to be 0.0001.
 .set_num_inputs(5)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<RMSPropAlexParam>)
-.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<5, 1>)
-.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<5, 1>)
+.set_attr<FInferShape>("FInferShape", ElemwiseShape<5, 1>)
+.set_attr<FInferType>("FInferType", ElemwiseType<5, 1>)
 .set_attr<nnvm::FMutateInputs>("FMutateInputs",
   [](const nnvm::NodeAttrs& attrs) {
     return std::vector<uint32_t>{2, 3, 4};

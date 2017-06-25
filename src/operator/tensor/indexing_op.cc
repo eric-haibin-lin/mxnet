@@ -60,8 +60,8 @@ Examples::
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"data", "weight"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", EmbeddingOpShape)
-.set_attr<nnvm::FInferType>("FInferType", EmbeddingOpType)
+.set_attr<FInferShape>("FInferShape", EmbeddingOpShape)
+.set_attr<FInferType>("FInferType", EmbeddingOpType)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
@@ -105,9 +105,9 @@ The gradient of an embedding matrix has the form of gradient vectors that are on
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"data", "weight"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", SparseEmbeddingShape)
-.set_attr<nnvm::FInferType>("FInferType", EmbeddingOpType)
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseEmbeddingForwardStorageType)
+.set_attr<FInferShape>("FInferShape", SparseEmbeddingShape)
+.set_attr<FInferType>("FInferType", EmbeddingOpType)
+.set_attr<FInferStorageType>("FInferStorageType", SparseEmbeddingForwardStorageType)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
@@ -164,8 +164,8 @@ Examples::
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"a", "indices"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", TakeOpShape)
-.set_attr<nnvm::FInferType>("FInferType", TakeOpType)
+.set_attr<FInferShape>("FInferShape", TakeOpShape)
+.set_attr<FInferType>("FInferType", TakeOpType)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
@@ -218,8 +218,8 @@ Examples::
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"a", "indices"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", BatchTakeOpShape)
-.set_attr<nnvm::FInferType>("FInferType", BatchTakeOpType)
+.set_attr<FInferShape>("FInferShape", BatchTakeOpShape)
+.set_attr<FInferType>("FInferType", BatchTakeOpType)
 .set_attr<FCompute>("FCompute<cpu>", BatchTakeOpForward<cpu>)
 .add_argument("a", "NDArray-or-Symbol", "The input array")
 .add_argument("indices", "NDArray-or-Symbol", "The index array");
@@ -265,8 +265,8 @@ Examples::
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"indices"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", OneHotOpShape)
-.set_attr<nnvm::FInferType>("FInferType", OneHotOpType)
+.set_attr<FInferShape>("FInferShape", OneHotOpShape)
+.set_attr<FInferType>("FInferType", OneHotOpType)
 .set_attr<FCompute>("FCompute<cpu>", OneHotOpForward<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", MakeZeroGradNodes)
 .add_argument("indices", "NDArray-or-Symbol", "array of locations where to set on_value")
@@ -294,9 +294,9 @@ Example::
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"data", "indices"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", SparseRetainOpShape)
-.set_attr<nnvm::FInferType>("FInferType", SparseRetainOpType)
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseRetainForwardInferStorageType)
+.set_attr<FInferShape>("FInferShape", SparseRetainOpShape)
+.set_attr<FInferType>("FInferType", SparseRetainOpType)
+.set_attr<FInferStorageType>("FInferStorageType", SparseRetainForwardInferStorageType)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SparseRetainOpForwardEx<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
   [](const nnvm::NodePtr& n, const std::vector<nnvm::NodeEntry>& ograds) {
@@ -310,7 +310,7 @@ NNVM_REGISTER_OP(_backward_sparse_retain)
 .set_num_inputs(2)
 .set_num_outputs(2)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
-.set_attr<nnvm::FInferStorageType>("FInferStorageType", SparseRetainBackwardInferStorageType)
+.set_attr<FInferStorageType>("FInferStorageType", SparseRetainBackwardInferStorageType)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SparseRetainOpBackwardEx<cpu>);
 
 }  // namespace op

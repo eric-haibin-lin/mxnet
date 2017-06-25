@@ -133,9 +133,9 @@ void SetShapeType(const nnvm::Op* op,
                   std::vector<NDArray>* p_ndoutputs,
                   int* dispatch_stype) {
   std::vector<NDArray>& ndoutputs = *p_ndoutputs;
-  static auto& infershape = nnvm::Op::GetAttr<nnvm::FInferShape>("FInferShape");
-  static auto& infertype = nnvm::Op::GetAttr<nnvm::FInferType>("FInferType");
-  static auto& inferstorage = nnvm::Op::GetAttr<nnvm::FInferStorageType>("FInferStorageType");
+  static auto& infershape = nnvm::Op::GetAttr<FInferShape>("FInferShape");
+  static auto& infertype = nnvm::Op::GetAttr<FInferType>("FInferType");
+  static auto& inferstorage = nnvm::Op::GetAttr<FInferStorageType>("FInferStorageType");
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   // infer shape
   std::vector<TShape>& in_shapes  = ret->arg_shapes;

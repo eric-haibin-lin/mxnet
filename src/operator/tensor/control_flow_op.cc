@@ -25,8 +25,8 @@ NNVM_REGISTER_OP(where)
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"condition", "x", "y"};
   })
-.set_attr<nnvm::FInferShape>("FInferShape", WhereOpShape)
-.set_attr<nnvm::FInferType>("FInferType", WhereOpType)
+.set_attr<FInferShape>("FInferShape", WhereOpShape)
+.set_attr<FInferType>("FInferType", WhereOpType)
 .set_attr<FCompute>("FCompute<cpu>", WhereOpForward<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
   // Use the following lambda function instead of ElemwiseGradUseIn

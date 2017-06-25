@@ -131,8 +131,8 @@ DMLC_REGISTER_PARAMETER(MultiSampleParam);
     [](const NodeAttrs& attrs) { \
       std::vector<std::string> v = {input_name_1, input_name_2}; v.resize(num_inputs); return v; \
     }) \
-  .set_attr<nnvm::FInferShape>("FInferShape", MultiSampleOpShape) \
-  .set_attr<nnvm::FInferType>("FInferType", MultiSampleOpType) \
+  .set_attr<FInferShape>("FInferShape", MultiSampleOpShape) \
+  .set_attr<FInferType>("FInferType", MultiSampleOpType) \
   .set_attr<FResourceRequest>("FResourceRequest", [](const NodeAttrs& attrs) { \
       return std::vector<ResourceRequest>(1, ResourceRequest::kRandom); \
     }) \
