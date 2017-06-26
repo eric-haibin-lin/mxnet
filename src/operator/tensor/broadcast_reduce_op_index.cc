@@ -84,8 +84,8 @@ Examples::
     param.keepdims = false;
     attrs->parsed = param;
   })
-.set_attr<FInferShape>("FInferShape", ReduceAxisShape)
-.set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<nnvm::FInferShape>("FInferShape", ReduceAxisShape)
+.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<FCompute>("FCompute<cpu>", SearchAxisCompute<cpu, mshadow::red::maximum>)
 .add_argument("data", "NDArray-or-Symbol", "The input array");
 
@@ -131,8 +131,8 @@ Examples::
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"data", "index"};
   })
-.set_attr<FInferShape>("FInferShape", PickOpShape)
-.set_attr<FInferType>("FInferType", PickOpType)
+.set_attr<nnvm::FInferShape>("FInferShape", PickOpShape)
+.set_attr<nnvm::FInferType>("FInferType", PickOpType)
 .set_attr<FCompute>("FCompute<cpu>", PickOpForward<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
   [](const nnvm::NodePtr& n, const std::vector<nnvm::NodeEntry>& ograds) {

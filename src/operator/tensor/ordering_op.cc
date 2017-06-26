@@ -45,8 +45,8 @@ Examples::
 .set_num_inputs(1)
 .set_num_outputs(TopKNumOutputs)
 .set_attr_parser(ParamParser<TopKParam>)
-.set_attr<FInferShape>("FInferShape", TopKShape)
-.set_attr<FInferType>("FInferType", TopKType)
+.set_attr<nnvm::FInferShape>("FInferShape", TopKShape)
+.set_attr<nnvm::FInferType>("FInferType", TopKType)
 .set_attr<nnvm::FNumVisibleOutputs>("FNumVisibleOutputs", TopKNumVisibleOutputs)
 .set_attr<FCompute>("FCompute<cpu>", TopK<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
@@ -108,8 +108,8 @@ Examples::
 .set_num_inputs(1)
 .set_num_outputs(2)
 .set_attr_parser(ParamParser<SortParam>)
-.set_attr<FInferShape>("FInferShape", SortShape)
-.set_attr<FInferType>("FInferType", ElemwiseType<1, 2>)
+.set_attr<nnvm::FInferShape>("FInferShape", SortShape)
+.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 2>)
 .set_attr<nnvm::FNumVisibleOutputs>("FNumVisibleOutputs", [](const NodeAttrs& attrs) { return 1; })
 .set_attr<FCompute>("FCompute<cpu>", Sort<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
@@ -158,8 +158,8 @@ Examples::
 .set_num_inputs(1)
 .set_num_outputs(1)
 .set_attr_parser(ParamParser<ArgSortParam>)
-.set_attr<FInferShape>("FInferShape", ArgSortShape)
-.set_attr<FInferType>("FInferType", ElemwiseType<1, 1>)
+.set_attr<nnvm::FInferShape>("FInferShape", ArgSortShape)
+.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)
 .set_attr<FCompute>("FCompute<cpu>", ArgSort<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", MakeZeroGradNodes)
 .set_attr<FResourceRequest>("FResourceRequest",

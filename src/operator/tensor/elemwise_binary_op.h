@@ -361,8 +361,8 @@ void BinaryBackwardUseInWithHalf2(const nnvm::NodeAttrs& attrs,
     [](const NodeAttrs& attrs) {                                    \
       return std::vector<std::string>{"lhs", "rhs"};                \
     })                                                              \
-  .set_attr<FInferShape>("FInferShape", ElemwiseShape<2, 1>)  \
-  .set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)     \
+  .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)  \
+  .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)     \
   .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
     [](const NodeAttrs& attrs){                                     \
       return std::vector<std::pair<int, int> >{{0, 0}, {1, 0}};     \

@@ -323,8 +323,8 @@ void RegisterLegacyOpProp() {
     op.set_attr<nnvm::FListInputNames>("FListInputNames", OpPropListInputNames);
     op.set_attr<nnvm::FListOutputNames>("FListOutputNames", OpPropListOutputNames);
     op.set_attr<nnvm::FNumVisibleOutputs>("FNumVisibleOutputs", OpPropNumVisibleOutputs);
-    op.set_attr<FInferShape>("FInferShape", OpPropInferShape);
-    op.set_attr<FInferType>("FInferType", OpPropInferType);
+    op.set_attr<nnvm::FInferShape>("FInferShape", OpPropInferShape);
+    op.set_attr<nnvm::FInferType>("FInferType", OpPropInferType);
     op.set_attr<nnvm::FMutateInputs>("FMutateInputs", OpPropMutateInputs);
     op.set_attr<nnvm::FInplaceOption>("FInplaceOption", OpPropInplaceOption);
     op.set_attr<FResourceRequest>("FResourceRequest", OpPropResourceRequest);

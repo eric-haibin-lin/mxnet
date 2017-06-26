@@ -40,8 +40,8 @@ Example::
 )code" ADD_FILELINE)
 .set_num_inputs(2)
 .set_num_outputs(1)
-.set_attr<FInferShape>("FInferShape", SoftmaxCrossEntropyShape)
-.set_attr<FInferType>("FInferType", ElemwiseType<2, 1>)
+.set_attr<nnvm::FInferShape>("FInferShape", SoftmaxCrossEntropyShape)
+.set_attr<nnvm::FInferType>("FInferType", ElemwiseType<2, 1>)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};

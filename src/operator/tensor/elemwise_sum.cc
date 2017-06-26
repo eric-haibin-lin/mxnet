@@ -81,8 +81,8 @@ NNVM_REGISTER_OP(add_n)
     "FInplaceOption", [](const NodeAttrs& attrs) {
       return std::vector<std::pair<int, int> >{{0, 0}};
     })
-.set_attr<FInferShape>("FInferShape", ElementWiseSumShape)
-.set_attr<FInferType>("FInferType", ElementWiseSumType)
+.set_attr<nnvm::FInferShape>("FInferShape", ElementWiseSumShape)
+.set_attr<nnvm::FInferType>("FInferType", ElementWiseSumType)
 .set_attr<nnvm::FGradient>("FGradient", ElementWiseSumGrad)
 .add_argument("args", "NDArray-or-Symbol[]", "Positional input arguments");
 

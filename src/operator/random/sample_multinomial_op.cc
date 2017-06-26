@@ -47,8 +47,8 @@ Examples::
     return param.get_prob ? 2U : 1U;
   })
 .set_attr_parser(ParamParser<SampleMultinomialParam>)
-.set_attr<FInferShape>("FInferShape", SampleMultinomialOpShape)
-.set_attr<FInferType>("FInferType", SampleMultinomialOpType)
+.set_attr<nnvm::FInferShape>("FInferShape", SampleMultinomialOpShape)
+.set_attr<nnvm::FInferType>("FInferType", SampleMultinomialOpType)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const nnvm::NodeAttrs& attrs) {
       return std::vector<ResourceRequest>{

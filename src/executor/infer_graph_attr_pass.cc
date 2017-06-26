@@ -49,7 +49,7 @@ nnvm::Graph InferAttr(nnvm::Graph &&ret,
 
   const IndexedGraph& idx = ret.indexed_graph();
   static auto& finfer_shape =
-      Op::GetAttr<FInferNodeEntryAttr<AttrType> >(infer_name);
+      Op::GetAttr<nnvm::FInferNodeEntryAttr<AttrType> >(infer_name);
   static auto& is_backward =
       Op::GetAttr<nnvm::TIsBackward>("TIsBackward");
   // gradient function, used to get node correspondence.

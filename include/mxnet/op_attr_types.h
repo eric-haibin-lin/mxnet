@@ -72,43 +72,6 @@ using FComputeEx = std::function<void (const nnvm::NodeAttrs& attrs,
                                      const std::vector<OpReqType>& req,
                                      const std::vector<NDArray>& outputs)>;
 
-/*!
- * \brief Inference function of certain type.
- * \tparam AttrType The type of the attribute to be infered.
- * \return whether all attributes are inferred.
- */
-template<typename AttrType>
-using FInferNodeEntryAttr = std::function<bool (const NodeAttrs& attrs,
-                                                std::vector<AttrType> *in_attrs,
-                                                std::vector<AttrType> *out_attrs)>;
-/*!
- * \brief Shape inference function.
- *  Update the shapes given the input shape information.
- *  TShape.ndim() == 0 means the shape is still unknown.
- *
- * \note Register under "FInferShape",
- *  by default do not update any shapes.
- *
- *  FInferShape is needed by shape inference
- */
-using FInferShape = FInferNodeEntryAttr<TShape>;
-
-/*!
- * \brief Type inference function.
- *  Update the type given the known type information.
- *
- * \note Register under "FInferType",
- *  by default set all the output types to 0.
- */
-using FInferType = FInferNodeEntryAttr<int>;
-
-/*!
- * \brief Storage type inference function.
- *  Update the type given the known type information.
- *
- * \note Register under "FInferStorageType",
- *  by default set all the output types to 0.
- */
 using FInferStorageType = std::function<bool (const NodeAttrs& attrs,
                                               const Context& ctx,
                                               std::vector<int>* in_attrs,

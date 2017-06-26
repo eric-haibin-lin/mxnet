@@ -663,8 +663,8 @@ void PickOpBackward(const nnvm::NodeAttrs& attrs,
   .set_num_inputs(1)                                            \
   .set_num_outputs(1)                                           \
   .set_attr_parser(ParamParser<ReduceAxisParam>)                \
-  .set_attr<FInferShape>("FInferShape", ReduceAxisShape)  \
-  .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>) \
+  .set_attr<nnvm::FInferShape>("FInferShape", ReduceAxisShape)  \
+  .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>) \
   .add_argument("data", "NDArray-or-Symbol", "The input")       \
   .add_arguments(ReduceAxisParam::__FIELDS__())
 
@@ -673,8 +673,8 @@ void PickOpBackward(const nnvm::NodeAttrs& attrs,
   .set_num_inputs(1)                                            \
   .set_num_outputs(1)                                           \
   .set_attr_parser(AxesParamParser<ReduceAxesParam>)            \
-  .set_attr<FInferShape>("FInferShape", ReduceAxesShape)  \
-  .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>) \
+  .set_attr<nnvm::FInferShape>("FInferShape", ReduceAxesShape)  \
+  .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>) \
   .add_argument("data", "NDArray-or-Symbol", "The input")       \
   .add_arguments(ReduceAxesParam::__FIELDS__())
 
@@ -688,7 +688,7 @@ void PickOpBackward(const nnvm::NodeAttrs& attrs,
   NNVM_REGISTER_OP(name)                                        \
   .set_num_inputs(1)                                            \
   .set_num_outputs(1)                                           \
-  .set_attr<FInferType>("FInferType", ElemwiseType<1, 1>) \
+  .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>) \
   .set_attr<nnvm::FGradient>("FGradient",                       \
     [](const nnvm::NodePtr& n,                                  \
        const std::vector<nnvm::NodeEntry>& ograds) {            \

@@ -125,8 +125,8 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
     [](const NodeAttrs& attrs) { return std::vector<uint32_t>(1, 1); })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", IdentityLikeRhsComputeEx<cpu>)
-.set_attr<FInferShape>("FInferShape", ElemwiseShape<2, 1>)
-.set_attr<FInferStorageType>("FInferStorageType", IdentityAttrLikeRhsStorageType)
+.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
+.set_attr<nnvm::FInferStorageType>("FInferStorageType", IdentityAttrLikeRhsStorageType)
 .set_attr<nnvm::FGradient>(
     "FGradient",  [](const nnvm::NodePtr& n,
                      const std::vector<nnvm::NodeEntry>& ograds) {
@@ -156,8 +156,8 @@ Example::
 
 )code" ADD_FILELINE)
 .set_attr_parser(ParamParser<CastParam>)
-.set_attr<FInferShape>("FInferShape", ElemwiseShape<1, 1>)
-.set_attr<FInferType>("FInferType", CastType)
+.set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)
+.set_attr<nnvm::FInferType>("FInferType", CastType)
 .set_attr<nnvm::FInplaceOption>("FInplaceOption",
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}};
