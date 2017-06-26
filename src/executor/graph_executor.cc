@@ -501,20 +501,20 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
 
   // expand arg_shapes and arg_dtypes to contain backward inputs
   arg_shapes.resize(idx.input_nodes().size(), TShape());
-  g = InferShape(g, arg_shapes, "__shape__");
+  g = InferShape(std::move(g), arg_shapes, "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
     HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
                           g.GetAttr<nnvm::ShapeVector>("shape"));
   }
 
   arg_dtypes.resize(idx.input_nodes().size(), -1);
-  g = InferType(g, arg_dtypes, "__dtype__");
+  g = InferType(std::move(g), arg_dtypes, "__dtype__");
   if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
     HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
                          g.GetAttr<nnvm::DTypeVector>("dtype"));
   }
   // TODO(haibin) better error message for infer_storage
-  g = InferStorageType(g, arg_stypes, "__storage_type__");
+  g = InferStorageType(std::move(g), arg_stypes, "__storage_type__");
 
   // Initialize the rest attributes of the graph.
   // This function can be called by regular bind
@@ -894,19 +894,19 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       arg_stypes[i] = it3->second;
     }
   }
-  g = InferShape(g, arg_shapes, "__shape__");
+  g = InferShape(std::move(g), arg_shapes, "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
     HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
                           g.GetAttr<nnvm::ShapeVector>("shape"));
   }
 
-  g = InferType(g, arg_dtypes, "__dtype__");
+  g = InferType(std::move(g), arg_dtypes, "__dtype__");
   if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
     HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
                          g.GetAttr<nnvm::DTypeVector>("dtype"));
   }
   // TODO(jun/haibin) check if InferShape is successful, and give warnings instead of segfault later
-  g = InferStorageType(g, arg_stypes, "__storage_type__");
+  g = InferStorageType(std::move(g), arg_stypes, "__storage_type__");
 
   // Create in_args, arg_grads, and aux_states using
   // the inferred shapes and dtypes.

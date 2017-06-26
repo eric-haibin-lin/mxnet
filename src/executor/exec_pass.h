@@ -118,7 +118,7 @@ Graph DetectInplaceAddTo(Graph g);
  * \return A graph with new attribute "shape" containing inferred shape of each NodeEntry.
  *         The index of ShapeVector is given by graph.indexed_graph().entry_id.
  */
-Graph InferShape(Graph graph,
+Graph InferShape(Graph&& graph,
                  nnvm::ShapeVector shape_inputs,
                  const std::string& shape_attr_key = "");
 
@@ -131,7 +131,7 @@ Graph InferShape(Graph graph,
  * \return A graph with new attribute "dtype" containing inferred type of each NodeEntry.
  *         The index of ShapeVector is given by graph.indexed_graph().entry_id.
  */
-Graph InferType(Graph graph,
+Graph InferType(Graph&& graph,
                 nnvm::DTypeVector dtype_inputs,
                 const std::string& dtype_attr_key = "");
 
@@ -144,7 +144,7 @@ Graph InferType(Graph graph,
  * \return A graph with new attribute "storage_type" containing inferred type of each NodeEntry.
  *         The index of StorageTypeVector is given by graph.indexed_graph().entry_id.
  */
-Graph InferStorageType(Graph graph,
+Graph InferStorageType(Graph&& graph,
                        nnvm::StorageTypeVector storage_type_inputs,
                        const std::string& storage_type_attr_key = "");
 
