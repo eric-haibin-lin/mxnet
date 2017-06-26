@@ -148,7 +148,7 @@ def test_sparse_embedding():
     np_weight = np.random.uniform(-0.01, 0.01, arg_map["embed_weight"].shape)
     np_onehot = np.zeros((batch, in_dim))
     np_onehot[np.arange(batch), np_data] = 1.0
-    nd_onehot = mx.nd.array(np_onehot).to_csr()
+    nd_onehot = mx.nd.array(np_onehot)._to_csr()
     # forward
     arg_map["data"][:] = nd_onehot
     arg_map["embed_weight"][:] = np_weight

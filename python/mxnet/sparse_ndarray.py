@@ -86,19 +86,19 @@ class SparseNDArray(NDArray):
     for more details.
     """
     def __iadd__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
+        raise NotImplementedError("SparseND doesn't support __iadd__")
 
     def __isub__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
+        raise NotImplementedError("SparseND doesn't support __isub__")
 
     def __imul__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
+        raise NotImplementedError("SparseND doesn't support __imul__")
 
     def __idiv__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
+        raise NotImplementedError("SparseND doesn't support __idiv__")
 
     def __itruediv__(self, other):
-        raise Exception('Not implemented for SparseND yet!')
+        raise NotImplementedError("SparseND doesn't support __itruediv__")
 
     def __setitem__(self, key, value):
         """x.__setitem__(i, y) <=> x[i]=y
