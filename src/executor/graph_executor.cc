@@ -501,20 +501,20 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
 
   // expand arg_shapes and arg_dtypes to contain backward inputs
   arg_shapes.resize(idx.input_nodes().size(), TShape());
-  g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
+  g = InferShape(std::move(g), arg_shapes, "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
     HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
                           g.GetAttr<nnvm::ShapeVector>("shape"));
   }
 
   arg_dtypes.resize(idx.input_nodes().size(), -1);
-  g = nnvm::pass::InferType(g, arg_dtypes, "__dtype__");
+  g = InferType(std::move(g), arg_dtypes, "__dtype__");
   if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
     HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
                          g.GetAttr<nnvm::DTypeVector>("dtype"));
   }
   // TODO(haibin) better error message for infer_storage
-  g = nnvm::pass::InferStorageType(g, arg_stypes, "__storage_type__");
+  g = InferStorageType(std::move(g), arg_stypes, "__storage_type__");
 
   // Initialize the rest attributes of the graph.
   // This function can be called by regular bind
@@ -877,7 +877,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   const nnvm::IndexedGraph& idx = g.indexed_graph();
   nnvm::ShapeVector arg_shapes(idx.input_nodes().size(), TShape());
   nnvm::DTypeVector arg_dtypes(idx.input_nodes().size(), -1);
-  nnvm::DTypeVector arg_stypes(idx.input_nodes().size(), kUndefinedStorage);
+  nnvm::StorageTypeVector arg_stypes(idx.input_nodes().size(), kUndefinedStorage);
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
     const std::string& name = idx[nid].source->attrs.name;
@@ -894,19 +894,19 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       arg_stypes[i] = it3->second;
     }
   }
-  g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
+  g = InferShape(std::move(g), arg_shapes, "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
     HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
                           g.GetAttr<nnvm::ShapeVector>("shape"));
   }
 
-  g = nnvm::pass::InferType(g, arg_dtypes, "__dtype__");
+  g = InferType(std::move(g), arg_dtypes, "__dtype__");
   if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
     HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
                          g.GetAttr<nnvm::DTypeVector>("dtype"));
   }
   // TODO(jun/haibin) check if InferShape is successful, and give warnings instead of segfault later
-  g = nnvm::pass::InferStorageType(g, arg_stypes, "__storage_type__");
+  g = InferStorageType(std::move(g), arg_stypes, "__storage_type__");
 
   // Create in_args, arg_grads, and aux_states using
   // the inferred shapes and dtypes.
