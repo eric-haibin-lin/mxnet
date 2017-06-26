@@ -979,7 +979,7 @@ fixed-size items.
         # pylint: disable=undefined-variable
         return cast_storage(self, storage_type='csr')
 
-    def to_rsp(self):
+    def _to_rsp(self):
         # pylint: disable=undefined-variable
         return cast_storage(self, storage_type='row_sparse')
 

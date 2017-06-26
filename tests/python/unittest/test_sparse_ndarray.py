@@ -264,8 +264,8 @@ def test_sparse_nd_binary():
             rhs = np.random.uniform(0, 1, size=rshape)
             lhs_nd_csr = mx.nd.array(lhs).to_csr()
             rhs_nd_csr = mx.nd.array(rhs).to_csr()
-            lhs_nd_rsp = mx.nd.array(lhs).to_rsp()
-            rhs_nd_rsp = mx.nd.array(rhs).to_rsp()
+            lhs_nd_rsp = mx.nd.array(lhs)._to_rsp()
+            rhs_nd_rsp = mx.nd.array(rhs)._to_rsp()
             for lhs_nd, rhs_nd in [(lhs_nd_csr, rhs_nd_csr), (lhs_nd_rsp, rhs_nd_rsp)]:
                 assert_allclose(fn(lhs, rhs),
                                 fn(lhs_nd, rhs_nd).asnumpy(),
@@ -291,7 +291,7 @@ def test_sparse_nd_binary_rop():
             shape = np.random.randint(1, 6, size=(ndim,))
             npy_nd = np.random.normal(0, 1, size=shape)
             csr_nd = mx.nd.array(npy_nd).to_csr()
-            rsp_nd = mx.nd.array(npy_nd).to_rsp()
+            rsp_nd = mx.nd.array(npy_nd)._to_rsp()
             for sparse_nd in [csr_nd, rsp_nd]:
                 assert_allclose(
                     fn(npy_nd),
@@ -315,7 +315,7 @@ def test_sparse_nd_binary_rop():
 def test_sparse_nd_negate():
     npy = np.random.uniform(-10, 10, rand_shape_2d())
     arr_csr = mx.nd.array(npy).to_csr()
-    arr_rsp = mx.nd.array(npy).to_rsp()
+    arr_rsp = mx.nd.array(npy)._to_rsp()
     for arr in [arr_csr, arr_rsp]:
         assert_almost_equal(npy, arr.asnumpy())
         assert_almost_equal(-npy, (-arr).asnumpy())
