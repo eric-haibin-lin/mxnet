@@ -175,7 +175,6 @@ nnvm::Graph InferAttr(nnvm::Graph &&ret,
         if (finfer != nullptr) {
           // Call inference function of the operator.
           try {
-            //forward_known = finfer(inode.source->attrs, &ishape, &oshape);
             forward_known = ApplyOpInferAttr(ret, finfer, inode.source->attrs,
                                              nid, &ishape, &oshape);
           } catch (const std::exception& e) {
