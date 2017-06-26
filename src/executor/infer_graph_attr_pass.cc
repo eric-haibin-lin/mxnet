@@ -10,6 +10,27 @@
 namespace mxnet {
 namespace exec {
 
+template<typename AttrType, typename FInfer>
+bool ApplyOpInferAttr(const nnvm::Graph& g,
+                      const FInfer& finfer,
+                      const NodeAttrs& attrs,
+                      const uint32_t nid,
+                      std::vector<AttrType>* in_attrs,
+                      std::vector<AttrType>* out_attrs) {
+  return finfer(attrs, in_attrs, out_attrs);
+}
+
+template<>
+bool ApplyOpInferAttr<int, FInferStorageType>(const nnvm::Graph& g,
+                                              const FInferStorageType& finfer,
+                                              const NodeAttrs& attrs,
+                                              const uint32_t nid,
+                                              std::vector<int>* in_attrs,
+                                              std::vector<int>* out_attrs) {
+  const ContextVector& ctxes = g.GetAttr<ContextVector>("context");
+  return finfer(attrs, ctxes[nid], in_attrs, out_attrs);
+}
+
 template<typename AttrType, typename IsNone, typename FDefault>
 nnvm::Graph InferAttr(nnvm::Graph &&ret,
                       const AttrType empty_val,
@@ -154,7 +175,9 @@ nnvm::Graph InferAttr(nnvm::Graph &&ret,
         if (finfer != nullptr) {
           // Call inference function of the operator.
           try {
-            forward_known = finfer(inode.source->attrs, &ishape, &oshape);
+            //forward_known = finfer(inode.source->attrs, &ishape, &oshape);
+            forward_known = ApplyOpInferAttr(ret, finfer, inode.source->attrs,
+                                             nid, &ishape, &oshape);
           } catch (const std::exception& e) {
             throw dmlc::Error("Error in operator " + inode.source->attrs.name + ": " + e.what());
           }

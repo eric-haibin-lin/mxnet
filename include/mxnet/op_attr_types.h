@@ -107,9 +107,12 @@ using FInferType = FInferNodeEntryAttr<int>;
  *  Update the type given the known type information.
  *
  * \note Register under "FInferStorageType",
- *  by default set all the output types to 1.
+ *  by default set all the output types to 0.
  */
-using FInferStorageType = FInferNodeEntryAttr<int>;
+using FInferStorageType = std::function<bool (const NodeAttrs& attrs,
+                                              const Context& ctx,
+                                              std::vector<int>* in_attrs,
+                                              std::vector<int>* out_attrs)>;
 
 }  // namespace mxnet
 
