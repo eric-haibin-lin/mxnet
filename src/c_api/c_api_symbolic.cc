@@ -545,6 +545,7 @@ int MXSymbolInferStorageType(SymbolHandle sym,
      mxnet::MatchArguments(g.indexed_graph(), kwargs, &arg_storage_types, "InferStorageType");
   }
 
+  // TODO(junwu): This graph has no context attr, check what to do
   g = mxnet::exec::InferStorageType(std::move(g), arg_storage_types, "__storage_type__");
   // copy back
   CopyAttr(g.indexed_graph(), g.GetAttr<nnvm::StorageTypeVector>("storage_type"),

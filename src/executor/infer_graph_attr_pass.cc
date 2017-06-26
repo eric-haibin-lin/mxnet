@@ -31,7 +31,7 @@ bool ApplyOpInferAttr<int, FInferStorageType>(const nnvm::Graph& g,
   return finfer(attrs, ctxes[nid], in_attrs, out_attrs);
 }
 
-template<typename AttrType, typename IsNone, typename FDefault>
+template<typename AttrType, typename FInferType, typename IsNone, typename FDefault>
 nnvm::Graph InferAttr(nnvm::Graph &&ret,
                       const AttrType empty_val,
                       const char* infer_name,
@@ -49,7 +49,7 @@ nnvm::Graph InferAttr(nnvm::Graph &&ret,
 
   const IndexedGraph& idx = ret.indexed_graph();
   static auto& finfer_shape =
-      Op::GetAttr<nnvm::FInferNodeEntryAttr<AttrType> >(infer_name);
+      Op::GetAttr<FInferType>(infer_name);
   static auto& is_backward =
       Op::GetAttr<nnvm::TIsBackward>("TIsBackward");
   // gradient function, used to get node correspondence.
@@ -258,8 +258,10 @@ inline bool SameType(const nnvm::NodeAttrs& attrs,
 // assigning default type N to both input and output attrs with value -1
 template <int default_val, int none>
 inline bool DefaultType(const nnvm::NodeAttrs& attrs,
+                        const Context& ctx,
                         std::vector<int> *iattr,
                         std::vector<int> *oattr) {
+  // TODO(junwu): check whether need to use ctx
   for (int& v : *oattr) {
     if (v == none) v = default_val;
   }
@@ -279,7 +281,7 @@ nnvm::Graph InferShape(nnvm::Graph graph,
   if (shape_attr_key.length() != 0) {
     graph.attrs["shape_attr_key"] = std::make_shared<any>(std::move(shape_attr_key));
   }
-  return InferAttr<nnvm::TShape>(
+  return InferAttr<nnvm::TShape, nnvm::FInferShape>(
       std::move(graph), nnvm::TShape(),
       "FInferShape", "shape_inputs", "shape_attr_key",
       "shape", "shape_num_unknown_nodes",
@@ -297,7 +299,7 @@ nnvm::Graph InferType(nnvm::Graph graph,
   if (dtype_attr_key.length() != 0) {
     graph.attrs["dtype_attr_key"] = std::make_shared<any>(std::move(dtype_attr_key));
   }
-  return InferAttr<int>(
+  return InferAttr<int, nnvm::FInferType>(
       std::move(graph), -1,
       "FInferType", "dtype_inputs", "dtype_attr_key",
       "dtype", "dtype_num_unknown_nodes",
@@ -317,7 +319,7 @@ nnvm::Graph InferStorageType(nnvm::Graph graph,
   }
   // for storage type, the backward attr is not necessarily the same as it's correspondence
   const int kDefaultStorage = 0;
-  return InferAttr<int>(
+  return InferAttr<int, FInferStorageType>(
       std::move(graph), -1,
       "FInferStorageType", "storage_type_inputs", "storage_type_attr_key",
       "storage_type", "storage_type_num_unknown_nodes",
