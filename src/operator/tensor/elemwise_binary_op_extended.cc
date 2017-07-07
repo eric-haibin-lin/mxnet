@@ -92,7 +92,7 @@ NNVM_REGISTER_OP(_backward_hypot)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu,
   mshadow_op::hypot_grad_left, mshadow_op::hypot_grad_right>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu,
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInExDense<cpu,
   mshadow_op::hypot_grad_left, mshadow_op::hypot_grad_right>)
 ;
 

@@ -443,10 +443,10 @@ class BinaryOp : public OpBase
   .add_argument("lhs", "NDArray-or-Symbol", "first input")          \
   .add_argument("rhs", "NDArray-or-Symbol", "second input")
 
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH(__func$, __xpu$, __kernel$)        \
-  MXNET_OPERATOR_REGISTER_BINARY(__func$)                                        \
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<__xpu$, __kernel$>)      \
-  .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<__xpu$, __kernel$>)
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH(__name$, __xpu$, __kernel$)                \
+  NNVM_REGISTER_OP(__name$)                                                              \
+  .set_attr<FCompute>("FCompute<" #__xpu$ ">", BinaryOp::Launch<__xpu$, __kernel$>)      \
+  .set_attr<FComputeEx>("FComputeEx<" #__xpu$ ">", BinaryOp::LaunchEx<__xpu$, __kernel$>)
 
 }  // namespace op
 }  // namespace mxnet
