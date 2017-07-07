@@ -236,6 +236,46 @@ class KVStore(object):
             self.handle, mx_uint(len(ckeys)), ckeys, cvals,
             ctypes.c_int(priority)))
 
+    def row_sparse_pull(self, key, out=None, priority=0, row_ids=None):
+        """ Pulls a single row_sparse value or a sequence of row_sparse values from the store
+         with specified row_ids.
+
+        `row_sparse_pull` is executed asynchronously after all previous
+        `push`/`pull`/`row_sparse_pull` calls for the same input key(s) are finished.
+
+        The returned values are gauranteed to be the latest values in the store.
+
+        Parameters
+        ----------
+        key : str or list of str
+            Keys.
+
+        out: NDArray or list of NDArray or list of list of NDArray
+            Values corresponding to the keys.
+
+        priority : int, optional
+            The priority of the pull operation.
+            Higher priority pull operations are likely to be executed before
+            other pull actions.
+
+        row_ids : NDArray or list of NDArray
+            The row_ids for which to pull for each value. The row_ids doesn't have to be unique
+            or sorted.
+        """
+        assert(out is not None)
+        assert(row_ids is not None)
+        if isinstance(row_ids, NDArray):
+            row_ids = [row_ids]
+        key = _cast_to_str_keys(key)
+        ckeys, cvals = _ctype_str_key_value(key, out)
+        assert(len(row_ids) == len(cvals))
+        #TODO(haibin) pickup upstream changes which removed `_cast_to_str_keys`
+        crow_ids = c_array(NDArrayHandle, [row_id.handle for row_id in row_ids])
+
+        check_call(_LIB.MXKVStorePullRowSparse(
+            self.handle, mx_uint(len(ckeys)), ckeys, cvals, crow_ids, ctypes.c_int(priority)))
+
+
     def set_optimizer(self, optimizer):
         """ Registers an optimizer with the kvstore.
 
