@@ -164,6 +164,16 @@ class KVStoreLocal : public KVStore {
     }
   }
 
+  void LookupKeys(const std::unordered_map<std::string, std::vector<NDArray>> &str_row_id_map,
+                  std::unordered_map<int, std::vector<NDArray>> *row_id_map) {
+    for (auto it = str_row_id_map.begin(); it != str_row_id_map.end(); ++it) {
+      auto &str_key = it->first;
+      CHECK(str_key_dict_.find(str_key) != str_key_dict_.end())
+            << "key " << str_key << " doesn't exist. Did you init?";
+      (*row_id_map)[str_key_dict_[str_key]] = it->second;
+    }
+  }
+
   /// reducer and broadcaster
   Comm* comm_;
   /// pinned context

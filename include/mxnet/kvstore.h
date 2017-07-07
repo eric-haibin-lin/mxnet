@@ -155,6 +155,19 @@ class KVStore {
                     const std::vector<NDArray*>& values,
                     int priority = 0) = 0;
 
+  /*!
+   * \brief pull a list of key-value pairs from the store, where each key is a string.
+   *        If a key shows up in the row_ids map, the NDArray pulled back will be in row_sparse
+   *        storage with only the specified row_ids present (others rows are zeros).
+   * \param keys the list of keys in string format
+   * \param values the list of buffers for the pulled data
+   * \param row_id_map the mapping from key to the list of row_ids
+   * \param priority the priority of the action.
+   */
+  virtual void PullRowSparse(const std::vector<std::string>& str_keys,
+                   const std::vector<NDArray*>& values,
+                   const std::unordered_map<std::string, std::vector<NDArray>>& row_id_map,
+                   const int priority = 0) = 0;
 
   /**
    * \brief the prototype of user-defined updater
