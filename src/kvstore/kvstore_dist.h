@@ -420,6 +420,7 @@ class KVStoreDist : public KVStoreLocal {
     return pskv;
   }
 
+  // TODO(haibin) this encoding method for row sparse keys doesn't allow cross-layer batching
   inline PSKV& EncodeRowSparseKey(const int key, const size_t size, const int64_t num_rows,
                                   const int64_t *offsets, const size_t unit_len,
                                   const int64_t total_num_rows) {

@@ -1467,15 +1467,12 @@ MXNET_DLL int MXKVStorePullEx(KVStoreHandle handle,
 
 /*!
  * \brief pull a list of (key, value) pairs from the kvstore, where each key is a string.
- *        If a key shows up in the row_ids map, the NDArray pulled back will be in row_sparse
-          storage with only the specified row_ids present (others rows are zeros).
+ *        The NDArray pulled back will be in row_sparse storage with only the specified
+ *        row_ids present based row_ids (others rows are zeros).
  * \param handle handle to the kvstore
  * \param num the number of key-value pairs
  * \param keys the list of keys
  * \param vals the list of values
- * \param num_row_ids the number of keys with row_id list specified
- * \param row_id_names the names of keys with row_id list specified
- * \param row_id_lens the list of row_id list length for each key
  * \param row_ids the list of row_id NDArrays
  * \param priority the priority of the action
  * \return 0 when success, -1 when failure happens
@@ -1484,9 +1481,6 @@ MXNET_DLL int MXKVStorePullRowSparse(KVStoreHandle handle,
                                      mx_uint num,
                                      const char** keys,
                                      NDArrayHandle* vals,
-                                     const mx_uint num_row_ids,
-                                     const char** row_id_names,
-                                     const mx_uint* row_id_lens,
                                      const NDArrayHandle* row_ids,
                                      int priority);
 

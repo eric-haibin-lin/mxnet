@@ -50,6 +50,13 @@ class Comm {
       const std::vector<NDArray*> dst, int priority) = 0;
 
   /**
+   * \brief broadcast src to dst[i] with unique sorted row_ids
+   */
+  virtual void BroadcastRowSparse(int key, const NDArray& src,
+                                  const std::vector<std::pair<NDArray*, NDArray>>& dst,
+                                  const int priority) = 0;
+
+  /**
    * \brief return a pinned contex
    */
   Context pinned_ctx() const {
@@ -161,6 +168,36 @@ class CommCPU : public Comm {
       auto& buf = merge_buf_[key];
       CopyFromTo(src, &buf.merged, priority);
       for (auto d : dst) CopyFromTo(buf.merged, d, priority);
+    }
+  }
+
+  // TODO(haibin) support broadcast row_sparse on GPU
+  void BroadcastRowSparse(int key, const NDArray& src,
+                          const std::vector<std::pair<NDArray*, NDArray>>& dst,
+                          const int priority) override {
+    using namespace mshadow;
+    int mask = src.ctx().dev_mask();
+    auto size = dst.size();
+    for (size_t i = 0; i < size; i++) {
+      auto out = dst[i].first;
+      auto row_id = dst[i].second;
+      CHECK_EQ(out->storage_type(), kRowSparseStorage)
+               << "BroadcastRowSparse expects row_sparse dst NDArray";
+      CHECK_EQ(mask, Context::kCPU)
+               << "BroadcastRowSparse with src on gpu context not supported";
+      CHECK_EQ(out->ctx().dev_mask(), Context::kCPU)
+               << "BroadcastRowSparse with dst on gpu context not supported";
+      CHECK_EQ(row_id.ctx().dev_mask(), Context::kCPU)
+               << "BroadcastRowSparse with src on gpu context not supported";
+      // retain according to unique indices
+      Engine::Get()->PushSync([src, out, row_id](RunContext rctx) {
+          NDArray *output = out;
+          const auto indices = row_id.data();
+          op::SparseRetainOpForwardRspImpl<cpu>(rctx.get_stream<cpu>(),
+                                                src, indices, kWriteTo,
+                                                output);
+        }, Context::CPU(), {src.var(), row_id.var()}, {out->var()},
+        FnProperty::kNormal, priority, PROFILER_MESSAGE("SparseRetain"));
     }
   }
 
@@ -516,6 +553,12 @@ class CommDevice : public Comm {
         CopyFromTo(buf.merged, d, priority);
       }
     }
+  }
+
+  void BroadcastRowSparse(int key, const NDArray& src,
+                          const std::vector<std::pair<NDArray*, NDArray>>& dst,
+                          const int priority) override {
+    LOG(FATAL) << "Not implemented yet";
   }
 
  private:

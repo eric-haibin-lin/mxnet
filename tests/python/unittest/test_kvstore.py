@@ -16,13 +16,13 @@ def init_kv(stype='default'):
     kv.init(keys, [mx.nd.zeros(shape=shape, storage_type=stype)] * len(keys))
     return kv
 
-def init_kv_with_str():
+def init_kv_with_str(stype='default'):
     """init kv """
     kv = mx.kv.create()
     # single
     kv.init('a', mx.nd.zeros(shape))
     # list
-    kv.init(str_keys, [mx.nd.zeros(shape)] * len(keys))
+    kv.init(str_keys, [mx.nd.zeros(shape=shape, storage_type=stype)] * len(keys))
     return kv
 
 def check_diff_to_scalar(A, x):
@@ -41,6 +41,32 @@ def test_single_kv_pair():
     check_single_kv_pair(init_kv(), 3)
     check_single_kv_pair(init_kv_with_str(), 'a')
 
+def test_row_sparse_pull():
+    kv = init_kv_with_str('row_sparse')
+    kv.init('e', mx.nd.ones(shape)._to_rsp())
+
+    def check_row_sparse_pull(kv, count):
+        num_rows = shape[0]
+        vals = []
+        row_ids = []
+        all_row_ids = np.arange(num_rows)
+        for i in range(count):
+            vals.append(mx.nd.zeros(shape)._to_rsp())
+            row_id = np.random.randint(num_rows, size=num_rows)
+            row_ids.append(mx.nd.array(row_id, dtype='int64'))
+        row_ids_to_pull = row_ids[0] if len(row_ids) == 1 else row_ids
+        vals_to_pull = vals[0] if len(vals) == 1 else vals
+
+        kv.row_sparse_pull('e', out=vals_to_pull, row_ids=row_ids_to_pull)
+        for val, row_id in zip(vals, row_ids):
+            retained = val.asnumpy()
+            excluded_row_ids = np.setdiff1d(all_row_ids, row_id.asnumpy())
+            for row in range(num_rows):
+                expected_val = 0 if row in excluded_row_ids else 1
+                assert_almost_equal(retained[row], expected_val)
+
+    check_row_sparse_pull(kv, 1)
+    check_row_sparse_pull(kv, 4)
 
 def test_init():
     """test init"""
@@ -193,3 +219,4 @@ if __name__ == '__main__':
     test_sparse_aggregator()
     test_aggregator()
     test_updater()
+    test_row_sparse_pull()

@@ -106,6 +106,38 @@ class KVStoreLocal : public KVStore {
     }
   }
 
+  void PullRowSparse(const std::vector<int>& keys,
+                     const std::vector<std::pair<NDArray*, NDArray>>& val_rowids,
+                     int priority = 0) {
+    std::vector<int> uniq_keys;
+    std::vector<std::vector<std::pair<NDArray*, NDArray> > > grouped_vals;
+    GroupKVPairs(keys, val_rowids, &uniq_keys, &grouped_vals);
+    for (size_t i = 0; i < uniq_keys.size(); ++i) {
+      int key = uniq_keys[i];
+      const NDArray& local = local_[key];
+      CHECK(!local.is_none()) << "key " << key << " has not been inited";
+      CHECK_EQ(local.storage_type(), kRowSparseStorage)
+               << "PullRowSparse expects row_sparse src NDArray";
+      auto &target_val_rowids= grouped_vals[i];
+      const size_t len = target_val_rowids.size();
+      for (size_t i = 0; i < len; i++) {
+        auto &row_id = target_val_rowids[i].second;
+        CHECK_EQ(row_id.shape().ndim(), 1) << "PullRowSparse expects 1D row_ids";
+        // TODO(haibin) need better solution for GPU context
+        NDArray indices = row_id.Copy(Context());
+        const auto size = row_id.shape()[0];
+        // sort and get unique row_ids
+        // TODO(haibin) use type switch
+        auto dptr = indices.data().dptr<int64_t>();
+        common::ParallelSort(dptr, dptr + size, omp_get_max_threads());
+        auto num_unique_idx = std::unique(dptr, dptr + size) - dptr;
+        indices.Reshape(mshadow::Shape1(num_unique_idx));
+        target_val_rowids[i].second = indices;
+      }
+      comm_->BroadcastRowSparse(key, local, grouped_vals[i], priority);
+    }
+  }
+
   void Push(const std::vector<std::string>& str_keys,
             const std::vector<NDArray>& values,
             int priority) override {
@@ -120,6 +152,14 @@ class KVStoreLocal : public KVStore {
     std::vector<int> keys(str_keys.size());
     LookupKeys(str_keys, &keys);
     Pull(keys, values, priority);
+  }
+
+  void PullRowSparse(const std::vector<std::string>& str_keys,
+                     const std::vector<std::pair<NDArray*, NDArray>>& val_rowids,
+                     const int priority = 0) override {
+    std::vector<int> keys(str_keys.size());
+    LookupKeys(str_keys, &keys);
+    PullRowSparse(keys, val_rowids, priority);
   }
 
  protected:
@@ -161,16 +201,6 @@ class KVStoreLocal : public KVStore {
       CHECK(str_key_dict_.find(str_key) != str_key_dict_.end())
             << "key " << str_key << " doesn't exist. Did you init?";
       keys->at(i) = str_key_dict_[str_key];
-    }
-  }
-
-  void LookupKeys(const std::unordered_map<std::string, std::vector<NDArray>> &str_row_id_map,
-                  std::unordered_map<int, std::vector<NDArray>> *row_id_map) {
-    for (auto it = str_row_id_map.begin(); it != str_row_id_map.end(); ++it) {
-      auto &str_key = it->first;
-      CHECK(str_key_dict_.find(str_key) != str_key_dict_.end())
-            << "key " << str_key << " doesn't exist. Did you init?";
-      (*row_id_map)[str_key_dict_[str_key]] = it->second;
     }
   }
 

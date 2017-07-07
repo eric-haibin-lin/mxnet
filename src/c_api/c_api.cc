@@ -779,29 +779,17 @@ int MXKVStorePullRowSparse(KVStoreHandle handle,
                            mx_uint num,
                            const char** keys,
                            NDArrayHandle* vals,
-                           const mx_uint num_row_ids,
-                           const char** row_id_names,
-                           const mx_uint* row_id_lens,
                            const NDArrayHandle* row_ids,
                            int priority) {
   API_BEGIN();
   std::vector<std::string> v_keys(num);
-  std::vector<NDArray*> v_vals(num);
-  std::unordered_map<std::string, std::vector<NDArray>> row_id_map;
+  std::vector<std::pair<NDArray*, NDArray>> v_val_rowids(num);
   for (mx_uint i = 0; i < num; ++i) {
     v_keys[i] = keys[i];
-    v_vals[i] = static_cast<NDArray*>(vals[i]);
+    v_val_rowids[i] = std::make_pair(static_cast<NDArray*>(vals[i]),
+                                     *static_cast<NDArray*>(row_ids[i]));
   }
-  int index = 0;
-  for (mx_uint i = 0; i < num_row_ids; ++i) {
-    auto len = row_id_lens[i];
-    std::vector<NDArray> row_id_list(len);
-    for (mx_uint j = 0; j < len; j++) {
-      row_id_list[j] = *reinterpret_cast<NDArray*>(row_ids[index++]);
-    }
-    row_id_map[row_id_names[i]] = row_id_list;
-  }
-  static_cast<KVStore*>(handle)->PullRowSparse(v_keys, v_vals, row_id_map, priority);
+  static_cast<KVStore*>(handle)->PullRowSparse(v_keys, v_val_rowids, priority);
   API_END();
 }
 
