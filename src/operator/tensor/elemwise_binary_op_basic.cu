@@ -15,7 +15,7 @@ NNVM_REGISTER_OP(_backward_add)
 .set_attr<FCompute>("FCompute<gpu>",
                     BinaryOp::BinaryBackwardUseNone<gpu,
                     mshadow_op::identity, mshadow_op::identity>)
-.set_attr<FComputeEx>(FCOMP_EX_GPU,
+.set_attr<FComputeEx>("FComputeEx<gpu>",
   BinaryOp::BinaryBackwardUseNoneEx<gpu, mshadow_op::identity, mshadow_op::identity>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH(elemwise_sub, gpu, mshadow::op::minus)

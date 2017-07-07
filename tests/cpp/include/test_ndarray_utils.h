@@ -277,7 +277,7 @@ class Array
 #if MXNET_USE_CUDA
     if(array.ctx().dev_type == Context::kGPU) {
       NDArray tmp(array.shape(), Context::CPU(-1));
-      CopyFromTo(array, &tmp, int priority);
+      CopyFromTo(array, &tmp);
       array = tmp;
     }
 #endif  // MXNET_USE_CUDA
