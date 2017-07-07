@@ -1,7 +1,7 @@
 from mxnet.test_utils import *
 
-def check_elemwise_binary_ops():
-    def test_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
+def test_elemwise_binary_ops():
+    def check_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
                                             forward_mxnet_call, forward_numpy_call,
                                             backward_numpy_call1, backward_numpy_call2,
                                             data1_grad_stype=None, data2_grad_stype=None,
@@ -78,7 +78,7 @@ def check_elemwise_binary_ops():
         assert_almost_equal(arr_grad1, npout_grad1)
         assert_almost_equal(arr_grad2, npout_grad2)
 
-    def test_elemwise_binary_op(name, lhs_stype, rhs_stype, shape,
+    def check_elemwise_binary_op(name, lhs_stype, rhs_stype, shape,
                                 forward_mxnet_call, forward_numpy_call, backward_numpy_call,
                                 lhs_grad_stype, rhs_grad_stype,
                                 expected_result_storage_type=None):
@@ -174,20 +174,20 @@ def check_elemwise_binary_ops():
     def le(l, r):
         return test_all(l, r, lambda a, b: a <= b)
 
-    def test_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
-        test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
+    def check_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
+        check_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.maximum(l, r),
                                 lambda l, r: np.maximum(l, r),
                                 lambda outg, l, r: (ge(l, r), lt(l, r)),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
+        check_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.minimum(l, r),
                                 lambda l, r: np.minimum(l, r),
                                 lambda outg, l, r: (le(l, r), gt(l, r)),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
+        check_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
                                             lambda x, y: mx.sym.hypot(x, y),
                                             lambda x, y: np.hypot(x, y),
                                             lambda x, y: x / np.hypot(x, y),
@@ -195,37 +195,37 @@ def check_elemwise_binary_ops():
                                             data1_grad_stype=lhs_grad_stype,
                                             data2_grad_stype=rhs_grad_stype)
 
-        test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
+        check_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_add(l, r),
                                 lambda l, r: l + r,
                                 lambda outg, l, r: (outg, outg),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
+        check_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_sub(l, r),
                                 lambda l, r: l - r,
                                 lambda outg, l, r: (outg, -outg),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
+        check_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_mul(l, r),
                                 lambda l, r: l * r,
                                 lambda outg, l, r: (r, l),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
+        check_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_div(l, r),
                                 lambda l, r: l / r,
                                 lambda outg, l, r: (1/r, -l/(r*r)),
                                 lhs_grad_stype, rhs_grad_stype, expected_result_storage_type='default')
 
     # Run basic tests
-    shape = (1, 1)
-    #shape = rand_shape_2d()
-    test_elemwise_binary_ops('default', 'default', shape)
-    test_elemwise_binary_ops('default', 'row_sparse', shape)
-    test_elemwise_binary_ops('row_sparse', 'default', shape)
-    test_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    #shape = (1, 1)
+    shape = rand_shape_2d()
+    check_elemwise_binary_ops('default', 'default', shape)
+    check_elemwise_binary_ops('default', 'row_sparse', shape)
+    check_elemwise_binary_ops('row_sparse', 'default', shape)
+    check_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 # TODO(haibin) randomize this test
@@ -635,8 +635,8 @@ def check_type(arr, stype):
     else:
         assert arr.storage_type == 'default'
 
-def check_sparse_maximum_minimum():
-    def test_sparse_maximum_minimum(stype, grad_stype, expected_result_stype=None):
+def test_sparse_maximum_minimum():
+    def check_sparse_maximum_minimum(stype, grad_stype, expected_result_stype=None):
         data1 = mx.symbol.Variable('data')
         data2 = mx.symbol.Variable('data')
         shape = (3, 4)
@@ -739,5 +739,5 @@ if __name__ == '__main__':
     #check_sparse_maximum_minimum()
     #check_sparse_relu()
     #test_sparse_sigmoid()
-    check_elemwise_binary_ops()
-    #test_sparse_mathematical_core()
+    test_elemwise_binary_ops()
+    test_sparse_mathematical_core()
