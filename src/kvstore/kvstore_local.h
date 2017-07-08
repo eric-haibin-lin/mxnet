@@ -110,31 +110,23 @@ class KVStoreLocal : public KVStore {
                      const std::vector<std::pair<NDArray*, NDArray>>& val_rowids,
                      int priority = 0) {
     std::vector<int> uniq_keys;
-    std::vector<std::vector<std::pair<NDArray*, NDArray> > > grouped_vals;
-    GroupKVPairs(keys, val_rowids, &uniq_keys, &grouped_vals);
+    std::vector<std::vector<std::pair<NDArray*, NDArray>>> grouped_val_rowids;
+    GroupKVPairs(keys, val_rowids, &uniq_keys, &grouped_val_rowids);
     for (size_t i = 0; i < uniq_keys.size(); ++i) {
       int key = uniq_keys[i];
       const NDArray& local = local_[key];
       CHECK(!local.is_none()) << "key " << key << " has not been inited";
       CHECK_EQ(local.storage_type(), kRowSparseStorage)
                << "PullRowSparse expects row_sparse src NDArray";
-      auto &target_val_rowids= grouped_vals[i];
-      const size_t len = target_val_rowids.size();
-      for (size_t i = 0; i < len; i++) {
+      auto &target_val_rowids = grouped_val_rowids[i];
+      const size_t num_vals = target_val_rowids.size();
+      for (size_t i = 0; i < num_vals; i++) {
         auto &row_id = target_val_rowids[i].second;
-        CHECK_EQ(row_id.shape().ndim(), 1) << "PullRowSparse expects 1D row_ids";
-        // TODO(haibin) need better solution for GPU context
         NDArray indices = row_id.Copy(Context());
-        const auto size = row_id.shape()[0];
-        // sort and get unique row_ids
-        // TODO(haibin) use type switch
-        auto dptr = indices.data().dptr<int64_t>();
-        common::ParallelSort(dptr, dptr + size, omp_get_max_threads());
-        auto num_unique_idx = std::unique(dptr, dptr + size) - dptr;
-        indices.Reshape(mshadow::Shape1(num_unique_idx));
+        Unique(row_id, &indices, priority);
         target_val_rowids[i].second = indices;
       }
-      comm_->BroadcastRowSparse(key, local, grouped_vals[i], priority);
+      comm_->BroadcastRowSparse(key, local, grouped_val_rowids[i], priority);
     }
   }
 
@@ -202,6 +194,25 @@ class KVStoreLocal : public KVStore {
             << "key " << str_key << " doesn't exist. Did you init?";
       keys->at(i) = str_key_dict_[str_key];
     }
+  }
+
+  /**
+   * \brief sort and get unique values. Both input and output are expected to be on cpu context
+   */
+  void Unique(const NDArray &in, NDArray *out, int priority = 0) {
+    Engine::Get()->PushSync([in, out](RunContext rctx) {
+        NDArray *output = out;
+        CHECK_EQ(in.shape().ndim(), 1) << "Unique expects 1D inputs";
+        // TODO(haibin) need better solution for GPU context
+        const auto size = in.shape()[0];
+        // TODO(haibin) use type switch
+        auto dptr = output->data().dptr<int64_t>();
+        common::ParallelSort(dptr, dptr + size, omp_get_max_threads());
+        auto num_unique_idx = std::unique(dptr, dptr + size) - dptr;
+        *output = output->Reshape(mshadow::Shape1(num_unique_idx));
+      }, Context::CPU(), {in.var()}, {out->var()},
+      FnProperty::kCPUPrioritized, priority, PROFILER_MESSAGE("KVStoreUnique"));
+    out->WaitToRead();
   }
 
   /// reducer and broadcaster

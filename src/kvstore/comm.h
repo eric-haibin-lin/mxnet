@@ -197,7 +197,7 @@ class CommCPU : public Comm {
                                                 src, indices, kWriteTo,
                                                 output);
         }, Context::CPU(), {src.var(), row_id.var()}, {out->var()},
-        FnProperty::kNormal, priority, PROFILER_MESSAGE("SparseRetain"));
+        FnProperty::kNormal, priority, PROFILER_MESSAGE("KVStoreSparseRetain"));
     }
   }
 
