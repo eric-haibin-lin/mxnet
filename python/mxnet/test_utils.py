@@ -766,22 +766,22 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     else:
         assert out_grads is None
 
-    if out_grads is not None:
-        print("out_grads:")
-        for og in out_grads:
-            print(og.asnumpy())
+    # if out_grads is not None:
+    #     print("out_grads:")
+    #     for og in out_grads:
+    #         print(og.asnumpy())
 
     executor.backward(out_grads)
 
-    print("EXPECTED in_grads:")
-    for k, v in expected.items():
-        print(k, v)
+    # print("EXPECTED in_grads:")
+    # for k, v in expected.items():
+    #     print(k, v)
 
     grads = {k: v.asnumpy() for k, v in args_grad_data.items()}
-    print("ACTUAL in_grads:")
-    for k, v in grads.items():
-        print(k)
-        print(v)
+    # print("ACTUAL in_grads:")
+    # for k, v in grads.items():
+    #     print(k)
+    #     print(v)
 
     for name in expected:
         if grad_req[name] == 'write':
