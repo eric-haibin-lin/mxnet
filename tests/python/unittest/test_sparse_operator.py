@@ -1,7 +1,7 @@
 from mxnet.test_utils import *
 
-def test_elemwise_binary_ops():
-    def check_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
+def check_elemwise_binary_ops():
+    def test_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
                                             forward_mxnet_call, forward_numpy_call,
                                             backward_numpy_call1, backward_numpy_call2,
                                             data1_grad_stype=None, data2_grad_stype=None,
@@ -78,7 +78,7 @@ def test_elemwise_binary_ops():
         assert_almost_equal(arr_grad1, npout_grad1)
         assert_almost_equal(arr_grad2, npout_grad2)
 
-    def check_elemwise_binary_op(name, lhs_stype, rhs_stype, shape,
+    def test_elemwise_binary_op(name, lhs_stype, rhs_stype, shape,
                                 forward_mxnet_call, forward_numpy_call, backward_numpy_call,
                                 lhs_grad_stype, rhs_grad_stype,
                                 expected_result_storage_type=None):
@@ -145,7 +145,7 @@ def test_elemwise_binary_ops():
 
         check_numeric_gradient(test, location)
 
-    def test_all(l, r, test_function):
+    def check_all(l, r, check_function):
         assert l.shape == r.shape
 
         it_l = np.nditer(l, flags=['f_index'])
@@ -157,7 +157,7 @@ def test_elemwise_binary_ops():
         while not it_l.finished:
             val_l = it_l[0]
             val_r = it_r[0]
-            if test_function(val_l, val_r):
+            if check_function(val_l, val_r):
                 it_out[0] = 1
             it_l.iternext()
             it_r.iternext()
@@ -166,31 +166,31 @@ def test_elemwise_binary_ops():
         return output
 
     def gt(l, r):
-        return test_all(l, r, lambda a, b: a > b)
+        return check_all(l, r, lambda a, b: a > b)
 
     def ge(l, r):
-        return test_all(l, r, lambda a, b: a >= b)
+        return check_all(l, r, lambda a, b: a >= b)
 
     def lt(l, r):
-        return test_all(l, r, lambda a, b: a < b)
+        return check_all(l, r, lambda a, b: a < b)
 
     def le(l, r):
-        return test_all(l, r, lambda a, b: a <= b)
+        return check_all(l, r, lambda a, b: a <= b)
 
-    def check_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
-        check_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
+    def test_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
+        test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.maximum(l, r),
                                 lambda l, r: np.maximum(l, r),
                                 lambda outg, l, r: (ge(l, r), lt(l, r)),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        check_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
+        test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.minimum(l, r),
                                 lambda l, r: np.minimum(l, r),
                                 lambda outg, l, r: (le(l, r), gt(l, r)),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        check_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
+        test_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
                                             lambda x, y: mx.sym.hypot(x, y),
                                             lambda x, y: np.hypot(x, y),
                                             lambda x, y: x / np.hypot(x, y),
@@ -198,25 +198,25 @@ def test_elemwise_binary_ops():
                                             data1_grad_stype=lhs_grad_stype,
                                             data2_grad_stype=rhs_grad_stype)
 
-        check_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
+        test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_add(l, r),
                                 lambda l, r: l + r,
                                 lambda outg, l, r: (outg, outg),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        check_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
+        test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_sub(l, r),
                                 lambda l, r: l - r,
                                 lambda outg, l, r: (outg, -outg),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        check_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
+        test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_mul(l, r),
                                 lambda l, r: l * r,
                                 lambda outg, l, r: (r, l),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        check_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
+        test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_div(l, r),
                                 lambda l, r: l / r,
                                 lambda outg, l, r: (1/r, -l/(r*r)),
@@ -225,14 +225,14 @@ def test_elemwise_binary_ops():
     # Run basic tests
     #shape = (1, 1)
     shape = rand_shape_2d()
-    check_elemwise_binary_ops('default', 'default', shape)
-    check_elemwise_binary_ops('default', 'row_sparse', shape)
-    check_elemwise_binary_ops('row_sparse', 'default', shape)
-    check_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    test_elemwise_binary_ops('default', 'default', shape)
+    test_elemwise_binary_ops('default', 'row_sparse', shape)
+    test_elemwise_binary_ops('row_sparse', 'default', shape)
+    test_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 # TODO(haibin) randomize this test
-def test_elemwise_add_ex_multiple_stages():
+def check_elemwise_add_ex_multiple_stages():
     # prep data
     shape = (4, 2)
     ds_np = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
@@ -266,8 +266,8 @@ def test_elemwise_add_ex_multiple_stages():
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
 # TODO(haibin) also add test for backward pass.
-def test_cast_storage_ex():
-    def test_rsp_to_dns(shape):
+def check_cast_storage_ex():
+    def check_rsp_to_dns(shape):
         rsp, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse')
         dns_out = mx.nd.cast_storage(rsp, storage_type='default')
         dns_expected = np.zeros(shape, dtype=default_dtype())
@@ -276,32 +276,32 @@ def test_cast_storage_ex():
                 dns_expected[v, :] = data[k]
         assert same(dns_out.asnumpy(), dns_expected)
 
-    def test_dns_to_rsp(shape):
+    def check_dns_to_rsp(shape):
         dns_in = rand_ndarray(shape, 'default')
         rsp_out = mx.nd.cast_storage(mx.nd.array(dns_in, dtype=default_dtype()), storage_type='row_sparse')
         ret = mx.nd.cast_storage(rsp_out, storage_type='default')
         assert same(ret.asnumpy(), dns_in.asnumpy())
 
-    def test_csr_to_dns(shape):
+    def check_csr_to_dns(shape):
         csr, (indptr, indices, values) = rand_sparse_ndarray(shape, 'csr')
         mx_dns = csr.to_dense()
         np_dns = sp.csr_matrix((values, indices, indptr), shape).todense()
         assert_almost_equal(mx_dns.asnumpy(), np_dns)
 
-    def test_dns_to_csr(dns_in):
+    def check_dns_to_csr(dns_in):
         dns_in = np.array(dns_in)
         csr_out = mx.nd.cast_storage(mx.nd.array(dns_in, dtype=default_dtype()), storage_type='csr')
         ret = mx.nd.cast_storage(csr_out, storage_type='default')
         assert same(ret.asnumpy(), dns_in)
 
     shape = rand_shape_2d()
-    test_rsp_to_dns(shape)
-    test_dns_to_rsp(shape)
-    test_csr_to_dns((4, 4))
-    test_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
+    check_rsp_to_dns(shape)
+    check_dns_to_rsp(shape)
+    check_csr_to_dns((4, 4))
+    check_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
 
-def test_sparse_dot():
-    def test_dot_csr(lhs_shape, rhs_shape, rhs_stype, trans_lhs):
+def check_sparse_dot():
+    def check_dot_csr(lhs_shape, rhs_shape, rhs_stype, trans_lhs):
         lhs_dns = rand_ndarray(lhs_shape, 'default')
         lhs_nd = mx.nd.cast_storage(lhs_dns, storage_type='csr')
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=1)
@@ -327,19 +327,21 @@ def test_sparse_dot():
                                 rtol=1e-3, atol=1e-4)
 
     lhs_shape = rand_shape_2d()
-    test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'default', False)
-    test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'default', True)
-    test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
-    test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
+    check_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'default', False)
+    check_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'default', True)
+    check_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
+    check_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
 
-def create_sparse_array(shape, stype, data_init=None, rsp_indices=None):
+def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier_func=None):
     if stype == 'row_sparse':
         arr_indices = np.ndarray(len(rsp_indices))
         for i in xrange(0, len(rsp_indices)):
             arr_indices[i] = rsp_indices[i]
-        arr_data, (_, _) = rand_sparse_ndarray(shape, stype, density=0.5, data_init=data_init, rsp_indices=arr_indices)
+        arr_data, (_, _) = rand_sparse_ndarray(shape, stype, density=0.5, data_init=data_init,
+                                               rsp_indices=arr_indices, modifier_func=modifier_func)
     elif stype == 'csr':
-        arr_data, (_, _, _) = rand_sparse_ndarray(shape, stype, density=0.5, data_init=data_init)
+        arr_data, (_, _, _) = rand_sparse_ndarray(shape, stype, density=0.5, data_init=data_init,
+                                                  modifier_func=modifier_func)
     else:
         raise str("Unknown storage type: " + stype)
     return arr_data
@@ -350,7 +352,7 @@ def as_dense(arr):
     else:
         return arr;
 
-def test_sparse_mathematical_core():
+def check_sparse_mathematical_core():
     # Rounding check
     def rounding(name, stype, forward_mxnet_call, forward_numpy_call, data_init=5.):
         print("TESTING: " + name)
@@ -450,22 +452,8 @@ def test_sparse_mathematical_core():
             return 1
         return 0
 
-    def assign_each(input, function):
-        it_input = np.nditer(input, flags=['f_index'])
-
-        output = np.zeros(input.shape)
-        it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
-
-        while not it_input.finished:
-            val_input = it_input[0]
-            it_out[0] = function(val_input)
-            it_input.iternext()
-            it_out.iternext()
-
-        return output
-
     # Check many basic unary operators
-    def check_mathematical_core(stype, grad_stype=None):
+    def test_mathematical_core(stype, grad_stype=None):
         # sqrt
         mathematical_core("sqrt", stype,
                           lambda x: mx.sym.sqrt(x),
@@ -520,11 +508,13 @@ def test_sparse_mathematical_core():
                           lambda x: 1. / (x ** 2. + 1.), 0.5, 0.5, grad_stype=grad_stype)
 
         # hypot scalar
-        mathematical_core("hypot scalar", stype,
-                          lambda x: mx.sym.hypot(x, 3),
-                          lambda x: np.hypot(x, 3),
-                          lambda x: x / np.hypot(x, 3),
-                          0.5, 0.5, grad_stype=grad_stype, expected_result_type='default')
+        # mathematical_core("hypot scalar", stype,
+        #                   lambda x: mx.sym.hypot(x, 3),
+        #                   lambda x: np.hypot(x, 3),
+        #                   lambda x: x / np.hypot(x, 3),
+        #                   0.5, 0.5, grad_stype=grad_stype
+        #                   #, expected_result_type='default'
+        # )
 
         # degrees
         mathematical_core("degrees", stype,
@@ -602,14 +592,14 @@ def test_sparse_mathematical_core():
             else:
                 raise
 
-    check_mathematical_core('default')
+    test_mathematical_core('default')
     #check_mathematical_core('csr', 'csr')
-    check_mathematical_core('row_sparse')
-    check_mathematical_core('row_sparse', 'default')
-    check_mathematical_core('row_sparse', 'row_sparse')
+    test_mathematical_core('row_sparse')
+    test_mathematical_core('row_sparse', 'default')
+    test_mathematical_core('row_sparse', 'row_sparse')
     print("Done")
 
-def test_sparse_embedding():
+def check_sparse_embedding():
     in_dim = 10
     out_dim = 4
     batch = 24
@@ -639,8 +629,8 @@ def test_sparse_embedding():
     assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad), atol=1e-5)
 
 
-def test_sparse_slice():
-    def check_csr_slice(shape, slice_input):
+def check_sparse_slice():
+    def test_csr_slice(shape, slice_input):
         storage_type = 'csr'
         A, _ = rand_sparse_ndarray(shape, storage_type)
         B = A._slice(1, shape[0] - 1) if slice_input else A
@@ -651,11 +641,11 @@ def test_sparse_slice():
         assert same(nd_slice.asnumpy(), np[begin:end]), (nd_slice.asnumpy(), np[begin:end])
 
     shape = (rnd.randint(7, 15), rnd.randint(1, 10))
-    check_csr_slice(shape, True)
-    check_csr_slice(shape, False)
+    test_csr_slice(shape, True)
+    test_csr_slice(shape, False)
 
 
-def test_sparse_retain():
+def check_sparse_retain():
     for _ in range(10):
         shape = rand_shape_2d()
         num_rows = shape[0]
@@ -683,14 +673,14 @@ def do_cast(arr, stype):
         return mx.nd.cast_storage(arr, storage_type=stype)
     return arr
 
-def check_type(arr, stype):
+def test_type(arr, stype):
     if stype is not None:
         assert arr.storage_type == stype
     else:
         assert arr.storage_type == 'default'
 
-def check_sparse_maximum_minimum():
-    def test_sparse_maximum_minimum(stype, grad_stype, expected_result_stype=None):
+def test_sparse_maximum_minimum():
+    def check_sparse_maximum_minimum(stype, grad_stype, expected_result_stype=None):
         data1 = mx.symbol.Variable('data')
         data2 = mx.symbol.Variable('data')
         shape = (3, 4)
@@ -718,7 +708,7 @@ def check_sparse_maximum_minimum():
         print("END FORWARD")
 
         output = exe_test.outputs[0]
-        check_type(output, expected_result_stype)
+        test_type(output, expected_result_stype)
         print("BEGIN CAST")
         out = do_cast(output, 'default').asnumpy()
         #out = output.asnumpy()
@@ -740,51 +730,48 @@ def check_sparse_maximum_minimum():
         assert_almost_equal(as_dense(arr_grad1).asnumpy(), npout_grad1)
         assert_almost_equal(as_dense(arr_grad2).asnumpy(), npout_grad2)
 
-    #test_sparse_maximum_minimum('default', 'default', 'default')
-    test_sparse_maximum_minimum('row_sparse', 'row_sparse', 'row_sparse')
+    #check_sparse_maximum_minimum('default', 'default', 'default')
+    check_sparse_maximum_minimum('row_sparse', 'row_sparse', 'row_sparse')
 
-# def check_sparse_relu():
-#
-#     def test_sparse_relu(stype):
-#         def frelu(x):
-#             res = np.maximum(x, 0.0)
-#             return res
-#         def frelu_grad(x):
-#             return 1.0 * (x > 0.0)
-#         shape = (3, 4)
-#         x = mx.symbol.Variable("x")
-#         y = mx.sym.relu(x)
-#         if stype == 'default':
-#             xa = np.random.uniform(low=-1.0,high=1.0,size=shape)
-#         else:
-#             xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=(1, 2))
-#             print(as_dense(xa).asnumpy())
-#         ya = frelu(xa)
-#         ga = frelu_grad(xa)
-#         check_numeric_gradient(y, [xa], numeric_eps=1E-3)
-#         check_symbolic_forward(y, [xa], [ya])
-#         check_symbolic_backward(y, [xa], [np.ones(shape)], [ga])
-#
-#     #test_sparse_relu('default')
-#     test_sparse_relu('row_sparse')
+def test_sparse_simple():
+    def check_sparse_simple(name, stype, mxnet_func, forward_numpy_func, backward_numpy_func):
+        shape = (3, 4)
+        x = mx.symbol.Variable("x")
+        y = mxnet_func(x)
+        if stype == 'default':
+            xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
+            xa_np = xa
+        else:
+            xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
+                                     modifier_func=lambda a: a - 0.5)
+            xa_np = xa.asnumpy()
+        ya = forward_numpy_func(xa_np)
+        ga = backward_numpy_func(xa_np)
+        check_symbolic_forward(y, [xa], [ya])
+        check_symbolic_backward(y, [xa], [np.ones(shape)], [ga])
 
-# def test_sparse_sigmoid():
-#     def fsigmoid(a):
-#         return np.divide(1.0, (1.0 + np.exp(-a)))
-#     shape = (3, 4)
-#     x = mx.symbol.Variable("x")
-#     y = mx.sym.sigmoid(x)
-#     xa = np.random.uniform(low=-1.0,high=1.0,size=shape)
-#     ya = fsigmoid(xa)
-#     check_numeric_gradient(y, [xa], numeric_eps=1E-3)
-#     check_symbolic_forward(y, [xa], [ya])
-#     check_symbolic_backward(y, [xa], [np.ones(shape)], [ya * (1 - ya)])
+    def check_sparse_function(name, mxnet_func, forward_numpy_func, backward_numpy_func):
+        check_sparse_simple(name, 'default', mxnet_func, forward_numpy_func, backward_numpy_func)
+        check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_func, backward_numpy_func)
+
+    check_sparse_function('relu',
+                          lambda x: mx.sym.relu(x),
+                          lambda x: np.maximum(x, 0.0),
+                          lambda x: 1.0 * (x > 0.0)
+                          )
+
+    check_sparse_function('sigmoid',
+                          lambda x: mx.sym.sigmoid(x),
+                          lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
+                          lambda x: np.divide(1.0, (1.0 + np.exp(-x)))
+                                    * (1 - np.divide(1.0, (1.0 + np.exp(-x))))
+                          )
 
 if __name__ == '__main__':
     #import nose
     #nose.runmodule()
     #check_sparse_maximum_minimum()
-    #check_sparse_relu()
-    #test_sparse_sigmoid()
-    #test_elemwise_binary_ops()
-    test_sparse_mathematical_core()
+    test_sparse_simple()
+    #check_sparse_sigmoid()
+    check_elemwise_binary_ops()
+    check_sparse_mathematical_core()

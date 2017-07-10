@@ -76,9 +76,24 @@ def random_sample(population, k):
     return population_copy[0:k]
 
 
+def assign_each(input, function):
+    """Pass each value through a caller-specified function and return the modified array."""
+    it_input = np.nditer(input, flags=['f_index'])
+
+    output = np.zeros(input.shape)
+    it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
+
+    while not it_input.finished:
+        val_input = it_input[0]
+        it_out[0] = function(val_input)
+        it_input.iternext()
+        it_out.iternext()
+
+    return output
+
 # TODO(haibin) also include types in arguments
 def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
-                        rsp_indices=None):
+                        rsp_indices=None, modifier_func=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     density = rnd.rand() if density is None else density
     if storage_type == 'row_sparse':
@@ -98,8 +113,13 @@ def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
             return result, (np.array([]), np.array([], dtype='int32'))
         # generate random values
         val = rnd.rand(indices.shape[0], num_cols)
+
+        # Allow caller to override or adjust random values
         if data_init is not None:
             val.fill(data_init)
+        if modifier_func is not None:
+            val = assign_each(val, modifier_func)
+
         arr = mx.sparse_nd.row_sparse(val, indices, shape, indices_type=np.int32)
         return arr, (val, indices)
     elif storage_type == 'csr':
@@ -582,6 +602,7 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
 
     numeric_gradients = numeric_grad(executor, location_npy, aux_states_npy,
                                      eps=numeric_eps, use_forward_train=use_forward_train)
+
     for name in grad_nodes:
         fd_grad = numeric_gradients[name]
         orig_grad = args_grad_npy[name]
