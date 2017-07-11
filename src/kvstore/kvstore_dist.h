@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <utility>
 #include "./kvstore_local.h"
 #include "mxnet/engine.h"
 #include "ps/ps.h"

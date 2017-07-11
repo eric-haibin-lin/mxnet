@@ -200,7 +200,8 @@ class KVStoreLocal : public KVStore {
    * \brief sort and get unique values. Output is expected to be on cpu_pinned context
    */
   void Unique(NDArray *out, int priority = 0) {
-    CHECK_EQ(out->ctx().dev_mask(), pinned_ctx_.dev_mask()) << "Unique Expects input on `pinned_ctx_`";
+    CHECK_EQ(out->ctx().dev_mask(), pinned_ctx_.dev_mask())
+             << "Unique expects input with `pinned_ctx_`";
     Engine::Get()->PushSync([out](RunContext rctx) {
         NDArray *output = out;
         CHECK_EQ(out->shape().ndim(), 1) << "Unique expects 1D inputs";
