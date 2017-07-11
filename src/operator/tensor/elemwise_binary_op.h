@@ -311,18 +311,16 @@ class BinaryOp : public OpBase
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
     if (req[0] != kNullOp) {
-      // If any input is dense, fallback to FCompute
+      // If any input or output is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
-      if (common::ContainsDefaultStorage(inputs)) {
-#ifndef NDEBUG
-        std::cerr << "BinaryOp::ComputeEx(): Casting operation to dense" << std::endl << std::flush;
-#endif
+      if (!common::ContainsDefaultStorage(inputs)) {
+        // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
+        DCHECK(fabs(OP::Map(0, 0)) < 1e-5);
+        ComputeRspRsp<xpu, OP>(attrs, ctx, inputs, req, outputs);
+      } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                             Launch<xpu, OP>, "Launch");
-        return;
+                             Launch<xpu, OP>, "LaunchEx");
       }
-      CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
-      ComputeRspRsp<xpu, OP>(attrs, ctx, inputs, req, outputs);
     }
   }
 
@@ -445,21 +443,25 @@ class BinaryOp : public OpBase
   .add_argument("lhs", "NDArray-or-Symbol", "first input")          \
   .add_argument("rhs", "NDArray-or-Symbol", "second input")
 
+/*! \brief Binary launch */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(__name$, __kernel$)         \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                     \
   .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)      \
   .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, __kernel$>)
 
+/*! \brief Binary launch, dense result */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(__name$, __kernel$)         \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                        \
   .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)         \
   .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchAsDense<cpu, __kernel$>)
 
+/*! \brief Binary CUDA launch */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(__name$, __kernel$)           \
   NNVM_REGISTER_OP(__name$)                                                      \
   .set_attr<FCompute>("FCompute<gpu>", BinaryOp::Launch<gpu, __kernel$>)         \
   .set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::LaunchEx<gpu, __kernel$>)
 
+/*! \brief Binary CUDA launch, dense result */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DR(__name$, __kernel$)        \
   NNVM_REGISTER_OP(__name$)                                                      \
   .set_attr<FCompute>("FCompute<gpu>", BinaryOp::Launch<gpu, __kernel$>)         \

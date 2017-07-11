@@ -20,9 +20,7 @@ MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(relu, cpu, kernel_launch_op::relu)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_relu"});
 
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_relu)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, kernel_launch_op::relu_grad>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, kernel_launch_op::relu_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_relu, kernel_launch_op::relu_grad);
 
 // sigmoid
 MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(sigmoid, cpu, kernel_launch_op::sigmoid)
@@ -34,9 +32,7 @@ MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(sigmoid, cpu, kernel_launch_op::sigmoid)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_backward_sigmoid"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_sigmoid)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, kernel_launch_op::sigmoid_grad>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, kernel_launch_op::sigmoid_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_sigmoid, kernel_launch_op::sigmoid_grad);
 
 // copy
 MXNET_OPERATOR_REGISTER_UNARY(_copy)
@@ -208,9 +204,7 @@ Example::
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_abs"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_abs)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::sign> >)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, unary_bwd<mshadow_op::sign> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_abs, unary_bwd<mshadow_op::sign>);
 
 // sign
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sign, cpu, mshadow_op::sign)
@@ -223,9 +217,7 @@ Example::
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_sign"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_sign)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::sign_grad> >)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, unary_bwd<mshadow_op::sign_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_sign, unary_bwd<mshadow_op::sign_grad>);
 
 // round
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(round, cpu, mshadow_op::round)
@@ -296,8 +288,7 @@ Example::
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_square"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_square)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::square_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_square, unary_bwd<mshadow_op::square_grad>);
 
 // sqrt
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sqrt, cpu, mshadow_op::square_root)
@@ -372,8 +363,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(log2, cpu, mshadow_op::log2)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_log"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_log)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::log_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_log, unary_bwd<mshadow_op::log_grad>);
 
 // sin
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sin, cpu, mshadow_op::sin)
@@ -399,8 +389,7 @@ This function is more accurate than ``log(1 + x)``  for small ``x`` so that
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_log1p"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_log1p)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::log1p_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_log1p, unary_bwd<mshadow_op::log1p_grad>);
 
 // expm1
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(expm1, cpu, mshadow_op::expm1)
@@ -411,8 +400,7 @@ This function provides greater precision than ``exp(x) - 1`` for small values of
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_expm1"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_expm1)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::exp> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_expm1, unary_bwd<mshadow_op::exp>);
 
 // cos
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(cos, cpu, mshadow_op::cos)
@@ -426,9 +414,7 @@ The input should be in radians (:math:`2\pi` rad equals 360 degrees).
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_cos"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_cos)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::cos_grad> >)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, unary_bwd<mshadow_op::cos_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_cos, unary_bwd<mshadow_op::cos_grad>);
 
 // tan
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(tan, cpu, mshadow_op::tan)
@@ -457,8 +443,7 @@ The output is in the closed interval of [:math:`-\pi/2`, :math:`\pi/2`].
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arcsin" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_arcsin)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::arcsin_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_arcsin, unary_bwd<mshadow_op::arcsin_grad>);
 
 // arccos
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccos, cpu, mshadow_op::arccos)
@@ -473,8 +458,7 @@ The output is in the closed interval :math:`[0, \pi]`
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arccos" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_arccos)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::arccos_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccos, unary_bwd<mshadow_op::arccos_grad>);
 
 // arctan
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctan, cpu, mshadow_op::arctan)
@@ -488,8 +472,7 @@ The output is in the closed interval :math:`[-\pi/2, \pi/2]`
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arctan" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_arctan)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::arctan_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctan, unary_bwd<mshadow_op::arctan_grad>);
 
 // degrees
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(degrees, cpu, mshadow_op::degrees)
@@ -501,8 +484,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(degrees, cpu, mshadow_op::degrees)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_degrees" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_degrees)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::degrees_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_degrees, unary_bwd<mshadow_op::degrees_grad>);
 
 // radians
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(radians, cpu, mshadow_op::radians)
@@ -514,8 +496,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(radians, cpu, mshadow_op::radians)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_radians" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_radians)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::radians_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_radians, unary_bwd<mshadow_op::radians_grad>);
 
 // sinh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sinh, cpu, mshadow_op::sinh)
@@ -527,8 +508,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sinh, cpu, mshadow_op::sinh)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_sinh" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_sinh)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::sinh_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_sinh, unary_bwd<mshadow_op::sinh_grad>);
 
 // cosh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(cosh, cpu, mshadow_op::cosh)
@@ -540,8 +520,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(cosh, cpu, mshadow_op::cosh)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_cosh" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_cosh)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::cosh_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_cosh, unary_bwd<mshadow_op::cosh_grad>);
 
 // tanh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(tanh, cpu, mshadow_op::tanh)
@@ -553,8 +532,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(tanh, cpu, mshadow_op::tanh)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{ "_backward_tanh" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_tanh)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::tanh_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_tanh, unary_bwd<mshadow_op::tanh_grad>);
 
 // arcsinh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arcsinh, cpu, mshadow_op::arcsinh)
@@ -570,8 +548,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccosh, cpu, mshadow_op::arccosh)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arccosh" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_arccosh)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::arccosh_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccosh, unary_bwd<mshadow_op::arccosh_grad>);
 
 // arctanh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctanh, cpu, mshadow_op::arctanh)
@@ -579,8 +556,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctanh, cpu, mshadow_op::arctanh)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arctanh" });
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_arctanh)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::arctanh_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctanh, unary_bwd<mshadow_op::arctanh_grad>);
 
 // gamma
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gamma, cpu, mshadow_op::gamma)
@@ -588,8 +564,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gamma, cpu, mshadow_op::gamma)
   " , computed element-wise on the input array.")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_gamma"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_gamma)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::gamma_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gamma, unary_bwd<mshadow_op::gamma_grad>);
 
 // gammaln
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gammaln, cpu, mshadow_op::gammaln)
@@ -597,8 +572,7 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gammaln, cpu, mshadow_op::gammaln)
   " of the input.")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_gammaln"});
 
-MXNET_OPERATOR_REGISTER_BINARY(_backward_gammaln)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, unary_bwd<mshadow_op::gammaln_grad> >);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gammaln, unary_bwd<mshadow_op::gammaln_grad>);
 
 }  // namespace op
 }  // namespace mxnet
