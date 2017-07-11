@@ -62,7 +62,8 @@ def test_row_sparse_pull():
             retained = val.asnumpy()
             excluded_row_ids = np.setdiff1d(all_row_ids, row_id.asnumpy())
             for row in range(num_rows):
-                expected_val = 0 if row in excluded_row_ids else 1
+                expected_val = np.zeros_like(retained[row])
+                expected_val += 0 if row in excluded_row_ids else 1
                 assert_almost_equal(retained[row], expected_val)
 
     check_row_sparse_pull(kv, 1)

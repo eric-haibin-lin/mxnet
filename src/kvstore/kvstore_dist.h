@@ -12,7 +12,6 @@
 #include "mxnet/engine.h"
 #include "ps/ps.h"
 #include "./kvstore_dist_server.h"
-#include "../operator/tensor/init_op.h"
 #if MKL_EXPERIMENTAL == 1
 #include <mkl_memory.h>
 #include "../operator/mkl/mkl_memory-inl.h"
@@ -101,50 +100,82 @@ class KVStoreDist : public KVStoreLocal {
       // after the previous push on this key
       auto& recv_buf = comm_buf_[key];
       const auto storage_type = grouped_vals[i][0]->storage_type();
+      CHECK_EQ(storage_type, kDefaultStorage)
+               << "Expected stype of value to be kDefaultStorage";
       if (recv_buf.is_none()) {
         // it may happen for the first time a no-rank-0 worker pull the weight.
-        if (storage_type == kDefaultStorage) {
-          recv_buf = NDArray(grouped_vals[i][0]->shape(), pinned_ctx_,
-                             false, grouped_vals[i][0]->dtype());
-        } else {
-          recv_buf = NDArray(storage_type, grouped_vals[i][0]->shape(),
-                             pinned_ctx_, true, grouped_vals[i][0]->dtype());
-          // initialize the buffer with sufficient memory
-          op::FillDnsZerosRspImpl<mshadow::cpu>(nullptr, &recv_buf);
-        }
+        recv_buf = NDArray(grouped_vals[i][0]->shape(), pinned_ctx_,
+                           true, grouped_vals[i][0]->dtype());
       }
-      if (storage_type == kDefaultStorage) {
 #if MKL_EXPERIMENTAL == 1
-        mkl_set_tblob_eager_mode(recv_buf.data());
+      mkl_set_tblob_eager_mode(recv_buf.data());
 #endif
-        real_t* data = static_cast<real_t*>(recv_buf.data().dptr_);
-        size_t size = recv_buf.shape().Size();
-        auto pull_from_servers = [this, key, data, size](
-            RunContext rctx, Engine::CallbackOnComplete cb) {
-          // convert to ps keys
-          PSKV& pskv = EncodeKey(key, size);
+      real_t* data = static_cast<real_t*>(recv_buf.data().dptr_);
+      size_t size = recv_buf.shape().Size();
+      auto pull_from_servers = [this, key, data, size](
+          RunContext rctx, Engine::CallbackOnComplete cb) {
+        // convert to ps keys
+        PSKV& pskv = EncodeKey(key, size);
 
-          // issue pull, false means no delete
-          auto vals = new ps::SArray<real_t>(data, size, false);
-          CHECK_NOTNULL(ps_worker_)->ZPull(
-          pskv.keys, vals, &pskv.lens, kDefaultPushPull, [vals, cb](){ delete vals; cb(); });
-        };
+        // issue pull, false means no delete
+        auto vals = new ps::SArray<real_t>(data, size, false);
+        CHECK_NOTNULL(ps_worker_)->ZPull(
+        pskv.keys, vals, &pskv.lens, kDefaultPushPull, [vals, cb](){ delete vals; cb(); });
+      };
 
-        CHECK_NOTNULL(Engine::Get())->PushAsync(
-            pull_from_servers,
-            pinned_ctx_,
-            {},
-            {recv_buf.var()},
-            FnProperty::kNormal,
-            priority,
-            PROFILER_MESSAGE("KVStoreDistDefaultPull"));
-      } else if (storage_type == kRowSparseStorage) {
-        PullRowSparse(key, &recv_buf, grouped_vals[i][0]->aux_ndarray(rowsparse::kIdx), priority);
-      } else {
-        LOG(FATAL) << "unknown storage type " << storage_type;
-      }
+      CHECK_NOTNULL(Engine::Get())->PushAsync(
+          pull_from_servers,
+          pinned_ctx_,
+          {},
+          {recv_buf.var()},
+          FnProperty::kNormal,
+          priority,
+          PROFILER_MESSAGE("KVStoreDistDefaultPull"));
 
       comm_->Broadcast(key, recv_buf, grouped_vals[i], priority);
+    }
+  }
+
+  void PullRowSparse(const std::vector<int>& keys,
+                     const std::vector<std::pair<NDArray*, NDArray>>& val_rowids,
+                     const int priority = 0) {
+    std::vector<int> uniq_keys;
+    std::vector<std::vector<std::pair<NDArray*, NDArray>>> grouped_val_rowids;
+    GroupKVPairs(keys, val_rowids, &uniq_keys, &grouped_val_rowids);
+
+    for (size_t i = 0; i < uniq_keys.size(); ++i) {
+      int key = uniq_keys[i];
+      // use the same array for merging to guarantee that pull always happens
+      // after the previous push on this key
+      auto& recv_buf = comm_buf_[key];
+      auto& grouped_val_rowid = grouped_val_rowids[i];
+      const auto storage_type = grouped_val_rowid[0].first->storage_type();
+      CHECK_EQ(storage_type, kRowSparseStorage)
+               << "expected kRowSparseStorage, but got " << storage_type;
+      if (recv_buf.is_none()) {
+        // it may happen for the first time a no-rank-0 worker pull the weight.
+        recv_buf = NDArray(storage_type, grouped_val_rowid[0].first->shape(),
+                           pinned_ctx_, true, grouped_val_rowid[0].first->dtype());
+      }
+      auto &target_val_rowids = grouped_val_rowids[i];
+      const size_t num_vals = target_val_rowids.size();
+      size_t num_rows = 0;
+      // TODO(haibin) refactor this for loop
+      for (size_t i = 0; i < num_vals; i++) {
+        auto &row_id = target_val_rowids[i].second;
+        NDArray indices = row_id.Copy(pinned_ctx_);
+        Unique(&indices, priority);
+        target_val_rowids[i].second = indices;
+        num_rows += indices.shape().Size();
+      }
+      if (num_vals > 1) {
+        // TODO(haibin) aggregate over all unique indices
+        LOG(FATAL) << "RowSparsePull with multiple values is not implemented yet";
+      } else {
+        auto& indices = target_val_rowids[0].second;
+        PullRowSparse_(key, &recv_buf, indices, priority);
+        comm_->BroadcastRowSparse(key, recv_buf, grouped_val_rowid, num_vals == 1, priority);
+      }
     }
   }
 
@@ -231,8 +262,6 @@ class KVStoreDist : public KVStoreLocal {
             send_buf = NDArray(merged.shape(), pinned_ctx_, false, merged.dtype());
           } else {
             send_buf = NDArray(storage_type, merged.shape(), pinned_ctx_, true, merged.dtype());
-            // initialize the buffer with sufficient memory
-            op::FillDnsZerosRspImpl<mshadow::cpu>(nullptr, &send_buf);
           }
         }
         CopyFromTo(merged, &send_buf);
@@ -272,18 +301,19 @@ class KVStoreDist : public KVStoreLocal {
   }
 
   // pull row sparse weight into `recv_buf` based on indices given by `indices`
-  void PullRowSparse(int key, NDArray *recv_buf, const NDArray indices, int priority) {
+  void PullRowSparse_(int key, NDArray *recv_buf, const NDArray indices, int priority) {
     using namespace rowsparse;
-    auto pull_from_servers = [this, key, recv_buf, &indices]
+    auto pull_from_servers = [this, key, recv_buf, indices]
                              (RunContext rctx, Engine::CallbackOnComplete cb) {
-      // reading aux_shape & aux_data should be inside the engine
+      // allocate memory for the buffer
       size_t num_rows = indices.shape().Size();
       recv_buf->CheckAndAlloc({mshadow::Shape1(num_rows)});
 #if MKL_EXPERIMENTAL == 1
       mkl_set_tblob_eager_mode(recv_buf->data());
 #endif
       real_t* data = static_cast<real_t*>(recv_buf->data().dptr_);
-      const auto offsets = indices.data().dptr<int64_t>();
+      auto indices_data = indices.data();
+      const auto offsets = indices_data.dptr<int64_t>();
       const auto unit_len = recv_buf->shape().ProdShape(1, recv_buf->shape().ndim());
       size_t size = num_rows * unit_len;
        // convert to ps keys in row sparse format
@@ -296,6 +326,9 @@ class KVStoreDist : public KVStoreLocal {
       auto vals = new ps::SArray<real_t>(data, size, false);
       CHECK_NOTNULL(ps_worker_)->ZPull(pskv.keys, vals, &pskv.lens, kRowSparsePushPull,
         [vals, cb]() { delete vals; cb(); });
+      // copy indices to recv_buf
+      mshadow::Copy(recv_buf->aux_data(kIdx).FlatTo1D<cpu, int64_t>(),
+                    indices_data.FlatTo1D<cpu, int64_t>());
     };
     CHECK_NOTNULL(Engine::Get())->PushAsync(
         pull_from_servers,
@@ -305,10 +338,6 @@ class KVStoreDist : public KVStoreLocal {
         FnProperty::kNormal,
         priority,
         PROFILER_MESSAGE("KVStoreDistRowSparsePull"));
-     recv_buf->WaitToRead();
-     // copy indices pulled
-     auto recv_buf_idx = recv_buf->aux_ndarray(kIdx);
-     CopyFromTo(indices, &recv_buf_idx);
   }
 
   // push row sparse gradient

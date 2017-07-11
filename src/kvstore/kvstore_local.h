@@ -122,11 +122,11 @@ class KVStoreLocal : public KVStore {
       const size_t num_vals = target_val_rowids.size();
       for (size_t i = 0; i < num_vals; i++) {
         auto &row_id = target_val_rowids[i].second;
-        NDArray indices = row_id.Copy(Context());
-        Unique(row_id, &indices, priority);
+        NDArray indices = row_id.Copy(pinned_ctx_);
+        Unique(&indices, priority);
         target_val_rowids[i].second = indices;
       }
-      comm_->BroadcastRowSparse(key, local, grouped_val_rowids[i], priority);
+      comm_->BroadcastRowSparse(key, local, grouped_val_rowids[i], false, priority);
     }
   }
 
@@ -197,20 +197,21 @@ class KVStoreLocal : public KVStore {
   }
 
   /**
-   * \brief sort and get unique values. Both input and output are expected to be on cpu context
+   * \brief sort and get unique values. Output is expected to be on cpu_pinned context
    */
-  void Unique(const NDArray &in, NDArray *out, int priority = 0) {
-    Engine::Get()->PushSync([in, out](RunContext rctx) {
+  void Unique(NDArray *out, int priority = 0) {
+    CHECK_EQ(out->ctx().dev_mask(), pinned_ctx_.dev_mask()) << "Unique Expects input on `pinned_ctx_`";
+    Engine::Get()->PushSync([out](RunContext rctx) {
         NDArray *output = out;
-        CHECK_EQ(in.shape().ndim(), 1) << "Unique expects 1D inputs";
+        CHECK_EQ(out->shape().ndim(), 1) << "Unique expects 1D inputs";
         // TODO(haibin) need better solution for GPU context
-        const auto size = in.shape()[0];
+        const auto size = out->shape()[0];
         // TODO(haibin) use type switch
         auto dptr = output->data().dptr<int64_t>();
         common::ParallelSort(dptr, dptr + size, omp_get_max_threads());
         auto num_unique_idx = std::unique(dptr, dptr + size) - dptr;
         *output = output->Reshape(mshadow::Shape1(num_unique_idx));
-      }, Context::CPU(), {in.var()}, {out->var()},
+      }, pinned_ctx_, {}, {out->var()},
       FnProperty::kCPUPrioritized, priority, PROFILER_MESSAGE("KVStoreUnique"));
     out->WaitToRead();
   }

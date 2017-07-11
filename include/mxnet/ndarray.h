@@ -461,7 +461,6 @@ class NDArray {
   // Wrap the tblob of aux data into an NDArray which shares the same variable with the
   // current one.
   inline const NDArray aux_ndarray(size_t i) const {
-    this->WaitToRead();
     CHECK_NE(storage_type(), kDefaultStorage);
     CHECK(i < ptr_->aux_shapes.size());
     return NDArray(aux_data(i), ctx().dev_id, var());
@@ -469,7 +468,6 @@ class NDArray {
   // Wrap the tblob of data into an NDArray which shares the same variable with the
   // current one.
   inline const NDArray data_ndarray() const {
-    this->WaitToRead();
     CHECK_NE(storage_type(), kDefaultStorage);
     return NDArray(data(), ctx().dev_id, var());
   }
