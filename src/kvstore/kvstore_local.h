@@ -205,13 +205,14 @@ class KVStoreLocal : public KVStore {
     Engine::Get()->PushSync([out](RunContext rctx) {
         NDArray *output = out;
         CHECK_EQ(out->shape().ndim(), 1) << "Unique expects 1D inputs";
-        // TODO(haibin) need better solution for GPU context
         const auto size = out->shape()[0];
-        // TODO(haibin) use type switch
-        auto dptr = output->data().dptr<int64_t>();
-        common::ParallelSort(dptr, dptr + size, omp_get_max_threads());
-        auto num_unique_idx = std::unique(dptr, dptr + size) - dptr;
-        *output = output->Reshape(mshadow::Shape1(num_unique_idx));
+        auto out_data = output->data();
+        MSHADOW_IDX_TYPE_SWITCH(out_data.type_flag_, IType, {
+          auto dptr = output->data().dptr<IType>();
+          common::ParallelSort(dptr, dptr + size, omp_get_max_threads());
+          auto num_unique_idx = std::unique(dptr, dptr + size) - dptr;
+          *output = output->Reshape(mshadow::Shape1(num_unique_idx));
+        });
       }, pinned_ctx_, {}, {out->var()},
       FnProperty::kCPUPrioritized, priority, PROFILER_MESSAGE("KVStoreUnique"));
     out->WaitToRead();

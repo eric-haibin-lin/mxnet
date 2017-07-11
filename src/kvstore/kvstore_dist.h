@@ -302,7 +302,7 @@ class KVStoreDist : public KVStoreLocal {
   }
 
   // pull row sparse weight into `recv_buf` based on indices given by `indices`
-  void PullRowSparse_(int key, NDArray *recv_buf, const NDArray indices, int priority) {
+  void PullRowSparse_(int key, NDArray *recv_buf, const NDArray& indices, int priority) {
     using namespace rowsparse;
     auto pull_from_servers = [this, key, recv_buf, indices]
                              (RunContext rctx, Engine::CallbackOnComplete cb) {

@@ -185,6 +185,8 @@ class KVStore(object):
 
         The returned values are gauranteed to be the latest values in the store.
 
+        For row_sparse values, please use `row_sparse_pull` instead.
+
         Parameters
         ----------
         key : int or list of int
@@ -243,7 +245,7 @@ class KVStore(object):
         `row_sparse_pull` is executed asynchronously after all previous
         `push`/`pull`/`row_sparse_pull` calls for the same input key(s) are finished.
 
-        The returned values are gauranteed to be the latest values in the store.
+        The returned values are guaranteed to be the latest values in the store.
 
         Parameters
         ----------
@@ -261,6 +263,29 @@ class KVStore(object):
         row_ids : NDArray or list of NDArray
             The row_ids for which to pull for each value. The row_ids doesn't have to be unique
             or sorted.
+        Examples
+        --------
+        >>> shape = (3, 3)
+        >>> kv.init('3', mx.nd.ones(shape)._to_rsp())
+        >>> a = mx.nd.zeros(shape)
+        >>> row_ids = mx.nd.array([0, 2], dtype='int64')
+        >>> kv.row_sparse_pull('3', out=a, row_ids=row_ids)
+        >>> print a.asnumpy()
+        [[ 1.  1.  1.]
+        [ 0.  0.  0.]
+        [ 1.  1.  1.]]
+        >>> duplicate_row_ids = mx.nd.array([2, 2], dtype='int64')
+        >>> kv.row_sparse_pull('3', out=a, row_ids=duplicate_row_ids)
+        >>> print a.asnumpy()
+        [[ 0.  0.  0.]
+        [ 0.  0.  0.]
+        [ 1.  1.  1.]]
+        >>> unsorted_row_ids = mx.nd.array([1, 0], dtype='int64')
+        >>> kv.row_sparse_pull('3', out=a, row_ids=unsorted_row_ids)
+        >>> print a.asnumpy()
+        [[ 1.  1.  1.]
+        [ 1.  1.  1.]
+        [ 0.  0.  0.]]
         """
         assert(out is not None)
         assert(row_ids is not None)

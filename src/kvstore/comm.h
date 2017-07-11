@@ -50,7 +50,11 @@ class Comm {
       const std::vector<NDArray*> dst, int priority) = 0;
 
   /**
-   * \brief broadcast src to dst[i] with unique sorted row_ids
+   * \brief broadcast src to dst[i] with target row_ids for every i
+   * \param dst a list of destination row_sparse NDArray and its target row_ids to broadcast,
+            where the row_ids are expected to be unique and sorted
+   * \param use_copy if set to true, directly copy src to dst[i] without looking up the
+            provided row_ids
    */
   virtual void BroadcastRowSparse(int key, const NDArray& src,
                                   const std::vector<std::pair<NDArray*, NDArray>>& dst,
@@ -183,7 +187,7 @@ class CommCPU : public Comm {
       auto out = dst[i].first;
       auto row_id = dst[i].second;
       if (use_copy) {
-        CopyFromTo(src, out);
+        CopyFromTo(src, out, priority);
       } else {
         CHECK_EQ(out->storage_type(), kRowSparseStorage)
                  << "BroadcastRowSparse expects row_sparse dst NDArray";
