@@ -54,7 +54,7 @@ class BinaryOp : public OpBase
     }
   };
 
-/*! \brief For sparse, assume missing rvalue is 0 */
+  /*! \brief For sparse, assume missing rvalue is 0 */
   template<typename OP, int Req>
   struct BinaryOpMissingRValue
   {
@@ -64,7 +64,7 @@ class BinaryOp : public OpBase
     }
   };
 
-/*! \brief For sparse, assume missing lvalue is 0 */
+  /*! \brief For sparse, assume missing lvalue is 0 */
   template<typename OP, int Req>
   struct BinaryOpMissingLValue
   {
@@ -269,6 +269,7 @@ class BinaryOp : public OpBase
                                    const std::vector<NDArray> &inputs,
                                    const std::vector<OpReqType> &req,
                                    const std::vector<NDArray> &outputs) {
+    CHECK_EQ(outputs[0].storage_type(), kDefaultStorage);
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                          Launch<xpu, OP>, "LaunchAsDense");
   }
@@ -320,6 +321,7 @@ class BinaryOp : public OpBase
                              Launch<xpu, OP>, "Launch");
         return;
       }
+      CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
       ComputeRspRsp<xpu, OP>(attrs, ctx, inputs, req, outputs);
     }
   }
@@ -443,10 +445,26 @@ class BinaryOp : public OpBase
   .add_argument("lhs", "NDArray-or-Symbol", "first input")          \
   .add_argument("rhs", "NDArray-or-Symbol", "second input")
 
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH(__name$, __xpu$, __kernel$)                \
-  NNVM_REGISTER_OP(__name$)                                                              \
-  .set_attr<FCompute>("FCompute<" #__xpu$ ">", BinaryOp::Launch<__xpu$, __kernel$>)      \
-  .set_attr<FComputeEx>("FComputeEx<" #__xpu$ ">", BinaryOp::LaunchEx<__xpu$, __kernel$>)
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(__name$, __kernel$)         \
+  MXNET_OPERATOR_REGISTER_BINARY(__name$)                                     \
+  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)      \
+  .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, __kernel$>)
+
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(__name$, __kernel$)         \
+  MXNET_OPERATOR_REGISTER_BINARY(__name$)                                        \
+  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)         \
+  .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchAsDense<cpu, __kernel$>)
+
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(__name$, __kernel$)           \
+  NNVM_REGISTER_OP(__name$)                                                      \
+  .set_attr<FCompute>("FCompute<gpu>", BinaryOp::Launch<gpu, __kernel$>)         \
+  .set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::LaunchEx<gpu, __kernel$>)
+
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DR(__name$, __kernel$)        \
+  NNVM_REGISTER_OP(__name$)                                                      \
+  .set_attr<FCompute>("FCompute<gpu>", BinaryOp::Launch<gpu, __kernel$>)         \
+  .set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::LaunchAsDense<gpu, __kernel$>)
+
 
 }  // namespace op
 }  // namespace mxnet

@@ -72,6 +72,7 @@ class OpBase {
     }
   }
 
+  /*! \brief Generic copy NDArray */
   template<typename xpu>
   static inline void CopyNDArray(mshadow::Stream<xpu> *s,
                                  const NDArray& dest,
@@ -256,9 +257,9 @@ class UnaryOp : public OpBase {
                             const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
+    CHECK_EQ(outputs[0].storage_type(), kDefaultStorage);
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                          Launch<xpu, OP>, "LaunchAsDense");
-
   }
 
   template<typename xpu>
