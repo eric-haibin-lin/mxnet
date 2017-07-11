@@ -624,6 +624,21 @@ def check_sparse_mathematical_core():
         mathematical_core("log2", stype, lambda x: mx.sym.log2(x), lambda x: np.log2(x),
                           lambda x: (1 / x), grad_stype=grad_stype)
 
+        # relu
+        mathematical_core('relu', stype,
+                          lambda x: mx.sym.relu(x),
+                          lambda x: np.maximum(x, 0.0),
+                          lambda x: 1.0 * (x > 0.0),
+                          grad_stype=grad_stype)
+
+        # sigmoid
+        mathematical_core('sigmoid', stype,
+                          lambda x: mx.sym.sigmoid(x),
+                          lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
+                          #lambda x: np.divide(1.0, (1.0 + np.exp(-x))) * (x * (1 - x)),
+                          lambda x: np.divide(1.0, (1.0 + np.exp(-x)))
+                                    * (1.0 - np.divide(1.0, (1.0 + np.exp(-x)))),
+                          grad_stype=grad_stype)
         # rint
         rounding("rint", stype, lambda x: mx.sym.rint(x), lambda x: np.rint(x))
 
@@ -790,39 +805,39 @@ def test_sparse_maximum_minimum():
     #check_sparse_maximum_minimum('default', 'default', 'default')
     check_sparse_maximum_minimum('row_sparse', 'row_sparse', 'row_sparse')
 
-def test_sparse_simple():
-    def check_sparse_simple(name, stype, mxnet_func, forward_numpy_func, backward_numpy_func):
-        shape = (3, 4)
-        x = mx.symbol.Variable("x")
-        y = mxnet_func(x)
-        if stype == 'default':
-            xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
-            xa_np = xa
-        else:
-            xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
-                                     modifier_func=lambda a: a - 0.5)
-            xa_np = xa.asnumpy()
-        ya = forward_numpy_func(xa_np)
-        ga = backward_numpy_func(xa_np)
-        check_symbolic_forward(y, [xa], [ya])
-        check_symbolic_backward(y, [xa], [np.ones(shape)], [ga])
-
-    def check_sparse_function(name, mxnet_func, forward_numpy_func, backward_numpy_func):
-        check_sparse_simple(name, 'default', mxnet_func, forward_numpy_func, backward_numpy_func)
-        check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_func, backward_numpy_func)
-
-    check_sparse_function('relu',
-                          lambda x: mx.sym.relu(x),
-                          lambda x: np.maximum(x, 0.0),
-                          lambda x: 1.0 * (x > 0.0)
-                          )
-
-    check_sparse_function('sigmoid',
-                          lambda x: mx.sym.sigmoid(x),
-                          lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
-                          lambda x: np.divide(1.0, (1.0 + np.exp(-x)))
-                                    * (1 - np.divide(1.0, (1.0 + np.exp(-x))))
-                          )
+# def test_sparse_simple():
+#     def check_sparse_simple(name, stype, mxnet_func, forward_numpy_func, backward_numpy_func):
+#         shape = (3, 4)
+#         x = mx.symbol.Variable("x")
+#         y = mxnet_func(x)
+#         if stype == 'default':
+#             xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
+#             xa_np = xa
+#         else:
+#             xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
+#                                      modifier_func=lambda a: a - 0.5)
+#             xa_np = xa.asnumpy()
+#         ya = forward_numpy_func(xa_np)
+#         ga = backward_numpy_func(xa_np)
+#         check_symbolic_forward(y, [xa], [ya])
+#         check_symbolic_backward(y, [xa], [np.ones(shape)], [ga])
+#
+#     def check_sparse_function(name, mxnet_func, forward_numpy_func, backward_numpy_func):
+#         check_sparse_simple(name, 'default', mxnet_func, forward_numpy_func, backward_numpy_func)
+#         check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_func, backward_numpy_func)
+#
+#     check_sparse_function('relu',
+#                           lambda x: mx.sym.relu(x),
+#                           lambda x: np.maximum(x, 0.0),
+#                           lambda x: 1.0 * (x > 0.0)
+#                           )
+#
+#     check_sparse_function('sigmoid',
+#                           lambda x: mx.sym.sigmoid(x),
+#                           lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
+#                           lambda x: np.divide(1.0, (1.0 + np.exp(-x)))
+#                                     * (1 - np.divide(1.0, (1.0 + np.exp(-x))))
+#                           )
 
 if __name__ == '__main__':
     #import nose
