@@ -231,6 +231,10 @@ class KVStore(object):
         [ 2.  2.  2.]]
         """
         assert(out is not None)
+        if not isinstance(out, (list, tuple)):
+            out = [out]
+        for o in out:
+            assert(o.storage_type == 'default')
         key = _cast_to_str_keys(key)
         ckeys, cvals = _ctype_str_key_value(key, out)
         check_call(_LIB.MXKVStorePullEx(
@@ -290,6 +294,10 @@ class KVStore(object):
         assert(row_ids is not None)
         if isinstance(row_ids, NDArray):
             row_ids = [row_ids]
+        if not isinstance(out, (list, tuple)):
+            out = [out]
+        for o in out:
+            assert(o.storage_type == 'row_sparse')
         key = _cast_to_str_keys(key)
         ckeys, cvals = _ctype_str_key_value(key, out)
         assert(len(row_ids) == len(cvals))
