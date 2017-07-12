@@ -157,7 +157,7 @@ USE_CPP_PACKAGE=1             \
           init_git_win()
           bat """mkdir build_vc14_cpu
 cd build_vc14_cpu
-cmake -G \"Visual Studio 14 2015 Win64\" -DUSE_CUDA=0 -DUSE_CUDNN=0 -DUSE_NVRTC=0 -DUSE_OPENCV=1 -DUSE_OPENMP=1 -DUSE_PROFILER=1 -DUSE_BLAS=open -DUSE_DIST_KVSTORE=0 ${env.WORKSPACE}"""
+cmake -G \"Visual Studio 14 2015 Win64\" -DUSE_CUDA=0 -DUSE_CUDNN=0 -DUSE_NVRTC=0 -DUSE_OPENCV=1 -DUSE_OPENMP=1 -DUSE_PROFILER=1 -DUSE_BLAS=open -DUSE_LAPACK=1 -DUSE_DIST_KVSTORE=0 ${env.WORKSPACE}"""
           bat 'C:\\mxnet\\build_vc14_cpu.bat'
 
           bat '''rmdir /s/q pkg_vc14_gpu
@@ -188,7 +188,7 @@ del /Q *.7z
              bat """mkdir build_vc14_gpu
 call "C:\\Program Files (x86)\\Microsoft Visual Studio 14.0\\VC\\bin\\x86_amd64\\vcvarsx86_amd64.bat"
 cd build_vc14_gpu
-cmake -G \"NMake Makefiles JOM\" -DUSE_CUDA=1 -DUSE_CUDNN=1 -DUSE_NVRTC=1 -DUSE_OPENCV=1 -DUSE_OPENMP=1 -DUSE_PROFILER=1 -DUSE_BLAS=open -DUSE_DIST_KVSTORE=0 -DCUDA_ARCH_NAME=All -DCMAKE_CXX_FLAGS_RELEASE="/FS /MD /O2 /Ob2 /DNDEBUG" -DCMAKE_BUILD_TYPE=Release ${env.WORKSPACE}"""
+cmake -G \"NMake Makefiles JOM\" -DUSE_CUDA=1 -DUSE_CUDNN=1 -DUSE_NVRTC=1 -DUSE_OPENCV=1 -DUSE_OPENMP=1 -DUSE_PROFILER=1 -DUSE_BLAS=open -DUSE_LAPACK=1 -DUSE_DIST_KVSTORE=0 -DCUDA_ARCH_NAME=All -DCMAKE_CXX_FLAGS_RELEASE="/FS /MD /O2 /Ob2 /DNDEBUG" -DCMAKE_BUILD_TYPE=Release ${env.WORKSPACE}"""
              bat 'C:\\mxnet\\build_vc14_gpu.bat'
              bat '''rmdir /s/q pkg_vc14_gpu
 mkdir pkg_vc14_gpu\\lib
@@ -271,6 +271,36 @@ stage('Unit Test') {
       }
     }
   },
+  'R: CPU': {
+    node('linux') {
+      ws('workspace/ut-r-cpu') {
+        init_git()
+        unpack_lib('cpu')
+        timeout(time: max_time, unit: 'MINUTES') {
+          sh "${docker_run} cpu rm -rf .Renviron"
+          sh "${docker_run} cpu mkdir -p /workspace/ut-r-cpu/site-library"
+          sh "${docker_run} cpu make rpkg USE_BLAS=openblas R_LIBS=/workspace/ut-r-cpu/site-library"
+          sh "${docker_run} cpu R CMD INSTALL --library=/workspace/ut-r-cpu/site-library mxnet_current_r.tar.gz"
+          sh "${docker_run} cpu make rpkgtest R_LIBS=/workspace/ut-r-cpu/site-library"
+        }
+      }
+    }
+  },
+  'R: GPU': {
+    node('GPU' && 'linux') {
+      ws('workspace/ut-r-gpu') {
+        init_git()
+        unpack_lib('gpu')
+        timeout(time: max_time, unit: 'MINUTES') {
+          sh "${docker_run} cpu rm -rf .Renviron"
+          sh "${docker_run} gpu mkdir -p /workspace/ut-r-gpu/site-library"
+          sh "${docker_run} gpu make rpkg USE_BLAS=openblas R_LIBS=/workspace/ut-r-gpu/site-library"
+          sh "${docker_run} gpu R CMD INSTALL --library=/workspace/ut-r-gpu/site-library mxnet_current_r.tar.gz"
+          sh "${docker_run} gpu make rpkgtest R_LIBS=/workspace/ut-r-gpu/site-library"
+        }
+      }
+    }
+  },  
   'Python2/3: CPU Win':{
     node('windows') {
       ws('workspace/ut-python-cpu') {

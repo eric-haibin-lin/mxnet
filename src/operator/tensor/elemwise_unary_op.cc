@@ -48,6 +48,10 @@ MXNET_OPERATOR_REGISTER_BINARY(_backward_sigmoid)
 MXNET_OPERATOR_REGISTER_UNARY(_copy)
 .MXNET_DESCRIBE("Returns a copy of the input.")
 .add_alias("identity")
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+  [](const NodeAttrs& attrs){
+    return std::vector<bool>{true};
+  })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_copy"});
 
@@ -58,6 +62,10 @@ NNVM_REGISTER_OP(_backward_copy)
 .set_attr<nnvm::FInplaceOption>("FInplaceOption",
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}};
+  })
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+  [](const NodeAttrs& attrs){
+    return std::vector<bool>{true};
   })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>);
 
@@ -89,6 +97,10 @@ Example::
   [ 1.  1.]
 
 )code" ADD_FILELINE)
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+  [](const NodeAttrs& attrs){
+    return std::vector<bool>{true};
+  })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", MakeZeroGradNodes);
 
@@ -99,6 +111,10 @@ MXNET_OPERATOR_REGISTER_UNARY(make_loss)
 .set_attr<nnvm::FListOutputNames>("FListOutputNames",
   [](const NodeAttrs& attrs) {
     return std::vector<std::string>{"loss"};
+  })
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+  [](const NodeAttrs& attrs){
+    return std::vector<bool>{true};
   })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 .set_attr<nnvm::FGradient>("FGradient",
@@ -120,6 +136,10 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 .set_attr<nnvm::FInplaceOption>(
     "FInplaceOption", [](const NodeAttrs& attrs) {
       return std::vector<std::pair<int, int> >{{0, 0}};
+    })
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+    [](const NodeAttrs& attrs){
+      return std::vector<bool>{true};
     })
 .set_attr<nnvm::FIgnoreInputs>("FIgnoreInputs",
     [](const NodeAttrs& attrs) { return std::vector<uint32_t>(1, 1); })
@@ -162,6 +182,10 @@ Example::
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}};
   })
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+  [](const NodeAttrs& attrs){
+    return std::vector<bool>{true};
+  })
 .set_attr<FCompute>("FCompute<cpu>", CastCompute<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_cast"})
 .add_argument("data", "NDArray-or-Symbol", "The input.")
@@ -169,6 +193,14 @@ Example::
 
 NNVM_REGISTER_OP(_backward_cast)
 .set_attr<nnvm::TIsBackward>("TIsBackward", true)
+.set_attr<nnvm::FInplaceOption>("FInplaceOption",
+  [](const NodeAttrs& attrs){
+    return std::vector<std::pair<int, int> >{{0, 0}};
+  })
+.set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
+  [](const NodeAttrs& attrs){
+    return std::vector<bool>{true};
+  })
 .set_attr<FCompute>("FCompute<cpu>", CastCompute<cpu>);
 
 
@@ -239,6 +271,8 @@ Example::
 MXNET_OPERATOR_REGISTER_UNARY(ceil)
 .describe(R"code(Returns element-wise ceiling of the input.
 
+The ceil of the scalar x is the smallest integer i, such that i >= x.
+
 Example::
 
    ceil([-2.1, -1.9, 1.5, 1.9, 2.1]) = [-2., -1.,  2.,  2.,  3.]
@@ -250,12 +284,28 @@ Example::
 MXNET_OPERATOR_REGISTER_UNARY(floor)
 .describe(R"code(Returns element-wise floor of the input.
 
+The floor of the scalar x is the largest integer i, such that i <= x.
+
 Example::
 
    floor([-2.1, -1.9, 1.5, 1.9, 2.1]) = [-3., -2.,  1.,  1.,  2.]
 
 )code" ADD_FILELINE)
 .set_attr<FCompute>("FCompute<cpu>", UnaryCompute<cpu, mshadow_op::floor>);
+
+// trunc
+MXNET_OPERATOR_REGISTER_UNARY(trunc)
+.describe(R"code(Return the element-wise truncated value of the input.
+
+The truncated value of the scalar x is the nearest integer i which is closer to
+zero than x is. In short, the fractional part of the signed number x is discarded.
+
+Example::
+
+   trunc([-2.1, -1.9, 1.5, 1.9, 2.1]) = [-2., -1.,  1.,  1.,  2.]
+
+)code" ADD_FILELINE)
+.set_attr<FCompute>("FCompute<cpu>", UnaryCompute<cpu, mshadow_op::trunc>);
 
 // fix
 MXNET_OPERATOR_REGISTER_UNARY(fix)
@@ -277,7 +327,7 @@ MXNET_OPERATOR_REGISTER_UNARY(square)
 
 Example::
 
-   square([2, 3, 4]) = [3, 9, 16]
+   square([2, 3, 4]) = [4, 9, 16]
 
 )code" ADD_FILELINE)
 .set_attr<FCompute>("FCompute<cpu>", UnaryCompute<cpu, mshadow_op::square>)

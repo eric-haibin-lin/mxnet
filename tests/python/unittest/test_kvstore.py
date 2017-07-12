@@ -7,7 +7,11 @@ shape = (4, 4)
 keys = [5, 7, 11]
 str_keys = ['b', 'c', 'd']
 
+<<<<<<< HEAD
 def init_kv(stype='default'):
+=======
+def init_kv():
+>>>>>>> origin/dmlc-master-mirror
     """init kv """
     kv = mx.kv.create()
     # single
@@ -37,10 +41,16 @@ def test_single_kv_pair():
         val = mx.nd.empty(shape)
         kv.pull(key, out = val)
         check_diff_to_scalar(val, 1)
+<<<<<<< HEAD
 
     check_single_kv_pair(init_kv(), 3)
     check_single_kv_pair(init_kv_with_str(), 'a')
 
+=======
+
+    check_single_kv_pair(init_kv(), 3)
+    check_single_kv_pair(init_kv_with_str(), 'a')
+>>>>>>> origin/dmlc-master-mirror
 
 def test_init():
     """test init"""
@@ -52,7 +62,10 @@ def test_init():
 
     check_init(mx.kv.create(), 3)
     check_init(mx.kv.create(), 'a')
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/dmlc-master-mirror
 
 def test_list_kv_pair():
     """list key-value pair push & pull"""
@@ -74,6 +87,7 @@ def test_aggregator():
         # devices
         num_devs = 4
         devs = [mx.Context('cpu', i) for i in range(num_devs)]
+<<<<<<< HEAD
 
         # single
         vals = [mx.nd.ones(shape, d) for d in devs]
@@ -102,11 +116,13 @@ def test_sparse_aggregator():
 
     stype = 'row_sparse'
     kv = init_kv(stype)
+=======
+>>>>>>> origin/dmlc-master-mirror
 
-    # devices
-    num_devs = 4
-    devs = [mx.Context('cpu', i) for i in range(num_devs)]
+        # single
+        vals = [mx.nd.ones(shape, d) for d in devs]
 
+<<<<<<< HEAD
     # single
     vals = [rand_ndarray(shape, stype).copyto(devs[i]) for i in range(num_devs)]
     expected_sum = np.zeros(shape)
@@ -133,6 +149,25 @@ def test_sparse_aggregator():
         for v in vv:
             result_sum += v.asnumpy()
         assert_almost_equal(result_sum, expected_sum * num_devs)
+=======
+        kv.push(key, vals)
+        kv.pull(key, out = vals)
+
+        for v in vals:
+            check_diff_to_scalar(v, num_devs)
+
+        # list
+        vals = [[mx.nd.ones(shape, d)*2.0 for d in devs]] * len(key_list)
+        kv.push(key_list, vals)
+        kv.pull(key_list, out = vals)
+
+        for vv in vals:
+            for v in vv:
+                check_diff_to_scalar(v, num_devs * 2.0)
+
+    check_aggregator(init_kv(), 3, keys)
+    check_aggregator(init_kv_with_str(), 'a', str_keys)
+>>>>>>> origin/dmlc-master-mirror
 
 
 def updater(key, recv, local):
@@ -163,6 +198,7 @@ def test_updater(dev = 'cpu'):
         num_push = 4
         for i in range(num_push):
             kv.push(key_list, vals)
+<<<<<<< HEAD
 
         kv.pull(key_list, out = vals)
 
@@ -178,6 +214,22 @@ def test_updater(dev = 'cpu'):
     str_kv._set_updater(updater)
     check_updater(str_kv, 'a', str_keys)
 
+=======
+
+        kv.pull(key_list, out = vals)
+
+        for vv in vals:
+            for v in vv:
+                check_diff_to_scalar(v, num_devs * num_push)
+
+    kv = init_kv()
+    kv._set_updater(updater)
+    check_updater(kv, 3, keys)
+
+    str_kv = init_kv_with_str()
+    str_kv._set_updater(updater)
+    check_updater(str_kv, 'a', str_keys)
+>>>>>>> origin/dmlc-master-mirror
 
 
 def test_get_type():
