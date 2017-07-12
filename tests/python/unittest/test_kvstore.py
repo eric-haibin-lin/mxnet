@@ -140,8 +140,10 @@ def test_sparse_aggregator():
     for v in vals:
         expected_sum += v.asnumpy()
 
+    # prepare row_ids
+    all_rows = mx.nd.array(np.arange(shape[0]), dtype='int64')
     kv.push(3, vals)
-    kv.pull(3, out = vals)
+    kv.row_sparse_pull(3, out=vals, row_ids=[all_rows] * len(vals))
     result_sum = np.zeros(shape)
     for v in vals:
         result_sum += v.asnumpy()
@@ -154,7 +156,7 @@ def test_sparse_aggregator():
         expected_sum += v.asnumpy()
 
     kv.push(keys, vals)
-    kv.pull(keys, out = vals)
+    kv.row_sparse_pull(keys, out=vals, row_ids=[[all_rows] * num_devs] * len(vals))
     for vv in vals:
         result_sum = np.zeros(shape)
         for v in vv:

@@ -233,8 +233,12 @@ class KVStore(object):
         assert(out is not None)
         if not isinstance(out, (list, tuple)):
             out = [out]
-        for o in out:
-            assert(o.storage_type == 'default')
+        for val in out:
+            if not isinstance(val, (list, tuple)):
+                assert(val.storage_type == 'default')
+            else:
+                for v in val:
+                    assert(v.storage_type == 'default')
         key = _cast_to_str_keys(key)
         ckeys, cvals = _ctype_str_key_value(key, out)
         check_call(_LIB.MXKVStorePullEx(
@@ -256,7 +260,7 @@ class KVStore(object):
             Keys.
 
         out: NDArray or list of NDArray or list of list of NDArray
-            Values corresponding to the keys.
+            Values corresponding to the keys. The storage_type is expected to be row_sparse
 
         priority : int, optional
             The priority of the pull operation.
@@ -296,13 +300,17 @@ class KVStore(object):
             row_ids = [row_ids]
         if not isinstance(out, (list, tuple)):
             out = [out]
-        for o in out:
-            assert(o.storage_type == 'row_sparse')
+        for val in out:
+            if not isinstance(val, (list, tuple)):
+                assert(val.storage_type == 'row_sparse')
+            else:
+                for v in val:
+                    assert(v.storage_type == 'row_sparse')
         key = _cast_to_str_keys(key)
         ckeys, cvals = _ctype_str_key_value(key, out)
-        assert(len(row_ids) == len(cvals))
+        _, crow_ids = _ctype_str_key_value(key, row_ids)
+        assert(len(crow_ids) == len(cvals)), (len(crow_ids), len(cvals))
         #TODO(haibin) pickup upstream changes which removed `_cast_to_str_keys`
-        crow_ids = c_array(NDArrayHandle, [row_id.handle for row_id in row_ids])
 
         check_call(_LIB.MXKVStorePullRowSparse(
             self.handle, mx_uint(len(ckeys)), ckeys, cvals, crow_ids, ctypes.c_int(priority)))
