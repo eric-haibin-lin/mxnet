@@ -2,11 +2,18 @@
 import math
 import pickle
 import logging
+<<<<<<< HEAD
+import mxnet as mx
+from .ndarray import NDArray, clip, sqrt, sign
+from .ndarray import sgd_update, sgd_mom_update, adam_update, rmsprop_update, rmspropalex_update
+from .ndarray_utils import zeros
+=======
 import warnings
 import numpy
 from .ndarray import (NDArray, zeros, clip, sqrt, sign, array, maximum, abs as NDabs)
 from .ndarray import (sgd_update, sgd_mom_update, adam_update, rmsprop_update, rmspropalex_update,
                       mp_sgd_update, mp_sgd_mom_update)
+>>>>>>> origin/dmlc-master-mirror
 from .random import normal
 
 
@@ -339,6 +346,13 @@ class SGD(Optimizer):
         self.multi_precision = multi_precision
 
     def create_state(self, index, weight):
+<<<<<<< HEAD
+        if self.momentum == 0.0:
+            return None
+        else:
+            return mx.nd.zeros(shape=weight.shape, ctx=weight.context,
+                               dtype=weight.dtype, storage_type=weight.storage_type)
+=======
         momentum = None
         weight_master_copy = None
         if self.multi_precision and weight.dtype == numpy.float16:
@@ -354,6 +368,7 @@ class SGD(Optimizer):
         if self.momentum != 0.0:
             momentum = zeros(weight.shape, weight.context, dtype=weight.dtype)
         return momentum
+>>>>>>> origin/dmlc-master-mirror
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -540,8 +555,8 @@ class Adam(Optimizer):
         self.epsilon = epsilon
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context, dtype=weight.dtype),  # mean
-                zeros(weight.shape, weight.context, dtype=weight.dtype))  # variance
+        return (mx.nd.zeros(weight.shape, weight.context, dtype=weight.dtype),  # mean
+                mx.nd.zeros(weight.shape, weight.context, dtype=weight.dtype))  # variance
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -646,11 +661,11 @@ class RMSProp(Optimizer):
     def create_state(self, index, weight):
         if self.centered:
             return (
-                zeros(weight.shape, weight.context),  # n
-                zeros(weight.shape, weight.context),  # g
-                zeros(weight.shape, weight.context))  # delta
+                mx.nd.zeros(weight.shape, weight.context),  # n
+                mx.nd.zeros(weight.shape, weight.context),  # g
+                mx.nd.zeros(weight.shape, weight.context))  # delta
         else:
-            return (zeros(weight.shape, weight.context), )  # n
+            return (mx.nd.zeros(weight.shape, weight.context), )  # n
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))

@@ -10,16 +10,47 @@ from .base import check_call, c_array, c_str, string_types, mx_uint, py_str
 from .base import NDArrayHandle, KVStoreHandle
 from . import optimizer as opt
 
+<<<<<<< HEAD
+def _ctype_str_key_value(keys, vals):
+    names = []
+    if isinstance(keys, str):
+        if isinstance(vals, NDArray):
+            names.append(c_str(keys))
+            return (c_array(ctypes.c_char_p, names),
+                    c_array(NDArrayHandle, [vals.handle]))
+        else:
+            for value in vals:
+                assert(isinstance(value, NDArray))
+            return (c_array(ctypes.c_char_p, [c_str(keys)] * len(vals)),
+                    c_array(NDArrayHandle, [value.handle for value in vals]))
+    else:
+        assert(len(keys) == len(vals))
+        for k in keys:
+            assert(isinstance(k, str))
+=======
 def _ctype_key_value(keys, vals):
     if isinstance(keys, (tuple, list)):
         assert(len(keys) == len(vals))
+>>>>>>> origin/dmlc-master-mirror
         c_keys = []
         c_vals = []
         for key, val in zip(keys, vals):
-            c_key_i, c_val_i = _ctype_key_value(key, val)
+            c_key_i, c_val_i = _ctype_str_key_value(key, val)
             c_keys += c_key_i
             c_vals += c_val_i
         return (c_array(ctypes.c_char_p, c_keys), c_array(NDArrayHandle, c_vals))
+<<<<<<< HEAD
+
+def _cast_to_str_keys(keys):
+    if isinstance(keys, str):
+        return keys
+    if isinstance(keys, int):
+        return str(keys)
+    str_keys = []
+    for key in keys:
+        str_keys.append(str(key) if isinstance(key, int) else key)
+    return str_keys
+=======
     names = []
     keys = str(keys)
     if isinstance(vals, NDArray):
@@ -31,6 +62,7 @@ def _ctype_key_value(keys, vals):
             assert(isinstance(value, NDArray))
         return (c_array(ctypes.c_char_p, [c_str(keys)] * len(vals)),
                 c_array(NDArrayHandle, [value.handle for value in vals]))
+>>>>>>> origin/dmlc-master-mirror
 
 def _updater_wrapper(updater):
     """A wrapper for the user-defined handle."""
@@ -44,7 +76,7 @@ def _updater_wrapper(updater):
 
 class KVStore(object):
     """A key-value store for synchronization of values, over multiple devices."""
-    def __init__(self, handle):
+    def __init__(self, handle, name2idx=None):
         """Initializes a new KVStore.
 
         Parameters
@@ -54,6 +86,7 @@ class KVStore(object):
         """
         assert isinstance(handle, KVStoreHandle)
         self.handle = handle
+        self.name2idx = name2idx if name2idx is not None else {}
         self._updater = None
         self._updater_func = None
 
@@ -91,7 +124,12 @@ class KVStore(object):
         >>> keys = ['5', '7', '9']
         >>> kv.init(keys, [mx.nd.ones(shape)]*len(keys))
         """
+<<<<<<< HEAD
+        key = _cast_to_str_keys(key)
+        ckeys, cvals = _ctype_str_key_value(key, value)
+=======
         ckeys, cvals = _ctype_key_value(key, value)
+>>>>>>> origin/dmlc-master-mirror
         check_call(_LIB.MXKVStoreInitEx(self.handle, mx_uint(len(ckeys)), ckeys, cvals))
 
     def push(self, key, value, priority=0):
@@ -151,7 +189,12 @@ class KVStore(object):
         [[ 4.  4.  4.]
         [ 4.  4.  4.]]
         """
+<<<<<<< HEAD
+        key = _cast_to_str_keys(key)
+        ckeys, cvals = _ctype_str_key_value(key, value)
+=======
         ckeys, cvals = _ctype_key_value(key, value)
+>>>>>>> origin/dmlc-master-mirror
         check_call(_LIB.MXKVStorePushEx(
             self.handle, mx_uint(len(ckeys)), ckeys, cvals,
             ctypes.c_int(priority)))
@@ -214,7 +257,12 @@ class KVStore(object):
         [ 2.  2.  2.]]
         """
         assert(out is not None)
+<<<<<<< HEAD
+        key = _cast_to_str_keys(key)
+        ckeys, cvals = _ctype_str_key_value(key, out)
+=======
         ckeys, cvals = _ctype_key_value(key, out)
+>>>>>>> origin/dmlc-master-mirror
         check_call(_LIB.MXKVStorePullEx(
             self.handle, mx_uint(len(ckeys)), ckeys, cvals,
             ctypes.c_int(priority)))
@@ -391,7 +439,7 @@ class KVStore(object):
         check_call(_LIB.MXKVStoreSendCommmandToServers(
             self.handle, mx_uint(head), c_str(body)))
 
-def create(name='local'):
+def create(name='local', name2idx=None):
     """Creates a new KVStore.
 
     For single machine training, there are two commonly used types:
@@ -431,4 +479,4 @@ def create(name='local'):
     handle = KVStoreHandle()
     check_call(_LIB.MXKVStoreCreate(c_str(name),
                                     ctypes.byref(handle)))
-    return KVStore(handle)
+    return KVStore(handle, name2idx=name2idx)

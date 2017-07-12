@@ -19,6 +19,8 @@ from .base import check_call, MXNetError, _Null # pylint: disable=unused-import
 from .context import Context, cpu
 from .ndarray import NDArray, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
 from .name import NameManager  # pylint: disable=unused-import
+from .ndarray import _STORAGE_TYPE_STR_TO_ID
+from .sparse_ndarray import _ndarray_cls
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope
@@ -1217,8 +1219,9 @@ class Symbol(SymbolBase):
             raise TypeError('Only accept list of NDArrays or dict of str to NDArray')
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
-    def simple_bind(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
-                    shared_arg_names=None, shared_exec=None, shared_buffer=None, **kwargs):
+    def simple_bind(self, ctx, grad_req='write', type_dict=None, storage_type_dict=None,
+                    group2ctx=None, shared_arg_names=None, shared_exec=None,
+                    shared_buffer=None, **kwargs):
         """Bind current symbol to get an executor, allocate all the arguments needed.
         Allows specifying data types.
 
@@ -1260,6 +1263,9 @@ class Symbol(SymbolBase):
         type_dict  : Dict of str->numpy.dtype
             Input type dictionary, name->dtype
 
+        storage_type_dict  : Dict of str->str
+            Input storage type dictionary, name->storage_type
+
         group2ctx : Dict of string to mx.Context
             The dict mapping the `ctx_group` attribute to the context assignment.
 
@@ -1274,7 +1280,8 @@ class Symbol(SymbolBase):
         shared_buffer : Dict of string to `NDArray`
             The dict mapping argument names to the `NDArray` that can be reused for initializing
             the current executor. This buffer will be checked for reuse if one argument name
-            of the current executor is not found in `shared_arg_names`.
+            of the current executor is not found in `shared_arg_names`. The `NDArray`s are
+            expected have default storage type.
 
         kwargs : Dict of str->shape
             Input shape dictionary, name->shape
@@ -1284,6 +1291,7 @@ class Symbol(SymbolBase):
         executor : mxnet.Executor
             The generated executor
         """
+        # data types
         num_provided_arg_types = 0
         provided_arg_type_names = ctypes.POINTER(ctypes.c_char_p)()  # provided type argument names
         provided_arg_type_data = ctypes.POINTER(mx_uint)()  # provided types
@@ -1298,6 +1306,22 @@ class Symbol(SymbolBase):
             num_provided_arg_types = mx_uint(len(provided_arg_type_names))
             provided_arg_type_names = c_array(ctypes.c_char_p, provided_arg_type_names)
             provided_arg_type_data = c_array(ctypes.c_int, provided_arg_type_data)
+
+        # storage types
+        num_provided_arg_stypes = 0
+        # provided storage type argument names
+        provided_arg_stype_names = ctypes.POINTER(ctypes.c_char_p)()
+        provided_arg_stype_data = ctypes.POINTER(mx_uint)()  # provided storage types
+        if storage_type_dict is not None:
+            provided_arg_stype_names = []
+            provided_arg_stype_data = []
+            for k, v in storage_type_dict.items():
+                if v in _STORAGE_TYPE_STR_TO_ID:
+                    provided_arg_stype_names.append(c_str(k))
+                    provided_arg_stype_data.append(ctypes.c_int(_STORAGE_TYPE_STR_TO_ID[v]))
+            num_provided_arg_stypes = mx_uint(len(provided_arg_stype_names))
+            provided_arg_stype_names = c_array(ctypes.c_char_p, provided_arg_stype_names)
+            provided_arg_stype_data = c_array(ctypes.c_int, provided_arg_stype_data)
 
         provided_arg_shape_data = []  # shape data
         # argument shape index in sdata,
@@ -1372,6 +1396,8 @@ class Symbol(SymbolBase):
             shared_buffer_names = []
             shared_buffer_handles = []
             for k, v in shared_buffer.items():
+                assert(v.storage_type == 'default'), \
+                    "shared_buffer is expected to only contain NDArrays with default storage"
                 shared_buffer_names.append(c_str(k))
                 shared_buffer_handles.append(v.handle)
             shared_buffer_names = c_array(ctypes.c_char_p, shared_buffer_names)
@@ -1411,6 +1437,9 @@ class Symbol(SymbolBase):
                                                  num_provided_arg_types,
                                                  provided_arg_type_names,
                                                  provided_arg_type_data,
+                                                 num_provided_arg_stypes,
+                                                 provided_arg_stype_names,
+                                                 provided_arg_stype_data,
                                                  mx_uint(len(shared_arg_name_list)),
                                                  c_array(ctypes.c_char_p, shared_arg_name_list),
                                                  ctypes.byref(shared_buffer_len),
@@ -1440,11 +1469,12 @@ class Symbol(SymbolBase):
                 shared_buffer[k] = v
 
         # create in_args, arg_grads, and aux_states for the current executor
-        arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(num_in_args.value)]
-        grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
+        arg_arrays = [_ndarray_cls(NDArrayHandle(in_arg_handles[i])) \
+                      for i in range(num_in_args.value)]
+        grad_arrays = [_ndarray_cls(NDArrayHandle(arg_grad_handles[i]))
                        if arg_grad_handles[i] is not None
                        else None for i in range(num_in_args.value)]
-        aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i]))
+        aux_arrays = [_ndarray_cls(NDArrayHandle(aux_state_handles[i]))
                       for i in range(num_aux_states.value)]
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
@@ -1695,7 +1725,8 @@ class Symbol(SymbolBase):
         """
         return reshape(self, shape=shape)
 
-def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, **kwargs):
+def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None,
+        init=None, storage_type=None, **kwargs):
     """Creates a symbolic variable with specified name.
 
     Example usage:
@@ -1749,6 +1780,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, ini
         if not isinstance(init, string_types):
             init = init.dumps()
         attr['__init__'] = init
+    if storage_type is not None:
+        attr['__storage_type__'] = str(_STORAGE_TYPE_STR_TO_ID[storage_type])
     for k, v in kwargs.items():
         if k.startswith('__') and k.endswith('__'):
             attr[k] = str(v)
