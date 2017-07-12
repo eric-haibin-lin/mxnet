@@ -383,11 +383,11 @@ class BinaryOp : public OpBase
     BinaryBackwardUseNoneRsp<xpu, LOP, ROP>(attrs, ctx, inputs, req, outputs);
 #else
     MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
-      UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<LOP, Req>>(attrs, ctx, { inputs },
+      UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<LOP, Req>>(attrs, ctx, inputs,
                                                                 req, { outputs[0] });
     });
     MXNET_ASSIGN_REQ_SWITCH(req[1], Req, {
-      UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<ROP, Req>>(attrs, ctx, { inputs },
+      UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<ROP, Req>>(attrs, ctx, inputs,
                                                                 req, { outputs[1] });
     });
 #endif

@@ -1,7 +1,92 @@
 from mxnet.test_utils import *
 
+def get_result_type(call, dflt_stype):
+    if call is not None and dflt_stype != 'default':
+        zero = np.zeros(([1]))
+        result = do_normalize(call(zero))
+        if not almost_equal(result, zero, equal_nan=True):
+            expected_result_type = 'default'
+        else:
+            if dflt_stype is not None:
+                expected_result_type = dflt_stype;
+            else:
+                expected_result_type = 'default'
+    else:
+        expected_result_type = 'default'
+
+    return expected_result_type
+
+
+def get_result_type_2(call, dflt_stype):
+    if call is not None and dflt_stype != 'default':
+        zero = np.zeros(([1]))
+        need_default = False
+        for outer in [zero, np.ones(zero.shape)]:
+            for inner in [zero, np.ones(zero.shape)]:
+                result = do_normalize(call(outer, inner))
+                if not almost_equal(result, zero, equal_nan=True):
+                    need_default = True
+                    break
+            if need_default is True:
+                break
+
+        if not need_default and dflt_stype is not None:
+            expected_result_type = dflt_stype
+        else:
+            expected_result_type = 'default'
+    else:
+        expected_result_type = 'default'
+
+    return expected_result_type
+
+def get_result_type_3(call, dflt_stype):
+    if call is not None and dflt_stype != 'default':
+        zero = np.zeros(([1]))
+        need_default = False
+        for moon in [zero]:
+            for outer in [zero]:
+                for inner in [zero]:
+                    res_1, res_2 = call(moon, outer, inner)
+                    result = do_normalize(res_1)
+                    if not almost_equal(result, zero, equal_nan=True):
+                        need_default = True
+                        break
+                    result = do_normalize(res_2)
+                    if not almost_equal(result, zero, equal_nan=True):
+                        need_default = True
+                        break
+                if need_default is True:
+                    break
+            if need_default is True:
+                break
+
+        if not need_default and dflt_stype is not None:
+            expected_result_type = dflt_stype
+        else:
+            expected_result_type = 'default'
+    else:
+        expected_result_type = 'default'
+
+    return expected_result_type
+
+def get_fw_bw_result_types(forward_numpy_call,  fwd_res_dflt,
+                           backward_numpy_call, bwd_res_dflt):
+
+    return (get_result_type(forward_numpy_call,  fwd_res_dflt),
+            get_result_type(backward_numpy_call, bwd_res_dflt))
+
+def get_fw_bw_result_types_2(forward_numpy_call,  fwd_res_dflt,
+                             backward_numpy_call, bwd_res_dflt):
+    return (get_result_type(forward_numpy_call,  fwd_res_dflt),
+            get_result_type_2(backward_numpy_call, bwd_res_dflt))
 
 def check_elemwise_binary_ops():
+    def is_zero(val):
+      if abs(val) < 1e-4:
+        return True
+      else:
+        return False
+
     def test_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
                                             forward_mxnet_call, forward_numpy_call,
                                             backward_numpy_call1, backward_numpy_call2,
@@ -52,7 +137,7 @@ def check_elemwise_binary_ops():
         exe_test.forward(is_train=True)
         outputs = exe_test.outputs
 
-        assert outputs[0].storage_type.lower() == expected_result_storage_type.lower()
+        assert outputs[0].storage_type == expected_result_storage_type
 
         out = outputs[0].asnumpy()
         npout = forward_numpy_call(data_tmp1, data_tmp2)
@@ -82,8 +167,9 @@ def check_elemwise_binary_ops():
     def test_elemwise_binary_op(name, lhs_stype, rhs_stype, shape,
                                 forward_mxnet_call, forward_numpy_call, backward_numpy_call,
                                 lhs_grad_stype, rhs_grad_stype,
-                                expected_result_storage_type=None):
-
+                                expected_result_storage_type=None,
+                                modifier_func=None):
+        print("test_elemwise_binary_op:", name)
         # Output type should be same as lvalue type, unless otherwise specified
         if expected_result_storage_type is None:
             if lhs_stype == 'default' or rhs_stype == 'default':
@@ -91,58 +177,97 @@ def check_elemwise_binary_ops():
             else:
                 expected_result_storage_type = lhs_stype
 
+        if lhs_grad_stype is None:
+            lhs_grad_stype = lhs_stype
+        if rhs_grad_stype is None:
+            rhs_grad_stype = rhs_stype
+
+        lhs_stype = get_result_type_3(backward_numpy_call, lhs_grad_stype)
+        rhs_stype = get_result_type_3(backward_numpy_call, rhs_grad_stype)
+
         lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
         rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
-        if lhs_grad_stype is not None:
+        if lhs_grad_stype != 'default':
             lhs._set_attr(input_grad_stype_hint=lhs_grad_stype)
-        if rhs_grad_stype is not None:
+        if rhs_grad_stype != 'default':
             rhs._set_attr(input_grad_stype_hint=rhs_grad_stype)
 
-        lhs_nd = rand_ndarray(shape, 'default')
-        lhs_nd[0][0] = 2
-        if lhs_stype is not None and lhs_stype != 'default':
-            lhs_nd = mx.nd.cast_storage(lhs_nd, storage_type=lhs_stype)
+        if lhs_stype == 'default':
+            lhs_nd = rand_ndarray(shape, 'default')
+            lhs_nd = mx.nd.array(assign_each(lhs_nd.asnumpy(), modifier_func))
+        else:
+            lhs_nd = create_sparse_array(shape, lhs_stype, rsp_indices=[(0)],
+                                         modifier_func=modifier_func)
+            # lhs_nd = create_sparse_array(shape, lhs_stype, rsp_indices=(1, 2),
+            #                              modifier_func=modifier_func)
 
-        rhs_nd = rand_ndarray(shape, 'default')
-        rhs_nd[0][0] = 3
-        if rhs_stype is not None and rhs_stype != 'default':
-            rhs_nd = mx.nd.cast_storage(rhs_nd, storage_type=rhs_stype)
+        if rhs_stype == 'default':
+            rhs_nd = rand_ndarray(shape, 'default')
+            rhs_nd = mx.nd.array(assign_each(rhs_nd.asnumpy(), modifier_func))
+        else:
+            # rhs_nd = create_sparse_array(shape, rhs_stype, rsp_indices=(1, 2),
+            #                              modifier_func=modifier_func)
+            rhs_nd = create_sparse_array(shape, rhs_stype, rsp_indices=[(0)],
+                                         modifier_func=modifier_func)
+
+        # lhs_nd = rand_ndarray(shape, 'default')
+        # #lhs_nd[0][0] = 2
+        # if lhs_stype is not None and lhs_stype != 'default':
+        #     lhs_nd = mx.nd.cast_storage(lhs_nd, storage_type=lhs_stype)
+        #
+        # rhs_nd = rand_ndarray(shape, 'default')
+        # #rhs_nd[0][0] = 3
+        # if rhs_stype is not None and rhs_stype != 'default':
+        #     rhs_nd = mx.nd.cast_storage(rhs_nd, storage_type=rhs_stype)
 
         lhs_np = lhs_nd.asnumpy()
         rhs_np = rhs_nd.asnumpy()
 
-        # print("lhs input:")
-        # print(lhs_np)
-        # print("rhs input:")
-        # print(rhs_np)
+        print("lhs input:")
+        print(lhs_np)
+        print("rhs input:")
+        print(rhs_np)
+
+        test = forward_mxnet_call(lhs, rhs)
 
         out_np = forward_numpy_call(lhs_np, rhs_np)
-        test = forward_mxnet_call(lhs, rhs)
-        out_grad = np.ones(shape)
-        ingrad_lhs_np, ingrad_rhs_np = backward_numpy_call(out_grad, lhs_np, rhs_np)
-
-        # print(ingrad_lhs_np)
-        # print(ingrad_rhs_np)
 
         location = {'lhs': lhs_nd, 'rhs': rhs_nd}
 
         outputs = check_symbolic_forward(test, location, [out_np])
         assert len(outputs) == 1
-        assert outputs[0].storage_type.lower() == expected_result_storage_type.lower()
+        assert outputs[0].storage_type == expected_result_storage_type
 
-        # print ("lhs_nd: ", lhs_nd.storage_type)
-        # print ("rhs_nd: ", rhs_nd.storage_type)
-        # print ("forward output: ", outputs[0].storage_type)
+        print ("lhs_nd: ", lhs_nd.storage_type)
+        print ("rhs_nd: ", rhs_nd.storage_type)
+        print ("forward output: ", outputs[0].storage_type)
 
         if outputs[0].storage_type != 'default':
-            out_grad = mx.nd.cast_storage(mx.nd.array(out_grad), storage_type=outputs[0].storage_type)
+            # out_grad = mx.nd.cast_storage(mx.nd.array(out_grad_np),
+            #                               storage_type=expected_result_storage_type)
+            out_grad = create_sparse_array(shape, outputs[0].storage_type,
+                                           rsp_indices=[(0)],
+                                           data_init=1,
+                                           modifier_func=lambda x: 1)
+            # out_grad = create_sparse_array(shape, outputs[0].storage_type, rsp_indices=[(0, 1)],
+            #                                modifier_func=lambda x: 1)
+        else:
+            out_grad = mx.nd.array(np.ones(shape))
+
+        out_grad_np = out_grad.asnumpy()
+
+        ingrad_lhs_np, ingrad_rhs_np = backward_numpy_call(out_grad_np, lhs_np, rhs_np)
+        print(ingrad_lhs_np)
+        print(ingrad_rhs_np)
+
+        print("out_grad", out_grad.asnumpy())
         igrads_result = check_symbolic_backward(test, location, [out_grad], [ingrad_lhs_np, ingrad_rhs_np])
         assert len(igrads_result) == 2
 
         if lhs_grad_stype is not None:
-            assert igrads_result['lhs'].storage_type.lower() == lhs_grad_stype.lower()
+            assert igrads_result['lhs'].storage_type == lhs_grad_stype
         if rhs_grad_stype is not None:
-            assert igrads_result['rhs'].storage_type.lower() == rhs_grad_stype.lower()
+            assert igrads_result['rhs'].storage_type == rhs_grad_stype
 
         check_numeric_gradient(test, location)
 
@@ -178,26 +303,40 @@ def check_elemwise_binary_ops():
     def le(l, r):
         return check_all(l, r, lambda a, b: a <= b)
 
+    # def sparsesest(lstype, rstype):
+    #     if lstype == 'default' and rstype == 'default':
+    #         return 'default'
+    #     elif lstype == 'default':
+    #         return rstype
+    #     else:
+    #         return lstype
+
+    def least_sparse(lstype, rstype):
+        if lstype == 'default' or rstype == 'default':
+            return 'default'
+        else:
+            return lstype
+
     def test_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
-        test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
-                                lambda l, r: mx.sym.maximum(l, r),
-                                lambda l, r: np.maximum(l, r),
-                                lambda outg, l, r: (ge(l, r), lt(l, r)),
-                                lhs_grad_stype, rhs_grad_stype)
+        # test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: mx.sym.maximum(l, r),
+        #                         lambda l, r: np.maximum(l, r),
+        #                         lambda outg, l, r: (ge(l, r), lt(l, r)),
+        #                         lhs_grad_stype, rhs_grad_stype)
+        #
+        # test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: mx.sym.minimum(l, r),
+        #                         lambda l, r: np.minimum(l, r),
+        #                         lambda outg, l, r: (le(l, r), gt(l, r)),
+        #                         lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
-                                lambda l, r: mx.sym.minimum(l, r),
-                                lambda l, r: np.minimum(l, r),
-                                lambda outg, l, r: (le(l, r), gt(l, r)),
-                                lhs_grad_stype, rhs_grad_stype)
-
-        test_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
-                                            lambda x, y: mx.sym.hypot(x, y),
-                                            lambda x, y: np.hypot(x, y),
-                                            lambda x, y: x / np.hypot(x, y),
-                                            lambda x, y: y / np.hypot(x, y),
-                                            data1_grad_stype=lhs_grad_stype,
-                                            data2_grad_stype=rhs_grad_stype)
+        # test_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
+        #                                     lambda x, y: mx.sym.hypot(x, y),
+        #                                     lambda x, y: np.hypot(x, y),
+        #                                     lambda x, y: x / np.hypot(x, y),
+        #                                     lambda x, y: y / np.hypot(x, y),
+        #                                     data1_grad_stype=lhs_grad_stype,
+        #                                     data2_grad_stype=rhs_grad_stype)
 
         test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.elemwise_add(l, r),
@@ -205,31 +344,36 @@ def check_elemwise_binary_ops():
                                 lambda outg, l, r: (outg, outg),
                                 lhs_grad_stype, rhs_grad_stype)
 
-        test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
-                                lambda l, r: mx.sym.elemwise_sub(l, r),
-                                lambda l, r: l - r,
-                                lambda outg, l, r: (outg, -outg),
-                                lhs_grad_stype, rhs_grad_stype)
-
-        test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
-                                lambda l, r: mx.sym.elemwise_mul(l, r),
-                                lambda l, r: l * r,
-                                lambda outg, l, r: (r, l),
-                                lhs_grad_stype, rhs_grad_stype)
-
-        test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
-                                lambda l, r: mx.sym.elemwise_div(l, r),
-                                lambda l, r: l / r,
-                                lambda outg, l, r: (1/r, -l/(r*r)),
-                                lhs_grad_stype, rhs_grad_stype, expected_result_storage_type='default')
+        # test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: mx.sym.elemwise_sub(l, r),
+        #                         lambda l, r: l - r,
+        #                         lambda outg, l, r: (outg, -outg),
+        #                         lhs_grad_stype, rhs_grad_stype)
+        #
+        # test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: mx.sym.elemwise_mul(l, r),
+        #                         lambda l, r: l * r,
+        #                         lambda outg, l, r: (r, l),
+        #                         least_sparse(lhs_stype, rhs_stype),
+        #                         least_sparse(lhs_stype, rhs_stype))
+        #
+        # test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: mx.sym.elemwise_div(l, r),
+        #                         lambda l, r: l / r,
+        #                         lambda outg, l, r: (1/r, -l/(r*r)),
+        #                         lhs_grad_stype, rhs_grad_stype,
+        #                         modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1)
 
     # Run basic tests
-    #shape = (1, 1)
-    shape = rand_shape_2d()
-    test_elemwise_binary_ops('default', 'default', shape)
-    test_elemwise_binary_ops('default', 'row_sparse', shape)
-    test_elemwise_binary_ops('row_sparse', 'default', shape)
-    test_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    shape = (2, 6)
+    #shape = rand_shape_2d()
+    for ii in range(100):
+    #for ii in range(1):
+        print("Pass: ", ii)
+        # test_elemwise_binary_ops('default', 'default', shape)
+        # test_elemwise_binary_ops('default', 'row_sparse', shape)
+        # test_elemwise_binary_ops('row_sparse', 'default', shape)
+        test_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 # TODO(haibin) randomize this test
@@ -374,56 +518,6 @@ def do_normalize(l):
         it_out.iternext()
 
     return output
-
-def get_result_type(call, dflt_stype):
-    if call is not None and dflt_stype != 'default':
-        zero = np.zeros(([1]))
-        result = do_normalize(call(zero))
-        if not almost_equal(result, zero, equal_nan=True):
-            expected_result_type = 'default'
-        else:
-            if dflt_stype is not None:
-                expected_result_type = dflt_stype;
-            else:
-                expected_result_type = 'default'
-    else:
-        expected_result_type = 'default'
-
-    return expected_result_type
-
-
-def get_result_type_2(call, dflt_stype):
-    if call is not None and dflt_stype != 'default':
-        zero = np.zeros(([1]))
-        need_default = False
-        for outer in [zero, np.ones(zero.shape)]:
-            for inner in [zero, np.ones(zero.shape)]:
-                result = do_normalize(call(outer, inner))
-                if not almost_equal(result, zero, equal_nan=True):
-                    need_default = True
-                    break
-            if need_default is True:
-                break
-
-        if not need_default and dflt_stype is not None:
-            expected_result_type = dflt_stype
-        else:
-            expected_result_type = 'default'
-    else:
-        expected_result_type = 'default'
-
-    return expected_result_type
-
-def get_fw_bw_result_types(forward_numpy_call,  fwd_res_dflt,
-                           backward_numpy_call, bwd_res_dflt):
-
-    return (get_result_type(forward_numpy_call,  fwd_res_dflt),
-            get_result_type(backward_numpy_call, bwd_res_dflt))
-
-def get_fw_bw_result_types_2(forward_numpy_call,  fwd_res_dflt,
-                           backward_numpy_call, bwd_res_dflt):
-    return (get_result_type(forward_numpy_call,  fwd_res_dflt),
-            get_result_type_2(backward_numpy_call, bwd_res_dflt))
 
 def check_sparse_mathematical_core():
     # Unary operator check
@@ -886,7 +980,7 @@ if __name__ == '__main__':
     #import nose
     #nose.runmodule()
     #check_sparse_maximum_minimum()
-    test_sparse_unary_with_numerics()
+    #test_sparse_unary_with_numerics()
     #check_sparse_sigmoid()
-    #check_elemwise_binary_ops()
-    check_sparse_mathematical_core()
+    check_elemwise_binary_ops()
+    #check_sparse_mathematical_core()

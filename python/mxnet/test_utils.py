@@ -77,19 +77,22 @@ def random_sample(population, k):
 
 
 def assign_each(input, function):
-    """Pass each value through a caller-specified function and return the modified array."""
-    it_input = np.nditer(input, flags=['f_index'])
+    if function is not None:
+        """Pass each value through a caller-specified function and return the modified array."""
+        it_input = np.nditer(input, flags=['f_index'])
 
-    output = np.zeros(input.shape)
-    it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
+        output = np.zeros(input.shape)
+        it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
 
-    while not it_input.finished:
-        val_input = it_input[0]
-        it_out[0] = function(val_input)
-        it_input.iternext()
-        it_out.iternext()
+        while not it_input.finished:
+            val_input = it_input[0]
+            it_out[0] = function(val_input)
+            it_input.iternext()
+            it_out.iternext()
 
-    return output
+        return output
+    else:
+        return np.array(input)
 
 # TODO(haibin) also include types in arguments
 def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
@@ -135,7 +138,8 @@ def rand_ndarray(shape, storage_type, density=None):
     if storage_type == 'default':
         arr = mx.nd.array(random_arrays(shape))
     else:
-        arr, _ = rand_sparse_ndarray(shape, storage_type, density=density)
+        arr, _ = rand_sparse_ndarray(shape, storage_type,
+                                     density=density, modifier_func=lambda x: x - 0.5)
     return arr
 
 
@@ -757,7 +761,10 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
         input_grad_stype = attr.get('input_grad_stype_hint', None)
         nd = mx.nd.array(v, ctx=ctx)
         if input_grad_stype is not None and input_grad_stype != 'default':
-            args_grad_data[k] = mx.nd.cast_storage(nd, storage_type=input_grad_stype)
+            if input_grad_stype == out_grads[0].storage_type:
+                args_grad_data[k] = out_grads[0].copy()
+            else:
+                args_grad_data[k] = mx.nd.cast_storage(nd, storage_type=input_grad_stype)
         else:
             args_grad_data[k] = nd
 
