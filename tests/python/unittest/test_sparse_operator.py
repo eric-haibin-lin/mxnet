@@ -1,5 +1,6 @@
 from mxnet.test_utils import *
 
+
 def check_elemwise_binary_ops():
     def test_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
                                             forward_mxnet_call, forward_numpy_call,
@@ -19,9 +20,9 @@ def check_elemwise_binary_ops():
         data2 = mx.symbol.Variable('data')
 
         if data1_grad_stype is not None:
-            data1._set_attr(grad_stype_hint=str(data1_grad_stype))
+            data1._set_attr(input_grad_stype_hint=data1_grad_stype)
         if data2_grad_stype is not None:
-            data2._set_attr(grad_stype_hint=str(data2_grad_stype))
+            data2._set_attr(input_grad_stype_hint=data2_grad_stype)
 
         data_tmp1 = np.random.rand(shape[0], shape[1])
         data_tmp2 = np.random.rand(shape[0], shape[1])
@@ -93,9 +94,9 @@ def check_elemwise_binary_ops():
         lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
         rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
         if lhs_grad_stype is not None:
-            lhs._set_attr(grad_stype_hint=str(lhs_grad_stype))
+            lhs._set_attr(input_grad_stype_hint=lhs_grad_stype)
         if rhs_grad_stype is not None:
-            rhs._set_attr(grad_stype_hint=str(rhs_grad_stype))
+            rhs._set_attr(input_grad_stype_hint=rhs_grad_stype)
 
         lhs_nd = rand_ndarray(shape, 'default')
         lhs_nd[0][0] = 2
@@ -265,6 +266,7 @@ def check_elemwise_add_ex_multiple_stages():
     exec_test.backward(out_grads=exec_test.outputs)
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
+
 # TODO(haibin) also add test for backward pass.
 def check_cast_storage_ex():
     def check_rsp_to_dns(shape):
@@ -300,6 +302,7 @@ def check_cast_storage_ex():
     check_csr_to_dns((4, 4))
     check_dns_to_csr([[0, 1, 0], [0, 2, 0], [3, 0, 0], [0, 0, 4], [5, 6, 0], [0, 0, 7]])
 
+
 def check_sparse_dot():
     def check_dot_csr(lhs_shape, rhs_shape, rhs_stype, trans_lhs):
         lhs_dns = rand_ndarray(lhs_shape, 'default')
@@ -332,6 +335,7 @@ def check_sparse_dot():
     check_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
     check_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
 
+
 def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier_func=None):
     if stype == 'row_sparse':
         arr_indices = np.ndarray(len(rsp_indices))
@@ -346,87 +350,103 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier
         raise str("Unknown storage type: " + stype)
     return arr_data
 
+
 def as_dense(arr):
     if arr.storage_type != 'default':
         return mx.nd.cast_storage(arr, storage_type='default')
     else:
         return arr;
 
-def get_fw_bw_result_types(forward_numpy_call,  fwd_res_dflt,
-                           backward_numpy_call, bwd_res_dflt):
 
-    def do_normalize(l):
-        it_l = np.nditer(l, flags=['f_index'])
+# Make sure that 0's look like 0's when we do a comparison
+def do_normalize(l):
+    it_l = np.nditer(l, flags=['f_index'])
 
-        output = np.zeros(l.shape)
-        it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
+    output = np.zeros(l.shape)
+    it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
 
-        while not it_l.finished:
-            val_l = it_l[0]
-            if np.isclose(val_l, -0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
-                val_l = 0
-            it_out[0] = val_l
-            it_l.iternext()
-            it_out.iternext()
+    while not it_l.finished:
+        val_l = it_l[0]
+        if np.isclose(val_l, -0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
+            val_l = 0
+        it_out[0] = val_l
+        it_l.iternext()
+        it_out.iternext()
 
-        return output
+    return output
 
-    def get_result_type(call, dflt_stype):
-        if call is not None and dflt_stype != 'default':
-            zero = np.zeros(([1]))
-            result = do_normalize(call(zero))
-            if not almost_equal(result, zero, equal_nan=True):
-                expected_result_type = 'default'
-            else:
+def get_result_type(call, dflt_stype):
+    if call is not None and dflt_stype != 'default':
+        zero = np.zeros(([1]))
+        result = do_normalize(call(zero))
+        if not almost_equal(result, zero, equal_nan=True):
+            expected_result_type = 'default'
+        else:
+            if dflt_stype is not None:
                 expected_result_type = dflt_stype;
+            else:
+                expected_result_type = 'default'
+    else:
+        expected_result_type = 'default'
+
+    return expected_result_type
+
+
+def get_result_type_2(call, dflt_stype):
+    if call is not None and dflt_stype != 'default':
+        zero = np.zeros(([1]))
+        need_default = False
+        for outer in [zero, np.ones(zero.shape)]:
+            for inner in [zero, np.ones(zero.shape)]:
+                result = do_normalize(call(outer, inner))
+                if not almost_equal(result, zero, equal_nan=True):
+                    need_default = True
+                    break
+            if need_default is True:
+                break
+
+        if not need_default and dflt_stype is not None:
+            expected_result_type = dflt_stype
         else:
             expected_result_type = 'default'
+    else:
+        expected_result_type = 'default'
 
-        return expected_result_type
+    return expected_result_type
+
+def get_fw_bw_result_types(forward_numpy_call,  fwd_res_dflt,
+                           backward_numpy_call, bwd_res_dflt):
 
     return (get_result_type(forward_numpy_call,  fwd_res_dflt),
             get_result_type(backward_numpy_call, bwd_res_dflt))
 
+def get_fw_bw_result_types_2(forward_numpy_call,  fwd_res_dflt,
+                           backward_numpy_call, bwd_res_dflt):
+    return (get_result_type(forward_numpy_call,  fwd_res_dflt),
+            get_result_type_2(backward_numpy_call, bwd_res_dflt))
+
 def check_sparse_mathematical_core():
-    # Rounding check
-    def rounding(name, stype, forward_mxnet_call, forward_numpy_call, data_init=5.):
-        print("TESTING: " + name)
-        data = mx.symbol.Variable('data')
-        shape = (3, 4)
-        data_tmp = np.ones(shape)
-        data_tmp[:] = data_init
-        arr_data = mx.nd.array(data_tmp)
-        if stype != 'default':
-            arr_data = mx.nd.cast_storage(arr_data, storage_type=stype)
-
-        test = forward_mxnet_call(data)
-        exe_test = test.bind(default_context(), args=[arr_data])
-        exe_test.forward(is_train=True)
-        out = exe_test.outputs[0].asnumpy()
-        npout = forward_numpy_call(data_tmp)
-        assert_almost_equal(out, npout)
-
     # Unary operator check
     def mathematical_core(name, stype,
                           forward_mxnet_call, forward_numpy_call, backward_numpy_call=None,
-                          data_init=9, grad_init=2., grad_stype=None):
+                          data_init=9, grad_init=2., output_grad_stype=None, input_grad_stype=None):
         print("TESTING: " + name)
         data = mx.symbol.Variable('data', storage_type=stype)
 
-        if grad_stype is None:
-            grad_stype = stype;
-
-        if grad_stype != 'default':
-            data._set_attr(grad_stype_hint=grad_stype)
+        if input_grad_stype is None:
+            input_grad_stype = stype;
 
         expected_result_type, expected_grad_result_type = \
             get_fw_bw_result_types(forward_numpy_call, stype,
-                                   backward_numpy_call, grad_stype)
+                                   backward_numpy_call, output_grad_stype)
+
+        if input_grad_stype != 'default':
+            data._set_attr(input_grad_stype_hint=expected_grad_result_type)
 
         if expected_result_type != stype and expected_result_type == 'default':
             print(name + " >>> Dense forward result: " + expected_result_type)
 
-        if backward_numpy_call is not None and expected_grad_result_type == 'default' and grad_stype != 'default':
+        if backward_numpy_call is not None and expected_grad_result_type == 'default' and input_grad_stype != 'default':
             print(name + " <<< Dense backward result: " + expected_grad_result_type)
 
         shape = (3, 4)
@@ -465,11 +485,11 @@ def check_sparse_mathematical_core():
         assert_almost_equal(out, npout, equal_nan=True)
 
         if backward_numpy_call is not None:
-            if grad_stype == 'default' or grad_stype is None:
+            if input_grad_stype == 'default' or input_grad_stype is None:
                 out_grad = mx.nd.empty(shape)
                 out_grad[:] = grad_init
             else:
-                out_grad = create_sparse_array(shape, grad_stype, data_init=grad_init, rsp_indices=[(2)])
+                out_grad = create_sparse_array(shape, input_grad_stype, data_init=grad_init, rsp_indices=[(2)])
 
             npout_grad = out_grad.asnumpy()
 
@@ -505,37 +525,37 @@ def check_sparse_mathematical_core():
             return 1
 
     # Check many basic unary operators
-    def test_mathematical_core(stype, grad_stype=None):
+    def test_mathematical_core(stype, output_grad_stype=None):
         # sqrt
         mathematical_core("sqrt", stype,
                           lambda x: mx.sym.sqrt(x),
                           lambda x: np.sqrt(x),
                           lambda x: 1.0/(2.0 * np.sqrt(x)),
-                          grad_stype=grad_stype)
+                          output_grad_stype=output_grad_stype)
 
         # rsqrt
         mathematical_core("rsqrt", stype,
                           lambda x: mx.sym.rsqrt(x),
                           lambda x: 1 / np.sqrt(x),
                           lambda x: -(1.0 / (2.0 * x * np.sqrt(x))),
-                          grad_stype=grad_stype)
+                          output_grad_stype=output_grad_stype)
 
         # square
         mathematical_core("square", stype,
                           lambda x: mx.sym.square(x),
                           lambda x: np.square(x),
                           lambda x: 2 * x,
-                          grad_stype=grad_stype)
+                          output_grad_stype=output_grad_stype)
 
         # tan
-        mathematical_core("tan", stype, lambda x: mx.sym.tan(x), lambda x: np.tan(x), lambda x: np.tan(x) ** 2 + 1, grad_stype=grad_stype)
+        mathematical_core("tan", stype, lambda x: mx.sym.tan(x), lambda x: np.tan(x), lambda x: np.tan(x) ** 2 + 1, output_grad_stype=output_grad_stype)
 
         # abs
         mathematical_core("abs", stype,
                           lambda x: mx.sym.abs(x),
                           lambda x: np.abs(x),
                           lambda x: assign_each(x, function=util_sign),
-                          grad_stype=grad_stype)
+                          output_grad_stype=output_grad_stype)
 
         # negative
         mathematical_core("negative", stype, lambda x: mx.sym.negative(x), lambda x: np.negative(x))
@@ -547,103 +567,88 @@ def check_sparse_mathematical_core():
         mathematical_core("ceil", stype, lambda x: mx.sym.ceil(x), lambda x: np.ceil(x))
 
         # sign
-        mathematical_core("sign", stype, lambda x: mx.sym.sign(x), lambda x: np.sign(x), lambda x: np.zeros(x.shape), grad_stype=grad_stype)
+        mathematical_core("sign", stype, lambda x: mx.sym.sign(x), lambda x: np.sign(x), lambda x: np.zeros(x.shape), output_grad_stype=output_grad_stype)
 
         # cos
-        mathematical_core("cos", stype, lambda x: mx.sym.cos(x), lambda x: np.cos(x), lambda x: -np.sin(x), grad_stype=grad_stype)
+        mathematical_core("cos", stype, lambda x: mx.sym.cos(x), lambda x: np.cos(x), lambda x: -np.sin(x), output_grad_stype=output_grad_stype)
 
         # sin
-        mathematical_core("sin", stype, lambda x: mx.sym.sin(x), lambda x: np.sin(x), lambda x: np.cos(x), grad_stype=grad_stype)
+        mathematical_core("sin", stype, lambda x: mx.sym.sin(x), lambda x: np.sin(x), lambda x: np.cos(x), output_grad_stype=output_grad_stype)
 
         # arcsin
         mathematical_core("arcsin", stype,
                           lambda x: mx.sym.arcsin(x),
                           lambda x: np.arcsin(x),
                           lambda x: 1. / (1. - x ** 2) ** (1. / 2.),
-                          0.5, 0.5, grad_stype=grad_stype)
+                          0.5, 0.5, output_grad_stype=output_grad_stype)
 
         # arccos
         mathematical_core("arccos", stype, lambda x: mx.sym.arccos(x), lambda x: np.arccos(x),
-                          lambda x: -1. / (1. - x ** 2.) ** (1. / 2.), 0.5, 0.5, grad_stype=grad_stype)
+                          lambda x: -1. / (1. - x ** 2.) ** (1. / 2.), 0.5, 0.5, output_grad_stype=output_grad_stype)
 
         # arctan
         mathematical_core("arctan", stype, lambda x: mx.sym.arctan(x), lambda x: np.arctan(x),
-                          lambda x: 1. / (x ** 2. + 1.), 0.5, 0.5, grad_stype=grad_stype)
+                          lambda x: 1. / (x ** 2. + 1.), 0.5, 0.5, output_grad_stype=output_grad_stype)
 
         # degrees
         mathematical_core("degrees", stype,
                           lambda x: mx.sym.degrees(x),
                           lambda x: np.degrees(x),
                           lambda x: assign_each(x, lambda a: 180./np.pi),
-                          0.5, 0.5, grad_stype=grad_stype)
+                          0.5, 0.5, output_grad_stype=output_grad_stype)
 
         # radians
         mathematical_core("radians", stype,
                           lambda x: mx.sym.radians(x),
                           lambda x: np.radians(x),
                           lambda x: assign_each(x, lambda a: np.pi / 180.),
-                          0.6, 1, grad_stype=grad_stype)
+                          0.6, 1, output_grad_stype=output_grad_stype)
 
         # sinh
-        mathematical_core("sinh", stype, lambda x: mx.sym.sinh(x), lambda x: np.sinh(x), lambda x: np.cosh(x), grad_stype=grad_stype)
+        mathematical_core("sinh", stype, lambda x: mx.sym.sinh(x), lambda x: np.sinh(x), lambda x: np.cosh(x), output_grad_stype=output_grad_stype)
 
         # cosh
-        mathematical_core("cosh", stype, lambda x: mx.sym.cosh(x), lambda x: np.cosh(x), lambda x: np.sinh(x), 5, 5, grad_stype=grad_stype)
+        mathematical_core("cosh", stype, lambda x: mx.sym.cosh(x), lambda x: np.cosh(x), lambda x: np.sinh(x), 5, 5, output_grad_stype=output_grad_stype)
 
         # tanh
         mathematical_core("tanh", stype,
                           lambda x: mx.sym.tanh(x),
                           lambda x: np.tanh(x),
                           lambda x: 1. - np.tanh(x) ** 2,
-                          0.5, 1, grad_stype=grad_stype)
+                          0.5, 1, output_grad_stype=output_grad_stype)
 
         # arcsinh
         mathematical_core("arcsinh", stype, lambda x: mx.sym.arcsinh(x), lambda x: np.arcsinh(x),
-                          lambda x: 1./(x**2 + 1.)**(1./2.), grad_stype=grad_stype)
+                          lambda x: 1./(x**2 + 1.)**(1./2.), output_grad_stype=output_grad_stype)
 
         # arccosh
         mathematical_core("arccosh", stype, lambda x: mx.sym.arccosh(x), lambda x: np.arccosh(x),
-                          lambda x: 1./(x**2 - 1.)**(1./2.), grad_stype=grad_stype)
+                          lambda x: 1./(x**2 - 1.)**(1./2.), output_grad_stype=output_grad_stype)
 
         # arctanh
         mathematical_core("arctanh", stype, lambda x: mx.sym.arctanh(x), lambda x: np.arctanh(x),
-                          lambda x: -1./(x**2 - 1.), 0.5, grad_stype=grad_stype)
+                          lambda x: -1./(x**2 - 1.), 0.5, output_grad_stype=output_grad_stype)
 
         # log1p
         mathematical_core("log1p", stype, lambda x: mx.sym.log1p(x), lambda x: np.log1p(x),
-                          lambda x: 1. / (1.0 + x), 0.5, 0.5, grad_stype=grad_stype)
+                          lambda x: 1. / (1.0 + x), 0.5, 0.5, output_grad_stype=output_grad_stype)
         # expm1
         mathematical_core("expm1", stype, lambda x: mx.sym.expm1(x), lambda x: np.expm1(x),
-                          lambda x: np.exp(x), 0.5, 0.5, grad_stype=grad_stype)
+                          lambda x: np.exp(x), 0.5, 0.5, output_grad_stype=output_grad_stype)
 
         # log10
         mathematical_core("log10", stype, lambda x: mx.sym.log10(x), lambda x: np.log10(x),
-                          lambda x: (1 / x), grad_stype=grad_stype)
+                          lambda x: (1 / x), output_grad_stype=output_grad_stype)
 
         # log2
         mathematical_core("log2", stype, lambda x: mx.sym.log2(x), lambda x: np.log2(x),
-                          lambda x: (1 / x), grad_stype=grad_stype)
+                          lambda x: (1 / x), output_grad_stype=output_grad_stype)
 
-        # relu
-        mathematical_core('relu', stype,
-                          lambda x: mx.sym.relu(x),
-                          lambda x: np.maximum(x, 0.0),
-                          lambda x: 1.0 * (x > 0.0),
-                          grad_stype=grad_stype)
-
-        # sigmoid
-        mathematical_core('sigmoid', stype,
-                          lambda x: mx.sym.sigmoid(x),
-                          lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
-                          #lambda x: np.divide(1.0, (1.0 + np.exp(-x))) * (x * (1 - x)),
-                          lambda x: np.divide(1.0, (1.0 + np.exp(-x)))
-                                    * (1.0 - np.divide(1.0, (1.0 + np.exp(-x)))),
-                          grad_stype=grad_stype)
         # rint
-        rounding("rint", stype, lambda x: mx.sym.rint(x), lambda x: np.rint(x))
+        mathematical_core("rint", stype, lambda x: mx.sym.rint(x), lambda x: np.rint(x))
 
         # fix
-        rounding("fix", stype, lambda x: mx.sym.fix(x), lambda x: np.fix(x))
+        mathematical_core("fix", stype, lambda x: mx.sym.fix(x), lambda x: np.fix(x))
 
         try:
             from scipy import special as scipy_special
@@ -652,12 +657,14 @@ def check_sparse_mathematical_core():
             mathematical_core("gamma", stype,
                               lambda x: mx.sym.gamma(x),
                               lambda x: scipy_special.gamma(x),
-                              lambda x: scipy_special.gamma(x) * scipy_special.psi(x))
+                              lambda x: scipy_special.gamma(x) * scipy_special.psi(x),
+                              output_grad_stype=output_grad_stype)
             # gammaln
             mathematical_core("gammaln", stype,
                               lambda x: mx.sym.gammaln(x),
                               lambda x: scipy_special.gammaln(x),
-                              lambda x: scipy_special.psi(x))
+                              lambda x: scipy_special.psi(x),
+                              output_grad_stype=output_grad_stype)
 
         except:
             if import_succeeded == False:
@@ -667,8 +674,8 @@ def check_sparse_mathematical_core():
 
     test_mathematical_core('default')
     test_mathematical_core('row_sparse')
-    test_mathematical_core('row_sparse', grad_stype='default')
-    test_mathematical_core('row_sparse', grad_stype='row_sparse')
+    test_mathematical_core('row_sparse', output_grad_stype='default')
+    test_mathematical_core('row_sparse', output_grad_stype='row_sparse')
     print("Done")
 
 def check_sparse_embedding():
@@ -805,45 +812,81 @@ def test_sparse_maximum_minimum():
     #check_sparse_maximum_minimum('default', 'default', 'default')
     check_sparse_maximum_minimum('row_sparse', 'row_sparse', 'row_sparse')
 
-# def test_sparse_simple():
-#     def check_sparse_simple(name, stype, mxnet_func, forward_numpy_func, backward_numpy_func):
-#         shape = (3, 4)
-#         x = mx.symbol.Variable("x")
-#         y = mxnet_func(x)
-#         if stype == 'default':
-#             xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
-#             xa_np = xa
-#         else:
-#             xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
-#                                      modifier_func=lambda a: a - 0.5)
-#             xa_np = xa.asnumpy()
-#         ya = forward_numpy_func(xa_np)
-#         ga = backward_numpy_func(xa_np)
-#         check_symbolic_forward(y, [xa], [ya])
-#         check_symbolic_backward(y, [xa], [np.ones(shape)], [ga])
-#
-#     def check_sparse_function(name, mxnet_func, forward_numpy_func, backward_numpy_func):
-#         check_sparse_simple(name, 'default', mxnet_func, forward_numpy_func, backward_numpy_func)
-#         check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_func, backward_numpy_func)
-#
-#     check_sparse_function('relu',
-#                           lambda x: mx.sym.relu(x),
-#                           lambda x: np.maximum(x, 0.0),
-#                           lambda x: 1.0 * (x > 0.0)
-#                           )
-#
-#     check_sparse_function('sigmoid',
-#                           lambda x: mx.sym.sigmoid(x),
-#                           lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
-#                           lambda x: np.divide(1.0, (1.0 + np.exp(-x)))
-#                                     * (1 - np.divide(1.0, (1.0 + np.exp(-x))))
-#                           )
+
+def test_sparse_unary_with_numerics():
+    def check_sparse_simple(name, stype, mxnet_func, forward_numpy_call,
+                            backward_numpy_call, output_grad_stype=None):
+        if output_grad_stype is None:
+            output_grad_stype = stype
+
+        expected_result_type, expected_grad_result_type = \
+            get_fw_bw_result_types_2(forward_numpy_call, stype, backward_numpy_call, output_grad_stype)
+
+        if expected_result_type != stype and expected_result_type == 'default':
+            print(name + " >>> Dense forward result: " + expected_result_type)
+
+        if backward_numpy_call is not None and expected_grad_result_type == 'default' and output_grad_stype != 'default':
+            print(name + " <<< Dense backward result: " + expected_grad_result_type)
+
+        shape = (3, 4)
+        data = mx.symbol.Variable("data")
+
+        if output_grad_stype != 'default':
+            data._set_attr(input_grad_stype_hint=expected_grad_result_type)
+
+        y = mxnet_func(data)
+        if stype == 'default':
+            xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
+            xa_np = xa
+        else:
+            xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
+                                     modifier_func=lambda a: a - 0.5)
+            xa_np = xa.asnumpy()
+
+        if output_grad_stype != 'default':
+            out_grad = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1, 2],
+                                           modifier_func=lambda a: a - 0.5)
+            out_grad_np = out_grad.asnumpy()
+        else:
+            out_grad_np = np.ones(xa.shape)
+            out_grad = mx.nd.array(out_grad_np)
+
+        output_np = forward_numpy_call(xa_np)
+        input_grad_np = backward_numpy_call(output_np, out_grad_np)
+
+        outputs = check_symbolic_forward(y, [xa], [output_np])
+        output = outputs[0]
+
+        assert output.storage_type == expected_result_type
+
+        input_grad_dict = check_symbolic_backward(y, location=[xa], out_grads=[out_grad], expected=[input_grad_np])
+        inp_grad = input_grad_dict["data"]
+
+        assert inp_grad.storage_type == expected_grad_result_type
+
+    def check_sparse_function(name, mxnet_func, forward_numpy_call, backward_numpy_call):
+        check_sparse_simple(name, 'default', mxnet_func, forward_numpy_call, backward_numpy_call)
+        for output_grad_stype in [None, "row_sparse", "default"]:
+            check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_call, backward_numpy_call,
+                              output_grad_stype=output_grad_stype)
+
+    check_sparse_function('relu',
+                          lambda x: mx.sym.relu(x),
+                          lambda x: np.maximum(x, 0.0),
+                          lambda input, outg: outg * assign_each(input, lambda x: x > 0.0)
+                          )
+
+    check_sparse_function('sigmoid',
+                          lambda x: mx.sym.sigmoid(x),
+                          lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
+                          lambda output, outg: outg * assign_each(output, lambda x: x * (1.0 - x))
+                        )
 
 if __name__ == '__main__':
     #import nose
     #nose.runmodule()
     #check_sparse_maximum_minimum()
-    #test_sparse_simple()
+    test_sparse_unary_with_numerics()
     #check_sparse_sigmoid()
     #check_elemwise_binary_ops()
     check_sparse_mathematical_core()

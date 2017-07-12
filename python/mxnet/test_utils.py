@@ -680,9 +680,6 @@ def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
     executor.forward(is_train=False)
 
     outputs = [x.asnumpy() for x in executor.outputs]
-    print('outputs:')
-    for t in executor.outputs:
-        print(t.asnumpy())
     for output_name, expect, output in zip(sym.list_outputs(), expected, outputs):
         assert_almost_equal(expect, output, rtol, atol,
                             ("EXPECTED_%s"%output_name, "FORWARD_%s"%output_name))
@@ -750,10 +747,6 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     if isinstance(expected, (list, tuple)):
         expected = {k:v for k, v in zip(sym.list_arguments(), expected)}
 
-    # print('expected:')
-    # for ex in expected:
-    #     print(ex)
-
     args_grad_npy = {k:_rng.normal(size=v.shape) for k, v in expected.items()}
     # args_grad_data should be casted to storage type if hinted
     # TODO(haibin) this is a temporary solution for testing. remove later
@@ -761,15 +754,12 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     args_grad_data = {}
     for k, v in args_grad_npy.items():
         attr = attrs.get(k, {})
-        grad_stype = attr.get('grad_stype_hint', None)
+        input_grad_stype = attr.get('input_grad_stype_hint', None)
         nd = mx.nd.array(v, ctx=ctx)
-        if grad_stype is not None:
-            out = mx.nd.cast_storage(nd, storage_type=grad_stype)
-            args_grad_data[k] = out
+        if input_grad_stype is not None and input_grad_stype != 'default':
+            args_grad_data[k] = mx.nd.cast_storage(nd, storage_type=input_grad_stype)
         else:
             args_grad_data[k] = nd
-            print("-----")
-            print(nd.asnumpy())
 
     if isinstance(grad_req, str):
         grad_req = {k:grad_req for k in sym.list_arguments()}
@@ -781,28 +771,29 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     executor.forward(is_train=True)
 
     if isinstance(out_grads, (tuple, list)):
-        out_grads = [mx.nd.array(v, ctx=ctx) for v in out_grads]
-    elif isinstance(out_grads, (dict)):
-        out_grads = {k:mx.nd.array(v, ctx=ctx) for k, v in out_grads.items()}
+        outg = list()
+        for arr in out_grads:
+            if isinstance(arr, np.ndarray):
+                outg.append(mx.nd.array(arr, ctx=ctx))
+            else:
+                outg.append(arr)
+        #out_grads = [mx.nd.array(v, ctx=ctx) for v in out_grads]
+        out_grads = outg
+    elif isinstance(out_grads, dict):
+        outg = dict()
+        for k, v in out_grads.items():
+            if isinstance(v, np.ndarray):
+                outg[k] = mx.nd.array(v, ctx=ctx)
+            else:
+                outg[k] = v
+        out_grads = outg
+        #out_grads = {k:mx.nd.array(v, ctx=ctx) for k, v in out_grads.items()}
     else:
         assert out_grads is None
 
-    # if out_grads is not None:
-    #     print("out_grads:")
-    #     for og in out_grads:
-    #         print(og.asnumpy())
-
     executor.backward(out_grads)
 
-    # print("EXPECTED in_grads:")
-    # for k, v in expected.items():
-    #     print(k, v)
-
     grads = {k: v.asnumpy() for k, v in args_grad_data.items()}
-    # print("ACTUAL in_grads:")
-    # for k, v in grads.items():
-    #     print(k)
-    #     print(v)
 
     for name in expected:
         if grad_req[name] == 'write':
