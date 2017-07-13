@@ -95,8 +95,9 @@ class BinaryOp : public OpBase
 
     bool init_l = lhs.storage_initialized();
     bool init_r = rhs.storage_initialized();
+
     // both inputs are zeros
-    if (!init_l && !init_r) return;
+    //if (!init_l && !init_r) return;
 
     std::unique_ptr<NDArray> tempSparse;
     if(output->storage_type() == kDefaultStorage) {

@@ -443,7 +443,7 @@ The output is in the closed interval of [:math:`-\pi/2`, :math:`\pi/2`].
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arcsin" });
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_arcsin, unary_bwd<mshadow_op::arcsin_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arcsin, unary_bwd<mshadow_op::arcsin_grad>);
 
 // arccos
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccos, cpu, mshadow_op::arccos)
