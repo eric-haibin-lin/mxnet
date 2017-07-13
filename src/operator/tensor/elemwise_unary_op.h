@@ -137,12 +137,13 @@ class UnaryOp : public OpBase {
     CHECK_EQ(outputs.size(), static_cast<size_t>(n_out))
       << " in operator " << attrs.name;
     CHECK(n_in > 0 && n_out > 0);
-    if(!shape_is_none(inputs[0].storage_shape())) {
+    const TShape& isshape = inputs[0].storage_shape();
+    if(!shape_is_none(isshape)) {
       NDArray *output = nullptr;
-      for(size_t i = 0, n = inputs.size(); i < n; ++i) {
-        const NDArray& input = inputs[i];
-        const TShape& ishape = input.storage_shape();
-        if(i < n_out) {
+      for (size_t i = 0, n = inputs.size(); i < n; ++i) {
+        const NDArray &input = inputs[i];
+        const TShape &ishape = input.storage_shape();
+        if (i < n_out) {
           output = const_cast<NDArray *>(&outputs[i]);
         }
         TShape sshape = output->storage_shape();
@@ -150,15 +151,18 @@ class UnaryOp : public OpBase {
         output->set_storage_shape(sshape);
         CHECK_EQ(output->storage_type(), input.storage_type());
         CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
-        for(size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
+        for (size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
           TShape ashape = output->aux_shape(j);
           CHECK(shape_assign(&ashape, input.aux_shape(j)));
           output->set_aux_shape(j, ashape);
         }
       }
       return true;
+    } else if(isshape.ndim() > 0 && isshape[0] == 0
+              && inputs[0].storage_type() == kRowSparseStorage) {
+      return true;  // 0% density
     } else {
-      CHECK(false); // implement when necessary
+      CHECK(false);  // implement when necessary
     }
     return false;
   }
