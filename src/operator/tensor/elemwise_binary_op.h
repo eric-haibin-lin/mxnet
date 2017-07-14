@@ -16,6 +16,10 @@
 #include "elemwise_unary_op.h"
 #include "../../common/utils.h"
 
+#ifndef NEBUG
+#include "../../../tests/cpp/include/test_util.h"
+#endif
+
 namespace mxnet {
 namespace op {
 
@@ -107,23 +111,21 @@ class BinaryOp : public OpBase
                                             const std::vector<NDArray> &inputs,
                                             const std::vector<OpReqType> &req,
                                             const std::vector<NDArray> &outputs) {
-#if 0
+#if 1
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
 
     CHECK_EQ(inputs.size(), 3U);
     CHECK_EQ(outputs.size(), 1U);
-    //const NDArray &ograd  = inputs[0];
+
+    const NDArray &ograd  = inputs[0];
     const NDArray &lhs    = inputs[1];
     const NDArray &rhs    = inputs[2];
     const NDArray *output = &outputs[0];
 
-    //const bool init_l = lhs.storage_initialized();
-    //const bool init_r = rhs.storage_initialized();
-
-    // both inputs are zeros
-    //if (!init_l && !init_r) return;
+    CHECK_EQ(lhs.shape(), rhs.shape());
+    CHECK_EQ(lhs.shape(), ograd.shape());
 
     std::unique_ptr<NDArray> tempSparse;
     if(output->storage_type() == kDefaultStorage) {
@@ -136,25 +138,79 @@ class BinaryOp : public OpBase
 
     // Memory Estimation: This is (roughly) the number of result rows. We still
     // need to subtract the number of common rows
+    const size_t num_rows_ograd = ograd.aux_shape(rowsparse::kIdx).Size();
     const size_t num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
     const size_t num_rows_r = rhs.aux_shape(rowsparse::kIdx).Size();
-    output->CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
+
+
+
+    output->CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r + num_rows_ograd)});
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
 
     // Indices
+    Tensor<xpu, 1, IType> indices_ograd = ograd.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
     Tensor<xpu, 1, IType> indices_l = lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
     Tensor<xpu, 1, IType> indices_r = rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
     Tensor<xpu, 1, IType> indices_out = output->aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
 
     // Data
+    Tensor<xpu, 2, DType> data_ograd = ograd.data().FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> data_l = lhs.data().FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> data_r = rhs.data().FlatTo2D<xpu, DType>(s);
     Tensor<xpu, 2, DType> out = output->data().FlatTo2D<xpu, DType>(s);
 
+    size_t iter_ograd = 0;
     size_t iter_l = 0;
     size_t iter_r = 0;
     size_t iter_out = 0;
     int32_t num_common_rows = 0;
+
+    // Possible contain-row permutations
+    // none
+    // ograd, lhs, rhs
+    // ograd, lhs
+    // ograd, rhs
+    // lhs, rhs
+    // ograd
+    // lhs
+    // rhs
+
+    while (iter_ograd < num_rows_ograd && iter_l < num_rows_l && iter_r < num_rows_r) {
+      const IType idx_ograd = indices_ograd[iter_ograd];
+      const IType idx_l = indices_l[iter_l];
+      const IType idx_r = indices_r[iter_r];
+      if(idx_ograd == idx_l && idx_l == idx_r) {
+        indices_out[iter_out] = iter_ograd;
+        Tensor<xpu, 1, DType> ogradvalue = data_ograd[iter_ograd++];
+        Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
+        Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
+        DCHECK_EQ(lvalue.shape_.Size(), rvalue.shape_.Size());
+        MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+          Kernel<BinaryOpBackwardUseIn<OP, Req>, xpu>::Launch(
+            s, lvalue.shape_.Size(),
+            out[iter_out].dptr_,
+            ogradvalue.dptr_,
+            lvalue.dptr_,
+            rvalue.dptr_);
+        });
+        ++num_common_rows;
+      } else if(idx_ograd == idx_l) {
+
+        ++num_common_rows;
+      } else if(idx_l == idx_r) {
+
+        ++num_common_rows;
+      } else if(idx_ograd < idx_l && idx_ograd < idx_r) {
+
+      } else if(idx_l < idx_ograd && idx_l < idx_r) {
+
+      } else if(idx_r < idx_ograd && idx_r < idx_l) {
+
+      } else {
+        CHECK(false);  // SHouldn't get here
+      }
+    }
+/*
     while (iter_l < num_rows_l && iter_r < num_rows_r) {
       const IType idx_l = indices_l[iter_l];
       const IType idx_r = indices_r[iter_r];
@@ -208,31 +264,28 @@ class BinaryOp : public OpBase
     nnvm::TShape new_shape = output->aux_shape(rowsparse::kIdx);
     new_shape[0] -= num_common_rows;  // Reduce the first-dimension size by the number of common rows
     output->set_aux_shape(rowsparse::kIdx, new_shape);
+*/
+#endif
     if(tempSparse.get()) {
       // Required output is actually something other than RSP,
       // so cast out final RSP to the true output type
       CastStorageComputeImpl(s, *tempSparse, outputs[0]);
     }
-#endif
   }
 
   // TODO(cjolivier01) Precompute parallelizing strategy
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp2(const nnvm::NodeAttrs &attrs,
                                              const OpContext &ctx,
-                                             const std::vector<NDArray> &inputs,
-                                             const std::vector<OpReqType> &req,
-                                             const std::vector<NDArray> &outputs) {
+                                             const NDArray& lhs,
+                                             const NDArray& rhs,
+                                             const OpReqType req,
+                                             const NDArray _output) {
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
 
-    CHECK_EQ(inputs.size(), 2U);
-    CHECK_EQ(outputs.size(), 1U);
-
-    const NDArray &lhs = inputs[0];
-    const NDArray &rhs = inputs[1];
-    const NDArray *output = &outputs[0];
+    const NDArray *output = &_output;
 
     //const bool init_l = lhs.storage_initialized();
     //const bool init_r = rhs.storage_initialized();
@@ -279,7 +332,7 @@ class BinaryOp : public OpBase
         Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
         Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
         DCHECK_EQ(lvalue.shape_.Size(), rvalue.shape_.Size());
-        MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+        MXNET_ASSIGN_REQ_SWITCH(req, Req, {
           Kernel<BMap<OP, Req>, xpu>::Launch(
             s, lvalue.shape_.Size(), out[iter_out].dptr_, lvalue.dptr_, rvalue.dptr_);
         });
@@ -288,7 +341,7 @@ class BinaryOp : public OpBase
         // Left only
         indices_out[iter_out] = idx_l;
         Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
-        MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+        MXNET_ASSIGN_REQ_SWITCH(req, Req, {
           Kernel<BinaryOpMissingRValue<OP, Req>, xpu>::Launch(
             s, lvalue.shape_.Size(), out[iter_out].dptr_, lvalue.dptr_);
         });
@@ -296,7 +349,7 @@ class BinaryOp : public OpBase
         // Right only
         indices_out[iter_out] = idx_r;
         Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
-        MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+        MXNET_ASSIGN_REQ_SWITCH(req, Req, {
           Kernel<BinaryOpMissingLValue<OP, Req>, xpu>::Launch(
             s, rvalue.shape_.Size(), out[iter_out].dptr_, rvalue.dptr_);
         });
@@ -307,32 +360,38 @@ class BinaryOp : public OpBase
     while (iter_l < num_rows_l) {
       indices_out[iter_out] = indices_l[iter_l];
       Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
-      MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+      MXNET_ASSIGN_REQ_SWITCH(req, Req, {
         Kernel<BinaryOpMissingRValue<OP, Req>, xpu>::Launch(
-          s, lvalue.shape_.Size(), out[iter_out].dptr_, lvalue.dptr_);
+          s, lvalue.shape_.Size(), out[iter_out++].dptr_, lvalue.dptr_);
       });
     }
     while (iter_r < num_rows_r) {
       indices_out[iter_out] = indices_r[iter_r];
       Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
-      MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+      MXNET_ASSIGN_REQ_SWITCH(req, Req, {
         Kernel<BinaryOpMissingLValue<OP, Req>, xpu>::Launch(
-          s, rvalue.shape_.Size(), out[iter_out].dptr_, rvalue.dptr_);
+          s, rvalue.shape_.Size(), out[iter_out++].dptr_, rvalue.dptr_);
       });
     }
+    DCHECK_LE(iter_out, num_rows_l + num_rows_r);  // Make sure that we didn't overrun
     nnvm::TShape new_shape = output->aux_shape(rowsparse::kIdx);
     new_shape[0] -= num_common_rows;  // Reduce the first-dimension size by the number of common rows
     output->set_aux_shape(rowsparse::kIdx, new_shape);
     if(tempSparse.get()) {
       // Required output is actually something other than RSP,
       // so cast out final RSP to the true output type
-      CastStorageComputeImpl(s, *tempSparse, outputs[0]);
+      CastStorageComputeImpl(s, *tempSparse, _output);
     }
   }
 
   /*! \brief Minimum of three */
   static MSHADOW_XINLINE size_t minthree(const size_t a, const size_t b, const size_t c) {
     return std::min(a, std::min(b, c));
+  }
+
+  /*! \brief Maximum of three */
+  static MSHADOW_XINLINE size_t maxthree(const size_t a, const size_t b, const size_t c) {
+    return std::max(a, std::max(b, c));
   }
 
   template<typename DType>
@@ -346,28 +405,30 @@ class BinaryOp : public OpBase
   template<typename xpu, typename OP>
   static void ComputeRspRsp(const nnvm::NodeAttrs &attrs,
                             const OpContext &ctx,
-                            const std::vector<NDArray> &inputs,
-                            const std::vector<OpReqType> &req,
-                            const std::vector<NDArray> &outputs) {
-    MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-      MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
-        RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(attrs, ctx, inputs, req, outputs);
+                            const NDArray &lhs,
+                            const NDArray &rhs,
+                            const OpReqType req,
+                            const NDArray &output) {
+    MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+      MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
+        RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+          attrs, ctx, lhs, rhs, req, output);
       })
     });
   }
 
-  template<typename xpu, typename OP>
-  static void ComputeRspRsp3(const nnvm::NodeAttrs &attrs,
-                            const OpContext &ctx,
-                            const std::vector<NDArray> &inputs,
-                            const std::vector<OpReqType> &req,
-                            const std::vector<NDArray> &outputs) {
-    MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-      MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
-        RspRspElemwiseBinaryOp3<xpu, DType, IType, OP>(attrs, ctx, inputs, req, outputs);
-      })
-    });
-  }
+//  template<typename xpu, typename OP>
+//  static void ComputeRspRsp3(const nnvm::NodeAttrs &attrs,
+//                            const OpContext &ctx,
+//                            const std::vector<NDArray> &inputs,
+//                            const std::vector<OpReqType> &req,
+//                            const std::vector<NDArray> &outputs) {
+//    MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+//      MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+//        RspRspElemwiseBinaryOp3<xpu, DType, IType, OP>(attrs, ctx, inputs, req, outputs);
+//      })
+//    });
+//  }
 
   template<typename xpu, typename LOP, typename ROP, typename DType>
   static void BinaryBackwardUseNone_(const nnvm::NodeAttrs &attrs,
@@ -483,7 +544,8 @@ class BinaryOp : public OpBase
       if (!common::ContainsDefaultStorage(inputs)) {
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
         DCHECK(fabs(OP::Map(0, 0)) < 1e-5);
-        ComputeRspRsp<xpu, OP>(attrs, ctx, inputs, req, outputs);
+        ComputeRspRsp<xpu, OP>(attrs, ctx, inputs[0], inputs[1],
+                               req[0], outputs[0]);
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              Launch<xpu, OP>, "LaunchEx");
@@ -501,40 +563,6 @@ class BinaryOp : public OpBase
       BinaryBackwardUseNone_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
     });
   }
-
-//  // Only implemented for _backward_add for now
-//  template<typename xpu, typename LOP, typename ROP>
-//  static void BinaryBackwardUseNoneRsp(const nnvm::NodeAttrs &attrs,
-//                                const OpContext &ctx,
-//                                const std::vector<NDArray> &inputs,
-//                                const std::vector<OpReqType> &req,
-//                                const std::vector<NDArray> &outputs) {
-//    using namespace mshadow;
-//    using namespace mshadow::expr;
-//    Stream<xpu> *s = ctx.get_stream<xpu>();
-//    CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-//    CHECK_EQ(outputs[0].storage_type(), kRowSparseStorage);
-//    CHECK_EQ(outputs[1].storage_type(), kRowSparseStorage);
-//    CHECK(typeid(LOP) == typeid(mshadow_op::identity));
-//    CHECK(typeid(ROP) == typeid(mshadow_op::identity));
-//    const TShape &shape = inputs[0].aux_shape(rowsparse::kIdx);
-//    outputs[0].CheckAndAlloc({shape});
-//    outputs[1].CheckAndAlloc({shape});
-//    MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-//      MSHADOW_TYPE_SWITCH(outputs[0].aux_type(rowsparse::kIdx), IType, {
-//        Tensor<xpu, 1, IType> lgrad_idx = outputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-//        Tensor<xpu, 1, IType> rgrad_idx = outputs[1].aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-//        Tensor<xpu, 1, IType> ograd_idx = inputs[0].aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-//        Tensor<xpu, 1, DType> lgrad = outputs[0].data().FlatTo1D<xpu, DType>(s);
-//        Tensor<xpu, 1, DType> rgrad = outputs[1].data().FlatTo1D<xpu, DType>(s);
-//        Tensor<xpu, 1, DType> ograd = inputs[0].data().FlatTo1D<xpu, DType>(s);
-//        ASSIGN_DISPATCH(lgrad, req[0], F<LOP>(ograd));
-//        ASSIGN_DISPATCH(rgrad, req[1], F<ROP>(ograd));
-//        ASSIGN_DISPATCH(lgrad_idx, req[0], F<LOP>(ograd_idx));
-//        ASSIGN_DISPATCH(rgrad_idx, req[1], F<ROP>(ograd_idx));
-//      });
-//    });
-//  }
 
   template<typename xpu, typename LOP, typename ROP>
   static inline void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs &attrs,
@@ -586,21 +614,27 @@ class BinaryOp : public OpBase
                                            const std::vector<NDArray> &inputs,
                                            const std::vector<OpReqType> &req,
                                            const std::vector<NDArray> &outputs) {
-#if 0
+#if 1
+    CHECK_EQ(inputs.size(), 3U);  // output grad,
+    CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
         //DCHECK(fabs(OP::Map(0, 0)) < 1e-5);
-        #pragma omp parallel for
-        for(int x = 0; x < 2; ++x) {
-          if(!x) {
-            ComputeRspRsp3<xpu, LOP>(attrs, ctx, inputs, req, {outputs[0]});
-          } else {
-            ComputeRspRsp3<xpu, ROP>(attrs, ctx, inputs, req, {outputs[1]});
-          }
-        }
+//        mxnet::test::print(&std::cout, "inputs[0]", inputs[0]);
+//        mxnet::test::print(&std::cout, "inputs[1]", inputs[1]);
+//        mxnet::test::print(&std::cout, "inputs[2]", inputs[2]);
+//        mxnet::test::print(&std::cout, "outputs[0]", outputs[0]);
+        ComputeRspRsp<xpu, LOP>(attrs, ctx, inputs[1], inputs[2], req[0], outputs[0]);
+//        mxnet::test::print(&std::cout, "outputs[0]", outputs[0]);
+        ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[0], inputs[0], req[0], outputs[0]);
+//        mxnet::test::print(&std::cout, "outputs[0]", outputs[0]);
+//        mxnet::test::print(&std::cout, "outputs[1]", outputs[1]);
+        ComputeRspRsp<xpu, ROP>(attrs, ctx, inputs[1], inputs[2], req[1], outputs[1]);
+        ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[1], inputs[0], req[1], outputs[1]);
+//        mxnet::test::print(&std::cout, "outputs[1]", outputs[1]);
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              BinaryBackwardUseIn<xpu, LOP, ROP>,

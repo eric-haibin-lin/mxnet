@@ -134,6 +134,25 @@ def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
         assert(False), "unknown storage type"
 
 
+def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier_func=None, density=.5):
+    if stype == 'row_sparse':
+        arr_indices = None if rsp_indices is None else np.asarray(rsp_indices)
+        arr_data, (_, _) = rand_sparse_ndarray(shape, stype,
+                                               density=density,
+                                               data_init=data_init,
+                                               rsp_indices=arr_indices,
+                                               modifier_func=modifier_func)
+    elif stype == 'csr':
+        arr_data, (_, _, _) = rand_sparse_ndarray(shape,
+                                                  stype,
+                                                  density=density,
+                                                  data_init=data_init,
+                                                  modifier_func=modifier_func)
+    else:
+        raise str("Unknown storage type: " + stype)
+    return arr_data
+
+
 def rand_ndarray(shape, storage_type, density=None):
     if storage_type == 'default':
         arr = mx.nd.array(random_arrays(shape))
@@ -761,10 +780,7 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
         input_grad_stype = attr.get('input_grad_stype_hint', None)
         nd = mx.nd.array(v, ctx=ctx)
         if input_grad_stype is not None and input_grad_stype != 'default':
-            if input_grad_stype == out_grads[0].storage_type:
-                args_grad_data[k] = out_grads[0].copy()
-            else:
-                args_grad_data[k] = mx.nd.cast_storage(nd, storage_type=input_grad_stype)
+            args_grad_data[k] = create_sparse_array(v.shape, input_grad_stype, density=0.0)
         else:
             args_grad_data[k] = nd
 
@@ -784,7 +800,6 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
                 outg.append(mx.nd.array(arr, ctx=ctx))
             else:
                 outg.append(arr)
-        #out_grads = [mx.nd.array(v, ctx=ctx) for v in out_grads]
         out_grads = outg
     elif isinstance(out_grads, dict):
         outg = dict()
@@ -794,7 +809,6 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
             else:
                 outg[k] = v
         out_grads = outg
-        #out_grads = {k:mx.nd.array(v, ctx=ctx) for k, v in out_grads.items()}
     else:
         assert out_grads is None
 
