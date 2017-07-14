@@ -276,6 +276,7 @@ def almost_equal_ignore_nan(a, b, rtol=None, atol=None):
 
     return almost_equal(a, b, rtol, atol)
 
+
 def assert_almost_equal_ignore_nan(a, b, rtol=None, atol=None, names=('a', 'b')):
     """Test that two NumPy arrays are almost equal (ignoring NaN in either array).
     Combines a relative and absolute measure of approximate eqality.
@@ -616,11 +617,11 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
                          "Got %d inputs and %d locations"%(len(inps), len(location)))
     assert len(executor.outputs) == 1
 
-    print("calling forward()")
+    #print("calling forward()")
     executor.forward(is_train=True)
-    print("calling backward()")
+    #print("calling backward()")
     executor.backward()
-    print("returned from backward()")
+    #print("returned from backward()")
     symbolic_grads = {k:executor.grad_dict[k].asnumpy() for k in grad_nodes}
 
     numeric_gradients = numeric_grad(executor, location_npy, aux_states_npy,
