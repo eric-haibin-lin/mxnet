@@ -661,13 +661,8 @@ class Validator {
     const TBlob& b1 = bv1[idx];
     const TBlob& b2 = bv2[idx];
     if (print && test::debugOutput) {
-      MSHADOW_REAL_TYPE_SWITCH(
-        b1.type_flag_,
-        DTypeX,
-        {
-          test::print_blob<DTypeX>(&(std::cout << "Blob 1:"), b1, true, true);
-          test::print_blob<DTypeX>(&(std::cout << "Blob 2:"), b2, true, true);
-        });
+       test::print_blob(&(std::cout << "Blob 1:"), b1, true, true);
+       test::print_blob(&(std::cout << "Blob 2:"), b2, true, true);
     }
     return compare(b1, b2);
   }
