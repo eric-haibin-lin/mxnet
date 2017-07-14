@@ -178,10 +178,6 @@ class UnaryOp : public OpBase {
     // Copy over geometry
     DCHECK_EQ(inputs.size(), 1U);
     DCHECK_EQ(outputs.size(), 1U);
-#ifndef NDEBUG
-    const TShape& ishape = inputs[0].shape();
-    const TShape& oshape = outputs[0].shape();
-#endif
     InitStorageGeometry<1, 1>(attrs, inputs, outputs);
     CHECK_EQ(inputs.size(), outputs.size()); // need to figure out what to do for binary type
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
@@ -333,34 +329,6 @@ class UnaryOp : public OpBase {
     OpBase::CopyNDArray(ctx.get_stream<xpu>(), outputs[0], req[0], inputs[0]);
 #endif
   }
-
-//  template<typename xpu>
-//  static void IdentityComputeRsp(const nnvm::NodeAttrs& attrs,
-//                                 const OpContext& ctx,
-//                                 const std::vector<NDArray>& inputs,
-//                                 const std::vector<OpReqType>& req,
-//                                 const std::vector<NDArray>& outputs) {
-//    using namespace mshadow;
-//    using namespace mshadow::expr;
-//    Stream<xpu> *s = ctx.get_stream<xpu>();
-//    auto &input = inputs[0];
-//    auto &output = outputs[0];
-//    CHECK_NE(req[0], kNullOp) << "kNullOp in IdentityComputeEx not supported yet";
-//    CHECK_NE(req[0], kWriteInplace) << "kWriteInplace in IdentityComputeEx not supported yet";
-//    if (!input.storage_initialized()) return;
-//    TShape shape = input.aux_shape(rowsparse::kIdx);
-//    output.CheckAndAlloc({shape});
-//    MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-//      MSHADOW_TYPE_SWITCH(output.aux_type(rowsparse::kIdx), AuxType, {
-//        auto out_d = output.data().FlatTo1D<xpu, DType>(s);
-//        auto out_aux = output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-//        auto in_aux = input.aux_data(rowsparse::kIdx).FlatTo1D<xpu, AuxType>(s);
-//        ASSIGN_DISPATCH(out_d, req[0],
-//                        F<mshadow_op::identity>(input.data().FlatTo1D<xpu, DType>(s)));
-//        ASSIGN_DISPATCH(out_aux, req[0], F<mshadow_op::identity>(in_aux));
-//      });
-//    });
-//  }
 };
 
 template<typename GRAD_OP>

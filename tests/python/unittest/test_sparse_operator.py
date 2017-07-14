@@ -81,7 +81,6 @@ def get_fw_bw_result_types_2(forward_numpy_call,  fwd_res_dflt,
     return (get_result_type(forward_numpy_call,  fwd_res_dflt),
             get_result_type_2(backward_numpy_call, bwd_res_dflt))
 
-
 def gen_rsp_random_indices(shape, density=.5, overlap=None):
     assert density >= 0 and density <= 1
     indices = set(overlap) if overlap is not None else set()
@@ -114,7 +113,8 @@ def check_elemwise_binary_ops():
                                             backward_numpy_call1, backward_numpy_call2,
                                             data1_grad_stype=None, data2_grad_stype=None,
                                             expected_result_storage_type=None,
-                                            data1_init=2., data2_init=3., grad_init=2.):
+                                            data1_init=2., data2_init=3., grad_init=2.,
+                                            force_overlap=False, density=.5):
 
         # Output type should be same as lvalue type, unless otherwise specified
         if expected_result_storage_type is None:
@@ -190,14 +190,9 @@ def check_elemwise_binary_ops():
                                 forward_mxnet_call, forward_numpy_call, backward_numpy_call,
                                 lhs_grad_stype, rhs_grad_stype,
                                 expected_result_storage_type=None,
-                                modifier_func=None):
+                                modifier_func=None,
+                                density=.5, force_overlap=False):
         print("test_elemwise_binary_op:", name)
-        # Output type should be same as lvalue type, unless otherwise specified
-        if expected_result_storage_type is None:
-            if lhs_stype == 'default' or rhs_stype == 'default':
-                expected_result_storage_type = 'default'
-            else:
-                expected_result_storage_type = lhs_stype
 
         if lhs_grad_stype is None:
             lhs_grad_stype = lhs_stype
@@ -206,6 +201,13 @@ def check_elemwise_binary_ops():
 
         lhs_stype = get_result_type_3(backward_numpy_call, lhs_grad_stype)
         rhs_stype = get_result_type_3(backward_numpy_call, rhs_grad_stype)
+
+        # Output type should be same as lvalue type, unless otherwise specified
+        if expected_result_storage_type is None:
+            if lhs_stype == 'default' or rhs_stype == 'default':
+                expected_result_storage_type = 'default'
+            else:
+                expected_result_storage_type = lhs_stype
 
         lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
         rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
@@ -218,15 +220,21 @@ def check_elemwise_binary_ops():
             lhs_nd = rand_ndarray(shape, 'default')
             lhs_nd = mx.nd.array(assign_each(lhs_nd.asnumpy(), modifier_func))
         else:
-            lhs_nd = create_sparse_array(shape, lhs_stype, rsp_indices=gen_rsp_random_indices(shape),
-                                         modifier_func=modifier_func)
+            lhs_nd = create_sparse_array(
+                shape, lhs_stype,
+                modifier_func=modifier_func,
+                rsp_indices=gen_rsp_random_indices(
+                    shape, density=density,
+                    overlap=[(shape[0]/2)] if force_overlap is True else None))
 
         if rhs_stype == 'default':
             rhs_nd = rand_ndarray(shape, 'default')
             rhs_nd = mx.nd.array(assign_each(rhs_nd.asnumpy(), modifier_func))
         else:
-            rhs_nd = create_sparse_array(shape, rhs_stype, rsp_indices=gen_rsp_random_indices(shape),
-                                         modifier_func=modifier_func)
+            rhs_nd = create_sparse_array(shape, rhs_stype, modifier_func=modifier_func,
+                                         rsp_indices=gen_rsp_random_indices(
+                                             shape, density=density,
+                                             overlap=[(shape[0]/2)] if force_overlap is True else None))
 
         lhs_np = lhs_nd.asnumpy()
         rhs_np = rhs_nd.asnumpy()
@@ -251,10 +259,13 @@ def check_elemwise_binary_ops():
         print ("forward output: ", outputs[0].storage_type)
 
         if outputs[0].storage_type != 'default':
-            out_grad = create_sparse_array(shape, outputs[0].storage_type,
-                                           rsp_indices=gen_rsp_random_indices(shape),
-                                           data_init=1,
-                                           modifier_func=lambda x: 1)
+            out_grad = create_sparse_array(
+                shape, outputs[0].storage_type, data_init=1,
+                modifier_func=lambda x: 1,
+                rsp_indices=gen_rsp_random_indices(
+                    shape, density=density,
+                    overlap=[(shape[0]/2)] if force_overlap is True else None)
+            )
         else:
             out_grad = mx.nd.array(np.ones(shape))
 
@@ -307,77 +318,83 @@ def check_elemwise_binary_ops():
     def le(l, r):
         return check_all(l, r, lambda a, b: a <= b)
 
-    # def sparsesest(lstype, rstype):
-    #     if lstype == 'default' and rstype == 'default':
-    #         return 'default'
-    #     elif lstype == 'default':
-    #         return rstype
-    #     else:
-    #         return lstype
-
     def least_sparse(lstype, rstype):
         if lstype == 'default' or rstype == 'default':
             return 'default'
         else:
             return lstype
 
-    def test_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
+    def test_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None,
+                                 density=.5, force_overlap=False):
         # test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
         #                         lambda l, r: mx.sym.maximum(l, r),
         #                         lambda l, r: np.maximum(l, r),
         #                         lambda outg, l, r: (ge(l, r), lt(l, r)),
-        #                         lhs_grad_stype, rhs_grad_stype)
+        #                         lhs_grad_stype, rhs_grad_stype,
+        #                         force_overlap=False, density=0.5)
         #
         # test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
         #                         lambda l, r: mx.sym.minimum(l, r),
         #                         lambda l, r: np.minimum(l, r),
         #                         lambda outg, l, r: (le(l, r), gt(l, r)),
-        #                         lhs_grad_stype, rhs_grad_stype)
-
+        #                         lhs_grad_stype, rhs_grad_stype,
+        #                         force_overlap=force_overlap, density=density)
+        #
         # test_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
         #                                     lambda x, y: mx.sym.hypot(x, y),
         #                                     lambda x, y: np.hypot(x, y),
         #                                     lambda x, y: x / np.hypot(x, y),
         #                                     lambda x, y: y / np.hypot(x, y),
         #                                     data1_grad_stype=lhs_grad_stype,
-        #                                     data2_grad_stype=rhs_grad_stype)
+        #                                     data2_grad_stype=rhs_grad_stype,
+        #                                     force_overlap=force_overlap, density=density)
 
-        test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
-                                lambda l, r: mx.sym.elemwise_add(l, r),
-                                lambda l, r: l + r,
-                                lambda outg, l, r: (outg, outg),
-                                lhs_grad_stype, rhs_grad_stype)
+        # test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: mx.sym.elemwise_add(l, r),
+        #                         lambda l, r: l + r,
+        #                         lambda outg, l, r: (outg, outg),
+        #                         lhs_grad_stype, rhs_grad_stype,
+        #                         force_overlap=force_overlap, density=density)
 
         # test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
         #                         lambda l, r: mx.sym.elemwise_sub(l, r),
         #                         lambda l, r: l - r,
         #                         lambda outg, l, r: (outg, -outg),
-        #                         lhs_grad_stype, rhs_grad_stype)
+        #                         lhs_grad_stype, rhs_grad_stype,
+        #                         force_overlap=force_overlap, density=density)
         #
-        # test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.elemwise_mul(l, r),
-        #                         lambda l, r: l * r,
-        #                         lambda outg, l, r: (r, l),
-        #                         least_sparse(lhs_stype, rhs_stype),
-        #                         least_sparse(lhs_stype, rhs_stype))
-        #
+        test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.elemwise_mul(l, r),
+                                lambda l, r: l * r,
+                                lambda outg, l, r: (r, l),
+                                least_sparse(lhs_stype, rhs_stype),
+                                least_sparse(lhs_stype, rhs_stype),
+                                force_overlap=force_overlap, density=density)
+
         # test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
         #                         lambda l, r: mx.sym.elemwise_div(l, r),
         #                         lambda l, r: l / r,
         #                         lambda outg, l, r: (1/r, -l/(r*r)),
         #                         lhs_grad_stype, rhs_grad_stype,
-        #                         modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1)
+        #                         modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
+        #                         force_overlap=force_overlap, density=density)
 
     # Run basic tests
     #shape = (2, 6)
-    for ii in range(100):
-        #for ii in range(1):
-        shape = rand_shape_2d()
-        print("Pass: ", ii)
-        # test_elemwise_binary_ops('default', 'default', shape)
-        # test_elemwise_binary_ops('default', 'row_sparse', shape)
-        # test_elemwise_binary_ops('row_sparse', 'default', shape)
-        test_elemwise_binary_ops('row_sparse', 'row_sparse', shape, lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    for ii in range(1):
+        for density in [0.0, random.uniform(0, 1), 1.0]:
+            for force_overlap in [False, True]:
+                #shape = rand_shape_2d()
+                shape = (1,1)
+                # test_elemwise_binary_ops('default', 'default', shape, density=density,
+                #                          force_overlap=force_overlap)
+                # test_elemwise_binary_ops('default', 'row_sparse', shape, density=density,
+                #                          force_overlap=force_overlap)
+                # test_elemwise_binary_ops('row_sparse', 'default', shape, density=density,
+                #                          force_overlap=force_overlap)
+                test_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
+                                         lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse',
+                                         density=density, force_overlap=force_overlap)
 
 
 # TODO(haibin) randomize this test
@@ -1006,6 +1023,6 @@ if __name__ == '__main__':
     #import nose
     #nose.runmodule()
     #check_sparse_maximum_minimum()
-    test_sparse_unary_with_numerics()
-    #check_elemwise_binary_ops()
-    check_sparse_mathematical_core()
+    #test_sparse_unary_with_numerics()
+    check_elemwise_binary_ops()
+    #check_sparse_mathematical_core()
