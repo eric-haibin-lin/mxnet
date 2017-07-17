@@ -156,7 +156,8 @@ def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
         assert(False), "unknown storage type"
 
 
-def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier_func=None, density=.5):
+def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
+                        modifier_func=None, density=.5):
     if stype == 'row_sparse':
         if rsp_indices is not None:
             arr_indices = np.asarray(rsp_indices).sort()
@@ -177,6 +178,15 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier
         raise str("Unknown storage type: " + stype)
     return arr_data
 
+
+def create_sparse_array_zd(shape, stype, data_init=None,
+                           rsp_indices=None, modifier_func=None,
+                           density=0.0):
+    return create_sparse_array(shape, stype,
+                               data_init=data_init,
+                               rsp_indices=rsp_indices,
+                               modifier_func=modifier_func,
+                               density=density)
 
 def rand_ndarray(shape, storage_type, density=None):
     if storage_type == 'default':

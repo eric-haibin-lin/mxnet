@@ -104,6 +104,7 @@ class BinaryOp : public OpBase
 
  private:
 
+#if 0
   // TODO(cjolivier01) Precompute parallelizing strategy
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp3(const nnvm::NodeAttrs &attrs,
@@ -272,7 +273,7 @@ class BinaryOp : public OpBase
       CastStorageComputeImpl(s, *tempSparse, outputs[0]);
     }
   }
-
+#endif
   // TODO(cjolivier01) Precompute parallelizing strategy
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp2(const nnvm::NodeAttrs &attrs,
@@ -280,18 +281,15 @@ class BinaryOp : public OpBase
                                              const NDArray& lhs,
                                              const NDArray& rhs,
                                              const OpReqType req,
-                                             const NDArray _output) {
+                                             const NDArray& _output) {
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
 
     const NDArray *output = &_output;
 
-    //const bool init_l = lhs.storage_initialized();
-    //const bool init_r = rhs.storage_initialized();
-
-    // both inputs are zeros
-    //if (!init_l && !init_r) return;
+//    test::print(&std::cout, "lhs", lhs);
+//    test::print(&std::cout, "rhs", rhs);
 
     std::unique_ptr<NDArray> tempSparse;
     if(output->storage_type() == kDefaultStorage) {
@@ -380,7 +378,9 @@ class BinaryOp : public OpBase
     if(tempSparse.get()) {
       // Required output is actually something other than RSP,
       // so cast out final RSP to the true output type
+      //test::print(&std::cout, "output", *tempSparse);
       CastStorageComputeImpl(s, *tempSparse, _output);
+      //test::print(&std::cout, "output_dense", _output);
     }
   }
 
@@ -622,19 +622,10 @@ class BinaryOp : public OpBase
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
-        //DCHECK(fabs(OP::Map(0, 0)) < 1e-5);
-//        mxnet::test::print(&std::cout, "inputs[0]", inputs[0]);
-//        mxnet::test::print(&std::cout, "inputs[1]", inputs[1]);
-//        mxnet::test::print(&std::cout, "inputs[2]", inputs[2]);
-//        mxnet::test::print(&std::cout, "outputs[0]", outputs[0]);
         ComputeRspRsp<xpu, LOP>(attrs, ctx, inputs[1], inputs[2], req[0], outputs[0]);
-//        mxnet::test::print(&std::cout, "outputs[0]", outputs[0]);
         ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[0], inputs[0], req[0], outputs[0]);
-//        mxnet::test::print(&std::cout, "outputs[0]", outputs[0]);
-//        mxnet::test::print(&std::cout, "outputs[1]", outputs[1]);
         ComputeRspRsp<xpu, ROP>(attrs, ctx, inputs[1], inputs[2], req[1], outputs[1]);
         ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[1], inputs[0], req[1], outputs[1]);
-//        mxnet::test::print(&std::cout, "outputs[1]", outputs[1]);
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              BinaryBackwardUseIn<xpu, LOP, ROP>,
