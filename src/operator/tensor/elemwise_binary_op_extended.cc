@@ -11,7 +11,7 @@ namespace op {
 MXNET_OPERATOR_REGISTER_BINARY(_power)
 .add_alias("_Power")
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, mshadow_op::power>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, mshadow_op::power>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchAsDense<cpu, mshadow_op::power>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_power"});
 
@@ -26,7 +26,7 @@ NNVM_REGISTER_OP(_backward_power)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::power_grad,
                                                               mshadow_op::power_rgrad>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::power_grad,
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInExDense<cpu, mshadow_op::power_grad,
   mshadow_op::power_rgrad>);
 
 MXNET_OPERATOR_REGISTER_BINARY(_maximum)

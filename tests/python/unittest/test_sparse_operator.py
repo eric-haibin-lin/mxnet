@@ -104,84 +104,6 @@ def rand_choice(a, b):
 
 
 def check_elemwise_binary_ops():
-    def test_elemwise_binary_op_backwards_2(name, data1_stype, data2_stype, shape,
-                                            forward_mxnet_call, forward_numpy_call,
-                                            backward_numpy_call1, backward_numpy_call2,
-                                            data1_grad_stype=None, data2_grad_stype=None,
-                                            expected_result_storage_type=None,
-                                            data1_init=2., data2_init=3., grad_init=2.,
-                                            force_overlap=False, density=.5):
-
-        # Output type should be same as lvalue type, unless otherwise specified
-        if expected_result_storage_type is None:
-            if data1_stype == 'default' or data2_stype == 'default':
-                expected_result_storage_type = 'default'
-            else:
-                expected_result_storage_type = data1_stype
-
-        data1 = mx.symbol.Variable('data')
-        data2 = mx.symbol.Variable('data')
-
-        if data1_grad_stype is not None:
-            data1._set_attr(input_grad_stype_hint=data1_grad_stype)
-        if data2_grad_stype is not None:
-            data2._set_attr(input_grad_stype_hint=data2_grad_stype)
-
-        data_tmp1 = np.random.rand(shape[0], shape[1])
-        data_tmp2 = np.random.rand(shape[0], shape[1])
-        data_tmp1[:] = data1_init
-        data_tmp2[:] = data2_init
-
-        arr_data1 = mx.nd.array(data_tmp1)
-        arr_data2 = mx.nd.array(data_tmp2)
-
-        if data1_stype is not None and data1_stype != 'default':
-            arr_data1 = mx.nd.cast_storage(arr_data1, storage_type=data1_stype)
-
-        if data2_stype is not None and data2_stype != 'default':
-            arr_data2 = mx.nd.cast_storage(arr_data2, storage_type=data2_stype)
-
-        arr_grad1 = mx.nd.empty(shape)
-        arr_grad2 = mx.nd.empty(shape)
-
-        if data1_grad_stype is not None:
-            arr_grad1 = mx.nd.cast_storage(arr_grad1, storage_type=data1_grad_stype)
-        if data2_grad_stype is not None:
-            arr_grad2 = mx.nd.cast_storage(arr_grad2, storage_type=data2_grad_stype)
-
-        test = forward_mxnet_call(data1, data2)
-
-        exe_test = test.bind(default_context(), args=[arr_data1, arr_data2], args_grad=[arr_grad1, arr_grad2])
-        exe_test.forward(is_train=True)
-        outputs = exe_test.outputs
-
-        assert outputs[0].storage_type == expected_result_storage_type
-
-        out = outputs[0].asnumpy()
-        npout = forward_numpy_call(data_tmp1, data_tmp2)
-        assert_almost_equal(out, npout)
-
-        out_grad = mx.nd.empty(shape)
-        out_grad[:] = grad_init
-
-        if outputs[0].storage_type != 'default':
-            out_grad = mx.nd.cast_storage(mx.nd.array(out_grad), storage_type=outputs[0].storage_type)
-
-        exe_test.backward(out_grad)
-
-        assert outputs[0].storage_type == expected_result_storage_type
-
-        npout_grad = np.ones(shape)
-        npout_grad[:] = grad_init
-
-        npout_grad1 = npout_grad * backward_numpy_call1(data_tmp1, data_tmp2)
-        npout_grad2 = npout_grad * backward_numpy_call2(data_tmp1, data_tmp2)
-        arr_grad1 = arr_grad1.asnumpy()
-        arr_grad2 = arr_grad2.asnumpy()
-
-        assert_almost_equal(arr_grad1, npout_grad1)
-        assert_almost_equal(arr_grad2, npout_grad2)
-
     def test_elemwise_binary_op(name, lhs_stype, rhs_stype, shape,
                                 forward_mxnet_call, forward_numpy_call, backward_numpy_call,
                                 lhs_grad_stype, rhs_grad_stype,
@@ -251,13 +173,16 @@ def check_elemwise_binary_ops():
             print("rhs input:")
             print(rhs_np)
 
-        test = forward_mxnet_call(lhs, rhs)
-
         out_np = forward_numpy_call(lhs_np, rhs_np)
+
+        if verbose is True:
+            print("out_np", out_np)
+
+        test = forward_mxnet_call(lhs, rhs)
 
         location = {'lhs': lhs_nd, 'rhs': rhs_nd}
 
-        outputs = check_symbolic_forward(test, location, [out_np])
+        outputs = check_symbolic_forward(test, location, [out_np], equal_nan=True)
         assert len(outputs) == 1
         assert outputs[0].storage_type == expected_result_storage_type
 
@@ -291,7 +216,8 @@ def check_elemwise_binary_ops():
             print("ingrad_lhs_np", ingrad_lhs_np)
             print("ingrad_rhs_np", ingrad_rhs_np)
 
-        igrads_result = check_symbolic_backward(test, location, [out_grad], [ingrad_lhs_np, ingrad_rhs_np])
+        igrads_result = check_symbolic_backward(test, location, [out_grad], [ingrad_lhs_np, ingrad_rhs_np],
+                                                equal_nan=True)
 
         if verbose is True:
             print("ingrad_lhs", igrads_result['lhs'].asnumpy())
@@ -347,85 +273,90 @@ def check_elemwise_binary_ops():
 
     def test_elemwise_binary_ops(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None,
                                  density=.5, force_overlap=False, ograd_density=0.0):
-        # test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.maximum(l, r),
-        #                         lambda l, r: np.maximum(l, r),
-        #                         lambda outg, l, r: (outg * ge(l, r), outg * lt(l, r)),
-        #                         lhs_grad_stype, rhs_grad_stype,
-        #                         modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
-        #                         force_overlap=False, density=density,
-        #                         skip_gradient_check=True,
-        #                         ograd_density=ograd_density,
-        #                         verbose=False)
-        #
-        # test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.minimum(l, r),
-        #                         lambda l, r: np.minimum(l, r),
-        #                         lambda outg, l, r: (outg * le(l, r), outg * gt(l, r)),
-        #                         lhs_grad_stype, rhs_grad_stype,
-        #                         modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
-        #                         force_overlap=force_overlap, density=density,
-        #                         ograd_density=ograd_density,
-        #                         skip_gradient_check=True)
-        #
-        # test_elemwise_binary_op_backwards_2("hypot", lhs_stype, rhs_stype, shape,
-        #                                     lambda x, y: mx.sym.hypot(x, y),
-        #                                     lambda x, y: np.hypot(x, y),
-        #                                     lambda x, y: x / np.hypot(x, y),
-        #                                     lambda x, y: y / np.hypot(x, y),
-        #                                     data1_grad_stype=lhs_grad_stype,
-        #                                     data2_grad_stype=rhs_grad_stype,
-        #                                     force_overlap=force_overlap, density=density)
-        #
-        # test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.elemwise_add(l, r),
-        #                         lambda l, r: l + r,
-        #                         lambda outg, l, r: (outg, outg),
-        #                         lhs_grad_stype, rhs_grad_stype,
-        #                         ograd_density=ograd_density,
-        #                         force_overlap=force_overlap, density=density)
-        #
-        # test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.elemwise_sub(l, r),
-        #                         lambda l, r: l - r,
-        #                         lambda outg, l, r: (outg, -outg),
-        #                         lhs_grad_stype, rhs_grad_stype,
-        #                         ograd_density=ograd_density,
-        #                         force_overlap=force_overlap, density=density)
-        #
-        #
-        # test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.elemwise_mul(l, r),
-        #                         lambda l, r: l * r,
-        #                         lambda outg, l, r: (outg * r, outg * l),
-        #                         least_sparse(lhs_stype, rhs_stype),
-        #                         least_sparse(lhs_stype, rhs_stype),
-        #                         ograd_density=ograd_density,
-        #                         force_overlap=force_overlap, density=density)
-        #
-        # test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
-        #                         lambda l, r: mx.sym.elemwise_div(l, r),
-        #                         lambda l, r: l / r,
-        #                         lambda outg, l, r: (outg * (1/r), outg * (-l/(r*r))),
-        #                         lhs_grad_stype, rhs_grad_stype,
-        #                         modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
-        #                         force_overlap=force_overlap, density=density,
-        #                         ograd_density=ograd_density)
+        test_elemwise_binary_op("elemwise_add", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.elemwise_add(l, r),
+                                lambda l, r: l + r,
+                                lambda outg, l, r: (outg, outg),
+                                lhs_grad_stype, rhs_grad_stype,
+                                ograd_density=ograd_density,
+                                force_overlap=force_overlap, density=density)
+
+        test_elemwise_binary_op("elemwise_sub", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.elemwise_sub(l, r),
+                                lambda l, r: l - r,
+                                lambda outg, l, r: (outg, -outg),
+                                lhs_grad_stype, rhs_grad_stype,
+                                ograd_density=ograd_density,
+                                force_overlap=force_overlap, density=density)
+
+
+        test_elemwise_binary_op("elemwise_mul", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.elemwise_mul(l, r),
+                                lambda l, r: l * r,
+                                lambda outg, l, r: (outg * r, outg * l),
+                                least_sparse(lhs_stype, rhs_stype),
+                                least_sparse(lhs_stype, rhs_stype),
+                                ograd_density=ograd_density,
+                                force_overlap=force_overlap, density=density)
+
+        test_elemwise_binary_op("elemwise_div", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.elemwise_div(l, r),
+                                lambda l, r: l / r,
+                                lambda outg, l, r: (outg * (1/r), outg * (-l/(r*r))),
+                                lhs_grad_stype, rhs_grad_stype,
+                                modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
+                                force_overlap=force_overlap, density=density,
+                                ograd_density=ograd_density)
+
+        test_elemwise_binary_op("maximum", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.maximum(l, r),
+                                lambda l, r: np.maximum(l, r),
+                                lambda outg, l, r: (outg * ge(l, r), outg * lt(l, r)),
+                                lhs_grad_stype, rhs_grad_stype,
+                                modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
+                                force_overlap=False, density=density,
+                                skip_gradient_check=True,
+                                ograd_density=ograd_density,
+                                verbose=False)
+
+        test_elemwise_binary_op("minimum", lhs_stype, rhs_stype, shape,
+                                lambda l, r: mx.sym.minimum(l, r),
+                                lambda l, r: np.minimum(l, r),
+                                lambda outg, l, r: (outg * le(l, r), outg * gt(l, r)),
+                                lhs_grad_stype, rhs_grad_stype,
+                                modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
+                                force_overlap=force_overlap, density=density,
+                                ograd_density=ograd_density,
+                                skip_gradient_check=True)
+
+        test_elemwise_binary_op("hypot", lhs_stype, rhs_stype, shape,
+                                            lambda l, r: mx.sym.hypot(l, r),
+                                            lambda l, r: np.hypot(l, r),
+                                            lambda outg, l, r: (
+                                                outg * assign_each2(l, r, lambda a, b: a/np.sqrt(a * a + b * b)),
+                                                outg * assign_each2(l, r, lambda a, b: b/np.sqrt(a * a + b * b))
+                                            ),
+                                lhs_grad_stype, rhs_grad_stype,
+                                force_overlap=force_overlap, density=density,
+                                #modifier_func=lambda a: 0,
+                                ograd_density=ograd_density,
+                                skip_gradient_check=True,
+                                verbose=False)
 
         test_elemwise_binary_op("power", lhs_stype, rhs_stype, shape,
                                 lambda l, r: mx.sym.pow(l, r),
                                 lambda l, r: np.power(l, r),
                                 lambda outg, l, r: (
-                                    outg * assign_each2(l, r, lambda a, b: np.power(a, b - 1 ) * b),
+                                    outg * assign_each2(l, r, lambda a, b: np.power(a, b - 1) * b),
                                     outg * assign_each2(l, r, lambda a, b: np.power(a, b) * np.log(a))
                                 ),
                                 lhs_grad_stype, rhs_grad_stype,
-                                #modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
-                                modifier_func=lambda a: 2,
+                                modifier_func=lambda a: a if abs(a) > 0.25 else abs(a) + 1,
+                                #modifier_func=lambda a: 0,
                                 force_overlap=force_overlap, density=density,
                                 ograd_density=ograd_density,
-                                verbose=True)
-
+                                skip_gradient_check=True,
+                                verbose=False)
 
     # Run basic tests
     for ii in range(2):
@@ -433,16 +364,17 @@ def check_elemwise_binary_ops():
             for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
                 for force_overlap in [False, True]:
                     shape = rand_shape_2d()
+                    #shape = (1,1)
                     test_elemwise_binary_ops('default', 'default', shape, density=density,
                                              force_overlap=force_overlap, ograd_density=ograd_density)
-                    # test_elemwise_binary_ops('default', 'row_sparse', shape, density=density,
-                    #                          force_overlap=force_overlap, ograd_density=ograd_density)
-                    # test_elemwise_binary_ops('row_sparse', 'default', shape, density=density,
-                    #                          force_overlap=force_overlap, ograd_density=ograd_density)
-                    # test_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
-                    #                          lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse',
-                    #                          density=density, force_overlap=force_overlap,
-                    #                          ograd_density=ograd_density)
+                    test_elemwise_binary_ops('default', 'row_sparse', shape, density=density,
+                                             force_overlap=force_overlap, ograd_density=ograd_density)
+                    test_elemwise_binary_ops('row_sparse', 'default', shape, density=density,
+                                             force_overlap=force_overlap, ograd_density=ograd_density)
+                    test_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
+                                             lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse',
+                                             density=density, force_overlap=force_overlap,
+                                             ograd_density=ograd_density)
 
 
 # TODO(haibin) randomize this test

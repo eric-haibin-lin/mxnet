@@ -680,7 +680,8 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
 
 
 def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
-                           aux_states=None, ctx=None):
+                           aux_states=None, ctx=None,
+                           equal_nan=False):
     """Compares a symbol's forward results with the expected ones.
     Prints error messages if the forward results are not the same as the expected ones.
 
@@ -741,11 +742,13 @@ def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
     outputs = [x.asnumpy() for x in executor.outputs]
     for output_name, expect, output in zip(sym.list_outputs(), expected, outputs):
         assert_almost_equal(expect, output, rtol, atol,
-                            ("EXPECTED_%s"%output_name, "FORWARD_%s"%output_name))
+                            ("EXPECTED_%s"%output_name, "FORWARD_%s"%output_name),
+                            equal_nan=equal_nan)
     return executor.outputs
 
 def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=None,
-                            aux_states=None, grad_req='write', ctx=None):
+                            aux_states=None, grad_req='write', ctx=None,
+                            equal_nan=False):
     """Compares a symbol's backward results with the expected ones.
     Prints error messages if the backward results are not the same as the expected results.
 
@@ -855,13 +858,16 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     for name in expected:
         if grad_req[name] == 'write':
             assert_almost_equal(expected[name], grads[name], rtol, atol,
-                                ("EXPECTED_%s"%name, "BACKWARD_%s"%name))
+                                ("EXPECTED_%s"%name, "BACKWARD_%s"%name),
+                                equal_nan=equal_nan)
         elif grad_req[name] == 'add':
             assert_almost_equal(expected[name], grads[name] - args_grad_npy[name],
-                                rtol, atol, ("EXPECTED_%s"%name, "BACKWARD_%s"%name))
+                                rtol, atol, ("EXPECTED_%s"%name, "BACKWARD_%s"%name),
+                                equal_nan=equal_nan)
         elif grad_req[name] == 'null':
             assert_almost_equal(args_grad_npy[name], grads[name],
-                                rtol, atol, ("EXPECTED_%s"%name, "BACKWARD_%s"%name))
+                                rtol, atol, ("EXPECTED_%s"%name, "BACKWARD_%s"%name),
+                                equal_nan=equal_nan)
         else:
             raise ValueError("Invalid grad_req %s for argument %s"%(grad_req[name], name))
     return args_grad_data
