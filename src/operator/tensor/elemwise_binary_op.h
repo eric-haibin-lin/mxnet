@@ -592,7 +592,7 @@ class BinaryOp : public OpBase
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              BinaryBackwardUseNone<xpu, LOP, ROP>,
-                             "BinaryBackwardUseInEx");
+                             "BinaryBackwardUseNoneEx");
       }
     }
   }
