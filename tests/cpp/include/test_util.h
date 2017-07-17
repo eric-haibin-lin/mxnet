@@ -311,7 +311,7 @@ inline void print(StreamType *_os, const std::string& label, const NDArray& arr)
   switch(arr.storage_type()) {
     case kRowSparseStorage: {
       const TShape& shape = arr.shape();
-      print_shape(_os, "main shape", shape);
+      print_shape(_os, "[row_sparse main] shape", shape);
       const TShape& storage_shape = arr.storage_shape();
       print_shape(_os, "storage shape", storage_shape);
       print_blob(_os, arr.data()) << std::endl;
@@ -320,8 +320,15 @@ inline void print(StreamType *_os, const std::string& label, const NDArray& arr)
       print_blob(_os, arr.aux_data(rowsparse::kIdx)) << std::endl;
       break;
     }
+    case kDefaultStorage: {
+      const TShape& shape = arr.shape();
+      print_shape(_os, "[default] main shape", shape);
+      print_blob(_os, arr.data()) << std::endl;
+      break;
+    }
     default:
       CHECK(false) << "Unsupported storage type:" << arr.storage_type();
+      break;
   }
   *_os << std::flush;
 }

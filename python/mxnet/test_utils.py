@@ -77,8 +77,8 @@ def random_sample(population, k):
 
 
 def assign_each(input, function):
+    """Return ndarray composed of passing each array value through some function"""
     if function is not None:
-        """Pass each value through a caller-specified function and return the modified array."""
         it_input = np.nditer(input, flags=['f_index'])
 
         output = np.zeros(input.shape)
@@ -88,6 +88,28 @@ def assign_each(input, function):
             val_input = it_input[0]
             it_out[0] = function(val_input)
             it_input.iternext()
+            it_out.iternext()
+
+        return output
+    else:
+        return np.array(input)
+
+def assign_each2(input1, input2, function):
+    """Return ndarray composed of passing two array values through some function"""
+    if function is not None:
+        assert input1.shape == input2.shape
+        it_input1 = np.nditer(input1, flags=['f_index'])
+        it_input2 = np.nditer(input2, flags=['f_index'])
+
+        output = np.zeros(input1.shape)
+        it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
+
+        while not it_input1.finished:
+            val_input1 = it_input1[0]
+            val_input2 = it_input2[0]
+            it_out[0] = function(val_input1, val_input2)
+            it_input1.iternext()
+            it_input2.iternext()
             it_out.iternext()
 
         return output
@@ -136,7 +158,10 @@ def rand_sparse_ndarray(shape, storage_type, density=None, data_init=None,
 
 def create_sparse_array(shape, stype, data_init=None, rsp_indices=None, modifier_func=None, density=.5):
     if stype == 'row_sparse':
-        arr_indices = None if rsp_indices is None else np.asarray(rsp_indices)
+        if rsp_indices is not None:
+            arr_indices = np.asarray(rsp_indices).sort()
+        else:
+            arr_indices = None
         arr_data, (_, _) = rand_sparse_ndarray(shape, stype,
                                                density=density,
                                                data_init=data_init,
