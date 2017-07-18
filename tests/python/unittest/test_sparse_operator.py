@@ -1,6 +1,7 @@
 from mxnet.test_utils import *
 import random
 
+
 def get_result_type(call, dflt_stype):
     if call is not None and dflt_stype != 'default':
         zero = np.zeros(([1]))
@@ -40,6 +41,7 @@ def get_result_type_2(call, dflt_stype):
 
     return expected_result_type
 
+
 def get_result_type_3(call, dflt_stype):
     if call is not None and dflt_stype != 'default':
         zero = np.zeros(([1]))
@@ -69,6 +71,7 @@ def get_result_type_3(call, dflt_stype):
         expected_result_type = 'default'
 
     return expected_result_type
+
 
 def get_fw_bw_result_types(forward_numpy_call,  fwd_res_dflt,
                            backward_numpy_call, bwd_res_dflt):
@@ -771,6 +774,17 @@ def check_sparse_mathematical_core():
         mathematical_core("log1p", stype, lambda x: mx.sym.log1p(x), lambda x: np.log1p(x),
                           lambda x: 1. / (1.0 + x), 0.5, 0.5, output_grad_stype=output_grad_stype,
                           force_overlap=force_overlap, density=density, ograd_density=ograd_density)
+
+        # # exp
+        # mathematical_core("exp", stype,
+        #                   lambda x: mx.sym.exp(x),
+        #                   lambda x: np.exp(x),
+        #                   lambda x: x / np.exp(x),
+        #                   0.5, 0.5, output_grad_stype=output_grad_stype,
+        #                   force_overlap=force_overlap, density=density,
+        #                   ograd_density=ograd_density,
+        #                   verbose=True)
+
         # expm1
         mathematical_core("expm1", stype, lambda x: mx.sym.expm1(x), lambda x: np.expm1(x),
                           lambda x: np.exp(x), 0.5, 0.5, output_grad_stype=output_grad_stype,

@@ -119,6 +119,17 @@ inline bool ElemwiseStorageType(const nnvm::NodeAttrs& attrs,
     attrs, in_attrs, out_attrs);
 }
 
+template<int n_out>
+inline bool ElemwiseStorageTypeDenseOutput(const nnvm::NodeAttrs& attrs,
+                                           std::vector<int> */*in_attrs*/,
+                                           std::vector<int> *out_attrs) {
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
+  for(size_t i = 0; i < n_out; ++i) {
+    CHECK(type_assign(&(*out_attrs)[i], kDefaultStorage));
+  }
+  return true;
+}
+
 inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
                                            std::vector<int> *in_attrs,
                                            std::vector<int> *out_attrs) {
