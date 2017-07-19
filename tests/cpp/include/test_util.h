@@ -23,6 +23,7 @@ namespace test {
 
 extern bool unitTestsWithCuda;
 extern bool debugOutput;
+extern bool quick_test;
 
 /*! \brief Pause VTune analysis */
 struct VTunePause {
