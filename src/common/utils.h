@@ -67,14 +67,6 @@ inline bool GetDefaultBlobs(const std::vector<NDArray>& nds,
   return casted;
 }
 
-template <typename xpu>
-inline void GetOutputBlobs(const std::vector<NDArray>& nds,
-                           std::vector<TBlob> *blobs) {
-  for (auto& nd : nds) {
-    blobs->push_back(nd.data());
-  }
-}
-
 /*
  * \brief Cast the NDArrays in `src` according to the storage types of the NDArrays
  *        in `dst`. The ones with default storage in `dst` are ignored.
