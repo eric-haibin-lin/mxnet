@@ -70,7 +70,7 @@ NNVM_REGISTER_OP(_backward_mul)
 ;
 
 // For divide, we will always auto-convert to dense since the sparse 0's will generate nans
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(elemwise_div, mshadow::op::div)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(elemwise_div, mshadow::op::div)
 .add_alias("_div").add_alias("_Div")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_div"});
 

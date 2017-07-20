@@ -125,7 +125,20 @@ inline bool ElemwiseStorageTypeDenseOutput(const nnvm::NodeAttrs& attrs,
                                            std::vector<int> *out_attrs) {
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   for(size_t i = 0; i < n_out; ++i) {
-    CHECK(type_assign(&(*out_attrs)[i], kDefaultStorage));
+    STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, i, kDefaultStorage);
+  }
+  return true;
+}
+
+template<int n_in, int n_out, int n_force_out_as_input_index>
+inline bool ElemwiseStorageTypeForce(const nnvm::NodeAttrs& attrs,
+                                           std::vector<int> *in_attrs,
+                                           std::vector<int> *out_attrs) {
+  CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
+  CHECK_LT(n_force_out_as_input_index, n_in) << "";
+  for(size_t i = 0; i < n_out; ++i) {
+    STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, i, (*in_attrs)[n_force_out_as_input_index]);
   }
   return true;
 }
