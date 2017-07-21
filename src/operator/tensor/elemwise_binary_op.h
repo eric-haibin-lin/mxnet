@@ -40,7 +40,7 @@ struct BMap
 };
 
 /*! Gather binary operator functions into BinaryOp class */
-class BinaryOp : public OpBase
+class ElemwiseBinaryOp : public OpBase
 {
  public:
   template<typename OP, int Req>
@@ -447,12 +447,12 @@ class BinaryOp : public OpBase
 
   /*! \brief Minimum of three */
   static MSHADOW_XINLINE size_t minthree(const size_t a, const size_t b, const size_t c) {
-    return std::min(a, std::min(b, c));
+    return a < b ? (a < c ? a : c) : (b < c ? b : c);
   }
 
   /*! \brief Maximum of three */
   static MSHADOW_XINLINE size_t maxthree(const size_t a, const size_t b, const size_t c) {
-    return std::max(a, std::max(b, c));
+    return a > b ? (a > c ? a : c) : (b > c ? b : c);
   }
 
   template<typename DType>
@@ -537,7 +537,6 @@ class BinaryOp : public OpBase
       ss << "BinaryBackwardUseIn_(): inputs[" << x << "]: ";
       test::print_blob(&std::cout, ss.str(), inputs[x]);
     }
-    //using namespace mxnet_op;
     mxnet_op::Stream<xpu> *s = ctx.get_stream<xpu>();
     const DType *ograd_dptr = inputs[0].dptr<DType>();
     const DType *lhs_dptr = inputs[1].dptr<DType>();
@@ -736,7 +735,7 @@ class BinaryOp : public OpBase
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                          BinaryBackwardUseIn<xpu, LOP, ROP>, "BinaryBackwardUseInExDense");
   }
-};  // class BinaryOp
+};  // class ElemwiseBinaryOp
 
 #define MXNET_OPERATOR_REGISTER_BINARY(name)                        \
   NNVM_REGISTER_OP(name)                                            \
@@ -759,37 +758,40 @@ class BinaryOp : public OpBase
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(__name$, __kernel$)                \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                            \
   .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>) \
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)             \
-  .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, __kernel$>)
+  .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)     \
+  .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchEx<cpu, __kernel$>)
 
 /*! \brief Binary launch, dense result */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(__name$, __kernel$)                     \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                                    \
   .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageTypeDenseOutput<1>) \
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)                     \
-  .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchEx<cpu, __kernel$>)
+  .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)             \
+  .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchEx<cpu, __kernel$>)
 
 /*! \brief Binary launch, dense rvalue */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(__name$, __kernel$)            \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                                     \
   .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageTypeForce<2, 1, 0>)  \
-  .set_attr<FCompute>("FCompute<cpu>", BinaryOp::Launch<cpu, __kernel$>)                      \
-  .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::LaunchExDenseRValue<cpu, __kernel$>)
+  .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
+  .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchExDenseRValue<cpu, __kernel$>)
 
 /*! \brief Binary CUDA launch */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(__name$, __kernel$)               \
   NNVM_REGISTER_OP(__name$)                                                          \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>) \
-  .set_attr<FCompute>("FCompute<gpu>", BinaryOp::Launch<gpu, __kernel$>)             \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::LaunchEx<gpu, __kernel$>)
+  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, __kernel$>)     \
+  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchEx<gpu, __kernel$>)
 
 /*! \brief Binary CUDA launch, dense result */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DR(__name$, __kernel$)                       \
   NNVM_REGISTER_OP(__name$)                                                                     \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageTypeDenseOutput<2, 1>) \
-  .set_attr<FCompute>("FCompute<gpu>", BinaryOp::Launch<gpu, __kernel$>)                        \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::LaunchAsDense<gpu, __kernel$>)
+  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, __kernel$>)                \
+  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchAsDense<gpu, __kernel$>)
 
+/*! \brief Binary CUDA launch, dense rvalue */
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_RVALUE(__name$, __kernel$)           \
+  NNVM_REGISTER_OP(__name$)                                                                   \
+  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
+  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchExDenseRValue<cpu, __kernel$>)
 
 }  // namespace op
 }  // namespace mxnet

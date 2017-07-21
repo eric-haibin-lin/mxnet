@@ -7,41 +7,40 @@
 
 namespace mxnet {
 namespace op {
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(elemwise_add, gpu, mshadow::op::plus);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(elemwise_add, mshadow::op::plus);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(_grad_add, gpu, mshadow::op::plus);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(_grad_add, mshadow::op::plus);
 
 NNVM_REGISTER_OP(_backward_add)
-.set_attr<FCompute>("FCompute<gpu>", BinaryOp::BinaryBackwardUseNone<gpu,
+.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::BinaryBackwardUseNone<gpu,
   mshadow_op::identity, mshadow_op::identity>)
-.set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::BinaryBackwardUseNoneEx<gpu,
+.set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::BinaryBackwardUseNoneEx<gpu,
   mshadow_op::identity, mshadow_op::identity>);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(elemwise_sub, gpu, mshadow::op::minus)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(elemwise_sub, mshadow::op::minus)
 .add_alias("_sub").add_alias("_minus").add_alias("_Minus");
 
 NNVM_REGISTER_OP(_backward_sub)
-.set_attr<FCompute>("FCompute<gpu>", BinaryOp::BinaryBackwardUseNone<gpu,
+.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::BinaryBackwardUseNone<gpu,
   mshadow_op::identity, mshadow_op::negation>)
-.set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::BinaryBackwardUseNoneEx<gpu,
+.set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::BinaryBackwardUseNoneEx<gpu,
   mshadow_op::identity, mshadow_op::identity>);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(elemwise_mul, gpu, mshadow::op::mul)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_RVALUE(elemwise_mul, mshadow::op::mul)
 .add_alias("_mul").add_alias("_Mul");
 
 NNVM_REGISTER_OP(_backward_mul)
-.set_attr<FCompute>("FCompute<gpu>", BinaryOp::BinaryBackwardUseIn<gpu,
+.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<gpu,
   mshadow_op::right, mshadow_op::left>)
-.set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::BinaryBackwardUseInEx<gpu,
+.set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<gpu,
   mshadow_op::right, mshadow_op::left>);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(elemwise_div, gpu, mshadow::op::div)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_RVALUE(elemwise_div, mshadow::op::div)
 .add_alias("_div").add_alias("_Div");
-
 NNVM_REGISTER_OP(_backward_div)
-.set_attr<FCompute>("FCompute<gpu>", BinaryOp::BinaryBackwardUseIn<gpu,
+.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<gpu,
   mshadow_op::div_grad, mshadow_op::div_rgrad>)
-.set_attr<FComputeEx>("FComputeEx<gpu>", BinaryOp::BinaryBackwardUseInExDense<gpu,
+.set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::BinaryBackwardUseInExDense<gpu,
   mshadow_op::div_grad, mshadow_op::div_rgrad>);
 
 }  // namespace op

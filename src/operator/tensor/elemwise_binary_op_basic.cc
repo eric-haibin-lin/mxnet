@@ -25,10 +25,10 @@ NNVM_REGISTER_OP(_backward_add)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}, {0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseNone<cpu, mshadow_op::identity,
+.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseNone<cpu, mshadow_op::identity,
                                                                 mshadow_op::identity>)
 .set_attr<FComputeEx>("FComputeEx<cpu>",
-                      BinaryOp::BinaryBackwardUseNoneEx<cpu, mshadow_op::identity,
+                      ElemwiseBinaryOp::BinaryBackwardUseNoneEx<cpu, mshadow_op::identity,
                         mshadow_op::identity>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
@@ -44,13 +44,13 @@ NNVM_REGISTER_OP(_backward_sub)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}, {0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseNone<cpu,
+.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseNone<cpu,
   mshadow_op::identity, mshadow_op::negation>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseNoneEx<cpu,
+.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseNoneEx<cpu,
   mshadow_op::identity, mshadow_op::negation>)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(elemwise_mul, mshadow::op::mul)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(elemwise_mul, mshadow::op::mul)
 .add_alias("_mul").add_alias("_Mul")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mul"});
 
@@ -63,13 +63,12 @@ NNVM_REGISTER_OP(_backward_mul)
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::right,
+.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::right,
     mshadow_op::left>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::right,
+.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::right,
     mshadow_op::left>);
 ;
 
-// For divide, we will always auto-convert to dense since the sparse 0's will generate nans
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(elemwise_div, mshadow::op::div)
 .add_alias("_div").add_alias("_Div")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_div"});
@@ -83,9 +82,9 @@ NNVM_REGISTER_OP(_backward_div)
     return std::vector<std::pair<int, int> >{{0, 1}};
   })
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
-.set_attr<FCompute>("FCompute<cpu>", BinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::div_grad,
+.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::div_grad,
   mshadow_op::div_rgrad>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryOp::BinaryBackwardUseInExDense<cpu, mshadow_op::div_grad,
+.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInExDense<cpu, mshadow_op::div_grad,
   mshadow_op::div_rgrad>)
 ;
 }  // namespace op
