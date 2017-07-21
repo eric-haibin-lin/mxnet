@@ -122,8 +122,8 @@ def check_elemwise_binary_ops():
                                 ograd_density=0.0,
                                 skip_gradient_check=False,
                                 verbose=False):
-        #if verbose is True:
-        print("test_elemwise_binary_op:", name)
+        if verbose is True:
+            print("test_elemwise_binary_op:", name)
 
         if lhs_grad_stype is None:
             lhs_grad_stype = lhs_stype
