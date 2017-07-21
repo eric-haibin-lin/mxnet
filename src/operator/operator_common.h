@@ -81,12 +81,6 @@ inline bool type_is_none(const int& x) {
   return x == -1;
 }
 
-/*! \brief check if shape vector is empty or contains unknown (0) dim. */
-template<typename VType>
-inline bool vector_is_none(const std::vector<VType>& x) {
-  return x.empty();
-}
-
 /*! \brief check if shape is scalar({1}). */
 inline bool shape_is_scalar(const TShape& x) {
   return x.ndim() == 1 && x.Size() == 1;

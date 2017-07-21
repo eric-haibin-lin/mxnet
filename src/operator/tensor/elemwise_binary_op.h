@@ -300,6 +300,22 @@ class ElemwiseBinaryOp : public OpBase
     return static_cast<size_t>(index_out_min);
   }
 
+  template<typename DType>
+  static inline bool IsSameArray(const NDArray *a1, const NDArray *a2) {
+    if (a1 && a2) {
+      if (a1 == a2) {
+        return true;
+      }
+      if (a1->ctx().dev_type == a2->ctx().dev_type) {
+        const DType *pa1 = a1->data().dptr<DType>();
+        if (pa1 && pa1 == a2->data().dptr<DType>()) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   // TODO(cjolivier01) Precompute parallelizing strategy
   template<typename xpu, typename DType, typename IType, typename OP>
   static inline void RspRspElemwiseBinaryOp2(const nnvm::NodeAttrs &attrs,
@@ -337,7 +353,9 @@ class ElemwiseBinaryOp : public OpBase
       if(rhs_is_dense) {
         output->CheckAndAlloc({mshadow::Shape1(num_rows_l)});
       } else {
-        output->CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
+        if(!IsSameArray<DType>(&lhs, output)) {
+          output->CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
+        }
       }
     }
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -439,8 +457,11 @@ class ElemwiseBinaryOp : public OpBase
     } else {
       DCHECK_LE(iter_out, num_rows_l + num_rows_r);  // Make sure that we didn't overrun
       nnvm::TShape new_shape = output->aux_shape(rowsparse::kIdx);
-      new_shape[0] -= num_common_rows;  // Reduce the first-dimension size by the number of common rows
-      output->set_aux_shape(rowsparse::kIdx, new_shape);
+      CHECK_LE(iter_out, new_shape.Size());
+      if(!rhs_is_dense) {
+        new_shape[0] -= num_common_rows;  // Reduce the first-dimension size by the number of common rows
+        output->set_aux_shape(rowsparse::kIdx, new_shape);
+      }
       //test::print(&std::cout, "output", *output);
     }
   }
@@ -532,11 +553,11 @@ class ElemwiseBinaryOp : public OpBase
                                    const std::vector<TBlob> &outputs) {
     DCHECK_EQ(outputs.size(), 2U);
     DCHECK_EQ(inputs.size(), 3U);
-    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
-      std::stringstream ss;
-      ss << "BinaryBackwardUseIn_(): inputs[" << x << "]: ";
-      test::print_blob(&std::cout, ss.str(), inputs[x]);
-    }
+//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//      std::stringstream ss;
+//      ss << "BinaryBackwardUseIn_(): inputs[" << x << "]: ";
+//      test::print_blob(&std::cout, ss.str(), inputs[x]);
+//    }
     mxnet_op::Stream<xpu> *s = ctx.get_stream<xpu>();
     const DType *ograd_dptr = inputs[0].dptr<DType>();
     const DType *lhs_dptr = inputs[1].dptr<DType>();
@@ -563,8 +584,8 @@ class ElemwiseBinaryOp : public OpBase
                                                                      ograd_dptr,
                                                                      lhs_dptr,
                                                                      rhs_dptr);});
-    test::print_blob(&std::cout, "output[0]", outputs[0]);
-    test::print_blob(&std::cout, "output[1]", outputs[1]);
+//    test::print_blob(&std::cout, "output[0]", outputs[0]);
+//    test::print_blob(&std::cout, "output[1]", outputs[1]);
   }
 
  public:
@@ -628,17 +649,23 @@ class ElemwiseBinaryOp : public OpBase
     using namespace mshadow::expr;
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
+//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//      std::stringstream ss;
+//      ss << "LaunchExDenseRValue(): inputs[" << x << "]: ";
+//      test::print(&std::cout, ss.str(), inputs[x]);
+//    }
     if (req[0] != kNullOp) {
       // If any input or output is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (inputs[0].storage_type() != kDefaultStorage) {
         ComputeRspRsp<xpu, OP>(attrs, ctx, inputs[0], inputs[1],
-                               req[0], outputs[0], true);
+                                     req[0], outputs[0], true);
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              Launch<xpu, OP>, "LaunchEx");
       }
     }
+//    test::print(&std::cout, "output[0]", outputs[0]);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -704,6 +731,11 @@ class ElemwiseBinaryOp : public OpBase
                                            const std::vector<NDArray> &outputs) {
     CHECK_EQ(inputs.size(), 3U);  // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
+//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//      std::stringstream ss;
+//      ss << "BinaryBackwardUseInEx(): inputs[" << x << "]: ";
+//      test::print(&std::cout, ss.str(), inputs[x]);
+//    }
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
@@ -719,6 +751,8 @@ class ElemwiseBinaryOp : public OpBase
                              "BinaryBackwardUseInEx");
       }
     }
+//    test::print(&std::cout, "output[0]", outputs[0]);
+//    test::print(&std::cout, "output[1]", outputs[1]);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -727,11 +761,11 @@ class ElemwiseBinaryOp : public OpBase
                                                 const std::vector<NDArray> &inputs,
                                                 const std::vector<OpReqType> &req,
                                                 const std::vector<NDArray> &outputs) {
-    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
-      std::stringstream ss;
-      ss << "BinaryBackwardUseInExDense(): inputs[" << x << "]: ";
-      test::print(&std::cout, ss.str(), inputs[x]);
-    }
+//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//      std::stringstream ss;
+//      ss << "BinaryBackwardUseInExDense(): inputs[" << x << "]: ";
+//      test::print(&std::cout, ss.str(), inputs[x]);
+//    }
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                          BinaryBackwardUseIn<xpu, LOP, ROP>, "BinaryBackwardUseInExDense");
   }
@@ -785,13 +819,13 @@ class ElemwiseBinaryOp : public OpBase
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DR(__name$, __kernel$)                       \
   NNVM_REGISTER_OP(__name$)                                                                     \
   .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, __kernel$>)                \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchAsDense<gpu, __kernel$>)
+  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchEx<gpu, __kernel$>)
 
 /*! \brief Binary CUDA launch, dense rvalue */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_RVALUE(__name$, __kernel$)           \
   NNVM_REGISTER_OP(__name$)                                                                   \
   .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchExDenseRValue<cpu, __kernel$>)
+  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchExDenseRValue<gpu, __kernel$>)
 
 }  // namespace op
 }  // namespace mxnet

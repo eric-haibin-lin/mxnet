@@ -519,12 +519,19 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
     ---------
     ..[1] https://github.com/Theano/Theano/blob/master/theano/gradient.py
     """
+    def as_stype(var, stype):
+        return mx.nd.cast_storage(mx.nd.array(var), storage_type=stype)
+
     approx_grads = {k: np.zeros(v.shape, dtype=np.float32)
                     for k, v in location.items()}
     for k, v in location.items():
-        executor.arg_dict[k][:] = v
+        #print(k, v)
+        stype = executor.arg_dict[k].storage_type
+        if stype == 'default':
+            executor.arg_dict[k][:] = as_stype(v, stype)
     for k in location:
         location[k] = np.ascontiguousarray(location[k])
+        #print(k, location[k])
     for k, v in location.items():
         if v.dtype.kind != 'f':
             continue
@@ -532,19 +539,27 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
         for i in range(np.prod(v.shape)):
             # inplace update
             v.ravel()[i] += eps/2.0
-            executor.arg_dict[k][:] = v
+            stype = executor.arg_dict[k].storage_type
+            executor.arg_dict[k][:] = as_stype(v, stype)
             if aux_states is not None:
                 for key, val in aux_states.items():
                     executor.aux_dict[key][:] = val
+            # if k == "lhs":
+            #     print(k, "numeric grad calling fwd 1", v, executor.arg_dict[k].asnumpy())
             executor.forward(is_train=use_forward_train)
             f_peps = executor.outputs[0].asnumpy()
 
             v.ravel()[i] -= eps
-            executor.arg_dict[k][:] = v
+            executor.arg_dict[k][:] = as_stype(v, stype)
             if aux_states is not None:
                 for key, val in aux_states.items():
-                    executor.aux_dict[key][:] = val
+                    adstype = executor.aux_dict[key].storage_type
+                    executor.aux_dict[key][:] = as_stype(val, adstype)
+            # if k == "lhs":
+            #     print(k, "numeric grad calling fwd 1", v, executor.arg_dict[k].asnumpy())
             executor.forward(is_train=use_forward_train)
+            # if k == "lhs":
+            #     print(k, "numeric grad calling fwd DONE")
             f_neps = executor.outputs[0].asnumpy()
 
             approx_grads[k].ravel()[i] = (f_peps - f_neps).sum() / eps
@@ -659,6 +674,7 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
     #print("returned from backward()")
     symbolic_grads = {k:executor.grad_dict[k].asnumpy() for k in grad_nodes}
 
+    #print("getting numeric gradients")
     numeric_gradients = numeric_grad(executor, location_npy, aux_states_npy,
                                      eps=numeric_eps, use_forward_train=use_forward_train)
 
@@ -667,6 +683,8 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
         orig_grad = args_grad_npy[name]
         sym_grad = symbolic_grads[name]
         if grad_req[name] == 'write':
+            # print("fd_grad", fd_grad)
+            # print("sym_grad", sym_grad)
             assert_almost_equal(fd_grad, sym_grad, rtol, atol,
                                 ("NUMERICAL_%s"%name, "BACKWARD_%s"%name))
         elif grad_req[name] == 'add':

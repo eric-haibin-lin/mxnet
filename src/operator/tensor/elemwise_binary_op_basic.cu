@@ -35,7 +35,7 @@ NNVM_REGISTER_OP(_backward_mul)
 .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<gpu,
   mshadow_op::right, mshadow_op::left>);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_RVALUE(elemwise_div, mshadow::op::div)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DR(elemwise_div, mshadow::op::div)
 .add_alias("_div").add_alias("_Div");
 NNVM_REGISTER_OP(_backward_div)
 .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<gpu,
