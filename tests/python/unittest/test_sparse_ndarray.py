@@ -67,14 +67,15 @@ def test_sparse_nd_zeros():
         assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
 
     shape = rand_shape_2d()
+    shape_3d = rand_shape_3d()
     check_sparse_nd_zeros('row_sparse', shape)
     check_sparse_nd_zeros('csr', shape)
     check_sparse_nd_zeros('default', shape)
+    check_sparse_nd_zeros('row_sparse', shape_3d)
 
 
 def test_sparse_nd_copy():
-    def check_sparse_nd_copy(from_stype, to_stype):
-        shape = rand_shape_2d()
+    def check_sparse_nd_copy(from_stype, to_stype, shape):
         from_nd = rand_ndarray(shape, from_stype)
         # copy to ctx
         to_ctx = from_nd.copyto(default_context())
@@ -84,21 +85,14 @@ def test_sparse_nd_copy():
         assert np.sum(np.abs(from_nd.asnumpy() != to_ctx.asnumpy())) == 0.0
         assert np.sum(np.abs(from_nd.asnumpy() != to_nd.asnumpy())) == 0.0
 
-    check_sparse_nd_copy('row_sparse', 'row_sparse')
-    check_sparse_nd_copy('row_sparse', 'default')
-    check_sparse_nd_copy('default', 'row_sparse')
-    check_sparse_nd_copy('default', 'csr')
-
-
-def check_sparse_nd_prop_rsp():
-    storage_type = 'row_sparse'
     shape = rand_shape_2d()
-    nd, (v, idx) = rand_sparse_ndarray(shape, storage_type)
-    assert(nd._num_aux == 1)
-    assert(nd.indices.dtype == np.int64)
-    assert(nd.stype == 'row_sparse')
-    assert_almost_equal(nd.indices.asnumpy(), idx)
-
+    shape_3d = rand_shape_3d()
+    check_sparse_nd_copy('row_sparse', 'row_sparse', shape)
+    check_sparse_nd_copy('row_sparse', 'default', shape)
+    check_sparse_nd_copy('default', 'row_sparse', shape)
+    check_sparse_nd_copy('default', 'csr', shape)
+    check_sparse_nd_copy('row_sparse', 'row_sparse', shape_3d)
+    check_sparse_nd_copy('default', 'row_sparse', shape_3d)
 
 def test_sparse_nd_basic():
     def check_rsp_creation(values, indices, shape):
@@ -115,6 +109,16 @@ def test_sparse_nd_basic():
         assert_almost_equal(csr.indices.asnumpy(), indices)
         assert_almost_equal(csr.data.asnumpy(), values)
 
+    def check_sparse_nd_rsp_aux():
+        storage_type = 'row_sparse'
+        shape = rand_shape_2d()
+        nd, (v, idx) = rand_sparse_ndarray(shape, storage_type)
+        assert(nd._num_aux == 1)
+        assert(nd.indices.dtype == np.int64)
+        assert(nd.stype == 'row_sparse')
+        assert_almost_equal(nd.indices.asnumpy(), idx)
+        assert_almost_equal(nd.data.asnumpy(), v)
+
     shape = (4,2)
     values = np.random.rand(2,2)
     indices = np.array([1,3], dtype='int64')
@@ -129,7 +133,7 @@ def test_sparse_nd_basic():
     check_rsp_creation(values, indices, shape)
 
     check_csr_creation(shape)
-    check_sparse_nd_prop_rsp()
+    check_sparse_nd_rsp_aux()
 
 
 def test_sparse_nd_setitem():
