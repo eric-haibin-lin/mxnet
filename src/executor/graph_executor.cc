@@ -1131,6 +1131,7 @@ void GraphExecutor::InitCachedOps() {
     if (inode.source->is_variable()) {
       LOG(INFO) << "node " << nid << " var";
     } else {
+      const auto& vstorage_type = graph_.GetAttr<nnvm::StorageTypeVector>("storage_type");
       LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
       auto exec = op_execs[nid];
       for (const auto& e : inode.inputs) {
