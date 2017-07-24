@@ -160,7 +160,8 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
                         modifier_func=None, density=.5):
     if stype == 'row_sparse':
         if rsp_indices is not None:
-            arr_indices = np.asarray(rsp_indices).sort()
+            arr_indices = np.asarray(rsp_indices)
+            arr_indices.sort()
         else:
             arr_indices = None
         arr_data, (_, _) = rand_sparse_ndarray(shape, stype,

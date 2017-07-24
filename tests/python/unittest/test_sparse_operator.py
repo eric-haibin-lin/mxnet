@@ -598,21 +598,24 @@ def check_sparse_mathematical_core(name, stype,
     if rhs_arg is not None:
         if is_scalar(rhs_arg):
             expected_result_type, expected_grad_result_type = \
-                get_fw_bw_result_types_2(forward_numpy_call, stype,
-                                         backward_numpy_call, output_grad_stype)
+              get_fw_bw_result_types_with_scalar(forward_numpy_call, stype,
+                                         backward_numpy_call, input_grad_stype)
         else:
             expected_result_type, expected_grad_result_type = \
-                get_fw_bw_result_types_with_scalar(forward_numpy_call, stype,
-                                                   backward_numpy_call, output_grad_stype)
+              get_fw_bw_result_types_2(forward_numpy_call, stype,
+                                                   backward_numpy_call, input_grad_stype)
     else:
         expected_result_type, expected_grad_result_type = \
             get_fw_bw_result_types(forward_numpy_call, stype,
-                                   backward_numpy_call, output_grad_stype)
+                                   backward_numpy_call, input_grad_stype)
 
     if input_grad_stype != 'default':
         data._set_attr(input_grad_stype_hint=expected_grad_result_type)
 
     shape = rand_shape_2d()
+    #shape = (3,1)
+    #shape = (9,1)
+    #shape = (1,1)
 
     if verbose is True:
         print("Shape: ", shape, "density: ", density, "force_overlap", force_overlap)
@@ -630,9 +633,12 @@ def check_sparse_mathematical_core(name, stype,
                 shape,
                 density=density,
                 force_indices=[(shape[0]/2)] if force_overlap is True else None
+                #force_indices=[0,2,4,5,7,8]
             )
         )
         data_tmp = arr_data.asnumpy()
+        if verbose is True:
+          print("arr_data indices", arr_data.indices.asnumpy())
 
     if verbose is True:
         print("input", data_tmp)
@@ -685,12 +691,12 @@ def check_sparse_mathematical_core(name, stype,
     assert_almost_equal(out, npout, equal_nan=True)
 
     if backward_numpy_call is not None:
-        if input_grad_stype == 'default' or input_grad_stype is None:
+        if output_grad_stype == 'default' or output_grad_stype is None:
             out_grad = mx.nd.empty(shape)
             out_grad[:] = grad_init
         else:
             out_grad = create_sparse_array_zd(
-                shape, input_grad_stype, data_init=grad_init,
+                shape, output_grad_stype, data_init=grad_init,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
                     density=ograd_density,
@@ -699,7 +705,7 @@ def check_sparse_mathematical_core(name, stype,
         npout_grad = out_grad.asnumpy()
 
         if verbose is True:
-            print(npout_grad)
+            print("npout_grad", npout_grad)
 
         if rhs_arg is not None:
             temp = backward_numpy_call(data_tmp, rhs_arg)
@@ -720,7 +726,6 @@ def check_sparse_mathematical_core(name, stype,
         if verbose is True:
             print(name)
             print("arr_grad", arr_grad)
-            print("npout_grad", npout_grad)
             print("input_grad", input_grad)
 
         assert_almost_equal(arr_grad, input_grad, equal_nan=True)
@@ -749,6 +754,7 @@ def test_sparse_mathematical_core():
                                        output_grad_stype=output_grad_stype,
                                        density=density, ograd_density=ograd_density,
                                        force_overlap=force_overlap,
+                                       input_grad_stype='default',
                                        verbose=False)
 
     # Check many basic unary operators
@@ -760,7 +766,8 @@ def test_sparse_mathematical_core():
                                        lambda x: np.sqrt(x),
                                        lambda x: 1.0/(2.0 * np.sqrt(x)),
                                        output_grad_stype=output_grad_stype, force_overlap=force_overlap,
-                                       density=density, ograd_density=ograd_density)
+                                       density=density, ograd_density=ograd_density,
+                                       verbose=False)
 
         # rsqrt
         check_sparse_mathematical_core("rsqrt", stype,
@@ -970,8 +977,13 @@ def test_sparse_mathematical_core():
     for i in range(1):
         print("pass", i)
         for density in [0.0, random.uniform(0, 1), 1.0]:
+        #for density in [0.5]:
+        #for density in [0.0]:
             for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
+            #for ograd_density in [0.0]:
                 for force_overlap in [False, True]:
+                #for force_overlap in [True]:
+                #for force_overlap in [False]:
                     # Check unary ops (unary fwd, binary bwd)
                     check_mathematical_core('default', force_overlap=force_overlap,
                                           density=density, ograd_density=ograd_density)
@@ -985,18 +997,22 @@ def test_sparse_mathematical_core():
                                            density=density, ograd_density=ograd_density)
 
                     # Check binary with scalar ops
-                    check_binary_op_with_scalar('default',
-                                                density=density,
-                                                ograd_density=ograd_density)
+                    # check_binary_op_with_scalar('default',
+                    #                             density=density,
+                    #                             ograd_density=ograd_density,
+                    #                             force_overlap=force_overlap)
                     # check_binary_op_with_scalar('row_sparse',
                     #                             density=density,
-                    #                             ograd_density=ograd_density)
+                    #                             ograd_density=ograd_density,
+                    #                             force_overlap=force_overlap)
                     # check_binary_op_with_scalar('row_sparse', output_grad_stype='default',
                     #                             density=density,
-                    #                             ograd_density=ograd_density)
+                    #                             ograd_density=ograd_density
+                    #                             force_overlap=force_overlap)
                     # check_binary_op_with_scalar('row_sparse',
                     #                             output_grad_stype='row_sparse',
-                    #                             density=density, ograd_density=ograd_density)
+                    #                             density=density, ograd_density=ograd_density,
+                    #                             force_overlap=force_overlap)
 
 def check_sparse_embedding():
     in_dim = 10
@@ -1204,7 +1220,7 @@ if __name__ == '__main__':
     # nose.runmodule()
 
     test_sparse_mathematical_core()
-    test_sparse_unary_with_numerics()
-    test_elemwise_binary_ops()
+    #test_sparse_unary_with_numerics()
+    #test_elemwise_binary_ops()
     print("Done")
 

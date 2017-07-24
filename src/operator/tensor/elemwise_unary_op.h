@@ -29,7 +29,10 @@ class OpBase {
     CHECK_EQ(src_blob.type_flag_, dest_blob.type_flag_);
     CHECK_EQ(src_blob.shape_, dest_blob.shape_);
     MSHADOW_TYPE_SWITCH(src_blob.type_flag_, DType, {
-      mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s));
+      // Check if the pointers are the same (in-place operation needs no copy)
+      if(src_blob.dptr<DType>() != dest_blob.dptr<DType>()) {
+        mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s));
+      }
     });
   }
 
@@ -123,7 +126,7 @@ class OpBase {
     computer(attrs, ctx, in_blobs, req, out_blobs);
   }
 
-};
+};  // OpBase
 
 /*! \brief Unary operator class */
 class UnaryOp : public OpBase {
@@ -167,6 +170,7 @@ class UnaryOp : public OpBase {
     return false;
   }
 
+ protected:
   /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
   template<typename xpu, typename FComputer>
   static inline void MapToFCompute(const nnvm::NodeAttrs &attrs,
@@ -212,6 +216,7 @@ class UnaryOp : public OpBase {
                         const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
+    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
     MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute<xpu, OP>);
@@ -226,6 +231,7 @@ class UnaryOp : public OpBase {
                             const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
+    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_EQ(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a dense output storage type";
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
@@ -258,6 +264,7 @@ class UnaryOp : public OpBase {
                        const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
+    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
     MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
@@ -271,6 +278,7 @@ class UnaryOp : public OpBase {
                             const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
+    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_EQ(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a dense output storage type";
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
