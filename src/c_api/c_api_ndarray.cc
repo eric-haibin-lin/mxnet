@@ -332,6 +332,16 @@ void PushFComputeEx(const FComputeEx& fn,
                       engine::CallbackOnComplete(),
                       requested};
       std::vector<OpReqType> req(ndoutputs.size(), kWriteTo);
+      std::unordered_set<engine::VarHandle> in_vars;
+      for (auto &nd : ndinputs) {
+        in_vars.insert(nd.var());
+      }
+      for (size_t i = 0; i < ndoutputs.size(); i++) {
+        // output NDArray shares the memory with the input NDArray
+        if (in_vars.find(ndoutputs[i].var()) != in_vars.end()) {
+          req[i] = kWriteInplace;
+        }
+      }
       fn(attrs, opctx, ndinputs, req, ndoutputs);
       if (ctx.dev_mask() == gpu::kDevMask) {
         rctx.get_stream<gpu>()->Wait();
@@ -406,6 +416,16 @@ void PushOperator(const OpStatePtr& state,
           engine::CallbackOnComplete on_complete) {
         OpContext opctx{is_train, rctx, on_complete, requested};
         std::vector<OpReqType> req(ndoutputs.size(), kWriteTo);
+        std::unordered_set<engine::VarHandle> in_vars;
+        for (auto &nd : ndinputs) {
+          in_vars.insert(nd.var());
+        }
+        for (size_t i = 0; i < ndoutputs.size(); i++) {
+          // output NDArray shares the memory with the input NDArray
+          if (in_vars.find(ndoutputs[i].var()) != in_vars.end()) {
+            req[i] = kWriteInplace;
+          }
+        }
         fcompute_ex(state, opctx, ndinputs, req, ndoutputs);
         if (exec_type == ExecType::kSync) {
           if (rctx.get_ctx().dev_mask() == gpu::kDevMask) {
