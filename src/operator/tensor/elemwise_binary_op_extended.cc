@@ -41,7 +41,7 @@ NNVM_REGISTER_OP(_backward_maximum)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::ge,
    mshadow_op::lt>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::ge,
+.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInExDense<cpu, mshadow_op::ge,
    mshadow_op::lt>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_minimum, mshadow_op::minimum)
@@ -59,7 +59,7 @@ NNVM_REGISTER_OP(_backward_minimum)
 .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<cpu, mshadow_op::le,
                                                               mshadow_op::gt>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<cpu, mshadow_op::le,
+.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInExDense<cpu, mshadow_op::le,
   mshadow_op::gt>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_hypot, mshadow_op::hypot)

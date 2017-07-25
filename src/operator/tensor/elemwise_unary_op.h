@@ -19,6 +19,15 @@ namespace mxnet {
 namespace op {
 
 class OpBase {
+ public:
+  template<int Req>
+  struct MapIdentity {
+    template<typename DType>
+    MSHADOW_XINLINE static void Map(int i, DType *out, const DType value) {
+      KERNEL_ASSIGN(out[i], Req, value);
+    }
+  };
+
  protected:
   /*! \brief Copy blob data */
   template<typename xpu>
