@@ -110,7 +110,7 @@ def get_fw_bw_result_types_2(forward_numpy_call,  fwd_res_dflt,
 
 def get_fw_bw_result_types_with_scalar(forward_numpy_call,  fwd_res_dflt,
                                        backward_numpy_call, bwd_res_dflt):
-    return (get_result_type(forward_numpy_call,  fwd_res_dflt),
+    return (get_result_type_with_scalar(forward_numpy_call,  fwd_res_dflt),
             get_result_type_with_scalar(backward_numpy_call, bwd_res_dflt))
 
 def gen_rsp_random_indices(shape, density=.5, force_indices=None):
@@ -609,7 +609,7 @@ def check_sparse_mathematical_core(name, stype,
                                    input_grad_stype=None, force_overlap=False, density=.5,
                                    ograd_density=.5, verbose=False):
     if verbose is True:
-        print("TESTING: " + name)
+      print("TESTING: " + name)
 
     data = mx.symbol.Variable('data', storage_type=stype)
 
@@ -1022,18 +1022,18 @@ def test_sparse_mathematical_core():
                                                 density=density,
                                                 ograd_density=ograd_density,
                                                 force_overlap=force_overlap)
-                    # check_binary_op_with_scalar('row_sparse',
-                    #                             density=density,
-                    #                             ograd_density=ograd_density,
-                    #                             force_overlap=force_overlap)
-                    # check_binary_op_with_scalar('row_sparse', output_grad_stype='default',
-                    #                             density=density,
-                    #                             ograd_density=ograd_density
-                    #                             force_overlap=force_overlap)
-                    # check_binary_op_with_scalar('row_sparse',
-                    #                             output_grad_stype='row_sparse',
-                    #                             density=density, ograd_density=ograd_density,
-                    #                             force_overlap=force_overlap)
+                    check_binary_op_with_scalar('row_sparse',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('row_sparse', output_grad_stype='default',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('row_sparse',
+                                                output_grad_stype='row_sparse',
+                                                density=density, ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
 
 def check_sparse_embedding():
     in_dim = 10
