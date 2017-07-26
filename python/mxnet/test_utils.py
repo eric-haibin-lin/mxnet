@@ -522,13 +522,13 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
     ..[1] https://github.com/Theano/Theano/blob/master/theano/gradient.py
     """
     def as_stype(var, stype):
-        return mx.nd.cast_storage(mx.nd.array(var), storage_type=stype)
+        return mx.nd.cast_storage(mx.nd.array(var), stype=stype)
 
     approx_grads = {k: np.zeros(v.shape, dtype=np.float32)
                     for k, v in location.items()}
     for k, v in location.items():
         #print(k, v)
-        stype = executor.arg_dict[k].storage_type
+        stype = executor.arg_dict[k].stype
         if stype == 'default':
             executor.arg_dict[k][:] = as_stype(v, stype)
     for k in location:
@@ -541,7 +541,7 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
         for i in range(np.prod(v.shape)):
             # inplace update
             v.ravel()[i] += eps/2.0
-            stype = executor.arg_dict[k].storage_type
+            stype = executor.arg_dict[k].stype
             executor.arg_dict[k][:] = as_stype(v, stype)
             if aux_states is not None:
                 for key, val in aux_states.items():
@@ -555,7 +555,7 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
             executor.arg_dict[k][:] = as_stype(v, stype)
             if aux_states is not None:
                 for key, val in aux_states.items():
-                    adstype = executor.aux_dict[key].storage_type
+                    adstype = executor.aux_dict[key].stype
                     executor.aux_dict[key][:] = as_stype(val, adstype)
             # if k == "lhs":
             #     print(k, "numeric grad calling fwd 1", v, executor.arg_dict[k].asnumpy())
@@ -846,8 +846,11 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     for k, v in args_grad_npy.items():
         nd = mx.nd.array(v, ctx=ctx)
         if grad_stypes is not None and k in grad_stypes:
-            out = create_sparse_array(v.shape, grad_stypes[k], density=0.0)
-            #out = mx.nd.cast_storage(nd, stype=grad_stypes[k])
+            stype = grad_stypes[k]
+            if stype is not None and stype != 'default':
+                out = create_sparse_array(v.shape, stype, density=0.0)
+            else:
+                out = nd
             args_grad_data[k] = out
         else:
             args_grad_data[k] = nd

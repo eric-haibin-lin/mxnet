@@ -171,10 +171,15 @@ def test_elemwise_binary_ops():
 
         lhs = mx.symbol.Variable('lhs', stype=lhs_stype)
         rhs = mx.symbol.Variable('rhs', stype=rhs_stype)
-        if lhs_grad_stype != 'default':
-            lhs._set_attr(input_grad_stype_hint=lhs_grad_stype)
-        if rhs_grad_stype != 'default':
-            rhs._set_attr(input_grad_stype_hint=rhs_grad_stype)
+
+        # if lhs_grad_stype != 'default':
+        #     lhs._set_attr(input_grad_stype_hint=lhs_grad_stype)
+        # if rhs_grad_stype != 'default':
+        #     rhs._set_attr(input_grad_stype_hint=rhs_grad_stype)
+
+        grad_stypes = dict()
+        grad_stypes['lhs'] = lhs_grad_stype
+        grad_stypes['rhs'] = rhs_grad_stype
 
         if lhs_stype == 'default':
             lhs_nd = rand_ndarray(shape, 'default')
@@ -268,6 +273,7 @@ def test_elemwise_binary_ops():
             print("ingrad_rhs_np", ingrad_rhs_np)
 
         igrads_result = check_symbolic_backward(test, location, [out_grad], [ingrad_lhs_np, ingrad_rhs_np],
+                                                grad_stypes=grad_stypes,
                                                 equal_nan=True)
 
         if verbose is True:
@@ -282,10 +288,7 @@ def test_elemwise_binary_ops():
             assert igrads_result['rhs'].stype == rhs_grad_stype
 
         if skip_gradient_check is not True:
-            check_numeric_gradient(test, location,
-                                   numeric_eps=numeric_eps,
-                                   #numeric_eps=1e-2
-                                   )
+            check_numeric_gradient(test, location, numeric_eps=numeric_eps)
 
     def check_all(l, r, check_function):
         assert l.shape == r.shape
@@ -462,17 +465,17 @@ def test_elemwise_binary_ops():
                                                   force_lr_overlap=force_lr_overlap,
                                                   force_grad_overlap=force_grad_overlap,
                                                   ograd_density=ograd_density)
-                        check_elemwise_binary_ops('row_sparse', 'default', shape,
-                                                  lhs_density=lhs_density, rhs_density=rhs_density,
-                                                  force_lr_overlap=force_lr_overlap,
-                                                  force_grad_overlap=force_grad_overlap,
-                                                  ograd_density=ograd_density)
-                        check_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
-                                                  lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse',
-                                                  lhs_density=lhs_density, rhs_density=rhs_density,
-                                                  force_lr_overlap=force_lr_overlap,
-                                                  force_grad_overlap=force_grad_overlap,
-                                                  ograd_density=ograd_density)
+                        # check_elemwise_binary_ops('row_sparse', 'default', shape,
+                        #                           lhs_density=lhs_density, rhs_density=rhs_density,
+                        #                           force_lr_overlap=force_lr_overlap,
+                        #                           force_grad_overlap=force_grad_overlap,
+                        #                           ograd_density=ograd_density)
+                        # check_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
+                        #                           lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse',
+                        #                           lhs_density=lhs_density, rhs_density=rhs_density,
+                        #                           force_lr_overlap=force_lr_overlap,
+                        #                           force_grad_overlap=force_grad_overlap,
+                        #                           ograd_density=ograd_density)
 
 
 def as_dense(arr):
@@ -526,8 +529,7 @@ def check_sparse_mathematical_core(name, stype,
       get_fw_bw_result_types(forward_numpy_call, stype,
                              backward_numpy_call, input_grad_stype)
 
-  if input_grad_stype != 'default':
-    data._set_attr(input_grad_stype_hint=expected_grad_result_type)
+  grad_stypes = list(expected_grad_result_type)
 
   #shape = rand_shape_2d()
   shape = (3,4)
@@ -1207,8 +1209,7 @@ def test_sparse_unary_with_numerics():
     shape = (3, 4)
     data = mx.symbol.Variable("data")
 
-    if output_grad_stype != 'default':
-      data._set_attr(input_grad_stype_hint=expected_grad_result_type)
+    grad_stypes = list(expected_grad_result_type)
 
     y = mxnet_func(data)
     if stype == 'default':
@@ -1235,7 +1236,9 @@ def test_sparse_unary_with_numerics():
 
     assert output.stype == expected_result_type
 
-    input_grad_dict = check_symbolic_backward(y, location=[xa], out_grads=[out_grad], expected=[input_grad_np])
+    input_grad_dict = check_symbolic_backward(y, location=[xa], out_grads=[out_grad],
+                                              expected=[input_grad_np],
+                                              grad_stypes=grad_stypes)
     inp_grad = input_grad_dict["data"]
 
     assert inp_grad.stype == expected_grad_result_type
@@ -1272,7 +1275,7 @@ if __name__ == '__main__':
   # import nose
   # nose.runmodule()
 
-  test_sparse_mathematical_core()
-  # test_sparse_unary_with_numerics()
-  # test_elemwise_binary_ops()
+  #test_sparse_mathematical_core()
+  #test_sparse_unary_with_numerics()
+  test_elemwise_binary_ops()
   print("Done")
