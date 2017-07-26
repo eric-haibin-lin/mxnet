@@ -44,7 +44,7 @@ NNVM_REGISTER_OP(_backward_div)
   mshadow_op::div_grad, mshadow_op::div_rgrad>);
 
 NNVM_REGISTER_OP(_mod)
-.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, mshadow_op::mod, OpBase::WITH_HALF2>);
+.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, mshadow_op::mod>);
 
 NNVM_REGISTER_OP(_backward_mod)
 .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::BinaryBackwardUseInWithHalf2<

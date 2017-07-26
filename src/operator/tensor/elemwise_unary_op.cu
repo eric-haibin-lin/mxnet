@@ -59,8 +59,8 @@ NNVM_REGISTER_OP(reciprocal)
 .set_attr<FCompute>("FCompute<gpu>", UnaryOp::Compute<gpu, mshadow_op::reciprocal>);
 
 NNVM_REGISTER_OP(_backward_reciprocal)
-.set_attr<FCompute>("FCompute<gpu>",
-BinaryScalarOp::BinaryCompute<gpu, unary_bwd<mshadow_op::reciprocal_grad> >);
+.set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<
+  gpu, unary_bwd<mshadow_op::reciprocal_grad> >);
 
 // abs
 NNVM_REGISTER_OP(abs)
