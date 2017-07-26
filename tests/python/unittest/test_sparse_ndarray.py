@@ -88,8 +88,6 @@ def test_sparse_nd_basic():
         assert(nd._num_aux == 1)
         assert(nd.indices.dtype == np.int64)
         assert(nd.stype == 'row_sparse')
-        assert_almost_equal(nd.indices.asnumpy(), idx)
-        assert_almost_equal(nd.data.asnumpy(), v)
     check_sparse_nd_basic_rsp()
 
 
