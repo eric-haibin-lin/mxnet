@@ -24,12 +24,13 @@ def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_
 
 
 def test_elemwise_add_ex():
-    shape = rand_shape_2d()
-    check_elemwise_add_ex('default', 'default', shape)
-    check_elemwise_add_ex('default', 'row_sparse', shape)
-    check_elemwise_add_ex('row_sparse', 'default', shape)
-    check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
-                          lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
+    shapes = [rand_shape_2d(), rand_shape_3d()]
+    for shape in shapes:
+        check_elemwise_add_ex('default', 'default', shape)
+        check_elemwise_add_ex('default', 'row_sparse', shape)
+        check_elemwise_add_ex('row_sparse', 'default', shape)
+        check_elemwise_add_ex('row_sparse', 'row_sparse', shape,
+                              lhs_grad_stype='row_sparse', rhs_grad_stype='row_sparse')
 
 
 # TODO(haibin) randomize this test
@@ -139,37 +140,9 @@ def test_sparse_dot():
     test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False)
     test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True)
     test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(1, 10)), 'row_sparse', False, 0.05)
-    test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True, 0.05)
-
-
-def test_sparse_embedding():
-    in_dim = 10
-    out_dim = 4
-    batch = 24
-
-    data = mx.sym.Variable("data", stype='csr')
-    embed = mx.sym.SparseEmbedding(data=data, input_dim=in_dim, output_dim=out_dim, name="embed")
-    exe_test = embed.simple_bind(default_context(), grad_req={'data': 'null', 'embed_weight': 'write'},
-                                 data=(batch, in_dim))
-
-    arg_map = dict(zip(embed.list_arguments(), exe_test.arg_arrays))
-    grad_map = dict(zip(embed.list_arguments(), exe_test.grad_arrays))
-    np_data = np.random.randint(low=0, high=in_dim, size=batch)
-    np_weight = np.random.uniform(-0.01, 0.01, arg_map["embed_weight"].shape)
-    np_onehot = np.zeros((batch, in_dim))
-    np_onehot[np.arange(batch), np_data] = 1.0
-    nd_onehot = mx.nd.array(np_onehot)._to_csr()
-    # forward
-    arg_map["data"][:] = nd_onehot
-    arg_map["embed_weight"][:] = np_weight
-    exe_test.forward(is_train=True)
-    assert_almost_equal(exe_test.outputs[0].asnumpy(), np.dot(np_onehot, np_weight))
-    # backward
-    np_grad = np.random.uniform(-1, 1, exe_test.outputs[0].shape)
-    grad = mx.nd.zeros(np_grad.shape)
-    grad[:] = np_grad
-    exe_test.backward([grad])
-    assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad), atol=1e-5)
+    # TODO(haibin/jun/stefan) test dot(csr.T, row_sparse) = dns gpu version
+    if Context.default_ctx == mx.cpu():
+        test_dot_csr(lhs_shape, (lhs_shape[0], rnd.randint(1, 10)), 'row_sparse', True, 0.05)
 
 
 def test_sparse_slice():
@@ -188,8 +161,7 @@ def test_sparse_slice():
 
 
 def test_sparse_retain():
-    for _ in range(10):
-        shape = rand_shape_2d()
+    def check_sparse_retain(shape):
         num_rows = shape[0]
         rsp, _ = rand_sparse_ndarray(shape=shape, stype='row_sparse', density=0.5)
         length = np.random.randint(1, num_rows + 1)
@@ -208,6 +180,22 @@ def test_sparse_retain():
         idx = mx.symbol.Variable('indices')
         sym = mx.sym.sparse_retain(data=data, indices=idx)
         check_numeric_gradient(sym, [rsp, indices], grad_nodes=['data'], grad_stype_dict={'data': 'row_sparse'})
+    shape = rand_shape_2d()
+    shape_3d = rand_shape_3d()
+    check_sparse_retain(shape)
+    check_sparse_retain(shape_3d)
+
+def test_sparse_nd_zeros():
+    def check_sparse_nd_zeros(stype, shape):
+        zero = mx.nd.zeros(shape)
+        sparse_zero = mx.nd.zeros(shape=shape, stype=stype)
+        assert_almost_equal(sparse_zero.asnumpy(), zero.asnumpy())
+
+    shape = rand_shape_2d()
+    check_sparse_nd_zeros('row_sparse', shape)
+    check_sparse_nd_zeros('csr', shape)
+    check_sparse_nd_zeros('default', shape)
+
 
 if __name__ == '__main__':
     import nose
