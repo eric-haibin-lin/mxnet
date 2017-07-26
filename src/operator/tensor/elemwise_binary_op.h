@@ -313,8 +313,8 @@ class ElemwiseBinaryOp : public OpBase
                                              const NDArray& rhs,
                                              const OpReqType req,
                                              const NDArray& output,
-                                             const bool rhs_may_be_dense = false,
-                                             const bool allow_inplace = false) {
+                                             const bool rhs_may_be_dense,
+                                             const bool allow_inplace) {
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
@@ -515,33 +515,33 @@ class ElemwiseBinaryOp : public OpBase
                      / mxnet_op::DataType<DType>::kLanes);
   }
 
-  // Binary Compute between two row-sparse ndarray
-  // This implementation only works on CPU
-  template<typename xpu, typename OP, WithHalf2 with_half2 = WithHalf2::WITHOUT_HALF2>
-  static void ComputeRspRsp(const nnvm::NodeAttrs &attrs,
-                            const OpContext &ctx,
-                            const NDArray &lhs,
-                            const NDArray &rhs,
-                            const OpReqType req,
-                            const NDArray &output,
-                            const bool rhs_may_be_dense = false,
-                            const bool allow_inplace = false) {
-    MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
-      if(with_half2 == WithHalf2::WITHOUT_HALF2) {
-        MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
-            attrs, ctx, lhs, rhs, req, output,
-            rhs_may_be_dense, allow_inplace);
-        })
-      } else {
-        MSHADOW_TYPE_SWITCH_WITH_HALF2(output.dtype(), DType, {
-          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
-            attrs, ctx, lhs, rhs, req, output,
-            rhs_may_be_dense, allow_inplace);
-        })
-      }
-    });
-  }
+//  // Binary Compute between two row-sparse ndarray
+//  // This implementation only works on CPU
+//  template<typename xpu, typename OP, WithHalf2 with_half2 = WithHalf2::WITHOUT_HALF2>
+//  static void ComputeRspRsp(const nnvm::NodeAttrs &attrs,
+//                            const OpContext &ctx,
+//                            const NDArray &lhs,
+//                            const NDArray &rhs,
+//                            const OpReqType req,
+//                            const NDArray &output,
+//                            const bool rhs_may_be_dense = false,
+//                            const bool allow_inplace = false) {
+//    MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
+//      if(with_half2 == WithHalf2::WITHOUT_HALF2) {
+//        MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+//          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+//            attrs, ctx, lhs, rhs, req, output,
+//            rhs_may_be_dense, allow_inplace);
+//        })
+//      } else {
+//        MSHADOW_TYPE_SWITCH_WITH_HALF2(output.dtype(), DType, {
+//          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+//            attrs, ctx, lhs, rhs, req, output,
+//            rhs_may_be_dense, allow_inplace);
+//        })
+//      }
+//    });
+//  }
 
 //  template<typename xpu, typename OP>
 //  static void ComputeRspRsp3(const nnvm::NodeAttrs &attrs,
@@ -691,8 +691,14 @@ class ElemwiseBinaryOp : public OpBase
       // If any input or output is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
-        ComputeRspRsp<xpu, OP>(attrs, ctx, inputs[0], inputs[1],
-                               req[0], outputs[0]);
+        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+            RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+              attrs, ctx, inputs[0], inputs[1],
+              req[0], outputs[0],
+              false, false);
+          });
+        });
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              Launch<xpu, OP>, "LaunchEx");
@@ -700,6 +706,33 @@ class ElemwiseBinaryOp : public OpBase
 //      test::print(&std::cout, "output[0]", outputs[0]);
     }
   }
+
+//  template<typename xpu, typename OP>
+//  static void LaunchExWithHalf2(const nnvm::NodeAttrs &attrs,
+//                       const OpContext &ctx,
+//                       const std::vector<NDArray> &inputs,
+//                       const std::vector<OpReqType> &req,
+//                       const std::vector<NDArray> &outputs) {
+//    using namespace mshadow;
+//    using namespace mshadow::expr;
+//    CHECK_EQ(inputs.size(), 2);
+//    CHECK_EQ(outputs.size(), 1);
+//    if (req[0] != kNullOp) {
+//      // If any input or output is dense, fallback to FCompute
+//      // TODO(haibin) implement dns + rsp in a separate kernel
+//      if (!common::ContainsDefaultStorage(inputs)) {
+//        MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].dtype(), DType, {
+//          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+//            attrs, ctx, inputs[0], inputs[1],
+//            req[0], outputs[0],
+//            false, false);
+//        });
+//      } else {
+//        FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+//                             Launch<xpu, OP>, "LaunchEx");
+//      }
+//    }
+//  }
 
 //  template<typename xpu, typename OP>
 //  static void LaunchExWithHalf2(const nnvm::NodeAttrs &attrs,
@@ -749,8 +782,14 @@ class ElemwiseBinaryOp : public OpBase
     if (req[0] != kNullOp) {
       // If any input or output is dense, fallback to FCompute
       if (inputs[0].storage_type() != kDefaultStorage) {
-        ComputeRspRsp<xpu, OP>(attrs, ctx, inputs[0], inputs[1],
-                               req[0], outputs[0], true);
+        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+            RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+              attrs, ctx, inputs[0], inputs[1],
+              req[0], outputs[0],
+              true, false);
+          });
+        });
       } else {
         // May be lhs=dense, rhs=sparse
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
@@ -846,19 +885,36 @@ class ElemwiseBinaryOp : public OpBase
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
-        ComputeRspRsp<xpu, LOP, with_half2>(
-          attrs, ctx, inputs[1], inputs[2], req[0], outputs[0]);
+        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+            RspRspElemwiseBinaryOp2<xpu, DType, IType, LOP>(
+              attrs, ctx, inputs[1], inputs[2], req[0], outputs[0],
+              false, false
+            );
+          });
+        });
         //test::print(&std::cout, "output[0]", outputs[0]);
         // LHS in-place
-        ComputeRspRsp<xpu, mshadow::op::mul, with_half2>(
-          attrs, ctx, outputs[0], inputs[0], req[0], outputs[0], false, true);
+        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+            RspRspElemwiseBinaryOp2<xpu, DType, IType, mshadow::op::mul>(
+              attrs, ctx, outputs[0], inputs[0], req[0], outputs[0], false, true);
+          });});
         //test::print(&std::cout, "output[0]", outputs[0]);
-        ComputeRspRsp<xpu, ROP, with_half2>(
-          attrs, ctx, inputs[1], inputs[2], req[1], outputs[1]);
+        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_TYPE_SWITCH(outputs[1].dtype(), DType, {
+            RspRspElemwiseBinaryOp2<xpu, DType, IType, ROP>(
+              attrs, ctx, inputs[1], inputs[2], req[1], outputs[1],
+              false, false);
+          });});
         //test::print(&std::cout, "output[1]", outputs[1]);
         // RHS in-place
-        ComputeRspRsp<xpu, mshadow::op::mul, with_half2>(
-          attrs, ctx, inputs[0], outputs[1], req[1], outputs[1], false, true);
+        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_TYPE_SWITCH(outputs[1].dtype(), DType, {
+            RspRspElemwiseBinaryOp2<xpu, DType, IType, mshadow::op::mul>(
+              attrs, ctx, inputs[0], outputs[1], req[1], outputs[1],
+              false, true);
+          });});
         //test::print(&std::cout, "output[1]", outputs[1]);
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
