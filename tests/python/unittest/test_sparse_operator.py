@@ -169,8 +169,8 @@ def test_elemwise_binary_ops():
             else:
                 expected_result_storage_type = lhs_stype
 
-        lhs = mx.symbol.Variable('lhs', storage_type=lhs_stype)
-        rhs = mx.symbol.Variable('rhs', storage_type=rhs_stype)
+        lhs = mx.symbol.Variable('lhs', stype=lhs_stype)
+        rhs = mx.symbol.Variable('rhs', stype=rhs_stype)
         if lhs_grad_stype != 'default':
             lhs._set_attr(input_grad_stype_hint=lhs_grad_stype)
         if rhs_grad_stype != 'default':
@@ -230,17 +230,17 @@ def test_elemwise_binary_ops():
 
         outputs = check_symbolic_forward(test, location, [out_np], equal_nan=True)
         assert len(outputs) == 1
-        assert outputs[0].storage_type == expected_result_storage_type
+        assert outputs[0].stype == expected_result_storage_type
 
         if verbose is True:
             print ("mx forward output: ", outputs[0].asnumpy())
-            print ("lhs_nd: ", lhs_nd.storage_type)
-            print ("rhs_nd: ", rhs_nd.storage_type)
-            print ("forward output: ", outputs[0].storage_type)
+            print ("lhs_nd: ", lhs_nd.stype)
+            print ("rhs_nd: ", rhs_nd.stype)
+            print ("forward output: ", outputs[0].stype)
 
-        if outputs[0].storage_type != 'default':
+        if outputs[0].stype != 'default':
             out_grad = create_sparse_array_zd(
-                shape, outputs[0].storage_type, density=ograd_density,
+                shape, outputs[0].stype, density=ograd_density,
                 data_init=1,
                 modifier_func=lambda x: 2,
                 rsp_indices=gen_rsp_random_indices(
@@ -277,9 +277,9 @@ def test_elemwise_binary_ops():
         assert len(igrads_result) == 2
 
         if lhs_grad_stype is not None:
-            assert igrads_result['lhs'].storage_type == lhs_grad_stype
+            assert igrads_result['lhs'].stype == lhs_grad_stype
         if rhs_grad_stype is not None:
-            assert igrads_result['rhs'].storage_type == rhs_grad_stype
+            assert igrads_result['rhs'].stype == rhs_grad_stype
 
         if skip_gradient_check is not True:
             check_numeric_gradient(test, location,
@@ -476,8 +476,8 @@ def test_elemwise_binary_ops():
 
 
 def as_dense(arr):
-  if arr.storage_type != 'default':
-    return mx.nd.cast_storage(arr, storage_type='default')
+  if arr.stype != 'default':
+    return mx.nd.cast_storage(arr, stype='default')
   else:
     return arr;
 
@@ -507,7 +507,7 @@ def check_sparse_mathematical_core(name, stype,
   if verbose is True:
     print("TESTING: " + name)
 
-  data = mx.symbol.Variable('data', storage_type=stype)
+  data = mx.symbol.Variable('data', stype=stype)
 
   if input_grad_stype is None:
     input_grad_stype = stype
@@ -595,7 +595,7 @@ def check_sparse_mathematical_core(name, stype,
     exe_test = test.bind(default_context(), args=args)
 
   exe_test.forward(is_train=True)
-  assert exe_test.outputs[0].storage_type == expected_result_type
+  assert exe_test.outputs[0].stype == expected_result_type
   out = exe_test.outputs[0].asnumpy()
 
   if rhs_arg is not None:
@@ -640,7 +640,7 @@ def check_sparse_mathematical_core(name, stype,
     if verbose is True:
       print(arr_grad.asnumpy())
 
-    assert arr_grad.storage_type == expected_grad_result_type
+    assert arr_grad.stype == expected_grad_result_type
 
     arr_grad = arr_grad.asnumpy()
 
@@ -939,9 +939,6 @@ def test_sparse_mathematical_core():
           #                             force_overlap=force_overlap)
 
 
-# TODO(haibin) randomize this test
-def check_elemwise_add_ex_multiple_stages():
-
 def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
     lhs = mx.symbol.Variable('lhs', stype=lhs_stype)
     rhs = mx.symbol.Variable('rhs', stype=rhs_stype)
@@ -1128,15 +1125,15 @@ def test_sparse_retain():
     check_sparse_retain(shape_3d)
 
 def do_cast(arr, stype):
-  if arr.storage_type != stype:
-    return mx.nd.cast_storage(arr, storage_type=stype)
+  if arr.stype != stype:
+    return mx.nd.cast_storage(arr, stype=stype)
   return arr
 
 def test_type(arr, stype):
   if stype is not None:
-    assert arr.storage_type == stype
+    assert arr.stype == stype
   else:
-    assert arr.storage_type == 'default'
+    assert arr.stype == 'default'
 
 # TODO: Requires add_n for backward pass
 # def test_sparse_maximum_minimum():
@@ -1236,12 +1233,12 @@ def test_sparse_unary_with_numerics():
     outputs = check_symbolic_forward(y, [xa], [output_np])
     output = outputs[0]
 
-    assert output.storage_type == expected_result_type
+    assert output.stype == expected_result_type
 
     input_grad_dict = check_symbolic_backward(y, location=[xa], out_grads=[out_grad], expected=[input_grad_np])
     inp_grad = input_grad_dict["data"]
 
-    assert inp_grad.storage_type == expected_grad_result_type
+    assert inp_grad.stype == expected_grad_result_type
 
   def check_sparse_function(name, mxnet_func, forward_numpy_call, backward_numpy_call):
     check_sparse_simple(name, 'default', mxnet_func, forward_numpy_call, backward_numpy_call)
@@ -1276,6 +1273,6 @@ if __name__ == '__main__':
   # nose.runmodule()
 
   test_sparse_mathematical_core()
-  test_sparse_unary_with_numerics()
-  test_elemwise_binary_ops()
+  # test_sparse_unary_with_numerics()
+  # test_elemwise_binary_ops()
   print("Done")
