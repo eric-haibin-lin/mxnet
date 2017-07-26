@@ -32,16 +32,16 @@ NNVM_REGISTER_OP(_backward_rdiv_scalar)
   mshadow_op::rdiv_grad>);
 
 NNVM_REGISTER_OP(_mod_scalar)
-.set_attr<FCompute>("FCompute<gpu>", BinaryScalarCompute<gpu, mshadow_op::mod>);
+.set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarCompute<gpu, mshadow_op::mod>);
 
 NNVM_REGISTER_OP(_backward_mod_scalar)
-.set_attr<FCompute>("FCompute<gpu>", BinaryScalarBackward<gpu, mshadow_op::mod_grad>);
+.set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarBackward<gpu, mshadow_op::mod_grad>);
 
 NNVM_REGISTER_OP(_rmod_scalar)
-.set_attr<FCompute>("FCompute<gpu>", BinaryScalarCompute<gpu, mshadow_op::rmod>);
+.set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarCompute<gpu, mshadow_op::rmod>);
 
 NNVM_REGISTER_OP(_backward_rmod_scalar)
-.set_attr<FCompute>("FCompute<gpu>", BinaryScalarBackward<gpu, mshadow_op::rmod_grad>);
+.set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarBackward<gpu, mshadow_op::rmod_grad>);
 
 }  // namespace op
 }  // namespace mxnet

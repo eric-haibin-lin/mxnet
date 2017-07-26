@@ -53,22 +53,23 @@ void SetValueTest() {
 
 // InferStorage
 void InferElemwiseStorageTest() {
+  Context ctx;
   nnvm::NodeAttrs attrs;
   attrs.name = "test_op";
   std::vector<int> in_attrs({kRowSparseStorage, kDefaultStorage});
   std::vector<int> out_attrs({kUndefinedStorage});
   // rsp, default -> default
-  op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
+  op::ElemwiseStorageType<2, 1>(attrs, ctx, &in_attrs, &out_attrs);
   EXPECT_EQ(out_attrs[0], kDefaultStorage);
   // default, rsp -> default
   in_attrs = {kDefaultStorage, kRowSparseStorage};
   out_attrs = {kUndefinedStorage};
-  op::ElemwiseStorageType<2, 1>(attrs, &in_attrs, &out_attrs);
+  op::ElemwiseStorageType<2, 1>(attrs, ctx, &in_attrs, &out_attrs);
   EXPECT_EQ(out_attrs[0], kDefaultStorage);
   // rsp, rsp -> rsp
   in_attrs = {kRowSparseStorage};
   out_attrs = {kUndefinedStorage, kUndefinedStorage};
-  op::ElemwiseStorageType<1, 2>(attrs, &in_attrs, &out_attrs);
+  op::ElemwiseStorageType<1, 2>(attrs, ctx, &in_attrs, &out_attrs);
   EXPECT_EQ(out_attrs[0], kRowSparseStorage);
   EXPECT_EQ(out_attrs[1], kRowSparseStorage);
 }
@@ -282,7 +283,7 @@ class TestOldCode {
     unsigned int num_rows = output.shape()[0];
     output.CheckAndAlloc({mshadow::Shape1(num_rows)});
     MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-      MSHADOW_INT_TYPE_SWITCH(idx.dtype(), IType, {
+      MSHADOW_IDX_TYPE_SWITCH(idx.dtype(), IType, {
         MXNET_ASSIGN_REQ_SWITCH(req[1], req_type, {
           // input embedding indice, each idx in [0, input_dim)
           auto idx_data = idx.data().FlatTo1D<xpu, IType>(s);

@@ -24,6 +24,9 @@ namespace mxnet
 namespace test
 {
 
+
+#define ROW_SPARSE_IDX_TYPE mshadow::kInt64
+
 using namespace mxnet;
 #define TEST_DTYPE float
 #define TEST_ITYPE int32_t

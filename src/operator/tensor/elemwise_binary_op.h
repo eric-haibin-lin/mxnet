@@ -7,6 +7,7 @@
 #define MXNET_OPERATOR_TENSOR_ELEMWISE_BINARY_OP_H_
 
 #include <mxnet/operator_util.h>
+#include <mxnet/op_attr_types.h>
 #include <vector>
 #include <string>
 #include <utility>
@@ -350,10 +351,10 @@ class ElemwiseBinaryOp : public OpBase
           CHECK_EQ(is_dense_result, false);
           if(lhs_in_place) {
             // For in-place, zero L-value must always be zero output
-            CHECK(fabs(OP::Map(DType(0), DType(99))) < DType(1e-3));
+            //CHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
           } else {
             // For in-place, zero R-value must always be zero output
-            CHECK(fabs(OP::Map(DType(99), DType(0))) < DType(1e-3));
+            //CHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
           }
         }
       }
@@ -490,9 +491,9 @@ class ElemwiseBinaryOp : public OpBase
         // Reduce the first-dimension size by the number of common rows
         new_shape[0] -= num_common_rows;
         output.set_aux_shape(rowsparse::kIdx, new_shape);
-        const size_t matrix_size = output.shape().Size() / output.shape()[0];
-        const_cast<NDArray &>(output).set_storage_shape(TShape({new_shape[0],
-                                                                index_t(matrix_size)}));
+//        const size_t matrix_size = output.shape().Size() / output.shape()[0];
+//        const_cast<NDArray &>(output).set_storage_shape(TShape({new_shape[0],
+//                                                                index_t(matrix_size)}));
       }
       //test::print(&std::cout, "output", *output);
     }
@@ -516,7 +517,7 @@ class ElemwiseBinaryOp : public OpBase
 
   // Binary Compute between two row-sparse ndarray
   // This implementation only works on CPU
-  template<typename xpu, typename OP>
+  template<typename xpu, typename OP, WithHalf2 with_half2 = WithHalf2::WITHOUT_HALF2>
   static void ComputeRspRsp(const nnvm::NodeAttrs &attrs,
                             const OpContext &ctx,
                             const NDArray &lhs,
@@ -525,12 +526,20 @@ class ElemwiseBinaryOp : public OpBase
                             const NDArray &output,
                             const bool rhs_may_be_dense = false,
                             const bool allow_inplace = false) {
-    MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-      MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
-        RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
-          attrs, ctx, lhs, rhs, req, output,
-          rhs_may_be_dense, allow_inplace);
-      })
+    MSHADOW_TYPE_SWITCH(lhs.aux_type(rowsparse::kIdx), IType, {
+      if(with_half2 == WithHalf2::WITHOUT_HALF2) {
+        MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+            attrs, ctx, lhs, rhs, req, output,
+            rhs_may_be_dense, allow_inplace);
+        })
+      } else {
+        MSHADOW_TYPE_SWITCH_WITH_HALF2(output.dtype(), DType, {
+          RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+            attrs, ctx, lhs, rhs, req, output,
+            rhs_may_be_dense, allow_inplace);
+        })
+      }
     });
   }
 
@@ -621,9 +630,7 @@ class ElemwiseBinaryOp : public OpBase
                      const std::vector<TBlob> &inputs,
                      const std::vector<OpReqType> &req,
                      const std::vector<TBlob> &outputs) {
-    //using namespace mshadow;
     using namespace mxnet_op;
-    //using namespace mshadow::expr;
     if (req[0] != kNullOp) {
       Stream<xpu> *s = ctx.get_stream<xpu>();
       CHECK_EQ(inputs.size(), 2U);
@@ -632,10 +639,34 @@ class ElemwiseBinaryOp : public OpBase
         MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
           // Why is 'size' necessary?
           const size_t size = (minthree(outputs[0].Size(), inputs[0].Size(), inputs[1].Size())
-            + DataType<DType>::kLanes - 1) / DataType<DType>::kLanes;
+          + DataType<DType>::kLanes - 1) / DataType<DType>::kLanes;
           Kernel<BMap<OP, Req>, xpu>::Launch(s, size,
-                                             outputs[0].dptr<DType>(),
-                                             inputs[0].dptr<DType>(), inputs[1].dptr<DType>());
+          outputs[0].dptr<DType>(),
+          inputs[0].dptr<DType>(), inputs[1].dptr<DType>());
+        });
+      });
+    }
+  }
+
+  template<typename xpu, typename OP>
+  static void LaunchWithHalf2(const nnvm::NodeAttrs &attrs,
+                     const OpContext &ctx,
+                     const std::vector<TBlob> &inputs,
+                     const std::vector<OpReqType> &req,
+                     const std::vector<TBlob> &outputs) {
+    using namespace mxnet_op;
+    if (req[0] != kNullOp) {
+      Stream<xpu> *s = ctx.get_stream<xpu>();
+      CHECK_EQ(inputs.size(), 2U);
+      CHECK_EQ(outputs.size(), 1U);
+      MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
+        MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
+          // Why is 'size' necessary?
+          const size_t size = (minthree(outputs[0].Size(), inputs[0].Size(), inputs[1].Size())
+          + DataType<DType>::kLanes - 1) / DataType<DType>::kLanes;
+          Kernel<BMap<OP, Req>, xpu>::Launch(s, size,
+          outputs[0].dptr<DType>(),
+          inputs[0].dptr<DType>(), inputs[1].dptr<DType>());
         });
       });
     }
@@ -669,6 +700,35 @@ class ElemwiseBinaryOp : public OpBase
 //      test::print(&std::cout, "output[0]", outputs[0]);
     }
   }
+
+//  template<typename xpu, typename OP>
+//  static void LaunchExWithHalf2(const nnvm::NodeAttrs &attrs,
+//                       const OpContext &ctx,
+//                       const std::vector<NDArray> &inputs,
+//                       const std::vector<OpReqType> &req,
+//                       const std::vector<NDArray> &outputs) {
+//    using namespace mshadow;
+//    using namespace mshadow::expr;
+//    CHECK_EQ(inputs.size(), 2);
+//    CHECK_EQ(outputs.size(), 1);
+//    if (req[0] != kNullOp) {
+////      for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+////        std::stringstream ss;
+////        ss << "LaunchEx(): inputs[" << x << "]: ";
+////        test::print(&std::cout, ss.str(), inputs[x]);
+////      }
+//      // If any input or output is dense, fallback to FCompute
+//      // TODO(haibin) implement dns + rsp in a separate kernel
+//      if (!common::ContainsDefaultStorage(inputs)) {
+//        ComputeRspRsp<xpu, OP, >(attrs, ctx, inputs[0], inputs[1],
+//                               req[0], outputs[0]);
+//      } else {
+//        FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+//                             Launch<xpu, OP>, "LaunchEx");
+//      }
+////      test::print(&std::cout, "output[0]", outputs[0]);
+//    }
+//  }
 
   /*! \brief LaunchEx allowing dense rvalue */
   template<typename xpu, typename OP>
@@ -758,6 +818,17 @@ class ElemwiseBinaryOp : public OpBase
   }
 
   template<typename xpu, typename LOP, typename ROP>
+  static inline void BinaryBackwardUseInWithHalf2(const nnvm::NodeAttrs &attrs,
+                                                  const OpContext &ctx,
+                                                  const std::vector<TBlob> &inputs,
+                                                  const std::vector<OpReqType> &req,
+                                                  const std::vector<TBlob> &outputs) {
+    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
+      BinaryBackwardUseIn_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
+    });
+  }
+
+  template<typename xpu, typename LOP, typename ROP, WithHalf2 with_half2 = WithHalf2::WITHOUT_HALF2>
   static inline void BinaryBackwardUseInEx(const nnvm::NodeAttrs &attrs,
                                            const OpContext &ctx,
                                            const std::vector<NDArray> &inputs,
@@ -775,17 +846,19 @@ class ElemwiseBinaryOp : public OpBase
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
-        ComputeRspRsp<xpu, LOP>(attrs, ctx, inputs[1], inputs[2], req[0], outputs[0]);
+        ComputeRspRsp<xpu, LOP, with_half2>(
+          attrs, ctx, inputs[1], inputs[2], req[0], outputs[0]);
         //test::print(&std::cout, "output[0]", outputs[0]);
         // LHS in-place
-        ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[0], inputs[0],
-                                             req[0], outputs[0], false, true);
+        ComputeRspRsp<xpu, mshadow::op::mul, with_half2>(
+          attrs, ctx, outputs[0], inputs[0], req[0], outputs[0], false, true);
         //test::print(&std::cout, "output[0]", outputs[0]);
-        ComputeRspRsp<xpu, ROP>(attrs, ctx, inputs[1], inputs[2], req[1], outputs[1]);
+        ComputeRspRsp<xpu, ROP, with_half2>(
+          attrs, ctx, inputs[1], inputs[2], req[1], outputs[1]);
         //test::print(&std::cout, "output[1]", outputs[1]);
         // RHS in-place
-        ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, inputs[0], outputs[1],
-                                             req[1], outputs[1], false, true);
+        ComputeRspRsp<xpu, mshadow::op::mul, with_half2>(
+          attrs, ctx, inputs[0], outputs[1], req[1], outputs[1], false, true);
         //test::print(&std::cout, "output[1]", outputs[1]);
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
@@ -833,21 +906,21 @@ class ElemwiseBinaryOp : public OpBase
 /*! \brief Binary launch */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(__name$, __kernel$)                \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                            \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>) \
+  .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>)       \
   .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)     \
   .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchEx<cpu, __kernel$>)
 
 /*! \brief Binary launch, dense result */
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(__name$, __kernel$)                     \
-  MXNET_OPERATOR_REGISTER_BINARY(__name$)                                                    \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageTypeDenseOutput<1>) \
-  .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)             \
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(__name$, __kernel$)               \
+  MXNET_OPERATOR_REGISTER_BINARY(__name$)                                              \
+  .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageTypeDenseOutput<1>) \
+  .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)       \
   .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchEx<cpu, __kernel$>)
 
 /*! \brief Binary launch, dense rvalue */
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(__name$, __kernel$)      \
+#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(__name$, __kernel$)            \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                                     \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageTypeForce<2, 1, 0>)  \
+  .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageTypeForce<2, 1, 0>)        \
   .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
   .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchExDenseRValue<cpu, __kernel$>)
 

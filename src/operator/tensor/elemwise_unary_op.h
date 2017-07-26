@@ -14,12 +14,16 @@
 #include "../elemwise_op_common.h"
 #include "../special_functions-inl.h"
 #include "../mxnet_op.h"
+#include "cast_storage-inl.h"
 
 namespace mxnet {
 namespace op {
 
 class OpBase {
  public:
+
+  enum WithHalf2 { WITH_HALF2, WITHOUT_HALF2 };
+
   template<int Req>
   struct MapIdentity {
     template<typename DType>
@@ -154,13 +158,13 @@ class UnaryOp : public OpBase {
       NDArray *output = nullptr;
       for (size_t i = 0, n = inputs.size(); i < n; ++i) {
         const NDArray &input = inputs[i];
-        const TShape &ishape = input.storage_shape();
+        //const TShape &ishape = input.storage_shape();
         if (i < n_out) {
           output = const_cast<NDArray *>(&outputs[i]);
         }
-        TShape sshape = output->storage_shape();
-        CHECK(shape_assign(&sshape, ishape));
-        output->set_storage_shape(sshape);
+        //TShape sshape = output->storage_shape();
+        //CHECK(shape_assign(&sshape, ishape));
+        //output->set_storage_shape(sshape);
         CHECK_EQ(output->storage_type(), input.storage_type());
         CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
         for (size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
@@ -168,6 +172,7 @@ class UnaryOp : public OpBase {
           CHECK(shape_assign(&ashape, input.aux_shape(j)));
           output->set_aux_shape(j, ashape);
         }
+        DCHECK_EQ(output->storage_shape(), input.storage_shape());
       }
       return true;
     } else if(isshape.ndim() > 0 && !isshape.Size()
@@ -430,44 +435,33 @@ struct relu_grad {
 };
 }  // namespace kernel_launch_op
 
-struct CastStorageParam : public dmlc::Parameter<CastStorageParam> {
-  int storage_type;
-  DMLC_DECLARE_PARAMETER(CastStorageParam) {
-    DMLC_DECLARE_FIELD(storage_type)
-      .add_enum("default", kDefaultStorage)
-      .add_enum("row_sparse", kRowSparseStorage)
-      .add_enum("csr", kCSRStorage)
-      .describe("Output storage type.");
-  }
-};
+//inline bool CastStorageInferStorageType(const nnvm::NodeAttrs& attrs,
+//                                        std::vector<int> *in_attrs,
+//                                        std::vector<int> *out_attrs) {
+//  CHECK_EQ(in_attrs->size(), 1U);
+//  CHECK_EQ(out_attrs->size(), 1U);
+//  CHECK_NE(in_attrs->at(0), kUndefinedStorage)
+//    << "src ndarray's storage type must be specified";
+//  const CastStorageParam& param = nnvm::get<CastStorageParam>(attrs.parsed);
+//  CHECK_NE(param.storage_type, kUndefinedStorage)
+//    << "dst ndarray's storage type must be specified";
+//  TYPE_ASSIGN_CHECK(*out_attrs, 0, param.storage_type);
+//  return true;
+//}
 
-inline bool CastStorageInferStorageType(const nnvm::NodeAttrs& attrs,
-                                        std::vector<int> *in_attrs,
-                                        std::vector<int> *out_attrs) {
-  CHECK_EQ(in_attrs->size(), 1U);
-  CHECK_EQ(out_attrs->size(), 1U);
-  CHECK_NE(in_attrs->at(0), kUndefinedStorage)
-    << "src ndarray's storage type must be specified";
-  const CastStorageParam& param = nnvm::get<CastStorageParam>(attrs.parsed);
-  CHECK_NE(param.storage_type, kUndefinedStorage)
-    << "dst ndarray's storage type must be specified";
-  TYPE_ASSIGN_CHECK(*out_attrs, 0, param.storage_type);
-  return true;
-}
-
-template<typename xpu>
-void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
-                          const OpContext& ctx,
-                          const std::vector<NDArray>& inputs,
-                          const std::vector<OpReqType>& req,
-                          const std::vector<NDArray>& outputs) {
-  using namespace mshadow;
-  using namespace mshadow::expr;
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  CHECK_EQ(inputs.size(), 1);
-  CHECK_EQ(outputs.size(), 1);
-  CastStorageComputeImpl<xpu>(s, inputs[0], outputs[0]);
-}
+//template<typename xpu>
+//void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
+//                          const OpContext& ctx,
+//                          const std::vector<NDArray>& inputs,
+//                          const std::vector<OpReqType>& req,
+//                          const std::vector<NDArray>& outputs) {
+//  using namespace mshadow;
+//  using namespace mshadow::expr;
+//  Stream<xpu> *s = ctx.get_stream<xpu>();
+//  CHECK_EQ(inputs.size(), 1);
+//  CHECK_EQ(outputs.size(), 1);
+//  CastStorageComputeImpl<xpu>(s, inputs[0], outputs[0]);
+//}
 
 #define MXNET_OPERATOR_REGISTER_UNARY(name)                         \
   NNVM_REGISTER_OP(name)                                            \
@@ -475,7 +469,7 @@ void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
   .set_num_outputs(1)                                               \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
   .set_attr<nnvm::FInferType>("FInferType", ElemwiseType<1, 1>)     \
-  .set_attr<nnvm::FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>) \
+  .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>) \
   .set_attr<nnvm::FInplaceOption>("FInplaceOption",                 \
     [](const NodeAttrs& attrs){                                     \
       return std::vector<std::pair<int, int> >{{0, 0}};             \

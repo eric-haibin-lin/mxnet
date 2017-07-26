@@ -48,6 +48,8 @@ inline bool GetDefaultBlobs(const std::vector<NDArray>& nds,
   if (storage_fallback == false) {
     storage_fallback = dmlc::GetEnv("MXNET_EXEC_STORAGE_FALLBACK", true);
   }
+  temps->reserve(temps->size() + nds.size());
+  blobs->reserve(blobs->size() + nds.size());
   for (auto& nd : nds) {
     if (nd.storage_type() != kDefaultStorage) {
       if (storage_fallback == false) {
