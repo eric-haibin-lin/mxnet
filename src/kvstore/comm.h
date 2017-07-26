@@ -12,7 +12,8 @@
 #include <tuple>
 #include <thread>
 #include "mxnet/ndarray.h"
-#include "../common/utils.h"
+#include "../ndarray/ndarray_function.h"
+#include "../operator/tensor/indexing_op.h"
 namespace mxnet {
 namespace kvstore {
 /**
@@ -21,14 +22,7 @@ namespace kvstore {
 class Comm {
  public:
   Comm() {
-#if MXNET_USE_CUDA
-    int gpu_num;
-    int ret = cudaGetDeviceCount(&gpu_num);
-    pinned_ctx_ = (ret == 0 && gpu_num > 0) ?
-                  Context::CPUPinned(0) : Context::CPU();
-#else
-    pinned_ctx_ = Context::CPU();
-#endif
+    pinned_ctx_ = Context::CPUPinned(0);
   }
   virtual ~Comm() { }
   /**
@@ -47,6 +41,18 @@ class Comm {
   virtual void Broadcast(
       int key, const NDArray& src,
       const std::vector<NDArray*> dst, int priority) = 0;
+
+  /**
+   * \brief broadcast src to dst[i] with target row_ids for every i
+   * \param dst a list of destination row_sparse NDArray and its target row_ids to broadcast,
+            where the row_ids are expected to be unique and sorted
+   * \param use_copy if set to true, directly copy src to dst[i] without looking up the
+            provided row_ids
+   */
+  virtual void BroadcastRowSparse(int key, const NDArray& src,
+                                  const std::vector<std::pair<NDArray*, NDArray>>& dst,
+                                  const bool use_copy,
+                                  const int priority) = 0;
 
   /**
    * \brief return a pinned contex
@@ -84,12 +90,18 @@ class CommCPU : public Comm {
 
   const NDArray& Reduce(int key, const std::vector<NDArray>& src,
                         int priority) override {
+    auto& buf = merge_buf_[key];
     // avoid extra copy for single device, but it may bring problems for
     // abnormal usage of kvstore
     if (src.size() == 1) {
-      return src[0];
+      if (src[0].storage_type() == buf.merged.storage_type()) {
+        return src[0];
+      } else {
+        CopyFromTo(src[0], &buf.merged, priority);
+        return buf.merged;
+      }
     }
-    auto& buf = merge_buf_[key];
+
     if (buf.merged.storage_type() == kDefaultStorage) {
       std::vector<Engine::VarHandle> const_vars(src.size() - 1);
       std::vector<NDArray> reduce(src.size());
@@ -136,7 +148,8 @@ class CommCPU : public Comm {
       Engine::Get()->PushSync([reduce, result, this](RunContext rctx) {
           NDArray out = result;
           is_serial_push_?
-            ReduceSumCPUExSerial(reduce, &out) : ReduceSumCPUExParallel(reduce, &out);
+            ReduceSumCPUExSerial(reduce, &out)
+            : mxnet::ndarray::ElementwiseSum(rctx.get_stream<cpu>(), reduce, &out);
         }, Context::CPU(), const_vars, {result.var()},
         FnProperty::kCPUPrioritized, priority, PROFILER_MESSAGE("KVStoreReduce"));
     }
@@ -157,6 +170,38 @@ class CommCPU : public Comm {
     }
   }
 
+  // TODO(haibin) support broadcast row_sparse on GPU
+  void BroadcastRowSparse(int key, const NDArray& src,
+                          const std::vector<std::pair<NDArray*, NDArray>>& dst,
+                          const bool use_copy,
+                          const int priority) override {
+    using namespace mshadow;
+    auto size = dst.size();
+    for (size_t i = 0; i < size; i++) {
+      auto out = dst[i].first;
+      auto row_id = dst[i].second;
+      if (use_copy) {
+        CopyFromTo(src, out, priority);
+      } else {
+        CHECK_EQ(out->storage_type(), kRowSparseStorage)
+                 << "BroadcastRowSparse expects row_sparse dst NDArray";
+        CHECK_EQ(out->ctx().dev_mask(), Context::kCPU)
+                 << "BroadcastRowSparse with dst on gpu context not supported";
+        CHECK_EQ(row_id.ctx().dev_mask(), Context::kCPU)
+                 << "BroadcastRowSparse with src on gpu context not supported";
+        // retain according to unique indices
+        Engine::Get()->PushSync([src, out, row_id](RunContext rctx) {
+            NDArray *output = out;
+            const auto indices = row_id.data();
+            op::SparseRetainOpForwardRspImpl<cpu>(rctx.get_stream<cpu>(),
+                                                  src, indices, kWriteTo,
+                                                  output);
+          }, Context::CPU(), {src.var(), row_id.var()}, {out->var()},
+          FnProperty::kNormal, priority, PROFILER_MESSAGE("KVStoreSparseRetain"));
+      }
+    }
+  }
+
  private:
   // reduce sum into val[0]
   inline void ReduceSumCPU(const std::vector<NDArray> &in_data) {
@@ -173,7 +218,6 @@ class CommCPU : public Comm {
   }
 
   // serial implementation of reduce sum for row sparse NDArray.
-  // TODO(haibin) use openmp kernel to parallelize the summation
   inline void ReduceSumCPUExSerial(const std::vector<NDArray> &in, NDArray *out) {
     using namespace rowsparse;
     using namespace mshadow;
@@ -185,7 +229,7 @@ class CommCPU : public Comm {
     std::vector<bool> skip(num_in, false);
     // the values tensor of the inputs
     MSHADOW_TYPE_SWITCH(out->dtype(), DType, {
-      MSHADOW_INT_TYPE_SWITCH(out->aux_type(kIdx), IType, {
+      MSHADOW_IDX_TYPE_SWITCH(out->aux_type(kIdx), IType, {
         std::vector<Tensor<cpu, 2, DType>> in_vals(num_in);
         std::vector<Tensor<cpu, 1, IType>> in_indices(num_in);
         // offset to the values tensor of all inputs
@@ -241,115 +285,6 @@ class CommCPU : public Comm {
             }
           }
         }
-      });
-    });
-  }
-
-  template<typename DType, typename IType>
-  void ReduceSumCPUExImpl(const std::vector<NDArray>& nds,
-                          const std::vector<IType>& uniq_row_idx,
-                          NDArray* out) {
-#pragma omp parallel num_threads(nthread_reduction_)
-    {
-      const size_t nnr = uniq_row_idx.size();
-      const int num_threads = omp_get_num_threads();
-      size_t row_block_len = (nnr + num_threads  - 1) / num_threads;
-      const size_t row_block_start = omp_get_thread_num() * row_block_len;
-      if (row_block_start < nnr) {
-        const size_t row_block_end = std::min(row_block_start+row_block_len, nnr);
-
-        auto out_values = out->data().FlatTo2D<cpu, DType>();
-        auto out_indices = out->aux_data(rowsparse::kIdx).FlatTo1D<cpu, IType>();
-        for (size_t i = row_block_start; i < row_block_end; ++i) {
-          out_indices[i] = uniq_row_idx[i];
-        }
-        for (const auto& nd : nds) {
-          if (nd.storage_initialized()) {
-            const auto nd_indices = nd.aux_data(rowsparse::kIdx).FlatTo1D<cpu, IType>();
-            const auto nd_values = nd.data().FlatTo2D<cpu, DType>();
-            const auto nd_num_rows = nd.aux_shape(rowsparse::kIdx).Size();
-            const IType* nd_indices_start = &nd_indices[0];
-            const IType* nd_indices_end = nd_indices_start + nd_num_rows;
-            const IType* row_idx_ptr = std::lower_bound(nd_indices_start, nd_indices_end,
-                                                        out_indices[row_block_start]);
-            // skip this nd if all of its row indices are smaller than out_indices[row_block_start]
-            // or current row block is not covered by [*row_idx_ptr, nd_indices_end).
-            if (nd_indices_end == row_idx_ptr || *row_idx_ptr > out_indices[row_block_end-1]) {
-              continue;
-            }
-            for (size_t irow = row_block_start;
-                 irow < row_block_end && row_idx_ptr != nd_indices_end;) {
-              if (out_indices[irow] == *row_idx_ptr) {
-                auto out_value_cur_row = out_values[irow];
-                const auto offset = row_idx_ptr - nd_indices_start;
-                auto nd_value_cur_row = nd_values[offset];
-                for (size_t j = 0; j < nd_value_cur_row.shape_[0]; ++j) {
-                  out_value_cur_row[j] += nd_value_cur_row[j];
-                }
-                ++irow;
-                ++row_idx_ptr;
-              } else if (out_indices[irow] < *row_idx_ptr) {
-                ++irow;
-              } else {
-                ++row_idx_ptr;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  /*!
-   * \brief Given a vector of ndarrays, generate a index vector containing
-   * all the unique row indices of the ndarrays.
-   */
-  template<typename IType>
-  void GetUniqueRspRowIdx(const std::vector<NDArray>& nds,
-                          std::vector<IType>* uniq_row_idx) {
-    using namespace rowsparse;
-    size_t total_num_rows = 0;
-    for (const auto& nd : nds) {
-      CHECK_EQ(nd.storage_type(), kRowSparseStorage);
-      if (nd.storage_initialized()) {
-        total_num_rows += nd.aux_shape(kIdx).Size();
-      }
-    }
-
-    uniq_row_idx->resize(total_num_rows);
-    int nthreads = omp_get_max_threads();
-    int offset = 0;
-    for (const auto& nd : nds) {
-      if (nd.storage_initialized()) {
-        const IType* nd_row_idx = nd.aux_data(kIdx).dptr<IType>();
-        const int num_rows = nd.aux_shape(kIdx).Size();
-#pragma omp parallel for num_threads(nthreads)
-        for (int i = 0; i < num_rows; ++i) {
-          (*uniq_row_idx)[offset+i] = nd_row_idx[i];
-        }
-        offset += num_rows;
-      }
-    }
-
-    common::ParallelSort(uniq_row_idx->begin(), uniq_row_idx->end(), nthreads);
-    auto it = std::unique(uniq_row_idx->begin(), uniq_row_idx->end());
-    uniq_row_idx->resize(it - uniq_row_idx->begin());
-  }
-
-  void ReduceSumCPUExParallel(const std::vector<NDArray>& nds, NDArray* out) {
-    if (nds.empty()) return;
-    using namespace rowsparse;
-    CHECK_EQ(out->storage_type(), kRowSparseStorage)
-      << "Expected row sparse storage type ("
-      << out->storage_type() << " given)";
-
-    MSHADOW_TYPE_SWITCH(out->dtype(), DType, {
-      MSHADOW_INT_TYPE_SWITCH(out->aux_type(kIdx), IType, {
-        std::vector<IType> uniq_row_idx;
-        GetUniqueRspRowIdx(nds, &uniq_row_idx);
-        out->CheckAndAlloc({mshadow::Shape1(uniq_row_idx.size())});
-        out->data().FlatTo2D<cpu, DType>() = static_cast<DType>(0);
-        ReduceSumCPUExImpl<DType, IType>(nds, uniq_row_idx, out);
       });
     });
   }
@@ -510,6 +445,13 @@ class CommDevice : public Comm {
         CopyFromTo(buf.merged, d, priority);
       }
     }
+  }
+
+  void BroadcastRowSparse(int key, const NDArray& src,
+                          const std::vector<std::pair<NDArray*, NDArray>>& dst,
+                          const bool use_copy,
+                          const int priority) override {
+    LOG(FATAL) << "Not implemented yet";
   }
 
  private:

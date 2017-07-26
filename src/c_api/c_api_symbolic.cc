@@ -11,6 +11,7 @@
 #include <nnvm/symbolic.h>
 #include "./c_api_common.h"
 #include "../operator/operator_common.h"
+#include "../executor/exec_pass.h"
 
 namespace mxnet {
 namespace op {
@@ -122,22 +123,6 @@ int MXSymbolCreateAtomicSymbol(AtomicSymbolCreator creator,
   *s = nnvm::Symbol::CreateFunctor(op, std::move(kwargs));
   *out = s;
   API_END_HANDLE_ERROR(delete s;);
-}
-
-int MXCachedCreateSymbol(CachedOpHandle handle,
-                         const char* name,
-                         mx_uint num_args,
-                         SymbolHandle* args,
-                         SymbolHandle* out) {
-  nnvm::Symbol *s = new nnvm::Symbol();
-  const nnvm::NodeAttrs *attrs = static_cast<nnvm::NodeAttrs*>(handle);
-  API_BEGIN();
-  *s = nnvm::Symbol::CreateFunctor(*attrs);
-  nnvm::array_view<const nnvm::Symbol*> parg(
-      (nnvm::Symbol**)args, (nnvm::Symbol**)args + num_args); // NOLINT(*)
-  s->Compose(parg, std::unordered_map<std::string, const nnvm::Symbol*>(), name);
-  *out = s;
-  API_END_HANDLE_ERROR(delete s;)
 }
 
 int MXSymbolCreateVariable(const char *name, SymbolHandle *out) {
@@ -457,7 +442,7 @@ int MXSymbolInferShape(SymbolHandle sym,
   }
 
   try {
-    g = nnvm::pass::InferShape(std::move(g), arg_shapes, "__shape__");
+    g = mxnet::exec::InferShape(std::move(g), arg_shapes, "__shape__");
   } catch (const mxnet::op::InferShapeError &err) {
     throw dmlc::Error(err.msg);
   }
@@ -594,7 +579,7 @@ int MXSymbolInferType(SymbolHandle sym,
     mxnet::MatchArguments(g.indexed_graph(), kwargs, &arg_types, "InferType");
   }
 
-  g = nnvm::pass::InferType(std::move(g), arg_types, "__dtype__");
+  g = mxnet::exec::InferType(std::move(g), arg_types, "__dtype__");
   // copy back
   CopyAttr(g.indexed_graph(), g.GetAttr<nnvm::DTypeVector>("dtype"),
            &(ret->arg_types), &(ret->out_types), &(ret->aux_types));

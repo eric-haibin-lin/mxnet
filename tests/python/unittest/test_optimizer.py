@@ -30,21 +30,21 @@ def test_lr_wd_mult():
     assert not mx.test_utils.almost_equal(args1['fc2_weight'], args2['fc2_weight'], 1e-1)
 
 
-def compare_optimizer(opt1, opt2, shape, w_stype='default', g_stype='default'):
+def compare_optimizer(opt1, opt2, shape, dtype, w_stype='default', g_stype='default'):
     if w_stype == 'default':
-        w2 = mx.random.uniform(shape=shape, ctx=default_context())
+        w2 = mx.random.uniform(shape=shape, ctx=default_context(), dtype=dtype)
         w1 = w2.copyto(default_context())
     elif w_stype == 'row_sparse':
         w2 = rand_ndarray(shape, w_stype, density=1)
-        w1 = w2.copyto(default_context()).to_dense()
+        w1 = w2.copyto(default_context()).todense()
     else:
         raise Exception("type not supported yet")
     if g_stype == 'default':
-        g2 = mx.random.uniform(shape=shape, ctx=default_context())
+        g2 = mx.random.uniform(shape=shape, ctx=default_context(), dtype=dtype)
         g1 = g2.copyto(default_context())
     elif g_stype == 'row_sparse':
         g2 = rand_ndarray(shape, g_stype)
-        g1 = g2.copyto(default_context()).to_dense()
+        g1 = g2.copyto(default_context()).todense()
     else:
         raise Exception("type not supported yet")
 
@@ -53,7 +53,8 @@ def compare_optimizer(opt1, opt2, shape, w_stype='default', g_stype='default'):
     if state1 is not None and state2 is not None:
         if isinstance(state1, tuple):
             for s1, s2, in zip(state1, state2):
-                assert(same(s1.asnumpy(), s2.asnumpy()))
+                if s1 is not None or s2 is not None:
+                    assert(same(s1.asnumpy(), s2.asnumpy()))
         else:
             assert_almost_equal(state1.asnumpy(), state2.asnumpy())
 
@@ -62,7 +63,8 @@ def compare_optimizer(opt1, opt2, shape, w_stype='default', g_stype='default'):
     if state1 is not None and state2 is not None:
         if isinstance(state1, tuple):
             for s1, s2, in zip(state1, state2):
-                assert_almost_equal(s1.asnumpy(), s2.asnumpy(), rtol=1e-4, atol=1e-5)
+                if s1 is not None or s2 is not None:
+                    assert_almost_equal(s1.asnumpy(), s2.asnumpy(), rtol=1e-4, atol=1e-5)
         else:
             assert_almost_equal(state1.asnumpy(), state2.asnumpy())
     assert_almost_equal(w1.asnumpy(), w2.asnumpy(), rtol=1e-4, atol=1e-5)
@@ -71,9 +73,10 @@ def compare_optimizer(opt1, opt2, shape, w_stype='default', g_stype='default'):
 
 class PySGD(mx.optimizer.Optimizer):
     """python reference implemenation of sgd"""
-    def __init__(self, learning_rate=0.01, momentum=0.0, **kwargs):
+    def __init__(self, learning_rate=0.01, momentum=0.0, multi_precision=False, **kwargs):
         super(PySGD, self).__init__(learning_rate=learning_rate, **kwargs)
         self.momentum = momentum
+        self.multi_precision = multi_precision
 
     def create_state(self, index, weight):
         """Create additional optimizer state: momentum
@@ -84,10 +87,18 @@ class PySGD(mx.optimizer.Optimizer):
         The weight data
 
         """
-        if self.momentum == 0.0:
-            return None
+        momentum = None
+        weight_master_copy = None
+        do_multi_precision = self.multi_precision and weight.dtype == np.float16
+        if do_multi_precision:
+            if self.momentum != 0.0:
+                momentum = mx.nd.zeros(weight.shape, weight.context, dtype=np.float32)
+            weight_master_copy = array(weight, ctx=weight.context, dtype=np.float32)
+            return (momentum, weight_master_copy)
         else:
-            return mx.nd.zeros(weight.shape, weight.context, dtype=weight.dtype)
+            if self.momentum != 0.0:
+                momentum = mx.nd.zeros(weight.shape, weight.context, dtype=weight.dtype)
+            return momentum
 
     def update(self, index, weight, grad, state):
         """Update the parameters.
@@ -109,43 +120,72 @@ class PySGD(mx.optimizer.Optimizer):
         lr = self._get_lr(index)
         wd = self._get_wd(index)
         self._update_count(index)
+        use_multi_precision = isinstance(state, list) or isinstance(state, tuple)
 
-        if self.momentum == 0.0:
-            if self.clip_gradient is not None:
-                weight[:] = ((1 - lr*wd)*weight -
-                    lr*mx.nd.clip(grad*self.rescale_grad, -self.clip_gradient, self.clip_gradient))
+        if not use_multi_precision:
+            if self.momentum == 0.0:
+                if self.clip_gradient is not None:
+                    weight[:] = ((1 - lr*wd)*weight -
+                        lr*mx.nd.clip(grad*self.rescale_grad, -self.clip_gradient, self.clip_gradient))
+                else:
+                    weight[:] = (1 - lr*wd)*weight - lr*self.rescale_grad*grad
             else:
-                weight[:] = (1 - lr*wd)*weight - lr*self.rescale_grad*grad
+                mom = state
+                if self.clip_gradient is not None:
+                    mom[:] = (self.momentum*mom - lr*wd*weight -
+                        lr*mx.nd.clip(grad*self.rescale_grad, -self.clip_gradient, self.clip_gradient))
+                    weight += mom
+                else:
+                    mom[:] = self.momentum*mom - lr*wd*weight - lr*self.rescale_grad*grad
+                    weight += mom
         else:
-            mom = state
-            if self.clip_gradient is not None:
-                mom[:] = (self.momentum*mom - lr*wd*weight -
-                    lr*mx.nd.clip(grad*self.rescale_grad, -self.clip_gradient, self.clip_gradient))
-                weight += mom
+            grad32 = array(grad, ctx=grad.context, dtype=np.float32)
+            mom = state[0]
+            weight32 = state[1]
+            if self.momentum == 0.0:
+                if self.clip_gradient is not None:
+                    weight32[:] = ((1 - lr*wd)*weight32 -
+                        lr*mx.nd.clip(grad32*self.rescale_grad, -self.clip_gradient, self.clip_gradient))
+                else:
+                    weight32[:] = (1 - lr*wd)*weight32 - lr*self.rescale_grad*grad32
             else:
-                mom[:] = self.momentum*mom - lr*wd*weight - lr*self.rescale_grad*grad
-                weight += mom
+                if self.clip_gradient is not None:
+                    mom[:] = (self.momentum*mom - lr*wd*weight32 -
+                        lr*mx.nd.clip(grad32*self.rescale_grad, -self.clip_gradient, self.clip_gradient))
+                    weight32 += mom
+                else:
+                    mom[:] = self.momentum*mom - lr*wd*weight32 - lr*self.rescale_grad*grad32
+                    weight32 += mom
+            tmp = weight32.astype(weight.dtype)
+            tmp.copyto(weight)
 
 def test_sgd():
     mx.random.seed(0)
     opt1 = PySGD
     opt2 = mx.optimizer.SGD
     shape = (3, 4, 5)
-    kwargs = [{}, {'momentum': 0.9},
-              {'clip_gradient': 0.5},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14},
-              {'rescale_grad': 0.8},
-              {'clip_gradient': 0.5, 'wd': 0.07},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03},
-              {'rescale_grad': 0.8, 'wd': 0.05},
-              {'clip_gradient': 0.5, 'momentum': 0.9},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'momentum': 0.9},
-              {'rescale_grad': 0.8, 'momentum': 0.9},
-              {'clip_gradient': 0.5, 'wd': 0.07, 'momentum': 0.9},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03, 'momentum': 0.9},
-              {'rescale_grad': 0.8, 'wd': 0.05, 'momentum': 0.9}]
-    for kwarg in kwargs:
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape)
+    mom_options = [{}, {'momentum': 0.9}]
+    cg_options = [{}, {'clip_gradient': 0.4}, {'clip_gradient': 0.5}]
+    rg_options = [{}, {'rescale_grad': 0.14}, {'rescale_grad': 0.8}]
+    wd_options = [{}, {'wd': 0.03}, {'wd': 0.05}, {'wd': 0.07}]
+    mp_options = [{}, {'multi_precision': False}, {'multi_precision': True}]
+    for dtype in [np.float16, np.float32, np.float64]:
+        for mom_option in mom_options:
+            for cg_option in cg_options:
+                for rg_option in rg_options:
+                    for wd_option in wd_options:
+                        for mp_option in mp_options:
+                            kwarg = {}
+                            kwarg.update(mom_option)
+                            kwarg.update(cg_option)
+                            kwarg.update(rg_option)
+                            kwarg.update(wd_option)
+                            kwarg.update(mp_option)
+                            if (dtype == np.float16 and
+                                    ('multi_precision' not in kwarg or
+                                        not kwarg['multi_precision'])):
+                                continue
+                            compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype)
 
 class PySparseSGD(mx.optimizer.Optimizer):
     """python reference implemenation of sgd"""
@@ -236,8 +276,8 @@ def test_sparse_sgd():
               {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03, 'momentum': 0.9},
               {'rescale_grad': 0.8, 'wd': 0.05, 'momentum': 0.9}]
     for kwarg in kwargs:
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, w_stype='row_sparse', g_stype='row_sparse')
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, w_stype='row_sparse', g_stype='default')
+        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, 'float32', w_stype='row_sparse', g_stype='row_sparse')
+        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, 'float32', w_stype='row_sparse', g_stype='default')
 
 # ADAM
 
@@ -317,7 +357,7 @@ def test_adam():
               {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03},
               {'rescale_grad': 0.8, 'wd': 0.05}]
     for kwarg in kwargs:
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape)
+        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, np.float32)
 
 # RMSProp
 class PyRMSProp(mx.optimizer.Optimizer):
@@ -457,7 +497,7 @@ def test_rms():
               {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03, 'centered': True, 'clip_weights': 0.01},
               {'rescale_grad': 0.8, 'wd': 0.05, 'centered': True, 'clip_weights': 0.01}]
     for kwarg in kwargs:
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape)
+        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, np.float32)
 
 if __name__ == '__main__':
     test_adam()

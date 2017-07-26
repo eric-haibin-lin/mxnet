@@ -15,12 +15,12 @@ import numpy as _numpy
 from .base import _LIB, numeric_types
 from .base import c_array, c_str, mx_uint, py_str, string_types
 from .base import NDArrayHandle, ExecutorHandle, SymbolHandle, OpHandle
-from .base import check_call, MXNetError, _Null # pylint: disable=unused-import
-from .context import Context, cpu
-from .ndarray import NDArray, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
+from .base import check_call, MXNetError, NotImplementedForSymbol, _Null  # pylint: disable=unused-import
+from .context import Context
+from .ndarray.ndarray import NDArray, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP, _GRAD_REQ_MAP
 from .name import NameManager  # pylint: disable=unused-import
-from .ndarray import _STORAGE_TYPE_ID_TO_STR, _STORAGE_TYPE_STR_TO_ID
-from .sparse_ndarray import _ndarray_cls
+from .ndarray.ndarray import _STORAGE_TYPE_STR_TO_ID
+from .ndarray.sparse_ndarray import _ndarray_cls
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope
@@ -31,20 +31,19 @@ from .symbol_doc import _build_doc
 try:
     if int(_os.environ.get("MXNET_ENABLE_CYTHON", True)) == 0:
         from ._ctypes.symbol import SymbolBase, _set_symbol_class
-        from ._ctypes.symbol import CachedOp, invoke, _symbol_creator  # pylint: disable=unused-import
+        from ._ctypes.symbol import _symbol_creator  # pylint: disable=unused-import
     elif _sys.version_info >= (3, 0):
         from ._cy3.symbol import SymbolBase, _set_symbol_class
-        from ._cy3.symbol import CachedOp, invoke, _symbol_creator  # pylint: disable=unused-import
+        from ._cy3.symbol import _symbol_creator  # pylint: disable=unused-import
     else:
         from ._cy2.symbol import SymbolBase, _set_symbol_class
-        from ._cy2.symbol import CachedOp, invoke, _symbol_creator  # pylint: disable=unused-import
+        from ._cy2.symbol import _symbol_creator  # pylint: disable=unused-import
 except ImportError:
     if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
     from ._ctypes.symbol import SymbolBase, _set_symbol_class
-    from ._ctypes.symbol import CachedOp, invoke, _symbol_creator  # pylint: disable=unused-import
+    from ._ctypes.symbol import _symbol_creator  # pylint: disable=unused-import
 
-_GRAD_REQ_MAP = {'null': 0, 'write': 1, 'add': 3}
 
 class Symbol(SymbolBase):
     """Symbol is symbolic graph of the mxnet."""
@@ -96,6 +95,9 @@ class Symbol(SymbolBase):
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
+    def __iadd__(self, other):
+        raise NotImplementedForSymbol(self.__iadd__, '+=', other, 1)
+
     def __radd__(self, other):
         return self.__add__(other)
 
@@ -110,6 +112,9 @@ class Symbol(SymbolBase):
             return _internal._MinusScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
+
+    def __isub__(self, other):
+        raise NotImplementedForSymbol(self.__isub__, '-=', other)
 
     def __rsub__(self, other):
         """x.__rsub__(y) <=> y-x
@@ -140,6 +145,9 @@ class Symbol(SymbolBase):
             return _internal._MulScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
+
+    def __imul__(self, other):
+        raise NotImplementedForSymbol(self.__imul__, '*=', other)
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -174,11 +182,47 @@ class Symbol(SymbolBase):
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
+    def __mod__(self, other):
+        """x.__mod__(y) <=> x%y
+
+        Scalar input is supported.
+        Broadcasting is not supported. Use `broadcast_mod` instead. """
+        if isinstance(other, Symbol):
+            return _internal._Mod(self, other)
+        if isinstance(other, Number):
+            return _internal._ModScalar(self, scalar=other)
+        else:
+            raise TypeError('type %s not supported' % str(type(other)))
+
+    def __rmod__(self, other):
+        """x.__rmod__(y) <=> y%x
+
+        Only `NDArray` is supported for now.
+
+        Example usage:
+        ----------
+        >>> x = mx.nd.ones((2,3))*3
+        >>> y = mx.nd.ones((2,3))
+        >>> x.__rmod__(y).asnumpy()
+        array([[ 1.,  1.,  1.,
+               [ 1.,  1.,  1., dtype=float32)
+        """
+        if isinstance(other, Number):
+            return _internal._RModScalar(self, scalar=other)
+        else:
+            raise TypeError('type %s not supported' % str(type(other)))
+
+    def __idiv__(self, other):
+        raise NotImplementedForSymbol(self.__idiv__, '/=', other)
+
     def __truediv__(self, other):
         return self.__div__(other)
 
     def __rtruediv__(self, other):
         return self.__rdiv__(other)
+
+    def __itruediv__(self, other):
+        raise NotImplementedForSymbol(self.__itruediv__, '/=', other)
 
     def __pow__(self, other):
         """x.__pow__(y) <=> x**y
@@ -191,6 +235,9 @@ class Symbol(SymbolBase):
             return _internal._PowerScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
+
+    def __rpow__(self, other):
+        raise NotImplementedForSymbol(self.__rpow__, 'y**x', other)
 
     def __neg__(self):
         """x.__neg__() <=> -x
@@ -707,7 +754,7 @@ class Symbol(SymbolBase):
 
         Returns
         -------
-        aux_states : list of string
+        aux_states : list of str
             List of the auxiliary states in input symbol.
 
         Notes
@@ -723,88 +770,29 @@ class Symbol(SymbolBase):
             self.handle, ctypes.byref(size), ctypes.byref(sarr)))
         return [py_str(sarr[i]) for i in range(size.value)]
 
-    def infer_storage_type(self, *args, **kwargs):
-        """Infer the storage type of outputs and arguments of given known types of arguments.
-
-        User can either pass in the known types in positional way or keyword argument way.
-        Tuple of Nones is returned if there is not enough information passed in.
-        An error will be raised if there is inconsistency found in the known types passed in.
-
-        Parameters
-        ----------
-        *args :
-            Provide type of arguments in a positional way.
-            Unknown type can be marked as None
-
-        **kwargs :
-            Provide keyword arguments of known types.
+    def list_inputs(self):
+        """Lists all arguments and auxiliary states of this Symbol.
 
         Returns
         -------
-        arg_storage_types : list of numpy.dtype or None
-            List of types of arguments.
-            The order is in the same order as list_arguments()
-        out_storage_types : list of numpy.dtype or None
-            List of types of outputs.
-            The order is in the same order as list_outputs()
-        aux_storage_types : list of numpy.dtype or None
-            List of types of outputs.
-            The order is in the same order as list_auxiliary_states()
-        """
-        # pylint: disable=too-many-locals
-        if len(args) != 0 and len(kwargs) != 0:
-            raise ValueError('Can only specify known argument \
-                    types either by positional or kwargs way.')
-        sdata = []
-        if len(args) != 0:
-            keys = None
-            for s in args:
-                if s is not None:
-                    if s not in _STORAGE_TYPE_STR_TO_ID or not isinstance(s, basestring):
-                        raise TypeError('Argument need to be one of '+str(_STORAGE_TYPE_STR_TO_ID))
-                    sdata.append(_STORAGE_TYPE_STR_TO_ID[s])
-                else:
-                    sdata.append(_STORAGE_TYPE_STR_TO_ID['undefined'])
-        else:
-            keys = []
-            for k, v in kwargs.items():
-                if v in _STORAGE_TYPE_STR_TO_ID:
-                    keys.append(c_str(k))
-                    sdata.append(_STORAGE_TYPE_STR_TO_ID[v])
-        arg_storage_type_size = mx_uint()
-        arg_storage_type_data = ctypes.POINTER(ctypes.c_int)()
-        out_storage_type_size = mx_uint()
-        out_storage_type_data = ctypes.POINTER(ctypes.c_int)()
-        aux_storage_type_size = mx_uint()
-        aux_storage_type_data = ctypes.POINTER(ctypes.c_int)()
-        complete = ctypes.c_int()
-        check_call(_LIB.MXSymbolInferStorageType(
-            self.handle,
-            mx_uint(len(sdata)),
-            c_array(ctypes.c_char_p, keys),
-            c_array(ctypes.c_int, sdata),
-            ctypes.byref(arg_storage_type_size),
-            ctypes.byref(arg_storage_type_data),
-            ctypes.byref(out_storage_type_size),
-            ctypes.byref(out_storage_type_data),
-            ctypes.byref(aux_storage_type_size),
-            ctypes.byref(aux_storage_type_data),
-            ctypes.byref(complete)))
-        if complete.value != 0:
-            arg_storage_types = [
-                _STORAGE_TYPE_ID_TO_STR[arg_storage_type_data[i]] \
-                                        for i in range(arg_storage_type_size.value)]
-            out_storage_types = [
-                _STORAGE_TYPE_ID_TO_STR[out_storage_type_data[i]] \
-                                        for i in range(out_storage_type_size.value)]
-            aux_storage_types = [
-                _STORAGE_TYPE_ID_TO_STR[aux_storage_type_data[i]] \
-                                        for i in range(aux_storage_type_size.value)]
-            return (arg_storage_types, out_storage_types, aux_storage_types)
-        else:
-            return (None, None, None)
-        # pylint: enable=too-many-locals
+        inputs : list of str
+            List of all inputs.
 
+        Examples
+        --------
+        >>> bn = mx.sym.BatchNorm(name='bn')
+        >>> bn.list_arguments()
+        ['bn_data', 'bn_gamma', 'bn_beta']
+        >>> bn.list_auxiliary_states()
+        ['bn_moving_mean', 'bn_moving_var']
+        >>> bn.list_inputs()
+        ['bn_data', 'bn_gamma', 'bn_beta', 'bn_moving_mean', 'bn_moving_var']
+        """
+        size = ctypes.c_uint()
+        sarr = ctypes.POINTER(ctypes.c_char_p)()
+        check_call(_LIB.NNSymbolListInputNames(
+            self.handle, 0, ctypes.byref(size), ctypes.byref(sarr)))
+        return [py_str(sarr[i]) for i in range(size.value)]
 
     def infer_type(self, *args, **kwargs):
         """Infers the type of all arguments and all outputs, given the known types
@@ -1044,19 +1032,22 @@ class Symbol(SymbolBase):
         indptr = [0]
         if len(args) != 0:
             keys = None
-            for s in args:
+            for i, s in enumerate(args):
                 if s is not None:
                     if not isinstance(s, tuple):
-                        raise TypeError('Arguments must be shapes (tuple)')
+                        raise TypeError("Arguments need to be shapes (tuple), "
+                                        "but argument %d is %s." % (i, type(s)))
                     sdata.extend(s)
                 indptr.append(len(sdata))
         else:
             keys = []
             for k, v in kwargs.items():
-                if isinstance(v, tuple):
-                    keys.append(c_str(k))
-                    sdata.extend(v)
-                    indptr.append(len(sdata))
+                if not isinstance(v, tuple):
+                    raise TypeError("Arguments need to be shapes (tuple), "
+                                    "but '%s' is %s." % (k, type(v)))
+                keys.append(c_str(k))
+                sdata.extend(v)
+                indptr.append(len(sdata))
         arg_shape_size = mx_uint()
         arg_shape_ndim = ctypes.POINTER(mx_uint)()
         arg_shape_data = ctypes.POINTER(ctypes.POINTER(mx_uint))()
@@ -1245,7 +1236,7 @@ class Symbol(SymbolBase):
             raise TypeError('Only accept list of NDArrays or dict of str to NDArray')
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
-    def simple_bind(self, ctx, grad_req='write', type_dict=None, storage_type_dict=None,
+    def simple_bind(self, ctx, grad_req='write', type_dict=None, stype_dict=None,
                     group2ctx=None, shared_arg_names=None, shared_exec=None,
                     shared_buffer=None, **kwargs):
         """Bind current symbol to get an executor, allocate all the arguments needed.
@@ -1289,7 +1280,7 @@ class Symbol(SymbolBase):
         type_dict  : Dict of str->numpy.dtype
             Input type dictionary, name->dtype
 
-        storage_type_dict  : Dict of str->str
+        stype_dict  : Dict of str->str
             Input storage type dictionary, name->storage_type
 
         group2ctx : Dict of string to mx.Context
@@ -1338,10 +1329,10 @@ class Symbol(SymbolBase):
         # provided storage type argument names
         provided_arg_stype_names = ctypes.POINTER(ctypes.c_char_p)()
         provided_arg_stype_data = ctypes.POINTER(mx_uint)()  # provided storage types
-        if storage_type_dict is not None:
+        if stype_dict is not None:
             provided_arg_stype_names = []
             provided_arg_stype_data = []
-            for k, v in storage_type_dict.items():
+            for k, v in stype_dict.items():
                 if v in _STORAGE_TYPE_STR_TO_ID:
                     provided_arg_stype_names.append(c_str(k))
                     provided_arg_stype_data.append(ctypes.c_int(_STORAGE_TYPE_STR_TO_ID[v]))
@@ -1422,7 +1413,7 @@ class Symbol(SymbolBase):
             shared_buffer_names = []
             shared_buffer_handles = []
             for k, v in shared_buffer.items():
-                assert(v.storage_type == 'default'), \
+                assert(v.stype == 'default'), \
                     "shared_buffer is expected to only contain NDArrays with default storage"
                 shared_buffer_names.append(c_str(k))
                 shared_buffer_handles.append(v.handle)
@@ -1667,7 +1658,7 @@ class Symbol(SymbolBase):
         executor.aux_arrays = aux_states
         return executor
 
-    def grad(self, wrt):
+    def gradient(self, wrt):
         """Gets the autodiff of current symbol.
 
         This function can only be used if current symbol is a loss function.
@@ -1694,7 +1685,7 @@ class Symbol(SymbolBase):
 
     # pylint: enable= no-member
 
-    def eval(self, ctx=cpu(), **kwargs):
+    def eval(self, ctx=None, **kwargs):
         """Evaluates a symbol given arguments.
 
         The `eval` method combines a call to `bind` (which returns an executor)
@@ -1730,6 +1721,8 @@ class Symbol(SymbolBase):
         evaluated on given args. When called on a single symbol (not a group),
         the result will be a list with one element.
         """
+        if ctx is None:
+            ctx = Context.default_ctx
         return self.bind(ctx, kwargs).forward()
 
     def reshape(self, shape):
@@ -1751,8 +1744,32 @@ class Symbol(SymbolBase):
         """
         return reshape(self, shape=shape)
 
+    def wait_to_read(self):
+        raise NotImplementedForSymbol(self.wait_to_read, None)
+
+    def asnumpy(self):
+        raise NotImplementedForSymbol(self.asnumpy, None)
+
+    def asscalar(self):
+        raise NotImplementedForSymbol(self.asscalar, None)
+
+    def astype(self):
+        raise NotImplementedForSymbol(self.astype, None)
+
+    def copy(self):
+        raise NotImplementedForSymbol(self.copy, None)
+
+    def as_in_context(self):
+        raise NotImplementedForSymbol(self.as_in_context, None)
+
+    def detach(self):
+        raise NotImplementedForSymbol(self.detach, None)
+
+    def backward(self):
+        raise NotImplementedForSymbol(self.backward, None)
+
 def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None,
-        init=None, storage_type=None, **kwargs):
+        init=None, stype=None, **kwargs):
     """Creates a symbolic variable with specified name.
 
     Example usage:
@@ -1779,6 +1796,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None,
         The dtype for input variable. If not specified, this value will be inferred.
     init : initializer (mxnet.init.*)
         Initializer for this variable to (optionally) override the default initializer.
+    stype : str
+        The storage type of the variable.
     kwargs : Additional attribute variables
         Additional attributes must start and end with double underscores.
 
@@ -1806,8 +1825,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None,
         if not isinstance(init, string_types):
             init = init.dumps()
         attr['__init__'] = init
-    if storage_type is not None:
-        attr['__storage_type__'] = str(_STORAGE_TYPE_STR_TO_ID[storage_type])
+    if stype is not None:
+        attr['__storage_type__'] = str(_STORAGE_TYPE_STR_TO_ID[stype])
     for k, v in kwargs.items():
         if k.startswith('__') and k.endswith('__'):
             attr[k] = str(v)

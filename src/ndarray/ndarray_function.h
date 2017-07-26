@@ -10,6 +10,7 @@
 #include <mshadow/tensor.h>
 #include <mxnet/base.h>
 #include <mxnet/resource.h>
+#include <mxnet/ndarray.h>
 #include <vector>
 #include "../operator/mshadow_op.h"
 
@@ -39,6 +40,10 @@ struct Mul : public BinaryBase {
 
 struct Div : public BinaryBase {
   typedef mshadow::op::div mshadow_op;
+};
+
+struct Mod : public BinaryBase {
+  typedef op::mshadow_op::mod mshadow_op;
 };
 
 struct ClipMin : public BinaryBase {
@@ -145,6 +150,14 @@ template<typename Device>
 void ElementwiseSum(const std::vector<TBlob> source,
                     TBlob *out,
                     RunContext ctx);
+
+/*!
+ * \brief Interface for parallel impl of elemwise sum for sparse matrices
+ */
+template<typename xpu>
+void ElementwiseSum(mshadow::Stream<xpu>* s,
+                    const std::vector<NDArray>& nds,
+                    NDArray* out);
 
 // broadcasting
 template <typename Device>

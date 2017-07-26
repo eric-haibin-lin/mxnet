@@ -3,6 +3,8 @@ from mxnet.test_utils import *
 import numpy as np
 from functools import reduce
 from mxnet.module.executor_group import DataParallelExecutorGroup
+from common import assertRaises
+from collections import namedtuple
 
 import numpy.random as rnd
 
@@ -217,6 +219,70 @@ def test_module_switch_bucket():
     assert total_bytes_after == total_bytes_before
 
 
+
+def test_module_set_params():
+    # data iter
+    mx.random.seed(11)
+    data = mx.nd.array([[0.05, .10]]);
+    label = mx.nd.array([[.01, 0.99]]);
+    train_data = mx.io.NDArrayIter(data, label, batch_size=1)
+
+    # symbols
+    x = mx.symbol.Variable('data')
+    x = mx.symbol.FullyConnected(name='fc_0', data=x, num_hidden=2)
+    x = mx.symbol.Activation(name="act_0", data=x, act_type='sigmoid')
+    x = mx.symbol.FullyConnected(name='fc_1', data=x, num_hidden=2)
+    x = mx.symbol.Activation(name="act_1", data=x, act_type='sigmoid')
+    x = mx.symbol.LinearRegressionOutput(data=x, name='softmax', grad_scale=2)
+
+    # create module
+    mod = mx.mod.Module(x, context=[mx.cpu()]);
+    mod.bind(train_data.provide_data, label_shapes=train_data.provide_label,
+             for_training=True)
+
+    arg_params_correct = {'fc_0_weight': mx.nd.array([[.15, .20], [.25, .30]]),
+                  'fc_0_bias'  : mx.nd.array([.35, .35]),
+                  'fc_1_weight': mx.nd.array([[.40, .45], [.50, .55]]),
+                  'fc_1_bias'  : mx.nd.array([.60, .60])}
+
+    arg_params_missing = {'fc_0_weight': mx.nd.array([[.15, .20], [.25, .30]]),
+                  'fc_0_bias'  : mx.nd.array([.35, .35]),
+                  'fc_1_weight': mx.nd.array([[.40, .45], [.50, .55]])}
+
+    arg_params_extra = {'fc_0_weight': mx.nd.array([[.15, .20], [.25, .30]]),
+                  'fc_0_bias'  : mx.nd.array([.35, .35]),
+                  'fc_1_weight': mx.nd.array([[.40, .45], [.50, .55]]),
+                  'fc_1_bias'  : mx.nd.array([.60, .60]),
+                  'fc_2_weight': mx.nd.array([.60, .60])}
+
+    arg_params_missing_extra = {'fc_2_weight': mx.nd.array([.60, .60])}
+
+    # test regular set_params
+    mod.set_params(force_init=True, arg_params=arg_params_correct, aux_params={})
+
+    # test allow missing
+    mod.set_params(force_init=True, arg_params=arg_params_missing, aux_params={}, allow_missing=True)
+    assertRaises(RuntimeError, mod.set_params,
+                 force_init=True, arg_params=arg_params_missing,
+                 aux_params={}, allow_missing=False)
+
+    # test allow extra
+    mod.set_params(force_init=True, arg_params=arg_params_extra, aux_params={}, allow_missing=True, allow_extra=True)
+    assertRaises(ValueError, mod.set_params,
+                 force_init=True, arg_params=arg_params_extra,
+                 aux_params={}, allow_missing=True, allow_extra=False)
+
+    # test allow missing + extra,
+    assertRaises(RuntimeError, mod.set_params,
+                 force_init=True, arg_params=arg_params_missing_extra,
+                 aux_params={}, allow_missing=False, allow_extra=False)
+
+    # test allow missing + extra, this will throw a runtime error
+    assertRaises(ValueError, mod.set_params,
+                 force_init=True, arg_params=arg_params_missing_extra,
+                 aux_params={}, allow_missing=True, allow_extra=False)
+
+
 def test_monitor():
     # data iter
     mx.random.seed(11)
@@ -380,10 +446,10 @@ def test_module_fm():
     rnd.seed(11)
     def fm_model(k, feature_dim):
          norm = mx.initializer.Normal(sigma=0.01)
-         x = mx.symbol.Variable("data", storage_type='csr')
-         v = mx.symbol.Variable("v", shape=(feature_dim, k), init=norm, storage_type='row_sparse')
+         x = mx.symbol.Variable("data", stype='csr')
+         v = mx.symbol.Variable("v", shape=(feature_dim, k), init=norm, stype='row_sparse')
 
-         w1_weight = mx.symbol.var('w1_weight', shape=(feature_dim, 1), init=norm)
+         w1_weight = mx.symbol.var('w1_weight', shape=(feature_dim, 1), init=norm, stype='row_sparse')
          w1 = mx.symbol.dot(x, w1_weight)
 
          v_s = mx.symbol.sum(data=mx.symbol.square(data=v), axis=1)
@@ -412,7 +478,7 @@ def test_module_fm():
     import scipy.sparse as sp
     # generate some random scipy csr data
     csr_sp = sp.rand(num_samples, feature_dim, density=0.5, format='csr')
-    csr_nd = mx.sparse_nd.csr(csr_sp.data, csr_sp.indptr, csr_sp.indices,
+    csr_nd = mx.nd.csr(csr_sp.data, csr_sp.indptr, csr_sp.indices,
                               (num_samples, feature_dim))
     label = mx.nd.ones((num_samples,1))
     # the alternative is to use LibSVMIter
@@ -443,9 +509,9 @@ def test_module_fm():
 
 def test_module_initializer():
     def regression_model(m):
-         x = mx.symbol.var("data", storage_type='csr')
+         x = mx.symbol.var("data", stype='csr')
          v = mx.symbol.var("v", shape=(m, 1), init=mx.init.Uniform(scale=.1),
-                                storage_type='row_sparse')
+                                stype='row_sparse')
          model = mx.symbol.dot(lhs=x, rhs=v)
          y = mx.symbol.Variable("label")
          model = mx.symbol.LinearRegressionOutput(data=model, label=y, name="out")
@@ -454,7 +520,7 @@ def test_module_initializer():
     n, m = 128, 100
     model = regression_model(m)
 
-    data = mx.nd.zeros(shape=(n, m), storage_type='csr')
+    data = mx.nd.zeros(shape=(n, m), stype='csr')
     label = mx.nd.zeros((n, 1))
     iterator = mx.io.NDArrayIter(data=data, label={'label':label}, batch_size=n)
 
@@ -463,18 +529,127 @@ def test_module_initializer():
     mod.bind(data_shapes=iterator.provide_data, label_shapes=iterator.provide_label)
     mod.init_params()
     v = mod._arg_params['v']
-    assert(v.storage_type == 'row_sparse')
+    assert(v.stype == 'row_sparse')
     assert(np.sum(v.asnumpy()) != 0)
 
+def test_forward_reshape():
+    num_class=10
+    data1 = mx.sym.Variable('data1')
+    data2 = mx.sym.Variable('data2')
+    conv1 = mx.sym.Convolution(data=data1, kernel=(2, 2), num_filter=2, stride=(2, 2))
+    conv2 = mx.sym.Convolution(data=data2, kernel=(3, 3), num_filter=3, stride=(1, 1))
+    pooling1 = mx.sym.Pooling(data=conv1, kernel=(2, 2), stride=(1, 1), pool_type="avg")
+    pooling2 = mx.sym.Pooling(data=conv2, kernel=(2, 2), stride=(1, 1), pool_type="max")
+    flatten1 = mx.sym.flatten(data=pooling1)
+    flatten2 = mx.sym.flatten(data=pooling2)
+    sum = mx.sym.sum(data=flatten1, axis=1) + mx.sym.sum(data=flatten2, axis=1)
+    fc = mx.sym.FullyConnected(data=sum, num_hidden=num_class)
+    sym = mx.sym.SoftmaxOutput(data=fc, name='softmax')
+
+    dshape1 = (10, 3, 64, 64)
+    dshape2 = (10, 3, 32, 32)
+    lshape = (10,)
+
+    mod = mx.mod.Module(symbol=sym, data_names=['data1', 'data2'],
+                        label_names=['softmax_label'])
+    mod.bind(data_shapes=[('data1', dshape1), ('data2', dshape2)],
+             label_shapes=[('softmax_label', lshape)])
+    mod.init_params()
+    mod.init_optimizer(optimizer_params={'learning_rate': 0.01})
+
+    # Train with original data shapes
+    data_batch = mx.io.DataBatch(data=[mx.nd.random_uniform(0, 9, dshape1),
+                                       mx.nd.random_uniform(5, 15, dshape2)],
+                                 label=[mx.nd.ones(lshape)])
+    mod.forward(data_batch)
+    assert mod.get_outputs()[0].shape == tuple([lshape[0], num_class])
+    mod.backward()
+    mod.update()
+
+    # Train with different batch size
+    dshape1 = (3, 3, 64, 64)
+    dshape2 = (3, 3, 32, 32)
+    lshape = (3,)
+    data_batch = mx.io.DataBatch(data=[mx.nd.random_uniform(0, 9, dshape1),
+                                       mx.nd.random_uniform(5, 15, dshape2)],
+                                 label=[mx.nd.ones(lshape)])
+    mod.forward(data_batch)
+    assert mod.get_outputs()[0].shape == tuple([lshape[0], num_class])
+    mod.backward()
+    mod.update()
+
+    dshape1 = (20, 3, 64, 64)
+    dshape2 = (20, 3, 32, 32)
+    lshape = (20,)
+    data_batch = mx.io.DataBatch(data=[mx.nd.random_uniform(3, 5, dshape1),
+                                       mx.nd.random_uniform(10, 25, dshape2)],
+                                 label=[mx.nd.ones(lshape)])
+    mod.forward(data_batch)
+    assert mod.get_outputs()[0].shape == tuple([lshape[0], num_class])
+    mod.backward()
+    mod.update()
+
+    #Train with both different batch size and data shapes
+    dshape1 = (20, 3, 120, 120)
+    dshape2 = (20, 3, 32, 64)
+    lshape = (20,)
+    data_batch = mx.io.DataBatch(data=[mx.nd.random_uniform(0, 9, dshape1),
+                                       mx.nd.random_uniform(5, 15, dshape2)],
+                                 label=[mx.nd.ones(lshape)])
+    mod.forward(data_batch)
+    assert mod.get_outputs()[0].shape == tuple([lshape[0], num_class])
+    mod.backward()
+    mod.update()
+
+    dshape1 = (5, 3, 28, 40)
+    dshape2 = (5, 3, 24, 16)
+    lshape = (5,)
+    data_batch = mx.io.DataBatch(data=[mx.nd.random_uniform(0, 9, dshape1),
+                                       mx.nd.random_uniform(15, 25, dshape2)],
+                                 label=[mx.nd.ones(lshape)])
+    mod.forward(data_batch)
+    assert mod.get_outputs()[0].shape == tuple([lshape[0], num_class])
+    mod.backward()
+    mod.update()
+
+    #Test score
+    dataset_shape1 = (30, 3, 30, 30)
+    dataset_shape2 = (30, 3, 20, 40)
+    labelset_shape = (30,)
+
+    eval_dataiter = mx.io.NDArrayIter(data=[mx.nd.random_uniform(0, 9, dataset_shape1),
+                                            mx.nd.random_uniform(15, 25, dataset_shape2)],
+                                      label=[mx.nd.ones(labelset_shape)],
+                                      batch_size=5)
+    assert len(mod.score(eval_data=eval_dataiter, eval_metric='acc')) == 1
+
+    #Test prediction
+    dshape1 = (1, 3, 30, 30)
+    dshape2 = (1, 3, 20, 40)
+    dataset_shape1 = (10, 3, 30, 30)
+    dataset_shape2 = (10, 3, 20, 40)
+
+    pred_dataiter = mx.io.NDArrayIter(data=[mx.nd.random_uniform(0, 9, dataset_shape1),
+                                            mx.nd.random_uniform(15, 25, dataset_shape2)])
+    mod.bind(data_shapes=[('data1', dshape1), ('data2', dshape2)],
+             for_training=False, force_rebind=True)
+    assert mod.predict(pred_dataiter).shape == tuple([10, num_class])
+
+    #Test forward with other data batch API
+    Batch = namedtuple('Batch', ['data'])
+    data = mx.sym.Variable('data')
+    out = data * 2
+    mod = mx.mod.Module(symbol=out, label_names=None)
+    mod.bind(data_shapes=[('data', (1, 10))])
+    mod.init_params()
+    data1 = [mx.nd.ones((1, 10))]
+    mod.forward(Batch(data1))
+    assert mod.get_outputs()[0].shape == (1, 10)
+    data2 = [mx.nd.ones((3, 5))]
+    mod.forward(Batch(data2))
+    assert mod.get_outputs()[0].shape == (3, 5)
+
+
 if __name__ == '__main__':
-    test_module_dtype()
-    test_module_input_grads()
-    test_module_states()
-    test_module_reshape()
-    test_save_load()
-    test_module_layout()
-    test_module_switch_bucket()
-    test_monitor()
-    test_executor_group()
-    test_module_fm()
-    test_module_initializer()
+    import nose
+    nose.runmodule()

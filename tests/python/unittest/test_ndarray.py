@@ -249,6 +249,14 @@ def test_ndarray_slice():
     A[3:8] = A2[3:8]
     assert same(A[3:8].asnumpy(), A2[3:8])
 
+    shape = (3,4,5,6,7)
+    A = mx.nd.random_uniform(shape=shape)
+    A2 = A.asnumpy()
+
+    assert same(A[1,3:4,:,1:5].asnumpy(), A2[1,3:4,:,1:5])
+
+    assert A[1,2,3,4,5].asscalar() == A2[1,2,3,4,5]
+
 
 def test_ndarray_crop():
     # get crop
@@ -629,13 +637,17 @@ def test_iter():
 
 
 def test_cached():
-    op = mx.nd.CachedOp('Convolution', 3, kernel=(3, 3), num_filter=10)
+    sym = mx.sym.Convolution(kernel=(3, 3), num_filter=10) + 2
+    op = mx.nd.CachedOp(sym)
     data = mx.nd.ones((3, 4, 10, 10))
     weight = mx.nd.ones((10, 4, 3, 3))
     bias = mx.nd.ones((10,))
-    o1 = mx.nd.invoke(op, [data, weight, bias])
+    o1 = op(data, weight, bias)
     bias[:] = 2
-    o2 = mx.nd.invoke(op, [data, weight, bias])
+    o2 = op(data, weight, bias)
+    assert_almost_equal(o2.asnumpy(), o1.asnumpy()+1)
+    o2[:] = 0
+    op(data, weight, bias, out=o2)
     assert_almost_equal(o2.asnumpy(), o1.asnumpy()+1)
 
 def test_output():
@@ -649,6 +661,7 @@ def test_output():
     assert_almost_equal(out.asnumpy(), zeros.asnumpy())
     mx.nd.full(shape, 2, out=out)
     assert_almost_equal(out.asnumpy(), ones.asnumpy() * 2)
+
 
 if __name__ == '__main__':
     import nose

@@ -23,9 +23,6 @@
 
 namespace mxnet {
 
-using NodeOperatorMap = std::unordered_map<const nnvm::Node*,
-    std::shared_ptr<Operator>>;
-
 // forward declaration
 namespace exec {
 class GraphExecutor;
@@ -123,13 +120,13 @@ class GraphExecutor : public Executor {
     // the cached operator
     Engine::OprHandle opr = nullptr;
     // list of op executors
-    std::vector<OpExecutor*> exec_list;
+    std::vector<std::shared_ptr<OpExecutor> > exec_list;
   };
   // Initialize in_args, arg_grads, and aux_states
   void InitArguments(const nnvm::IndexedGraph& idx,
                      const nnvm::ShapeVector& inferred_shapes,
                      const nnvm::DTypeVector& inferred_dtypes,
-                     const nnvm::StorageTypeVector& inferred_stypes,
+                     const StorageTypeVector& inferred_stypes,
                      const std::vector<Context>& in_arg_ctxes,
                      const std::vector<Context>& arg_grad_ctxes,
                      const std::vector<Context>& aux_state_ctxes,
@@ -142,7 +139,7 @@ class GraphExecutor : public Executor {
   void InitArguments(const nnvm::IndexedGraph& idx,
                      const nnvm::ShapeVector& inferred_shapes,
                      const nnvm::DTypeVector& inferred_dtypes,
-                     const nnvm::StorageTypeVector& inferred_stypes,
+                     const StorageTypeVector& inferred_stypes,
                      const std::vector<Context>& in_arg_ctxes,
                      const std::vector<Context>& arg_grad_ctxes,
                      const std::vector<Context>& aux_state_ctxes,
@@ -217,7 +214,7 @@ class GraphExecutor : public Executor {
   // number of forward nodes
   size_t num_forward_nodes_{0};
   // saved operator for autograd
-  NodeOperatorMap saved_opr_;
+  std::unordered_map<const nnvm::Node*, OpStatePtr> saved_states_;
   // monitor call back
   std::function<void(const char*, void*)> monitor_callback_{nullptr};
   // whether to enable bulk execution

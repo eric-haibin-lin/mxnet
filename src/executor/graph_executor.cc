@@ -271,7 +271,7 @@ nnvm::Graph GraphExecutor::InitFullGraph(nnvm::Symbol symbol,
   nnvm::Graph g_grad = nnvm::pass::Gradient(
       g, symbol.outputs, xs, head_grad_entry_,
       AggregateGradient, need_mirror, nullptr,
-      zero_ops);
+      zero_ops, "_copy");
   CHECK_EQ(g_grad.outputs.size(), xs.size());
   for (const auto &e : g_grad.outputs) {
     g.outputs.push_back(e);
@@ -380,6 +380,21 @@ Graph AssignContext(Graph g,
       vcontext.push_back(ctx_list[assigned_device[i]]);
     }
   }
+
+  // after device planning, we should check again
+  // if the assigned device of gradient node
+  // corresponds to storage of grads
+  auto &new_idx = g.indexed_graph();
+  for (size_t i = num_forward_outputs; i < g.outputs.size(); ++i) {
+    const uint32_t nid = new_idx.outputs()[i].node_id;
+    Context ctx = arg_grad_ctxes[i - num_forward_outputs];
+    CHECK(ctx == vcontext[nid])
+      << "Trying to save gradient to " << ctx
+      << " while its source node \"" << new_idx[nid].source->attrs.name
+      << "\" computes it on " << vcontext[nid]
+      << ". Check your ctx in NDArray allocation.";
+  }
+
   g.attrs["context"] = std::make_shared<nnvm::any>(std::move(vcontext));
   return g;
 }
@@ -430,6 +445,29 @@ void HandleInferTypeError(const size_t num_forward_inputs,
              << oss.str();
 }
 
+void HandleInferStorageTypeError(const size_t num_forward_inputs,
+                                 const nnvm::IndexedGraph& idx,
+                                 const StorageTypeVector& inferred_stypes) {
+  int cnt = 10;
+  std::ostringstream oss;
+  for (size_t i = 0; i < num_forward_inputs; ++i) {
+    const uint32_t nid = idx.input_nodes().at(i);
+    const uint32_t eid = idx.entry_id(nid, 0);
+    const int inferred_stype = inferred_stypes[eid];
+    if (inferred_stype == -1) {
+      const std::string& arg_name = idx[nid].source->attrs.name;
+      oss << arg_name << ": " << inferred_stype << ", ";
+      if (--cnt == 0) {
+        oss << "...";
+        break;
+      }
+    }
+  }
+  LOG(FATAL) << "InferStoragetType pass cannot decide storage type for the following arguments "
+                "(-1 means unknown stype). Please consider providing them as inputs:\n"
+             << oss.str();
+}
+
 /*!
  * \brief GraphExecutor initializer for regular bind flow in which
  * input arguments and gradients are provided by users. This initializer
@@ -467,7 +505,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   data_entry_.resize(idx.num_node_entries());
   nnvm::ShapeVector arg_shapes;
   nnvm::DTypeVector arg_dtypes;
-  nnvm::StorageTypeVector arg_stypes;
+  StorageTypeVector arg_stypes;
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
     const std::string& arg_name = idx[nid].source->attrs.name;
@@ -501,20 +539,24 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
 
   // expand arg_shapes and arg_dtypes to contain backward inputs
   arg_shapes.resize(idx.input_nodes().size(), TShape());
-  g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
+  g = InferShape(std::move(g), arg_shapes, "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
     HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
                           g.GetAttr<nnvm::ShapeVector>("shape"));
   }
 
   arg_dtypes.resize(idx.input_nodes().size(), -1);
-  g = nnvm::pass::InferType(g, arg_dtypes, "__dtype__");
+  g = InferType(std::move(g), arg_dtypes, "__dtype__");
   if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
     HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
                          g.GetAttr<nnvm::DTypeVector>("dtype"));
   }
-  // TODO(haibin) better error message for infer_storage
-  g = nnvm::pass::InferStorageType(g, arg_stypes, "__storage_type__");
+
+  g = InferStorageType(std::move(g), arg_stypes, "__storage_type__");
+  if (g.GetAttr<size_t>("storage_type_num_unknown_nodes") != 0U) {
+    HandleInferStorageTypeError(num_forward_inputs_, g.indexed_graph(),
+                                g.GetAttr<StorageTypeVector>("storage_type"));
+  }
 
   // Initialize the rest attributes of the graph.
   // This function can be called by regular bind
@@ -531,7 +573,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
 void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const nnvm::ShapeVector& inferred_shapes,
                                   const nnvm::DTypeVector& inferred_dtypes,
-                                  const nnvm::StorageTypeVector& inferred_stypes,
+                                  const StorageTypeVector& inferred_stypes,
                                   const std::vector<Context>& in_arg_ctxes,
                                   const std::vector<Context>& arg_grad_ctxes,
                                   const std::vector<Context>& aux_state_ctxes,
@@ -637,7 +679,7 @@ NDArray ReshapeOrCreate(const std::string& name,
 void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
                                   const nnvm::ShapeVector& inferred_shapes,
                                   const nnvm::DTypeVector& inferred_dtypes,
-                                  const nnvm::StorageTypeVector& inferred_stypes,
+                                  const StorageTypeVector& inferred_stypes,
                                   const std::vector<Context>& in_arg_ctxes,
                                   const std::vector<Context>& arg_grad_ctxes,
                                   const std::vector<Context>& aux_state_ctxes,
@@ -760,13 +802,13 @@ void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol,
                                     const nnvm::NodeEntryMap<NDArray>& feed_dict) {
   const auto& idx = g.indexed_graph();
   // dispatch based on stype per operator
-  const auto& vstorage_type = g.GetAttr<nnvm::StorageTypeVector>("storage_type");
-  nnvm::StorageTypeVector dispatch_stypes(idx.num_nodes(), kUndefinedStorage);
+  const auto& vstorage_type = g.GetAttr<StorageTypeVector>("storage_type");
+  StorageTypeVector dispatch_stypes(idx.num_nodes(), kUndefinedStorage);
   for (size_t nid = 0; nid < idx.num_nodes(); nid++) {
       const auto& inode = idx[nid];
       auto num_outputs = inode.source->num_outputs();
       auto num_inputs = inode.inputs.size();
-      nnvm::StorageTypeVector vs(num_inputs + num_outputs, kUndefinedStorage);
+      StorageTypeVector vs(num_inputs + num_outputs, kUndefinedStorage);
       for (size_t i = 0; i < num_inputs; i++) {
         auto e = inode.inputs[i];
         vs[i] = vstorage_type[idx.entry_id(e)];
@@ -805,7 +847,7 @@ void GraphExecutor::FinishInitGraph(nnvm::Symbol symbol,
   }
   g = DetectInplaceAddTo(g);
 
-  g.attrs["saved_opr"] = std::make_shared<nnvm::any>(std::move(saved_opr_));
+  g.attrs["saved_states"] = std::make_shared<nnvm::any>(std::move(saved_states_));
   g = AttachOpExecs(g);
   g = AttachOpResources(g);
   graph_ = std::move(g);
@@ -877,7 +919,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
   const nnvm::IndexedGraph& idx = g.indexed_graph();
   nnvm::ShapeVector arg_shapes(idx.input_nodes().size(), TShape());
   nnvm::DTypeVector arg_dtypes(idx.input_nodes().size(), -1);
-  nnvm::DTypeVector arg_stypes(idx.input_nodes().size(), kUndefinedStorage);
+  StorageTypeVector arg_stypes(idx.input_nodes().size(), kUndefinedStorage);
   for (size_t i = 0; i < num_forward_inputs_; ++i) {
     const uint32_t nid = idx.input_nodes().at(i);
     const std::string& name = idx[nid].source->attrs.name;
@@ -894,32 +936,36 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       arg_stypes[i] = it3->second;
     }
   }
-  g = nnvm::pass::InferShape(g, arg_shapes, "__shape__");
+  g = InferShape(std::move(g), arg_shapes, "__shape__");
   if (g.GetAttr<size_t>("shape_num_unknown_nodes") != 0U) {
     HandleInferShapeError(num_forward_inputs_, g.indexed_graph(),
                           g.GetAttr<nnvm::ShapeVector>("shape"));
   }
 
-  g = nnvm::pass::InferType(g, arg_dtypes, "__dtype__");
+  g = InferType(std::move(g), arg_dtypes, "__dtype__");
   if (g.GetAttr<size_t>("dtype_num_unknown_nodes") != 0U) {
     HandleInferTypeError(num_forward_inputs_, g.indexed_graph(),
                          g.GetAttr<nnvm::DTypeVector>("dtype"));
   }
-  // TODO(jun/haibin) check if InferShape is successful, and give warnings instead of segfault later
-  g = nnvm::pass::InferStorageType(g, arg_stypes, "__storage_type__");
+
+  g = InferStorageType(std::move(g), arg_stypes, "__storage_type__");
+  if (g.GetAttr<size_t>("storage_type_num_unknown_nodes") != 0U) {
+    HandleInferStorageTypeError(num_forward_inputs_, g.indexed_graph(),
+                                g.GetAttr<StorageTypeVector>("storage_type"));
+  }
 
   // Create in_args, arg_grads, and aux_states using
   // the inferred shapes and dtypes.
   if (nullptr == shared_buffer) {  // regular simple bind
     InitArguments(idx, g.GetAttr<nnvm::ShapeVector>("shape"),
                   g.GetAttr<nnvm::DTypeVector>("dtype"),
-                  g.GetAttr<nnvm::StorageTypeVector>("storage_type"),
+                  g.GetAttr<StorageTypeVector>("storage_type"),
                   in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
                   grad_req_types, in_arg_vec, arg_grad_vec, aux_state_vec);
   } else {  // simple bind using shared data arrays and shared_exec
     InitArguments(idx, g.GetAttr<nnvm::ShapeVector>("shape"),
                   g.GetAttr<nnvm::DTypeVector>("dtype"),
-                  g.GetAttr<nnvm::StorageTypeVector>("storage_type"),
+                  g.GetAttr<StorageTypeVector>("storage_type"),
                   in_arg_ctxes, arg_grad_ctxes, aux_state_ctxes,
                   grad_req_types, shared_arg_names, shared_exec,
                   shared_buffer, in_arg_vec, arg_grad_vec, aux_state_vec);
@@ -972,7 +1018,6 @@ Graph GraphExecutor::InitGraph(nnvm::Symbol symbol,
 // initialize the memory of each entries
 void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   using nnvm::DTypeVector;
-  using nnvm::StorageTypeVector;
   using nnvm::ShapeVector;
   using nnvm::StorageVector;
   // get the graph
@@ -1068,6 +1113,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
   for (size_t i : sorted_pool_index) {
     const Context& ctx = pool_info[i].ctx;
     size_t bytes = pool_info[i].bytes;
+    NDArrayStorageType storage_type = pool_info[i].stype;
     bool allocated = false;
     for (auto it = free_pool.lower_bound(bytes); it != free_pool.end(); ++it) {
       if (it->second.ctx() == ctx && it->first >= bytes) {
@@ -1122,6 +1168,7 @@ void GraphExecutor::InitCachedOps() {
   const auto& vctx = graph_.GetAttr<ContextVector>("context");
   const auto& addto_entry = graph_.GetAttr<std::vector<int> >("addto_entry");
   const auto& skip_plus_node = graph_.GetAttr<std::vector<int> >("skip_plus_node");
+  const auto& vstorage_type = graph_.GetAttr<StorageTypeVector>("storage_type");
 
   op_nodes_.resize(idx.num_nodes());
   // setup the array and requirements.
@@ -1131,7 +1178,6 @@ void GraphExecutor::InitCachedOps() {
     if (inode.source->is_variable()) {
       LOG(INFO) << "node " << nid << " var";
     } else {
-      const auto& vstorage_type = graph_.GetAttr<nnvm::StorageTypeVector>("storage_type");
       LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
       auto exec = op_execs[nid];
       for (const auto& e : inode.inputs) {
@@ -1189,7 +1235,7 @@ void GraphExecutor::InitCachedOps() {
     if (inode.source->is_variable()) continue;
     if (op_nodes_[nid].skip_exec_node) continue;
     auto& exec = op_nodes_[nid].exec;
-    bool is_async = op_nodes_[nid].exec->exec_type() == Operator::kAsync;
+    bool is_async = op_nodes_[nid].exec->exec_type() == ExecType::kAsync;
     bool is_gpu = op_nodes_[nid].ctx.dev_mask() == gpu::kDevMask;
 
     // the variables
@@ -1203,6 +1249,9 @@ void GraphExecutor::InitCachedOps() {
     }
     for (auto& nd : exec->out_array) {
       mutate_vars.push_back(nd.var());
+    }
+    if (exec->var() != nullptr) {
+      mutate_vars.push_back(exec->var());
     }
     // dedup vars
     Engine::Get()->DeduplicateVarHandle(&use_vars, &mutate_vars);
@@ -1252,16 +1301,15 @@ void GraphExecutor::InitOpSegs() {
 
   // Generate segments based on the graph structure
   bool prefer_bulk_exec_inference = dmlc::GetEnv("MXNET_EXEC_BULK_EXEC_INFERENCE", true);
-  if (prefer_bulk_exec_inference && num_forward_nodes_ == total_num_nodes) {
-    // bulk the whole graph for inference
-    cached_seg_opr_[0] = this->CreateCachedSegOpr(0, num_forward_nodes_);
-    return;
-  }
-
   // Whether to perform bulk exec for training
   bool prefer_bulk_exec = dmlc::GetEnv("MXNET_EXEC_BULK_EXEC_TRAIN", 1);
   // The maximum number of node in a segment executed in bulk
   size_t num_nodes_threshold = dmlc::GetEnv("MXNET_EXEC_BULK_EXEC_MAX_NODE_TRAIN", 15);
+  if (prefer_bulk_exec_inference && num_forward_nodes_ == total_num_nodes) {
+    // bulk the whole graph for inference
+    num_nodes_threshold = std::numeric_limits<size_t>::max();
+  }
+
   // create forward segments for training
   if (prefer_bulk_exec > 0) {
     size_t topo_start = 0;
@@ -1271,7 +1319,7 @@ void GraphExecutor::InitOpSegs() {
       // check if the segment relies on external input, or exceeds maxinum number of node,
       // or requires async ops
       if (node->is_variable() || nid - topo_start > num_nodes_threshold ||
-          op_node.exec->exec_type() != Operator::kSync) {
+          op_node.exec->exec_type() != ExecType::kSync) {
         // create a new segment for the previous nodes if the current one cannot be bulked
         cached_seg_opr_[topo_start] = this->CreateCachedSegOpr(topo_start, nid);
         topo_start = nid + 1;
@@ -1298,7 +1346,7 @@ void GraphExecutor::InitOpSegs() {
         continue;
       }
       if (idx[nid].source->is_variable() || nid - topo_start > num_nodes_threshold ||
-          op_node.exec->exec_type() != Operator::kSync) {
+          op_node.exec->exec_type() != ExecType::kSync) {
         cached_seg_opr_[topo_start] = this->CreateCachedSegOpr(topo_start, nid);
         topo_start = nid + 1;
       } else {
@@ -1379,14 +1427,14 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
     OpNode& opnode = op_nodes_[nid];
     if (op_nodes_[nid].skip_exec_node) continue;
     opnode.exec->op_ctx.is_train = is_train;
-    if (opnode.exec->exec_type() == Operator::kCrossDeviceCopy) {
-#if EXECUTOR_DEBUG
-      LOG(INFO) << "Run node " << nid << " for CrossDeviceCopy";
-#endif
+    if (opnode.exec->exec_type() == ExecType::kCrossDeviceCopy) {
       CHECK_EQ(inode.inputs.size(), 1U);
       CHECK_EQ(opnode.exec->in_array.size(), 1U);
       CHECK_EQ(opnode.exec->out_array.size(), 1U);
       CopyFromTo(opnode.exec->in_array[0], &(opnode.exec->out_array[0]));
+    } else if (opnode.exec->exec_type() == ExecType::kLocal) {
+      bool is_gpu = opnode.ctx.dev_mask() == gpu::kDevMask;
+      opnode.exec->Run(RunContext{opnode.ctx, nullptr}, is_gpu);
     } else if (opnode.cached_opr != nullptr) {
 #if MXNET_USE_PROFILER
       bool profiling = engine::Profiler::Get()->GetState() == engine::Profiler::kRunning;
@@ -1432,7 +1480,7 @@ GraphExecutor::CachedSegOpr GraphExecutor::CreateCachedSegOpr(size_t topo_start,
     OpNode& op_node = op_nodes_[nid];
     if (op_node.skip_exec_node) continue;
     if (inode.source->is_variable()) continue;
-    if (op_node.exec->exec_type() != Operator::kSync) {
+    if (op_node.exec->exec_type() != ExecType::kSync) {
       return ret;
     }
     if (pctx == nullptr) pctx = &(op_node.ctx);
@@ -1444,7 +1492,7 @@ GraphExecutor::CachedSegOpr GraphExecutor::CreateCachedSegOpr(size_t topo_start,
               std::inserter(mutate_vars, mutate_vars.end()));
     std::copy(op_node.use_vars.begin(), op_node.use_vars.end(),
               std::inserter(use_vars, use_vars.end()));
-    ret.exec_list.push_back(exec.get());
+    ret.exec_list.push_back(exec);
 #if MXNET_USE_PROFILER
     opr_names += inode.source->op()->name + ",";
 #endif

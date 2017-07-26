@@ -7,15 +7,15 @@ more `Executor` for data parallelization.
 import logging
 import warnings
 
-import mxnet as mx
 from .. import context as ctx
-from .. import ndarray as nd
 from .. import optimizer as opt
 
 from .executor_group import DataParallelExecutorGroup
 from ..model import _create_kvstore, _initialize_kvstore, _update_params, _update_params_on_kvstore
 from ..model import load_checkpoint
 from ..initializer import Uniform, InitDesc
+from ..io import DataDesc
+from ..ndarray import zeros
 
 from .base_module import BaseModule, _check_input_names, _parse_data_desc
 
@@ -227,7 +227,7 @@ class Module(BaseModule):
         return (self._arg_params, self._aux_params)
 
     def init_params(self, initializer=Uniform(0.01), arg_params=None, aux_params=None,
-                    allow_missing=False, force_init=False):
+                    allow_missing=False, force_init=False, allow_extra=False):
         """Initializes the parameters and auxiliary states.
 
         Parameters
@@ -245,6 +245,10 @@ class Module(BaseModule):
             called to fill those missing params.
         force_init : bool
             If ``True``, will force re-initialize even if already initialized.
+        allow_extra : boolean, optional
+            Whether allow extra parameters that are not needed by symbol.
+            If this is True, no error will be thrown when arg_params or aux_params
+            contain extra parameters that is not needed by the executor.
         """
         if self.params_initialized and not force_init:
             warnings.warn("Parameters already initialized and force_init=False. "
@@ -282,9 +286,11 @@ class Module(BaseModule):
         self._params_dirty = False
 
         # copy the initialized parameters to devices
-        self._exec_group.set_params(self._arg_params, self._aux_params)
+        self._exec_group.set_params(self._arg_params, self._aux_params,
+                                    allow_extra=allow_extra)
 
-    def set_params(self, arg_params, aux_params, allow_missing=False, force_init=True):
+    def set_params(self, arg_params, aux_params, allow_missing=False, force_init=True,
+                   allow_extra=False):
         """Assigns parameter and aux state values.
 
         Parameters
@@ -298,7 +304,10 @@ class Module(BaseModule):
             called to fill those missing params.
         force_init : bool
             If ``True``, will force re-initialize even if already initialized.
-
+        allow_extra : boolean, optional
+            Whether allow extra parameters that are not needed by symbol.
+            If this is True, no error will be thrown when arg_params or aux_params
+            contain extra parameters that is not needed by the executor.
         Examples
         --------
         >>> # An example of setting module parameters.
@@ -307,7 +316,8 @@ class Module(BaseModule):
         """
         if not allow_missing:
             self.init_params(initializer=None, arg_params=arg_params, aux_params=aux_params,
-                             allow_missing=allow_missing, force_init=force_init)
+                             allow_missing=allow_missing, force_init=force_init,
+                             allow_extra=allow_extra)
             return
 
         if self.params_initialized and not force_init:
@@ -315,7 +325,7 @@ class Module(BaseModule):
                           "set_params call ignored.", stacklevel=2)
             return
 
-        self._exec_group.set_params(arg_params, aux_params)
+        self._exec_group.set_params(arg_params, aux_params, allow_extra=allow_extra)
 
         # because we didn't update self._arg_params, they are dirty now.
         self._params_dirty = True
@@ -399,13 +409,13 @@ class Module(BaseModule):
         else:
             assert self._arg_params is None and self._aux_params is None
             param_arrays = [
-                mx.nd.zeros(shape=x[0].shape, dtype=x[0].dtype, storage_type=x[0].storage_type)
+                zeros(shape=x[0].shape, dtype=x[0].dtype, stype=x[0].stype)
                 for x in self._exec_group.param_arrays
             ]
             self._arg_params = {name:arr for name, arr in zip(self._param_names, param_arrays)}
 
             aux_arrays = [
-                nd.zeros(x[0].shape, dtype=x[0].dtype)
+                zeros(x[0].shape, dtype=x[0].dtype)
                 for x in self._exec_group.aux_arrays
             ]
             self._aux_params = {name:arr for name, arr in zip(self._aux_names, aux_arrays)}
@@ -454,12 +464,9 @@ class Module(BaseModule):
 
         if self._params_dirty:
             self._sync_params_from_devices()
-        name2idx = {}
-        for idx, name in enumerate(self._exec_group.param_names):
-            name2idx[name] = idx
 
         (kvstore, update_on_kvstore) = \
-                _create_kvstore(kvstore, len(self._context), self._arg_params, name2idx=name2idx)
+                _create_kvstore(kvstore, len(self._context), self._arg_params)
 
         batch_size = self._exec_group.batch_size
         if kvstore and 'dist' in kvstore.type and '_sync' in kvstore.type:
@@ -529,7 +536,11 @@ class Module(BaseModule):
         self.optimizer_initialized = True
 
     def forward(self, data_batch, is_train=None):
-        """Forward computation.
+        """Forward computation. It supports data batches with different shapes, such as
+        different batch sizes or different image sizes.
+        If reshaping of data batch relates to modification of symbol or module, such as
+        changing image layout ordering or switching from training to predicting, module
+        rebinding is required.
 
         See Also
         ----------
@@ -543,6 +554,27 @@ class Module(BaseModule):
             Default is ``None``, which means ``is_train`` takes the value of ``self.for_training``.
         """
         assert self.binded and self.params_initialized
+
+        curr_data_shapes = tuple(i.shape for i in self._data_shapes)
+        new_data_shapes = tuple(i.shape for i in data_batch.data)
+
+        if curr_data_shapes != new_data_shapes:
+            if hasattr(data_batch, "provide_data") and data_batch.provide_data:
+                new_dshape = data_batch.provide_data
+            else:
+                new_dshape = [DataDesc(i.name, shape, i.dtype, i.layout) \
+                              for i, shape in zip(self._data_shapes, new_data_shapes)]
+
+            if hasattr(data_batch, "provide_label") and data_batch.provide_label:
+                new_lshape = data_batch.provide_label
+            elif hasattr(data_batch, "label") and data_batch.label:
+                new_lshape = [DataDesc(i.name, j.shape, i.dtype, i.layout) \
+                              for i, j in zip(self._label_shapes, data_batch.label)]
+            else:
+                new_lshape = None
+
+            self.reshape(new_dshape, new_lshape)
+
         self._exec_group.forward(data_batch, is_train)
 
     def backward(self, out_grads=None):
@@ -576,14 +608,14 @@ class Module(BaseModule):
         if self._update_on_kvstore:
             _update_params_on_kvstore(self._exec_group.param_arrays,
                                       self._exec_group.grad_arrays,
-                                      self._kvstore,
-                                      param_names=self._param_names)
+                                      self._kvstore, self._exec_group.param_names)
         else:
             _update_params(self._exec_group.param_arrays,
                            self._exec_group.grad_arrays,
                            updater=self._updater,
                            num_device=len(self._context),
-                           kvstore=self._kvstore)
+                           kvstore=self._kvstore,
+                           param_names=self._exec_group.param_names)
 
     def get_outputs(self, merge_multi_context=True):
         """Gets outputs of the previous forward computation.

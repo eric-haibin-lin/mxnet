@@ -6,29 +6,31 @@
 #ifndef MXNET_COMMON_UTILS_H_
 #define MXNET_COMMON_UTILS_H_
 
-#if DMLC_USE_CXX11
+#include <dmlc/logging.h>
+#include <dmlc/omp.h>
+#include <mxnet/engine.h>
+#include <mxnet/ndarray.h>
+#include <mxnet/op_attr_types.h>
+#include <mxnet/graph_attr_types.h>
+#include <nnvm/graph_attr_types.h>
+
 #include <memory>
 #include <vector>
 #include <type_traits>
 #include <utility>
 #include <random>
+#include <string>
 #include <thread>
 #include <algorithm>
 #include <functional>
-#endif  // DMLC_USE_CXX11
-
-#include <dmlc/logging.h>
-#include <mxnet/engine.h>
-#include <mxnet/ndarray.h>
-#include <mxnet/op_attr_types.h>
-#include <nnvm/graph_attr_types.h>
-#include "../operator/nn/cast_storage-inl.h"
 
 namespace mxnet {
 
 namespace common {
 
-#if DMLC_USE_CXX11
+template<typename xpu>
+void CastStorageDispatch(mshadow::Stream<xpu>* s, const NDArray& input, const NDArray& output);
+
 /*
  * \brief Get the corresponding tensor blobs from default storage NDArrays.
  *        If any NDArray is of non-default storage, it is casted to default storage and
@@ -46,8 +48,6 @@ inline bool GetDefaultBlobs(const std::vector<NDArray>& nds,
   if (storage_fallback == false) {
     storage_fallback = dmlc::GetEnv("MXNET_EXEC_STORAGE_FALLBACK", true);
   }
-  temps->reserve(temps->size() + nds.size());
-  blobs->reserve(blobs->size() + nds.size());
   for (auto& nd : nds) {
     if (nd.storage_type() != kDefaultStorage) {
       if (storage_fallback == false) {
@@ -56,7 +56,7 @@ inline bool GetDefaultBlobs(const std::vector<NDArray>& nds,
                    << "doesn't support NDArray inputs with non-default storage.";
       }
       NDArray temp(nd.shape(), nd.ctx(), false);
-      mxnet::op::CastStorageComputeImpl<xpu>(ctx.get_stream<xpu>(), nd, temp);
+      CastStorageDispatch<xpu>(ctx.get_stream<xpu>(), nd, temp);
       temps->push_back(temp);
       blobs->push_back(temp.data());
       casted = true;
@@ -92,14 +92,14 @@ inline void CastNonDefaultStorage(const std::vector<NDArray>& dst,
                    << "You are probably executing an operator which "
                    << "doesn't support NDArray inputs with non-default storage.";
       }
-      mxnet::op::CastStorageComputeImpl(ctx.get_stream<xpu>(), src[src_idx++], dst[i]);
+      CastStorageDispatch<xpu>(ctx.get_stream<xpu>(), src[src_idx++], dst[i]);
     }
   }
   CHECK_EQ(src_idx, src.size()) << "Not all src NDArrays are casted";
 }
 
 // Check if any storage type is not default storage
-inline bool ContainsNonDefaultStorage(const nnvm::StorageTypeVector& vstorage) {
+inline bool ContainsNonDefaultStorage(const StorageTypeVector& vstorage) {
   for (auto& i : vstorage) {
     if (i != kUndefinedStorage && i != kDefaultStorage) return true;
   }
@@ -115,32 +115,6 @@ inline bool ContainsDefaultStorage(const std::vector<NDArray>& ndarrays) {
   return false;
 }
 
-inline FCompute GetFCompute(const Op* op, Context ctx) {
-  static auto& fcompute_cpu = nnvm::Op::GetAttr<FCompute>("FCompute<cpu>");
-  static auto& fcompute_gpu = nnvm::Op::GetAttr<FCompute>("FCompute<gpu>");
-  if (ctx.dev_mask() == cpu::kDevMask) {
-    return fcompute_cpu.get(op, nullptr);
-  } else if (ctx.dev_mask() == gpu::kDevMask) {
-    return fcompute_gpu.get(op, nullptr);
-  }
-  LOG(FATAL) << "Unknown device mask";
-  return nullptr;
-}
-
-inline FComputeEx GetFComputeEx(const Op* op, Context ctx, int stype) {
-  static auto& fcpu = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<cpu>");
-  static auto& fgpu = nnvm::Op::GetAttr<FComputeEx>("FComputeEx<gpu>");
-  if (stype == kDefaultStorage) return nullptr;
-  if (ctx.dev_mask() == cpu::kDevMask) {
-    return fcpu.get(op, nullptr);
-  } else if (ctx.dev_mask() == gpu::kDevMask) {
-    return fgpu.get(op, nullptr);
-  }
-  LOG(FATAL) << "Unknown device mask";
-  return nullptr;
-}
-
-
 // heuristic to dermine number of threads per GPU
 inline int GetNumThreadPerGPU() {
   // This is resource efficient option.
@@ -153,6 +127,16 @@ inline int GetExecNumMatchColor() {
   // This is resource efficient option.
   int num_match_color = dmlc::GetEnv("MXNET_EXEC_NUM_TEMP", 1);
   return std::min(num_match_color, GetNumThreadPerGPU());
+}
+
+template<typename T, typename V>
+V ParallelAccumulate(const T* a, const int n, V start) {
+  V sum = start;
+#pragma omp parallel for reduction(+:sum)
+  for (int i = 0; i < n; ++i) {
+    sum += a[i];
+  }
+  return sum;
 }
 
 /*!
@@ -293,7 +277,21 @@ typename helper::UniqueIf<T>::UnknownBound MakeUnique(size_t n) {
 template <class T, class... Args>
 typename helper::UniqueIf<T>::KnownBound MakeUnique(Args&&... args) = delete;
 
-#endif  // DMLC_USE_CXX11
+template<typename FCompType>
+FCompType GetFCompute(const nnvm::Op* op, const std::string& name,
+                      const Context& ctx) {
+  static auto& fcompute_cpu = nnvm::Op::GetAttr<FCompType>(name + "<cpu>");
+  static auto& fcompute_gpu = nnvm::Op::GetAttr<FCompType>(name + "<gpu>");
+
+  if (ctx.dev_mask() == cpu::kDevMask) {
+    return fcompute_cpu.get(op, nullptr);
+  } else if (ctx.dev_mask() == gpu::kDevMask) {
+    return fcompute_gpu.get(op, nullptr);
+  } else {
+    LOG(FATAL) << "Unknown device mask";
+    return nullptr;
+  }
+}
 
 }  // namespace common
 }  // namespace mxnet

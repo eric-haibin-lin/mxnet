@@ -230,6 +230,23 @@ int MXNDArraySyncCopyToCPU(NDArrayHandle handle,
   API_END();
 }
 
+/*!
+ * \brief Copy src.data() to dst.data() if i = -1, else dst.aux_data(i) if i >= 0
+ * This function blocks. Do not use it in performance critical code.
+ * \param handle_dst handle of a dst ndarray whose data/aux_data has been allocated
+ * \param handle_src handle of a src ndarray which has default storage type
+ * \param i dst data blob indicator
+ */
+int MXNDArraySyncCopyFromNDArray(NDArrayHandle handle_dst,
+                                 const NDArrayHandle handle_src,
+                                 const int i) {
+  API_BEGIN();
+  NDArray* dst = static_cast<NDArray*>(handle_dst);
+  NDArray* src = static_cast<NDArray*>(handle_src);
+  dst->SyncCopyFromNDArray(*src, -1, i);
+  API_END();
+}
+
 int MXNDArrayWaitToRead(NDArrayHandle handle) {
   API_BEGIN();
   static_cast<NDArray*>(handle)->WaitToRead();
@@ -436,6 +453,11 @@ int MXNDArrayGetAuxType(NDArrayHandle handle,
   API_END();
 }
 
+/*!
+ * \brief Get a deep copy of the ith aux data blob
+ * in the form of an NDArray of default storage type.
+ * This function blocks. Do not use it in performance critical code.
+ */
 int MXNDArrayGetAuxNDArray(NDArrayHandle handle,
                            mx_uint i,
                            NDArrayHandle *out) {
@@ -445,6 +467,11 @@ int MXNDArrayGetAuxNDArray(NDArrayHandle handle,
   API_END();
 }
 
+/*!
+ * \brief Get a deep copy of the data blob
+ * in the form of an NDArray of default storage type.
+ * This function blocks. Do not use it in performance critical code.
+ */
 int MXNDArrayGetDataNDArray(NDArrayHandle handle,
                             NDArrayHandle *out) {
   API_BEGIN();
@@ -465,6 +492,19 @@ int MXNDArrayGetContext(NDArrayHandle handle,
   } else {
     *out_dev_type = 0;
     *out_dev_id = 0;
+  }
+  API_END();
+}
+
+
+int MXNDArrayGetGrad(NDArrayHandle handle, NDArrayHandle *out) {
+  API_BEGIN();
+  NDArray *arr = static_cast<NDArray*>(handle);
+  NDArray ret = arr->grad();
+  if (ret.is_none()) {
+    *out = NULL;
+  } else {
+    *out = new NDArray(ret);
   }
   API_END();
 }
@@ -696,6 +736,21 @@ int MXKVStoreInit(KVStoreHandle handle,
   API_END();
 }
 
+int MXKVStoreInitEx(KVStoreHandle handle,
+                  mx_uint num,
+                  const char** keys,
+                  NDArrayHandle* vals) {
+  API_BEGIN();
+  std::vector<std::string> v_keys(num);
+  std::vector<NDArray> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = *static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->Init(v_keys, v_vals);
+  API_END();
+}
+
 int MXKVStorePush(KVStoreHandle handle,
                   mx_uint num,
                   const int* keys,
@@ -703,6 +758,22 @@ int MXKVStorePush(KVStoreHandle handle,
                   int priority) {
   API_BEGIN();
   std::vector<int> v_keys(num);
+  std::vector<NDArray> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = *static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->Push(v_keys, v_vals, priority);
+  API_END();
+}
+
+int MXKVStorePushEx(KVStoreHandle handle,
+                  mx_uint num,
+                  const char** keys,
+                  NDArrayHandle* vals,
+                  int priority) {
+  API_BEGIN();
+  std::vector<std::string> v_keys(num);
   std::vector<NDArray> v_vals(num);
   for (mx_uint i = 0; i < num; ++i) {
     v_keys[i] = keys[i];
@@ -725,6 +796,40 @@ int MXKVStorePull(KVStoreHandle handle,
     v_vals[i] = static_cast<NDArray*>(vals[i]);
   }
   static_cast<KVStore*>(handle)->Pull(v_keys, v_vals, priority);
+  API_END();
+}
+
+int MXKVStorePullEx(KVStoreHandle handle,
+                  mx_uint num,
+                  const char** keys,
+                  NDArrayHandle* vals,
+                  int priority) {
+  API_BEGIN();
+  std::vector<std::string> v_keys(num);
+  std::vector<NDArray*> v_vals(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_vals[i] = static_cast<NDArray*>(vals[i]);
+  }
+  static_cast<KVStore*>(handle)->Pull(v_keys, v_vals, priority);
+  API_END();
+}
+
+int MXKVStorePullRowSparse(KVStoreHandle handle,
+                           mx_uint num,
+                           const char** keys,
+                           NDArrayHandle* vals,
+                           const NDArrayHandle* row_ids,
+                           int priority) {
+  API_BEGIN();
+  std::vector<std::string> v_keys(num);
+  std::vector<std::pair<NDArray*, NDArray>> v_val_rowids(num);
+  for (mx_uint i = 0; i < num; ++i) {
+    v_keys[i] = keys[i];
+    v_val_rowids[i] = std::make_pair(static_cast<NDArray*>(vals[i]),
+                                     *static_cast<NDArray*>(row_ids[i]));
+  }
+  static_cast<KVStore*>(handle)->PullRowSparse(v_keys, v_val_rowids, priority);
   API_END();
 }
 
@@ -998,6 +1103,6 @@ int MXRtcFree(RtcHandle handle) {
 
 int MXCustomOpRegister(const char* op_type, CustomOpPropCreator creator) {
   API_BEGIN();
-  mxnet::op::CustomOpProp::Register(op_type, creator);
+  mxnet::op::custom::Registry::Get()->Register(op_type, creator);
   API_END();
 }

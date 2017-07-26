@@ -11,7 +11,7 @@ from .base import _LIB
 from .base import mx_uint, NDArrayHandle, ExecutorHandle
 from .base import check_call, c_array, py_str
 from .ndarray import NDArray
-from .sparse_ndarray import _ndarray_cls
+from .ndarray import _ndarray_cls
 from . import ndarray as nd
 
 # those functions are not used here, we just import them to keep backward compatibility
@@ -140,6 +140,7 @@ class Executor(object):
                 "Calling forward the second time after forward(is_train=True) "
                 "without calling backward first. Is this intended?", stacklevel=2)
         self._output_dirty = is_train
+
         return self.outputs
 
     def backward(self, out_grads=None):
@@ -213,7 +214,6 @@ class Executor(object):
             if not isinstance(obj, NDArray):
                 raise TypeError("inputs must be NDArray")
         ndarray = c_array(NDArrayHandle, [item.handle for item in out_grads])
-
         check_call(_LIB.MXExecutorBackward(
             self.handle,
             mx_uint(len(out_grads)),
