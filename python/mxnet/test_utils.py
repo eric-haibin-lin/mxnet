@@ -180,9 +180,11 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
     return arr_data
 
 
-def create_sparse_array_zd(shape, stype, data_init=None,
-                           rsp_indices=None, modifier_func=None,
-                           density=0.0):
+def create_sparse_array_zd(shape, stype, density, data_init=None,
+                           rsp_indices=None, modifier_func=None):
+    """Create sparse array, rsp_indices will override density for row_sparse"""
+    if stype == 'row_sparse':
+        density = 0.0
     return create_sparse_array(shape, stype,
                                data_init=data_init,
                                rsp_indices=rsp_indices,

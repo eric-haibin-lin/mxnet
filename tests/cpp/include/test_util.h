@@ -174,115 +174,116 @@ template<typename DType, typename StreamType>
 inline StreamType& print_blob_(StreamType *_os, const TBlob &blob,
                                bool doChannels = true, bool doBatches = true) {
   StreamType &os = *_os;
-  //if(blob.shape_.Size()) {
-    const size_t dim = static_cast<size_t>(blob.ndim());
+  const size_t dim = static_cast<size_t>(blob.ndim());
 
-    if (dim == 1) {
-      // probably a 1d tensor (mshadow::Tensor is deprecated)
-      TBlob changed(blob.dptr<DType>(), TShape(3), blob.dev_mask(), blob.dev_id());
-      changed.shape_[0] = 1;
-      changed.shape_[1] = 1;
-      changed.shape_[2] = blob.shape_[0];
-      return print_blob_<DType>(&os, changed, false, false);
-    } else if (dim == 2) {
-      // probably a 2d tensor (mshadow::Tensor is deprecated)
-      TBlob changed(blob.dptr<DType>(), TShape(4), blob.dev_mask(), blob.dev_id());
-      changed.shape_[0] = 1;
-      changed.shape_[1] = 1;
-      changed.shape_[2] = blob.shape_[0];
-      changed.shape_[3] = blob.shape_[1];
-      return print_blob_<DType>(&os, changed, false, false);
-    }
-    CHECK_GE(dim, 3U) << "Invalid dimension zero (0)";
+  if (dim == 1) {
+    // probably a 1d tensor (mshadow::Tensor is deprecated)
+    TBlob changed(blob.dptr<DType>(), TShape(3), blob.dev_mask(), blob.dev_id());
+    changed.shape_[0] = 1;
+    changed.shape_[1] = 1;
+    changed.shape_[2] = blob.shape_[0];
+    return print_blob_<DType>(&os, changed, false, false);
+  } else if (dim == 2) {
+    // probably a 2d tensor (mshadow::Tensor is deprecated)
+    TBlob changed(blob.dptr<DType>(), TShape(4), blob.dev_mask(), blob.dev_id());
+    changed.shape_[0] = 1;
+    changed.shape_[1] = 1;
+    changed.shape_[2] = blob.shape_[0];
+    changed.shape_[3] = blob.shape_[1];
+    return print_blob_<DType>(&os, changed, false, false);
+  }
+  CHECK_GE(dim, 3U) << "Invalid dimension zero (0)";
 
-    const size_t batchSize = blob.size(0);
+  const size_t batchSize = blob.size(0);
 
-    size_t channels = 1;
-    size_t depth = 1;
-    size_t height = 1;
-    size_t width = 1;
-    if (dim > 1) {
-      channels = blob.size(1);
-      if (dim > 2) {
-        if (dim == 3) {
-          width = blob.size(2);
-        } else if (dim == 4) {
-          height = blob.size(2);
-          width = blob.size(3);
-        } else {
-          depth = blob.size(2);
-          if (dim > 3) {
-            height = blob.size(3);
-            if (dim > 4) {
-              width = blob.size(4);
-            }
+  size_t channels = 1;
+  size_t depth = 1;
+  size_t height = 1;
+  size_t width = 1;
+  if (dim > 1) {
+    channels = blob.size(1);
+    if (dim > 2) {
+      if (dim == 3) {
+        width = blob.size(2);
+      } else if (dim == 4) {
+        height = blob.size(2);
+        width = blob.size(3);
+      } else {
+        depth = blob.size(2);
+        if (dim > 3) {
+          height = blob.size(3);
+          if (dim > 4) {
+            width = blob.size(4);
           }
         }
       }
     }
+  }
 
-    os << std::endl;
-    for (size_t r = 0; r < height; ++r) {
-      for (size_t thisBatch = 0; thisBatch < batchSize; ++thisBatch) {
-        if (doBatches) {
-          std::stringstream ss;
-          if (doBatches && !thisBatch) {
-            os << "|";
-          }
-          ss << "N" << thisBatch << "| ";
-          const std::string nns = ss.str();
-          if (!r) {
-            os << nns;
+  //os << std::endl;
+  for (size_t r = 0; r < height; ++r) {
+    for (size_t thisBatch = 0; thisBatch < batchSize; ++thisBatch) {
+      if (doBatches) {
+        std::stringstream ss;
+        if (doBatches && !thisBatch) {
+          os << "|";
+        }
+        ss << "N" << thisBatch << "| ";
+        const std::string nns = ss.str();
+        if (!r) {
+          os << nns;
+        } else {
+          os << repeatedStr(" ", nns.size());
+        }
+      }
+      for (size_t thisChannel = 0; thisChannel < channels; ++thisChannel) {
+        os << "[";
+        for (size_t c = 0; c < width; ++c) {
+          if (c) {
+            os << ", ";
           } else {
-            os << repeatedStr(" ", nns.size());
+            //os << "[";
+          }
+          for (size_t dd = 0; dd < depth; ++dd) {
+            DType val;
+            switch (dim) {
+              case 3:
+                val = data_at<DType>(&blob, {thisBatch, thisChannel, c});
+                break;
+              case 4:
+                val = data_at<DType>(&blob, {thisBatch, thisChannel, r, c});
+                break;
+              case 5:
+                val = data_at<DType>(&blob, {thisBatch, thisChannel, dd, r, c});
+                break;
+              default:
+                LOG(FATAL) << "Unsupported blob dimension" << dim;
+                val = DType(0);
+                break;
+            }
+            os << repeatedStr("(", dd);
+            os << std::fixed << std::setw(7) << std::setprecision(MPRINT_PRECISION)
+               << std::right << val << " ";
+            os << repeatedStr(")", dd, true);
           }
         }
-        for (size_t thisChannel = 0; thisChannel < channels; ++thisChannel) {
-          os << "[";
-          for (size_t c = 0; c < width; ++c) {
-            if (c) {
-              os << ", ";
-            } else {
-              //os << "[";
-            }
-            for (size_t dd = 0; dd < depth; ++dd) {
-              DType val;
-              switch (dim) {
-                case 3:
-                  val = data_at<DType>(&blob, {thisBatch, thisChannel, c});
-                  break;
-                case 4:
-                  val = data_at<DType>(&blob, {thisBatch, thisChannel, r, c});
-                  break;
-                case 5:
-                  val = data_at<DType>(&blob, {thisBatch, thisChannel, dd, r, c});
-                  break;
-                default:
-                  LOG(FATAL) << "Unsupported blob dimension" << dim;
-                  val = DType(0);
-                  break;
-              }
-              os << repeatedStr("(", dd);
-              os << std::fixed << std::setw(7) << std::setprecision(MPRINT_PRECISION)
-                 << std::right << val << " ";
-              os << repeatedStr(")", dd, true);
-            }
-          }
-          os << "]  ";
-          if (!doChannels) {
-            break;
-          }
-        }
-        if (!doBatches) {
+        os << "]  ";
+        if (!doChannels) {
           break;
-        } else {
-          os << " |" << std::flush;;
         }
       }
-      os << std::endl;
+      if (!doBatches) {
+        break;
+      } else {
+        os << " |" << std::flush;;
+      }
     }
-    os << std::endl << std::flush;
-  //}
+    os << std::endl;
+  }
+  if(!height) {
+    os << std::endl;
+  }
+  os << std::flush;
   return os;
 }
 
@@ -311,17 +312,40 @@ inline void print(StreamType *_os, const std::string& label, const NDArray& arr)
   }
   switch(arr.storage_type()) {
     case kRowSparseStorage: {
+      // data
       const TShape& shape = arr.shape();
       print_shape(_os, "[row_sparse main] shape", shape);
       const TShape& storage_shape = arr.storage_shape();
       print_shape(_os, "storage shape", storage_shape);
       print_blob(_os, arr.data()) << std::endl;
+
+      // indices
       const TShape& indices_shape = arr.aux_shape(rowsparse::kIdx);
       print_shape(_os, "indices shape", indices_shape);
       print_blob(_os, arr.aux_data(rowsparse::kIdx)) << std::endl;
       break;
     }
+    case kCSRStorage: {
+      // data
+      const TShape& shape = arr.shape();
+      print_shape(_os, "[CSR main] shape", shape);
+      const TShape& storage_shape = arr.storage_shape();
+      print_shape(_os, "storage shape", storage_shape);
+      print_blob(_os, arr.data()) << std::endl;
+
+      // indices
+      const TShape& indices_shape = arr.aux_shape(csr::kIdx);
+      print_shape(_os, "indices shape", indices_shape);
+      print_blob(_os, arr.aux_data(csr::kIdx)) << std::endl;
+
+      // ind_ptr
+      const TShape& ind_ptr_shape = arr.aux_shape(csr::kIndPtr);
+      print_shape(_os, "indices ptr", ind_ptr_shape);
+      print_blob(_os, arr.aux_data(csr::kIndPtr)) << std::endl;
+      break;
+    }
     case kDefaultStorage: {
+      // data
       const TShape& shape = arr.shape();
       print_shape(_os, "[default] main shape", shape);
       print_blob(_os, arr.data()) << std::endl;

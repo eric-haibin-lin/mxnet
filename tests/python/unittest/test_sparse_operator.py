@@ -185,7 +185,7 @@ def test_elemwise_binary_ops():
             lhs_nd = mx.nd.array(assign_each(lhs_nd.asnumpy(), func))
         else:
             lhs_nd = create_sparse_array_zd(
-                shape, lhs_stype,
+                shape, lhs_stype, density=lhs_density,
                 modifier_func=modifier_func,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
@@ -202,7 +202,7 @@ def test_elemwise_binary_ops():
             rhs_nd = mx.nd.array(assign_each(rhs_nd.asnumpy(), func))
         else:
             rhs_nd = create_sparse_array_zd(
-                shape, rhs_stype,
+                shape, rhs_stype, density=rhs_density,
                 modifier_func=modifier_func,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
@@ -240,7 +240,7 @@ def test_elemwise_binary_ops():
 
         if outputs[0].storage_type != 'default':
             out_grad = create_sparse_array_zd(
-                shape, outputs[0].storage_type,
+                shape, outputs[0].storage_type, density=ograd_density,
                 data_init=1,
                 modifier_func=lambda x: 2,
                 rsp_indices=gen_rsp_random_indices(
@@ -633,8 +633,8 @@ def check_sparse_mathematical_core(name, stype,
     if input_grad_stype != 'default':
         data._set_attr(input_grad_stype_hint=expected_grad_result_type)
 
-    shape = rand_shape_2d()
-    #shape = (3,1)
+    #shape = rand_shape_2d()
+    shape = (3,4)
     #shape = (9,1)
     #shape = (1,1)
 
@@ -648,13 +648,13 @@ def check_sparse_mathematical_core(name, stype,
         arr_data = mx.nd.array(data_tmp)
     else:
         arr_data = create_sparse_array_zd(
-            shape, stype,
+            shape, stype, density=density,
             data_init=data_init,
             rsp_indices=gen_rsp_random_indices(
                 shape,
                 density=density,
                 force_indices=[(shape[0]/2)] if force_overlap is True else None
-                #force_indices=[0,2,4,5,7,8]
+                #force_indices=[(1, 2)]
             )
         )
         data_tmp = arr_data.asnumpy()
@@ -673,12 +673,16 @@ def check_sparse_mathematical_core(name, stype,
             arr_grad = mx.nd.ones(shape)
     else:
         arr_grad = create_sparse_array_zd(
-            shape, expected_grad_result_type, data_init=1,
-            rsp_indices=gen_rsp_random_indices(
-                shape,
-                density=density,
-                force_indices=[(shape[0]/2)] if force_overlap is True else None
-            )
+          shape,
+          expected_grad_result_type,
+          density=density,
+          data_init=1,
+          rsp_indices=gen_rsp_random_indices(
+            shape,
+            density=density,
+            force_indices=[(shape[0]/2)] if force_overlap is True else None
+            #force_indices=[(1, 2)]
+          )
         )
 
     if rhs_arg is not None:
@@ -688,8 +692,6 @@ def check_sparse_mathematical_core(name, stype,
 
     args = list()
     args.append(arr_data)
-    # if rhs_arg is not None:
-    #     args.append(rhs_arg)
 
     if arr_grad is not None:
         exe_test = test.bind(default_context(), args=args, args_grad=[arr_grad])
@@ -716,12 +718,14 @@ def check_sparse_mathematical_core(name, stype,
             out_grad = mx.nd.empty(shape)
             out_grad[:] = grad_init
         else:
-            out_grad = create_sparse_array_zd(
-                shape, output_grad_stype, data_init=grad_init,
-                rsp_indices=gen_rsp_random_indices(
-                    shape,
-                    density=ograd_density,
-                    force_indices=[(shape[0]/2)] if force_overlap is True else None))
+          out_grad = create_sparse_array_zd(
+            shape, output_grad_stype,
+            density=density,
+            data_init=grad_init,
+            rsp_indices=gen_rsp_random_indices(
+              shape,
+              density=ograd_density,
+              force_indices=[(shape[0]/2)] if force_overlap is True else None))
 
         npout_grad = out_grad.asnumpy()
 
@@ -775,7 +779,7 @@ def test_sparse_mathematical_core():
                                        output_grad_stype=output_grad_stype,
                                        density=density, ograd_density=ograd_density,
                                        force_overlap=force_overlap,
-                                       input_grad_stype='default',
+                                       #input_grad_stype='default',
                                        verbose=False)
 
     # Check many basic unary operators
@@ -998,10 +1002,9 @@ def test_sparse_mathematical_core():
     for i in range(1):
         print("pass", i)
         for density in [0.0, random.uniform(0, 1), 1.0]:
-        #for density in [0.5]:
-        #for density in [0.0]:
+        #for density in [1.0]:
             for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
-            #for ograd_density in [0.0]:
+            #for ograd_density in [1.0]:
                 for force_overlap in [False, True]:
                 #for force_overlap in [True]:
                 #for force_overlap in [False]:
@@ -1034,6 +1037,10 @@ def test_sparse_mathematical_core():
                                                 output_grad_stype='row_sparse',
                                                 density=density, ograd_density=ograd_density,
                                                 force_overlap=force_overlap)
+                    # check_binary_op_with_scalar('csr',
+                    #                             output_grad_stype='csr',
+                    #                             density=density, ograd_density=ograd_density,
+                    #                             force_overlap=force_overlap)
 
 def check_sparse_embedding():
     in_dim = 10

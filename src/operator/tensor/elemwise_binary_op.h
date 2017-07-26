@@ -16,30 +16,9 @@
 #include "elemwise_unary_op.h"
 #include "../../common/utils.h"
 
-#ifndef NEBUG
-#include "../../../tests/cpp/include/test_util.h"
-#endif
-
 namespace mxnet {
 namespace op
 {
-
-/*! \brief Generic conversion of F<OP> kernel mapping to Kernel::Launch mapping */
-template<typename OP, int Req>
-struct BMap
-{
-  template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType *out,
-                                  const DType *lhs,
-                                  const DType *rhs) {
-    KERNEL_ASSIGN(out[i], Req, OP::Map(lhs[i], rhs[i]));
-  }
-
-  template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType *out, const DType *in, const DType value) {
-    KERNEL_ASSIGN(out[i], Req, OP::Map(in[i], value));
-  }
-};
 
 /*! Gather binary operator functions into BinaryOp class */
 class ElemwiseBinaryOp : public OpBase
@@ -353,7 +332,7 @@ class ElemwiseBinaryOp : public OpBase
 
     // Memory Estimation: This is (roughly) the number of result rows. We still
     // need to subtract the number of common rows
-    bool is_in_place = false;
+    bool lhs_in_place = false, rhs_in_place = false;
     const size_t num_rows_l = lhs.aux_shape(rowsparse::kIdx).Size();
     const size_t num_rows_r = rhs_is_dense ? rhs.shape()[0] : rhs.aux_shape(rowsparse::kIdx).Size();
     if (is_dense_result) {
@@ -362,14 +341,20 @@ class ElemwiseBinaryOp : public OpBase
       if (rhs_is_dense) {
         output.CheckAndAlloc({mshadow::Shape1(num_rows_l)});
       } else {
-        if (!IsSameArray<DType>(&lhs, &output)) {
+        lhs_in_place = IsSameArray<DType>(&lhs, &output);
+        rhs_in_place = IsSameArray<DType>(&rhs, &output);
+        if (!lhs_in_place && !rhs_in_place) {
           output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
         } else {
           CHECK_EQ(allow_inplace, true);
           CHECK_EQ(is_dense_result, false);
-          is_in_place = true;
-          // For in-place, zero L-value must always be zero output
-          CHECK(fabs(OP::Map(DType(0), DType(99))) < DType(1e-3));
+          if(lhs_in_place) {
+            // For in-place, zero L-value must always be zero output
+            CHECK(fabs(OP::Map(DType(0), DType(99))) < DType(1e-3));
+          } else {
+            // For in-place, zero R-value must always be zero output
+            CHECK(fabs(OP::Map(DType(99), DType(0))) < DType(1e-3));
+          }
         }
       }
     }
@@ -403,13 +388,20 @@ class ElemwiseBinaryOp : public OpBase
     }
 
     while (iter_l < num_rows_l && iter_r < num_rows_r) {
-      const IType idx_l = indices_l[iter_l];
+      IType idx_l = indices_l[iter_l];
       IType idx_r = rhs_is_dense ? idx_l : indices_r[iter_r];
-      if(is_in_place) {
+      if(lhs_in_place) {
         while(idx_r < idx_l && ++iter_r < num_rows_r) {
           idx_r = indices_r[iter_r];
         }
         if(iter_r >= num_rows_r) {
+          break;
+        }
+      } else if(rhs_in_place) {
+        while(idx_l < idx_r && ++iter_l < num_rows_l) {
+          idx_l = indices_l[iter_l];
+        }
+        if(iter_l >= num_rows_l) {
           break;
         }
       }
@@ -454,7 +446,7 @@ class ElemwiseBinaryOp : public OpBase
       iter_out++;
     }
     // Evaluate the remaining rows beyond the l and r value row intersetion
-    while (iter_l < num_rows_l) {
+    while (iter_l < num_rows_l && !rhs_in_place) {
       if (!is_dense_result) {
         indices_out[iter_out] = indices_l[iter_l];
       } else {
@@ -467,7 +459,7 @@ class ElemwiseBinaryOp : public OpBase
           s, lvalue.shape_.Size(), out[iter_out++].dptr_, lvalue.dptr_);
       });
     }
-    while (iter_r < num_rows_r && !rhs_is_dense && !is_in_place) {
+    while (iter_r < num_rows_r && !rhs_is_dense && !lhs_in_place) {
       if (!is_dense_result) {
         indices_out[iter_out] = indices_r[iter_r];
       } else {
@@ -485,13 +477,16 @@ class ElemwiseBinaryOp : public OpBase
       iter_out = FillDense<xpu, DType, OP>(s, all_rows, all_rows, req, out, iter_out);
       //test::print(&std::cout, "output", *output);
     } else {
-      if(is_in_place) {
+      if(lhs_in_place) {
         CHECK_LE(iter_out, num_rows_l);
+      }
+      if(rhs_in_place) {
+        CHECK_LE(iter_out, num_rows_r);
       }
       DCHECK_LE(iter_out, num_rows_l + num_rows_r);  // Make sure that we didn't overrun
       nnvm::TShape new_shape = output.aux_shape(rowsparse::kIdx);
       CHECK_LE(iter_out, new_shape.Size());
-      if (!rhs_is_dense && !is_in_place) {
+      if (!rhs_is_dense && !lhs_in_place && !rhs_in_place) {
         // Reduce the first-dimension size by the number of common rows
         new_shape[0] -= num_common_rows;
         output.set_aux_shape(rowsparse::kIdx, new_shape);
@@ -782,12 +777,14 @@ class ElemwiseBinaryOp : public OpBase
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
         ComputeRspRsp<xpu, LOP>(attrs, ctx, inputs[1], inputs[2], req[0], outputs[0]);
         //test::print(&std::cout, "output[0]", outputs[0]);
+        // LHS in-place
         ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[0], inputs[0],
                                              req[0], outputs[0], false, true);
         //test::print(&std::cout, "output[0]", outputs[0]);
         ComputeRspRsp<xpu, ROP>(attrs, ctx, inputs[1], inputs[2], req[1], outputs[1]);
         //test::print(&std::cout, "output[1]", outputs[1]);
-        ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, outputs[1], inputs[0],
+        // RHS in-place
+        ComputeRspRsp<xpu, mshadow::op::mul>(attrs, ctx, inputs[0], outputs[1],
                                              req[1], outputs[1], false, true);
         //test::print(&std::cout, "output[1]", outputs[1]);
       } else {
