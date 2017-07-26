@@ -12,9 +12,6 @@
 #include <string>
 #include <utility>
 #include "../mshadow_op.h"
-#include "../elemwise_op_common.h"
-#include "./elemwise_binary_op.h"
-#include "../operator_common.h"
 
 namespace mxnet {
 namespace op {

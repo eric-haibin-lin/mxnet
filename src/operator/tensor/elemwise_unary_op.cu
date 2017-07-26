@@ -3,7 +3,6 @@
  * \file elemwise_unary_op.cu
  * \brief GPU Implementation of unary function.
  */
-#include "./elemwise_unary_op.h"
 #include "./elemwise_binary_op.h"
 
 namespace mxnet {

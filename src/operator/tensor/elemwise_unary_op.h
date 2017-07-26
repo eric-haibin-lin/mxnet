@@ -170,8 +170,8 @@ class UnaryOp : public OpBase {
         }
       }
       return true;
-    } else if(isshape.ndim() > 0 && isshape[0] == 0
-              && inputs[0].storage_type() == kRowSparseStorage) {
+    } else if(isshape.ndim() > 0 && !isshape.Size()
+      && inputs[0].storage_type() != kDefaultStorage) {
       return true;  // 0% density
     } else {
       CHECK(false);  // implement when necessary

@@ -18,6 +18,10 @@
 #include <utility>
 #include "./operator_common.h"
 
+#ifndef NEBUG
+#include "../../tests/cpp/include/test_util.h"
+#endif
+
 namespace mxnet {
 namespace op {
 template<typename AttrType, bool (*is_none)(const AttrType&),
@@ -185,6 +189,23 @@ struct ElemwiseGradUseNone {
   std::vector<nnvm::NodeEntry> operator()(const nnvm::NodePtr& n,
                                           const std::vector<nnvm::NodeEntry>& ograds) {
     return MakeNonlossGradNode(op_name, n, ograds, {}, n->attrs.dict);
+  }
+};
+
+/*! \brief Generic conversion of F<OP> kernel mapping to Kernel::Launch mapping */
+template<typename OP, int Req>
+struct BMap
+{
+  template<typename DType>
+  MSHADOW_XINLINE static void Map(int i, DType *out,
+                                  const DType *lhs,
+                                  const DType *rhs) {
+    KERNEL_ASSIGN(out[i], Req, OP::Map(lhs[i], rhs[i]));
+  }
+
+  template<typename DType>
+  MSHADOW_XINLINE static void Map(int i, DType *out, const DType *in, const DType value) {
+    KERNEL_ASSIGN(out[i], Req, OP::Map(in[i], value));
   }
 };
 

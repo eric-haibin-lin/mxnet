@@ -11,7 +11,7 @@
 #include <utility>
 #include "../mshadow_op.h"
 #include "../elemwise_op_common.h"
-#include "elemwise_binary_op.h"
+#include "elemwise_unary_op.h"
 
 namespace mxnet {
 namespace op {
@@ -19,13 +19,13 @@ namespace op {
 class BinaryScalarOp : public UnaryOp
 {
   template<typename xpu, typename OP, typename DType, typename IType>
-  static void ComputeExDenseResult(const nnvm::NodeAttrs &attrs,
-                                   const OpContext &ctx,
-                                   const NDArray &input,
-                                   const OpReqType req,
-                                   const NDArray output) {
-//    test::print(&std::cout, "ComputeExDenseResult(): input", input);
-//    test::print(&std::cout, "ComputeExDenseResult(): PRE OUTPUT", output);
+  static void LaunchExDenseResult(const nnvm::NodeAttrs &attrs,
+                                  const OpContext &ctx,
+                                  const NDArray &input,
+                                  const OpReqType req,
+                                  const NDArray output) {
+//    test::print(&std::cout, "LaunchExDenseResult(): input", input);
+//    test::print(&std::cout, "LaunchExDenseResult(): PRE OUTPUT", output);
     CHECK_EQ(output.storage_type(), kDefaultStorage);
     using namespace mshadow;
     using namespace mshadow::expr;
@@ -103,14 +103,27 @@ class BinaryScalarOp : public UnaryOp
         break;
       }
       case kCSRStorage: {
-        CHECK(false) << "Unsupported sparse storage type";
+        test::print(&std::cout, "LaunchExDenseResult(): input", input);
+        CHECK_EQ(output.shape(), input.shape());
+        const size_t  row_count = input.shape()[0];
+        const size_t item_count = input.aux_shape(csr::kIdx).Size();
+        const TBlob  row_starts = input.aux_data(csr::kIndPtr);
+        const TBlob  column_pos =  input.aux_data(csr::kIdx);
+        #pragma omp parallel for
+        for(size_t i = 0; i < row_count; ++i)  {
+          // Split up into blocks of contiguous data and do those together
+          //const size_t start_col_iter =
+          size_t start_col = 0;
+          size_t end_col = 0;
+        }
+        test::print(&std::cout, "LaunchExDenseResult(): output", output);
         break;
       }
       default:
         CHECK(false) << "Unsupported sparse storage type";
         break;
     }
-    //test::print(&std::cout, "ComputeExDenseResult(): output", output);
+    //test::print(&std::cout, "LaunchExDenseResult(): output", output);
   }
 
  public:
@@ -158,7 +171,7 @@ class BinaryScalarOp : public UnaryOp
       } else {
         MSHADOW_TYPE_SWITCH(outputs[0].data().type_flag_, DType, {
           MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
-            ComputeExDenseResult<xpu, OP, DType, IType>(attrs, ctx, inputs[0], req[0], outputs[0]);
+            LaunchExDenseResult<xpu, OP, DType, IType>(attrs, ctx, inputs[0], req[0], outputs[0]);
           });
         });
       }
