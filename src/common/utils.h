@@ -117,6 +117,15 @@ inline bool ContainsDefaultStorage(const std::vector<NDArray>& ndarrays) {
   return false;
 }
 
+inline bool ContainsNonDefaultStorage(const std::vector<NDArray>& ndarrays) {
+  for (auto &nd : ndarrays) {
+    if (nd.storage_type() != kUndefinedStorage && nd.storage_type() != kDefaultStorage) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // heuristic to dermine number of threads per GPU
 inline int GetNumThreadPerGPU() {
   // This is resource efficient option.

@@ -50,7 +50,7 @@ NNVM_REGISTER_OP(_backward_sub)
   mshadow_op::identity, mshadow_op::negation>)
 .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(elemwise_mul, mshadow::op::mul)
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_LRVALUE(elemwise_mul, mshadow::op::mul)
 .add_alias("_mul").add_alias("_Mul")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mul"});
 
