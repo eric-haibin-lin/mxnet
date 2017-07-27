@@ -788,11 +788,14 @@ class ElemwiseBinaryOp : public OpBase
     using namespace mshadow::expr;
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
-//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//    do {
 //      std::stringstream ss;
-//      ss << "LaunchExDenseRValue(): inputs[" << x << "]: ";
-//      test::print(&std::cout, ss.str(), inputs[x]);
-//    }
+//      ss << "LaunchExDenseRValue():" << std::endl;
+//      for (size_t x = 0, n = inputs.size(); x < n; ++x) {
+//        ss << "*inputs[" << x << "]: ";
+//        test::print(&std::cout, ss.str(), inputs[x]);
+//      }
+//    } while (0);
     if (req[0] != kNullOp) {
       bool allowed = false;
       if(lhs_may_be_dense && rhs_may_be_dense) {
@@ -820,7 +823,7 @@ class ElemwiseBinaryOp : public OpBase
                              Launch<xpu, OP>, "LaunchEx");
       }
     }
-//    test::print(&std::cout, "outputs[0]", outputs[0]);
+//    test::print(&std::cout, "*outputs[0]", outputs[0]);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -899,11 +902,14 @@ class ElemwiseBinaryOp : public OpBase
                                            const std::vector<NDArray> &outputs) {
     CHECK_EQ(inputs.size(), 3U);  // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
-//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//    do {
 //      std::stringstream ss;
-//      ss << "BinaryBackwardUseInEx(): inputs[" << x << "]: ";
-//      test::print(&std::cout, ss.str(), inputs[x]);
-//    }
+//      ss << "BinaryBackwardUseInEx():" << std::endl;
+//      for (size_t x = 0, n = inputs.size(); x < n; ++x) {
+//        ss << "*inputs[" << x << "]: ";
+//        test::print(&std::cout, ss.str(), inputs[x]);
+//      }
+//    } while (0);
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
@@ -957,11 +963,14 @@ class ElemwiseBinaryOp : public OpBase
                                                 const std::vector<NDArray> &inputs,
                                                 const std::vector<OpReqType> &req,
                                                 const std::vector<NDArray> &outputs) {
-//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
+//    do {
 //      std::stringstream ss;
-//      ss << "BinaryBackwardUseInExDense(): inputs[" << x << "]: ";
-//      test::print(&std::cout, ss.str(), inputs[x]);
-//    }
+//      ss << "BinaryBackwardUseInExDense():" << std::endl;
+//      for (size_t x = 0, n = inputs.size(); x < n; ++x) {
+//        ss << "*inputs[" << x << "]: ";
+//        test::print(&std::cout, ss.str(), inputs[x]);
+//      }
+//    } while (0);
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                          BinaryBackwardUseIn<xpu, LOP, ROP>, "BinaryBackwardUseInExDense");
   }

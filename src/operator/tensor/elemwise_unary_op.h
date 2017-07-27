@@ -22,7 +22,7 @@ namespace op {
 class OpBase {
  public:
 
-  enum WithHalf2 { WITH_HALF2, WITHOUT_HALF2 };
+  //enum WithHalf2 { WITH_HALF2, WITHOUT_HALF2 };
 
   template<int Req>
   struct MapIdentity {
@@ -434,34 +434,6 @@ struct relu_grad {
   }
 };
 }  // namespace kernel_launch_op
-
-//inline bool CastStorageInferStorageType(const nnvm::NodeAttrs& attrs,
-//                                        std::vector<int> *in_attrs,
-//                                        std::vector<int> *out_attrs) {
-//  CHECK_EQ(in_attrs->size(), 1U);
-//  CHECK_EQ(out_attrs->size(), 1U);
-//  CHECK_NE(in_attrs->at(0), kUndefinedStorage)
-//    << "src ndarray's storage type must be specified";
-//  const CastStorageParam& param = nnvm::get<CastStorageParam>(attrs.parsed);
-//  CHECK_NE(param.storage_type, kUndefinedStorage)
-//    << "dst ndarray's storage type must be specified";
-//  TYPE_ASSIGN_CHECK(*out_attrs, 0, param.storage_type);
-//  return true;
-//}
-
-//template<typename xpu>
-//void CastStorageComputeEx(const nnvm::NodeAttrs& attrs,
-//                          const OpContext& ctx,
-//                          const std::vector<NDArray>& inputs,
-//                          const std::vector<OpReqType>& req,
-//                          const std::vector<NDArray>& outputs) {
-//  using namespace mshadow;
-//  using namespace mshadow::expr;
-//  Stream<xpu> *s = ctx.get_stream<xpu>();
-//  CHECK_EQ(inputs.size(), 1);
-//  CHECK_EQ(outputs.size(), 1);
-//  CastStorageComputeImpl<xpu>(s, inputs[0], outputs[0]);
-//}
 
 #define MXNET_OPERATOR_REGISTER_UNARY(name)                         \
   NNVM_REGISTER_OP(name)                                            \

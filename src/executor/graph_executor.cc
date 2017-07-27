@@ -13,6 +13,9 @@
 #include "./graph_executor.h"
 #include "../engine/profiler.h"
 #include "../common/utils.h"
+#if EXECUTOR_DEBUG
+#include "../operator/operator_common.h"
+#endif
 
 namespace mxnet {
 namespace exec {
@@ -1176,16 +1179,16 @@ void GraphExecutor::InitCachedOps() {
     if (inode.source->is_variable()) {
       LOG(INFO) << "node " << nid << " var";
     } else {
-      const auto& vstorage_type = graph_.GetAttr<nnvm::StorageTypeVector>("storage_type");
+      const auto& vstorage_type = graph_.GetAttr<StorageTypeVector>("storage_type");
       LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
       auto exec = op_execs[nid];
       for (const auto& e : inode.inputs) {
         auto eid = idx.entry_id(e);
-        LOG(INFO) << "\t\tinput " << eid << " stype: " << vstorage_type[eid];
+        LOG(INFO) << "\t\tinput " << eid << " stype: " << op::stype_string(vstorage_type[eid]);
       }
       for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
         uint32_t eid = idx.entry_id(nid, index);
-        LOG(INFO) << "\t\toutput " << eid << " stype: " << vstorage_type[eid];
+        LOG(INFO) << "\t\toutput " << eid << " stype: " << op::stype_string(vstorage_type[eid]);
       }
     }
 #endif
