@@ -4,6 +4,7 @@
 """NDArray API of MXNet."""
 from __future__ import absolute_import
 from __future__ import division
+
 try:
     from __builtin__ import slice as py_slice
 except ImportError:
@@ -11,56 +12,51 @@ except ImportError:
 
 import ctypes
 import warnings
-
-import os as _os
-import sys as _sys
-
 import operator
 import numpy as np
-from .base import _LIB, string_types, numeric_types
-from .base import c_array, py_str, c_str, mx_real_t, _Null  # pylint: disable=unused-import
-from .base import mx_uint, NDArrayHandle, check_call, OpHandle
-from .base import ctypes2buffer
-from .context import Context
-from . import _ndarray_internal as _internal
-from .ndarray_doc import _build_doc
-
-
-# Use different verison of SymbolBase
-# When possible, use cython to speedup part of computation.
-# pylint: disable=unused-import
-try:
-    if int(_os.environ.get("MXNET_ENABLE_CYTHON", True)) == 0:
-        from ._ctypes.ndarray import NDArrayBase, _set_ndarray_class
-        from ._ctypes.ndarray import CachedOp, _imperative_invoke
-    elif _sys.version_info >= (3, 0):
-        from ._cy3.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
-        from ._cy3.ndarray import CachedOp, _imperative_invoke
-    else:
-        from ._cy2.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
-        from ._cy2.ndarray import CachedOp, _imperative_invoke
-except ImportError:
-    if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
-        raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
-    from ._ctypes.ndarray import NDArrayBase, _set_ndarray_class, _imperative_invoke
-    from ._ctypes.ndarray import CachedOp, _imperative_invoke
-# pylint: enable=unused-import
+from ..base import _LIB, numeric_types, integer_types
+from ..base import c_array, mx_real_t
+from ..base import mx_uint, NDArrayHandle, check_call
+from ..base import ctypes2buffer
+from ..context import Context
+from . import _internal
+from .op import NDArrayBase, _STORAGE_TYPE_ID_TO_STR
+from . import broadcast_add, broadcast_mul, transpose, broadcast_not_equal, broadcast_power
+from . import broadcast_sub, broadcast_div, broadcast_to, broadcast_equal, cast_storage
+from . import broadcast_greater, broadcast_greater_equal, broadcast_lesser, broadcast_lesser_equal
+from . import zeros_like, slice
 
 # pylint: disable= no-member
 _DTYPE_NP_TO_MX = {
+    None       : -1,
     np.float32 : 0,
     np.float64 : 1,
     np.float16 : 2,
     np.uint8   : 3,
-    np.int32   : 4
+    np.int32   : 4,
+    np.int8    : 5,
+    np.int64   : 6,
 }
-
 _DTYPE_MX_TO_NP = {
+    -1 : None,
     0 : np.float32,
     1 : np.float64,
     2 : np.float16,
     3 : np.uint8,
-    4 : np.int32
+    4 : np.int32,
+    5 : np.int8,
+    6 : np.int64,
+}
+_STORAGE_TYPE_STR_TO_ID = {
+    'undefined'  : -1,
+    'default'    : 0,
+    'row_sparse' : 1,
+    'csr'        : 2,
+}
+_GRAD_REQ_MAP = {
+    'null': 0,
+    'write': 1,
+    'add': 3
 }
 # pylint: enable= no-member
 
@@ -106,6 +102,11 @@ def waitall():
     """
     check_call(_LIB.MXNDArrayWaitAll())
 
+def _storage_type(handle):
+    storage_type = ctypes.c_int(0)
+    check_call(_LIB.MXNDArrayGetStorageType(handle, ctypes.byref(storage_type)))
+    return _STORAGE_TYPE_ID_TO_STR[storage_type.value]
+
 class NDArray(NDArrayBase):
     """An array object representing a multidimensional, homogeneous array of
 fixed-size items.
@@ -113,11 +114,16 @@ fixed-size items.
     """
     __slots__ = []
     # pylint: disable= no-member, undefined-variable
+
     def __repr__(self):
         """Returns a string representation of the array."""
         shape_info = 'x'.join(['%d' % x for x in self.shape])
-        return '<%s %s @%s>' % (self.__class__.__name__,
-                                shape_info, self.context)
+        return '\n%s\n<%s %s @%s>' % (str(self.asnumpy()),
+                                      self.__class__.__name__,
+                                      shape_info, self.context)
+
+    def __reduce__(self):
+        return NDArray, (None,), self.__getstate__()
 
     def __add__(self, other):
         """x.__add__(y) <=> x+y <=> mx.nd.add(x, y) """
@@ -258,8 +264,14 @@ fixed-size items.
         return lesser_equal(self, other)
 
     def __bool__(self):
-        raise ValueError("The truth value of an NDArray with more than one element is ambiguous.")
+        raise ValueError("The truth value of an NDArray is ambiguous. " \
+                         "Please convert to number with asscalar() first.")
+
     __nonzero__ = __bool__
+
+    def __len__(self):
+        """Number of element along the first axis."""
+        return self.shape[0]
 
     def __getstate__(self):
         handle = self.handle
@@ -327,14 +339,14 @@ fixed-size items.
         """
         # pylint: disable=too-many-branches
         if not self.writable:
-            raise ValueError('Failed to assign to a readonly NDArray')
-        if isinstance(key, int):
+            raise ValueError('Cannot assign to readonly NDArray')
+        if isinstance(key, integer_types):
             sliced_arr = self._at(key)
             sliced_arr[:] = value
             return
-        if isinstance(key, py_slice):
+        elif isinstance(key, py_slice):
             if key.step is not None:
-                raise ValueError('NDArray only supports continuous slicing on axis 0')
+                raise ValueError('NDArray only supports slicing with step size 1')
             if key.start is not None or key.stop is not None:
                 sliced_arr = self._slice(key.start, key.stop)
                 sliced_arr[:] = value
@@ -347,44 +359,72 @@ fixed-size items.
             elif isinstance(value, (np.ndarray, np.generic)):
                 self._sync_copyfrom(value)
             else:
-                raise TypeError('type %s not supported' % str(type(value)))
-        if isinstance(key, tuple):
+                raise TypeError(
+                    'NDArray does not support assignment with %s of type %s'%(
+                        str(value), str(type(value))))
+        elif isinstance(key, tuple):
             # multi-dimension indexing
             my_shape = self.shape
-            assert len(key) == len(my_shape)
-            for slice_i in key:
-                assert isinstance(slice_i, (py_slice, int))
+            assert len(key) <= len(my_shape), \
+                "Indexing dimensions exceed array dimensions, %d vs %d"%(
+                    len(key), len(my_shape))
             begin = [0 for _ in my_shape]
             end = [x for x in my_shape]
+            expand = []
             for i, slice_i in enumerate(key):
-                if isinstance(slice_i, int):
+                if isinstance(slice_i, integer_types):
                     assert slice_i < my_shape[i]
                     begin[i] = slice_i
                     end[i] = slice_i + 1
-                if isinstance(slice_i, py_slice):
+                    expand.append(i)
+                elif isinstance(slice_i, py_slice):
                     # only support continuous slicing
-                    assert slice_i.step is None
+                    assert slice_i.step is None, \
+                        "NDArray only supports slicing with step size 1."
                     begin[i] = slice_i.start or 0
                     end[i] = slice_i.stop or my_shape[i]
                     assert begin[i] < end[i]
                     assert end[i] <= my_shape[i]
-            begin = tuple(begin)
-            end = tuple(end)
+                else:
+                    raise ValueError(
+                        "NDArray does not support slicing with key %s of type %s."%(
+                            str(slice_i), str(type(slice_i))))
+
             if isinstance(value, NDArray):
                 value = value.as_in_context(self.context)
-                _internal._crop_assign(self, value, out=self,
-                                       begin=begin, end=end)
+                self._slice_assign(value, begin, end, expand)
             elif isinstance(value, numeric_types):
                 _internal._crop_assign_scalar(self, out=self,
                                               begin=begin, end=end,
                                               scalar=value)
             elif isinstance(value, (np.ndarray, np.generic)):
-                value = array(value, ctx=self.context)
-                _internal._crop_assign(self, value, out=self,
-                                       begin=begin, end=end)
+                value = array(value, ctx=self.context, dtype=self.dtype)
+                self._slice_assign(value, begin, end, expand)
             else:
-                raise TypeError('type %s not supported' % str(type(value)))
+                raise TypeError(
+                    'NDArray does not support assignment with %s of type %s'%(
+                        str(value), str(type(value))))
+        else:
+            raise ValueError(
+                "NDArray does not support slicing with key %s of type %s."%(
+                    str(key), str(type(key))))
         # pylint: enable=too-many-branches
+
+    def _slice_assign(self, value, begin, end, expand):
+        vshape = list(value.shape)
+        if expand and len(vshape) != len(begin):
+            if len(expand) + len(vshape) != len(begin):
+                sshape = [e - b for e, b in zip(end, begin)]
+                for i in reversed(expand):
+                    sshape.pop(i)
+                raise ValueError(
+                    "Cannot assign NDArray with shape %s to NDArray slice with " \
+                    "shape %s"%(str(vshape), str(sshape)))
+            for i in expand:
+                vshape.insert(i, 1)
+            value = value.reshape(vshape)
+        _internal._crop_assign(self, value, out=self,
+                               begin=begin, end=end)
 
     def __getitem__(self, key):
         """x.__getitem__(i) <=> x[i]
@@ -411,22 +451,50 @@ fixed-size items.
                [ 3.,  4.,  5.]], dtype=float32)
         """
         # multi-dimensional slicing is not supported yet
-        if isinstance(key, int):
+        if isinstance(key, integer_types):
             if key > self.shape[0] - 1:
                 raise IndexError(
                     'index {} is out of bounds for axis 0 with size {}'.format(
                         key, self.shape[0]))
             return self._at(key)
-        if isinstance(key, py_slice):
+        elif isinstance(key, py_slice):
             if key.step is not None:
-                raise ValueError('NDArray only supports continuous slicing on axis 0')
+                raise ValueError("NDArray only supports slicing with step size 1.")
             if key.start is not None or key.stop is not None:
                 return self._slice(key.start, key.stop)
             else:
                 return self
-        if isinstance(key, tuple):
-            raise ValueError('Multi-dimension indexing is not supported')
-
+        elif isinstance(key, tuple):
+            shape = self.shape
+            oshape = []
+            begin = []
+            end = []
+            assert len(shape) >= len(key), \
+                "Slicing dimensions exceeds array dimensions, %d vs %d"%(
+                    len(key), len(shape))
+            i = -1
+            for i, slice_i in enumerate(key):
+                if isinstance(slice_i, integer_types):
+                    begin.append(slice_i)
+                    end.append(slice_i+1)
+                elif isinstance(slice_i, py_slice):
+                    if slice_i.step is not None:
+                        raise ValueError("NDArray only supports slicing with step size 1.")
+                    begin.append(0 if slice_i.start is None else slice_i.start)
+                    end.append(shape[i] if slice_i.stop is None else slice_i.stop)
+                    oshape.append(end[i] - begin[i])
+                else:
+                    raise ValueError(
+                        "NDArray does not support slicing with key %s of type %s."%(
+                            str(slice_i), str(type(slice_i))))
+            oshape.extend(shape[i+1:])
+            if len(oshape) == 0:
+                oshape.append(1)
+            return slice(self, begin, end).reshape(oshape)
+        else:
+            raise ValueError(
+                "NDArray does not support slicing with key %s of type %s."%(
+                    str(key), str(type(key))))
 
     def _sync_copyfrom(self, source_array):
         """Performs a synchronized copy from the `source_array` to the current array.
@@ -648,7 +716,6 @@ fixed-size items.
         """
         check_call(_LIB.MXNDArrayWaitToRead(self.handle))
 
-
     @property
     def ndim(self):
         """Returns the number of dimensions of this array
@@ -683,6 +750,7 @@ fixed-size items.
             self.handle, ctypes.byref(ndim), ctypes.byref(pdata)))
         return tuple(pdata[:ndim.value])
 
+
     @property
     def size(self):
         """Number of elements in the array.
@@ -698,7 +766,10 @@ fixed-size items.
         >>> np.prod(x.shape)
         30
         """
-        return np.prod(self.shape)
+        size = 1
+        for i in self.shape:
+            size *= i
+        return size
 
     @property
     def context(self):
@@ -743,6 +814,10 @@ fixed-size items.
         check_call(_LIB.MXNDArrayGetDType(
             self.handle, ctypes.byref(mx_dtype)))
         return _DTYPE_MX_TO_NP[mx_dtype.value]
+
+    @property
+    def stype(self):
+        return _storage_type(self.handle)
 
     @property
     # pylint: disable= invalid-name, undefined-variable
@@ -945,6 +1020,34 @@ fixed-size items.
             return self
         return self.copyto(context)
 
+    def attach_grad(self, grad_req='write'):
+        """Attach a gradient buffer to this NDArray, so that `backward`
+        can compute gradient with respect to it.
+
+        Parameters
+        ----------
+        grad_req : {'write', 'add', 'null'}
+            How gradient will be accumulated.
+            - 'write': gradient will be overwritten on every backward.
+            - 'add': gradient will be added to existing value on every backward.
+            - 'null': do not compute gradient for this NDArray.
+        """
+        grad = zeros_like(self)  # pylint: disable=undefined-variable
+        grad_req = _GRAD_REQ_MAP[grad_req]
+        check_call(_LIB.MXAutogradMarkVariables(
+            1, ctypes.pointer(self.handle),
+            ctypes.pointer(mx_uint(grad_req)),
+            ctypes.pointer(grad.handle)))
+
+    @property
+    def grad(self):
+        """Returns gradient buffer attached to this NDArray."""
+        hdl = NDArrayHandle()
+        check_call(_LIB.MXNDArrayGetGrad(self.handle, ctypes.byref(hdl)))
+        if hdl.value is None:
+            return None
+        return NDArray(hdl)
+
     def detach(self):
         """Returns a new NDArray, detached from the current graph."""
         hdl = NDArrayHandle()
@@ -968,6 +1071,13 @@ fixed-size items.
             c_array(NDArrayHandle, ograd_handles),
             ctypes.c_int(retain_graph)))
 
+    def _to_csr(self):
+        # pylint: disable=undefined-variable
+        return cast_storage(self, stype='csr')
+
+    def _to_rsp(self):
+        # pylint: disable=undefined-variable
+        return cast_storage(self, stype='row_sparse')
 
 def onehot_encode(indices, out):
     """One-hot encoding indices into matrix out.
@@ -1006,48 +1116,14 @@ def empty(shape, ctx=None, dtype=mx_real_t):
     >>> mx.nd.empty((1,2), mx.gpu(0), 'float16')
     <NDArray 1x2 @gpu(0)>
     """
-    if isinstance(shape, int):
+    if isinstance(shape, integer_types):
         shape = (shape, )
     if ctx is None:
         ctx = Context.default_ctx
     return NDArray(handle=_new_alloc_handle(shape, ctx, False, dtype))
 
-def zeros(shape, ctx=None, dtype=mx_real_t, **kwargs):
-    """Returns a new array filled with all zeros, with the given shape and type.
 
-    Parameters
-    ----------
-    shape : int or tuple of int
-        The shape of the empty array.
-    ctx : Context, optional
-        An optional device context (default is the current default context).
-    dtype : str or numpy.dtype, optional
-        An optional value type (default is `float32`).
-    out : NDArray, optional
-        The output NDArray (default is `None`).
-
-    Returns
-    -------
-    NDArray
-        A created array
-
-    Examples
-    --------
-    >>> mx.nd.zeros(1).asnumpy()
-    array([ 0.], dtype=float32)
-    >>> mx.nd.zeros((1,2), mx.gpu(0))
-    <NDArray 1x2 @gpu(0)>
-    >>> mx.nd.zeros((1,2), mx.gpu(0), 'float16').asnumpy()
-    array([[ 0.,  0.]], dtype=float16)
-    """
-    # pylint: disable= unused-argument
-    if ctx is None:
-        ctx = Context.default_ctx
-    # pylint: disable= no-member, protected-access
-    return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, **kwargs)
-    # pylint: enable= no-member, protected-access
-
-def ones(shape, ctx=None, dtype=mx_real_t, **kwargs):
+def ones(shape, ctx=None, dtype=None, **kwargs):
     """Returns a new array filled with all ones, with the given shape and type.
 
     Parameters
@@ -1079,6 +1155,7 @@ def ones(shape, ctx=None, dtype=mx_real_t, **kwargs):
     # pylint: disable= unused-argument
     if ctx is None:
         ctx = Context.default_ctx
+    dtype = mx_real_t if dtype is None else dtype
     # pylint: disable= no-member, protected-access
     return _internal._ones(shape=shape, ctx=ctx, dtype=dtype, **kwargs)
     # pylint: enable= no-member, protected-access
@@ -2176,89 +2253,6 @@ def negative(arr):
     """
     return multiply(arr, -1.0)
 
-def load(fname):
-    """Loads an array from file.
-
-    See more details in ``save``.
-
-    Parameters
-    ----------
-    fname : str
-        The filename.
-
-    Returns
-    -------
-    list of NDArray or dict of str to NDArray
-        Loaded data.
-    """
-    if not isinstance(fname, string_types):
-        raise TypeError('fname required to be a string')
-    out_size = mx_uint()
-    out_name_size = mx_uint()
-    handles = ctypes.POINTER(NDArrayHandle)()
-    names = ctypes.POINTER(ctypes.c_char_p)()
-    check_call(_LIB.MXNDArrayLoad(c_str(fname),
-                                  ctypes.byref(out_size),
-                                  ctypes.byref(handles),
-                                  ctypes.byref(out_name_size),
-                                  ctypes.byref(names)))
-    if out_name_size.value == 0:
-        return [NDArray(NDArrayHandle(handles[i])) for i in range(out_size.value)]
-    else:
-        assert out_name_size.value == out_size.value
-        return dict(
-            (py_str(names[i]), NDArray(NDArrayHandle(handles[i]))) for i in range(out_size.value))
-
-
-def save(fname, data):
-    """Saves a list of arrays or a dict of str->array to file.
-
-    Examples of filenames:
-
-    - ``/path/to/file``
-    - ``s3://my-bucket/path/to/file`` (if compiled with AWS S3 supports)
-    - ``hdfs://path/to/file`` (if compiled with HDFS supports)
-
-    Parameters
-    ----------
-    fname : str
-        The filename.
-    data : list of ``NDArray` or dict of str to ``NDArray``
-        The data to save.
-
-    Examples
-    --------
-    >>> x = mx.nd.zeros((2,3))
-    >>> y = mx.nd.ones((1,4))
-    >>> mx.nd.save('my_list', [x,y])
-    >>> mx.nd.save('my_dict', {'x':x, 'y':y})
-    >>> mx.nd.load('my_list')
-    [<NDArray 2x3 @cpu(0)>, <NDArray 1x4 @cpu(0)>]
-    >>> mx.nd.load('my_dict')
-    {'y': <NDArray 1x4 @cpu(0)>, 'x': <NDArray 2x3 @cpu(0)>}
-    """
-    handles = []
-    if isinstance(data, dict):
-        keys = []
-        for key, val in data.items():
-            if not isinstance(key, string_types):
-                raise TypeError('save only accept dict str->NDArray or list of NDArray')
-            if not isinstance(val, NDArray):
-                raise TypeError('save only accept dict str->NDArray or list of NDArray')
-            keys.append(c_str(key))
-            handles.append(val.handle)
-        keys = c_array(ctypes.c_char_p, keys)
-    else:
-        for val in data:
-            if not isinstance(val, NDArray):
-                raise TypeError('save only accept dict str->NDArray or list of NDArray')
-            handles.append(val.handle)
-        keys = None
-    check_call(_LIB.MXNDArraySave(c_str(fname),
-                                  mx_uint(len(handles)),
-                                  c_array(NDArrayHandle, handles),
-                                  keys))
-
 
 def concatenate(arrays, axis=0, always_copy=True):
     """DEPRECATED, use ``concat`` instead
@@ -2358,160 +2352,38 @@ def imdecode(str_img, clip_rect=(0, 0, 0, 0), out=None, index=0, channels=3, mea
                                    out=out)
 
 
-# pylint: disable=too-many-locals, invalid-name
-def _make_ndarray_function(handle, name):
-    """Create a NDArray function from the FunctionHandle."""
-    real_name = ctypes.c_char_p()
-    desc = ctypes.c_char_p()
-    num_args = mx_uint()
-    arg_names = ctypes.POINTER(ctypes.c_char_p)()
-    arg_types = ctypes.POINTER(ctypes.c_char_p)()
-    arg_descs = ctypes.POINTER(ctypes.c_char_p)()
-    key_var_num_args = ctypes.c_char_p()
-    ret_type = ctypes.c_char_p()
+def _zeros_ndarray(shape, ctx=None, dtype=None, **kwargs):
+    """Returns a new array filled with all zeros, with the given shape and type.
 
-    check_call(_LIB.MXSymbolGetAtomicSymbolInfo(
-        handle, ctypes.byref(real_name), ctypes.byref(desc),
-        ctypes.byref(num_args),
-        ctypes.byref(arg_names),
-        ctypes.byref(arg_types),
-        ctypes.byref(arg_descs),
-        ctypes.byref(key_var_num_args),
-        ctypes.byref(ret_type)))
-    narg = int(num_args.value)
-    arg_names = [py_str(arg_names[i]) for i in range(narg)]
-    arg_types = [py_str(arg_types[i]) for i in range(narg)]
-    func_name = name
-    key_var_num_args = py_str(key_var_num_args.value)
-    ret_type = py_str(ret_type.value) if ret_type.value is not None else ''
-    doc_str = _build_doc(func_name,
-                         py_str(desc.value),
-                         arg_names,
-                         arg_types,
-                         [py_str(arg_descs[i]) for i in range(narg)],
-                         key_var_num_args,
-                         ret_type)
+    Parameters
+    ----------
+    shape : int or tuple of int
+        The shape of the empty array.
+    ctx : Context, optional
+        An optional device context (default is the current default context).
+    dtype : str or numpy.dtype, optional
+        An optional value type (default is `float32`).
+    out : NDArray, optional
+        The output NDArray (default is `None`).
 
-    dtype_name = None
-    arr_name = None
-    ndsignature = []
-    signature = []
-    ndarg_names = []
-    kwarg_names = []
-    for i in range(narg):
-        name, atype = arg_names[i], arg_types[i]
-        if name == 'dtype':
-            dtype_name = name
-            signature.append('%s=_Null'%name)
-        elif atype.startswith('NDArray') or atype.startswith('Symbol'):
-            assert not arr_name, \
-                "Op can only have one argument with variable " \
-                "size and it must be the last argument."
-            if atype.endswith('[]'):
-                ndsignature.append('*%s'%name)
-                arr_name = name
-            else:
-                ndsignature.append('%s=None'%name)
-                ndarg_names.append(name)
-        else:
-            signature.append('%s=_Null'%name)
-            kwarg_names.append(name)
-    #signature.append('is_train=False')
-    signature.append('out=None')
-    signature.append('name=None')
-    signature.append('**kwargs')
-    signature = ndsignature + signature
+    Returns
+    -------
+    NDArray
+        A created array
 
-    code = []
-    if arr_name:
-        code.append("""
-def %s(*%s, **kwargs):"""%(func_name, arr_name))
-        code.append("""
-    ndargs = []
-    for i in {}:
-        assert isinstance(i, NDArrayBase), \\
-            "Positional arguments must have NDArray type, " \\
-            "but got %s"%str(i)
-        ndargs.append(i)""".format(arr_name))
-        if dtype_name is not None:
-            code.append("""
-    if '%s' in kwargs:
-        kwargs['%s'] = np.dtype(kwargs['%s']).name"""%(
-            dtype_name, dtype_name, dtype_name))
-        code.append("""
-    _ = kwargs.pop('name', None)
-    out = kwargs.pop('out', None)
-    keys = list(kwargs.keys())
-    vals = list(kwargs.values())""")
-    else:
-        code.append("""
-def %s(%s):
-    ndargs = []
-    keys = list(kwargs.keys())
-    vals = list(kwargs.values())"""%(func_name, ', '.join(signature)))
-        # NDArray args
-        for name in ndarg_names: # pylint: disable=redefined-argument-from-local
-            code.append("""
-    if {name} is not None:
-        assert isinstance({name}, NDArrayBase), \\
-            "Argument {name} must have NDArray type, but got %s"%str({name})
-        ndargs.append({name})""".format(name=name))
-        # kwargs
-        for name in kwarg_names: # pylint: disable=redefined-argument-from-local
-            code.append("""
-    if %s is not _Null:
-        keys.append('%s')
-        vals.append(%s)"""%(name, name, name))
-        # dtype
-        if dtype_name is not None:
-            code.append("""
-    if %s is not _Null:
-        keys.append('%s')
-        vals.append(np.dtype(%s).name)"""%(dtype_name, dtype_name, dtype_name))
-
-    code.append("""
-    return _imperative_invoke(%d, ndargs, keys, vals, out)"""%(
-        handle.value))
-
-    local = {}
-    exec(''.join(code), None, local)  # pylint: disable=exec-used
-    ndarray_function = local[func_name]
-    ndarray_function.__name__ = func_name
-    ndarray_function.__doc__ = doc_str
-    ndarray_function.__module__ = 'mxnet.ndarray'
-    return ndarray_function
-
-
-# pylint: enable=too-many-locals, invalid-name
-def _init_ndarray_module(ndarray_class, root_namespace):
-    """List and add all the ndarray functions to current module."""
-    _set_ndarray_class(ndarray_class)
-    plist = ctypes.POINTER(ctypes.c_char_p)()
-    size = ctypes.c_uint()
-
-    check_call(_LIB.MXListAllOpNames(ctypes.byref(size),
-                                     ctypes.byref(plist)))
-    op_names = []
-    for i in range(size.value):
-        op_names.append(py_str(plist[i]))
-
-    module_obj = _sys.modules["%s.ndarray" % root_namespace]
-    module_internal = _sys.modules["%s._ndarray_internal" % root_namespace]
-    module_contrib = _sys.modules["%s.contrib.ndarray" % root_namespace]
-    for name in op_names:
-        hdl = OpHandle()
-        check_call(_LIB.NNGetOpHandle(c_str(name), ctypes.byref(hdl)))
-        function = _make_ndarray_function(hdl, name)
-        if function.__name__.startswith('_contrib_'):
-            function.__name__ = function.__name__[9:]
-            function.__module__ = 'mxnet.contrib.ndarray'
-            setattr(module_contrib, function.__name__, function)
-        elif function.__name__.startswith('_'):
-            setattr(module_internal, function.__name__, function)
-        else:
-            setattr(module_obj, function.__name__, function)
-
-_init_ndarray_module(NDArray, "mxnet")
-
-# from .base import add_fileline_to_docstring
-# add_fileline_to_docstring(__name__)
+    Examples
+    --------
+    >>> mx.nd.zeros(1).asnumpy()
+    array([ 0.], dtype=float32)
+    >>> mx.nd.zeros((1,2), mx.gpu(0))
+    <NDArray 1x2 @gpu(0)>
+    >>> mx.nd.zeros((1,2), mx.gpu(0), 'float16').asnumpy()
+    array([[ 0.,  0.]], dtype=float16)
+    """
+    # pylint: disable= unused-argument
+    if ctx is None:
+        ctx = Context.default_ctx
+    dtype = mx_real_t if dtype is None else dtype
+    # pylint: disable= no-member, protected-access
+    return _internal._zeros(shape=shape, ctx=ctx, dtype=dtype, **kwargs)
+    # pylint: enable= no-member, protected-access

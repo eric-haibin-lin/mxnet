@@ -15,10 +15,12 @@ import numpy as _numpy
 from .base import _LIB, numeric_types
 from .base import c_array, c_str, mx_uint, py_str, string_types
 from .base import NDArrayHandle, ExecutorHandle, SymbolHandle, OpHandle
-from .base import check_call, MXNetError, _Null # pylint: disable=unused-import
-from .context import Context, cpu
-from .ndarray import NDArray, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
+from .base import check_call, MXNetError, NotImplementedForSymbol, _Null  # pylint: disable=unused-import
+from .context import Context
+from .ndarray.ndarray import NDArray, _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP, _GRAD_REQ_MAP
 from .name import NameManager  # pylint: disable=unused-import
+from .ndarray.ndarray import _STORAGE_TYPE_STR_TO_ID
+from .ndarray.sparse_ndarray import _ndarray_cls
 from .executor import Executor
 from . import _symbol_internal as _internal
 from .attribute import AttrScope
@@ -42,7 +44,6 @@ except ImportError:
     from ._ctypes.symbol import SymbolBase, _set_symbol_class
     from ._ctypes.symbol import _symbol_creator  # pylint: disable=unused-import
 
-_GRAD_REQ_MAP = {'null': 0, 'write': 1, 'add': 3}
 
 class Symbol(SymbolBase):
     """Symbol is symbolic graph of the mxnet."""
@@ -94,6 +95,9 @@ class Symbol(SymbolBase):
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
+    def __iadd__(self, other):
+        raise NotImplementedForSymbol(self.__iadd__, '+=', other, 1)
+
     def __radd__(self, other):
         return self.__add__(other)
 
@@ -108,6 +112,9 @@ class Symbol(SymbolBase):
             return _internal._MinusScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
+
+    def __isub__(self, other):
+        raise NotImplementedForSymbol(self.__isub__, '-=', other)
 
     def __rsub__(self, other):
         """x.__rsub__(y) <=> y-x
@@ -138,6 +145,9 @@ class Symbol(SymbolBase):
             return _internal._MulScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
+
+    def __imul__(self, other):
+        raise NotImplementedForSymbol(self.__imul__, '*=', other)
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -202,11 +212,17 @@ class Symbol(SymbolBase):
         else:
             raise TypeError('type %s not supported' % str(type(other)))
 
+    def __idiv__(self, other):
+        raise NotImplementedForSymbol(self.__idiv__, '/=', other)
+
     def __truediv__(self, other):
         return self.__div__(other)
 
     def __rtruediv__(self, other):
         return self.__rdiv__(other)
+
+    def __itruediv__(self, other):
+        raise NotImplementedForSymbol(self.__itruediv__, '/=', other)
 
     def __pow__(self, other):
         """x.__pow__(y) <=> x**y
@@ -219,6 +235,9 @@ class Symbol(SymbolBase):
             return _internal._PowerScalar(self, scalar=other)
         else:
             raise TypeError('type %s not supported' % str(type(other)))
+
+    def __rpow__(self, other):
+        raise NotImplementedForSymbol(self.__rpow__, 'y**x', other)
 
     def __neg__(self):
         """x.__neg__() <=> -x
@@ -1217,8 +1236,9 @@ class Symbol(SymbolBase):
             raise TypeError('Only accept list of NDArrays or dict of str to NDArray')
         return c_array(NDArrayHandle, arg_handles), arg_arrays
 
-    def simple_bind(self, ctx, grad_req='write', type_dict=None, group2ctx=None,
-                    shared_arg_names=None, shared_exec=None, shared_buffer=None, **kwargs):
+    def simple_bind(self, ctx, grad_req='write', type_dict=None, stype_dict=None,
+                    group2ctx=None, shared_arg_names=None, shared_exec=None,
+                    shared_buffer=None, **kwargs):
         """Bind current symbol to get an executor, allocate all the arguments needed.
         Allows specifying data types.
 
@@ -1260,6 +1280,9 @@ class Symbol(SymbolBase):
         type_dict  : Dict of str->numpy.dtype
             Input type dictionary, name->dtype
 
+        stype_dict  : Dict of str->str
+            Input storage type dictionary, name->storage_type
+
         group2ctx : Dict of string to mx.Context
             The dict mapping the `ctx_group` attribute to the context assignment.
 
@@ -1274,7 +1297,8 @@ class Symbol(SymbolBase):
         shared_buffer : Dict of string to `NDArray`
             The dict mapping argument names to the `NDArray` that can be reused for initializing
             the current executor. This buffer will be checked for reuse if one argument name
-            of the current executor is not found in `shared_arg_names`.
+            of the current executor is not found in `shared_arg_names`. The `NDArray`s are
+            expected have default storage type.
 
         kwargs : Dict of str->shape
             Input shape dictionary, name->shape
@@ -1284,6 +1308,7 @@ class Symbol(SymbolBase):
         executor : mxnet.Executor
             The generated executor
         """
+        # data types
         num_provided_arg_types = 0
         provided_arg_type_names = ctypes.POINTER(ctypes.c_char_p)()  # provided type argument names
         provided_arg_type_data = ctypes.POINTER(mx_uint)()  # provided types
@@ -1298,6 +1323,22 @@ class Symbol(SymbolBase):
             num_provided_arg_types = mx_uint(len(provided_arg_type_names))
             provided_arg_type_names = c_array(ctypes.c_char_p, provided_arg_type_names)
             provided_arg_type_data = c_array(ctypes.c_int, provided_arg_type_data)
+
+        # storage types
+        num_provided_arg_stypes = 0
+        # provided storage type argument names
+        provided_arg_stype_names = ctypes.POINTER(ctypes.c_char_p)()
+        provided_arg_stype_data = ctypes.POINTER(mx_uint)()  # provided storage types
+        if stype_dict is not None:
+            provided_arg_stype_names = []
+            provided_arg_stype_data = []
+            for k, v in stype_dict.items():
+                if v in _STORAGE_TYPE_STR_TO_ID:
+                    provided_arg_stype_names.append(c_str(k))
+                    provided_arg_stype_data.append(ctypes.c_int(_STORAGE_TYPE_STR_TO_ID[v]))
+            num_provided_arg_stypes = mx_uint(len(provided_arg_stype_names))
+            provided_arg_stype_names = c_array(ctypes.c_char_p, provided_arg_stype_names)
+            provided_arg_stype_data = c_array(ctypes.c_int, provided_arg_stype_data)
 
         provided_arg_shape_data = []  # shape data
         # argument shape index in sdata,
@@ -1372,6 +1413,8 @@ class Symbol(SymbolBase):
             shared_buffer_names = []
             shared_buffer_handles = []
             for k, v in shared_buffer.items():
+                assert(v.stype == 'default'), \
+                    "shared_buffer is expected to only contain NDArrays with default storage"
                 shared_buffer_names.append(c_str(k))
                 shared_buffer_handles.append(v.handle)
             shared_buffer_names = c_array(ctypes.c_char_p, shared_buffer_names)
@@ -1411,6 +1454,9 @@ class Symbol(SymbolBase):
                                                  num_provided_arg_types,
                                                  provided_arg_type_names,
                                                  provided_arg_type_data,
+                                                 num_provided_arg_stypes,
+                                                 provided_arg_stype_names,
+                                                 provided_arg_stype_data,
                                                  mx_uint(len(shared_arg_name_list)),
                                                  c_array(ctypes.c_char_p, shared_arg_name_list),
                                                  ctypes.byref(shared_buffer_len),
@@ -1440,11 +1486,12 @@ class Symbol(SymbolBase):
                 shared_buffer[k] = v
 
         # create in_args, arg_grads, and aux_states for the current executor
-        arg_arrays = [NDArray(NDArrayHandle(in_arg_handles[i])) for i in range(num_in_args.value)]
-        grad_arrays = [NDArray(NDArrayHandle(arg_grad_handles[i]))
+        arg_arrays = [_ndarray_cls(NDArrayHandle(in_arg_handles[i])) \
+                      for i in range(num_in_args.value)]
+        grad_arrays = [_ndarray_cls(NDArrayHandle(arg_grad_handles[i]))
                        if arg_grad_handles[i] is not None
                        else None for i in range(num_in_args.value)]
-        aux_arrays = [NDArray(NDArrayHandle(aux_state_handles[i]))
+        aux_arrays = [_ndarray_cls(NDArrayHandle(aux_state_handles[i]))
                       for i in range(num_aux_states.value)]
 
         executor = Executor(exe_handle, self, ctx, grad_req, group2ctx)
@@ -1611,7 +1658,7 @@ class Symbol(SymbolBase):
         executor.aux_arrays = aux_states
         return executor
 
-    def grad(self, wrt):
+    def gradient(self, wrt):
         """Gets the autodiff of current symbol.
 
         This function can only be used if current symbol is a loss function.
@@ -1638,7 +1685,7 @@ class Symbol(SymbolBase):
 
     # pylint: enable= no-member
 
-    def eval(self, ctx=cpu(), **kwargs):
+    def eval(self, ctx=None, **kwargs):
         """Evaluates a symbol given arguments.
 
         The `eval` method combines a call to `bind` (which returns an executor)
@@ -1674,6 +1721,8 @@ class Symbol(SymbolBase):
         evaluated on given args. When called on a single symbol (not a group),
         the result will be a list with one element.
         """
+        if ctx is None:
+            ctx = Context.default_ctx
         return self.bind(ctx, kwargs).forward()
 
     def reshape(self, shape):
@@ -1695,7 +1744,32 @@ class Symbol(SymbolBase):
         """
         return reshape(self, shape=shape)
 
-def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, init=None, **kwargs):
+    def wait_to_read(self):
+        raise NotImplementedForSymbol(self.wait_to_read, None)
+
+    def asnumpy(self):
+        raise NotImplementedForSymbol(self.asnumpy, None)
+
+    def asscalar(self):
+        raise NotImplementedForSymbol(self.asscalar, None)
+
+    def astype(self):
+        raise NotImplementedForSymbol(self.astype, None)
+
+    def copy(self):
+        raise NotImplementedForSymbol(self.copy, None)
+
+    def as_in_context(self):
+        raise NotImplementedForSymbol(self.as_in_context, None)
+
+    def detach(self):
+        raise NotImplementedForSymbol(self.detach, None)
+
+    def backward(self):
+        raise NotImplementedForSymbol(self.backward, None)
+
+def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None,
+        init=None, stype=None, **kwargs):
     """Creates a symbolic variable with specified name.
 
     Example usage:
@@ -1722,6 +1796,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, ini
         The dtype for input variable. If not specified, this value will be inferred.
     init : initializer (mxnet.init.*)
         Initializer for this variable to (optionally) override the default initializer.
+    stype : str
+        The storage type of the variable.
     kwargs : Additional attribute variables
         Additional attributes must start and end with double underscores.
 
@@ -1749,6 +1825,8 @@ def var(name, attr=None, shape=None, lr_mult=None, wd_mult=None, dtype=None, ini
         if not isinstance(init, string_types):
             init = init.dumps()
         attr['__init__'] = init
+    if stype is not None:
+        attr['__storage_type__'] = str(_STORAGE_TYPE_STR_TO_ID[stype])
     for k, v in kwargs.items():
         if k.startswith('__') and k.endswith('__'):
             attr[k] = str(v)

@@ -35,7 +35,9 @@ NNVM_REGISTER_OP(make_loss)
 
 // identity output as first input, but attributes are constrainted to be like rhs
 NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
-.set_attr<FCompute>("FCompute<gpu>", IdentityCompute<gpu>);
+.set_attr<FCompute>("FCompute<gpu>", IdentityCompute<gpu>)
+.set_attr<FComputeEx>("FComputeEx<gpu>", IdentityLikeRhsComputeEx<gpu>);
+
 
 NNVM_REGISTER_OP(Cast)
 .set_attr<FCompute>("FCompute<gpu>", CastCompute<gpu>);
@@ -46,6 +48,14 @@ NNVM_REGISTER_OP(_backward_cast)
 // negative
 NNVM_REGISTER_OP(negative)
 .set_attr<FCompute>("FCompute<gpu>", UnaryCompute<gpu, mshadow_op::negation>);
+
+// reciprocal
+NNVM_REGISTER_OP(reciprocal)
+.set_attr<FCompute>("FCompute<gpu>", UnaryCompute<gpu, mshadow_op::reciprocal>);
+
+NNVM_REGISTER_OP(_backward_reciprocal)
+.set_attr<FCompute>("FCompute<gpu>",
+  BinaryCompute<gpu, unary_bwd<mshadow_op::reciprocal_grad> >);
 
 // abs
 NNVM_REGISTER_OP(abs)

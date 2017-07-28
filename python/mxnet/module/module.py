@@ -8,7 +8,6 @@ import logging
 import warnings
 
 from .. import context as ctx
-from .. import ndarray as nd
 from .. import optimizer as opt
 
 from .executor_group import DataParallelExecutorGroup
@@ -16,6 +15,7 @@ from ..model import _create_kvstore, _initialize_kvstore, _update_params, _updat
 from ..model import load_checkpoint
 from ..initializer import Uniform, InitDesc
 from ..io import DataDesc
+from ..ndarray import zeros
 
 from .base_module import BaseModule, _check_input_names, _parse_data_desc
 
@@ -409,20 +409,19 @@ class Module(BaseModule):
         else:
             assert self._arg_params is None and self._aux_params is None
             param_arrays = [
-                nd.zeros(x[0].shape, dtype=x[0].dtype)
+                zeros(shape=x[0].shape, dtype=x[0].dtype, stype=x[0].stype)
                 for x in self._exec_group.param_arrays
             ]
             self._arg_params = {name:arr for name, arr in zip(self._param_names, param_arrays)}
 
             aux_arrays = [
-                nd.zeros(x[0].shape, dtype=x[0].dtype)
+                zeros(x[0].shape, dtype=x[0].dtype)
                 for x in self._exec_group.aux_arrays
             ]
             self._aux_params = {name:arr for name, arr in zip(self._aux_names, aux_arrays)}
 
         if shared_module is not None and shared_module.optimizer_initialized:
             self.borrow_optimizer(shared_module)
-
 
     def reshape(self, data_shapes, label_shapes=None):
         """Reshapes the module for new input shapes.
@@ -465,6 +464,7 @@ class Module(BaseModule):
 
         if self._params_dirty:
             self._sync_params_from_devices()
+
         (kvstore, update_on_kvstore) = \
                 _create_kvstore(kvstore, len(self._context), self._arg_params)
 
@@ -554,11 +554,6 @@ class Module(BaseModule):
             Default is ``None``, which means ``is_train`` takes the value of ``self.for_training``.
         """
         assert self.binded and self.params_initialized
-
-        # If start to inference, force rebind module.
-        if self._label_shapes and not data_batch.label:
-            raise RuntimeError("If you are trying to do inference, rebind module "
-                               "with 'force_rebind=True' and 'for_training=False'")
 
         curr_data_shapes = tuple(i.shape for i in self._data_shapes)
         new_data_shapes = tuple(i.shape for i in data_batch.data)

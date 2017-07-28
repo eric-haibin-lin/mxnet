@@ -144,7 +144,9 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 .set_attr<nnvm::FIgnoreInputs>("FIgnoreInputs",
     [](const NodeAttrs& attrs) { return std::vector<uint32_t>(1, 1); })
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", IdentityLikeRhsComputeEx<cpu>)
 .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<2, 1>)
+.set_attr<FInferStorageType>("FInferStorageType", IdentityAttrLikeRhsStorageType)
 .set_attr<nnvm::FGradient>(
     "FGradient",  [](const nnvm::NodePtr& n,
                      const std::vector<nnvm::NodeEntry>& ograds) {
@@ -201,11 +203,30 @@ NNVM_REGISTER_OP(_backward_cast)
   })
 .set_attr<FCompute>("FCompute<cpu>", CastCompute<cpu>);
 
+
 // negative
 MXNET_OPERATOR_REGISTER_UNARY(negative)
-.MXNET_DESCRIBE("Negate src")
+.MXNET_DESCRIBE("Numerical negative of the argument, element-wise.")
 .set_attr<FCompute>("FCompute<cpu>", UnaryCompute<cpu, mshadow_op::negation>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"});
+
+// reciprocal
+MXNET_OPERATOR_REGISTER_UNARY(reciprocal)
+.describe(R"code(Returns the reciprocal of the argument, element-wise.
+
+Calculates 1/x.
+
+Example::
+
+    reciprocal([-2, 1, 3, 1.6, 0.2]) = [-0.5, 1.0, 0.33333334, 0.625, 5.0]
+
+)code" ADD_FILELINE)
+.set_attr<FCompute>("FCompute<cpu>", UnaryCompute<cpu, mshadow_op::reciprocal>)
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_reciprocal"});
+
+MXNET_OPERATOR_REGISTER_BINARY(_backward_reciprocal)
+.set_attr<FCompute>("FCompute<cpu>",
+  BinaryCompute<cpu, unary_bwd<mshadow_op::reciprocal_grad> >);
 
 // abs
 MXNET_OPERATOR_REGISTER_UNARY(abs)

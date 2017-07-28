@@ -76,15 +76,29 @@ def _create_kvstore(kvstore, num_device, arg_params):
 
     return (kv, update_on_kvstore)
 
-def _initialize_kvstore(kvstore, param_arrays, arg_params, param_names,
-                        update_on_kvstore):
+def _contains_non_default_storage(params):
+    if isinstance(params, (list, tuple)):
+        for param in params:
+            if param.stype != 'default':
+                return True
+    elif isinstance(params, NDArray):
+        return param.stype != 'default'
+    else:
+        return False
+
+def _initialize_kvstore(kvstore, param_arrays, arg_params, param_names, update_on_kvstore):
     """Initialize kvstore"""
     for idx, param_on_devs in enumerate(param_arrays):
         name = param_names[idx]
         kvstore.init(name, arg_params[name])
 
         if update_on_kvstore:
-            kvstore.pull(name, param_on_devs, priority=-idx)
+            if _contains_non_default_storage(param_on_devs):
+                # skip pulling row_sparse weights
+                warnings.warn('Detected non-default weight in kvstore to pull. Please make ' \
+                              'sure to pull it with row_ids explicitly', RuntimeWarning)
+            else:
+                kvstore.pull(name, param_on_devs, priority=-idx)
 
 def _update_params_on_kvstore(param_arrays, grad_arrays, kvstore, param_names):
     """Perform update of param_arrays from grad_arrays on kvstore."""
@@ -96,25 +110,36 @@ def _update_params_on_kvstore(param_arrays, grad_arrays, kvstore, param_names):
         # push gradient, priority is negative index
         kvstore.push(name, grad_list, priority=-index)
         # pull back the weights
-        kvstore.pull(name, arg_list, priority=-index)
+        if _contains_non_default_storage(arg_list):
+            # skip pulling row_sparse weights
+            warnings.warn('Detected non-default weight in kvstore to pull. Please make ' \
+                          'sure to pull it with row_ids', RuntimeWarning)
+        else:
+            kvstore.pull(name, arg_list, priority=-index)
 
 def _update_params(param_arrays, grad_arrays, updater, num_device,
                    kvstore=None, param_names=None):
     """Perform update of param_arrays from grad_arrays not on kvstore."""
-    for index, pair in enumerate(zip(param_arrays, grad_arrays)):
+    for i, pair in enumerate(zip(param_arrays, grad_arrays)):
         arg_list, grad_list = pair
         if grad_list[0] is None:
             continue
+        index = i
         if kvstore:
             name = param_names[index]
             # push gradient, priority is negative index
             kvstore.push(name, grad_list, priority=-index)
             # pull back the sum gradients, to the same locations.
-            kvstore.pull(name, grad_list, priority=-index)
+            if _contains_non_default_storage(grad_list):
+                # skip pulling row_sparse weights
+                warnings.warn('Detected non-default weight in kvstore to pull. Please make ' \
+                              'sure to pull it with row_ids', RuntimeWarning)
+            else:
+                kvstore.pull(name, grad_list, priority=-index)
         for k, p in enumerate(zip(arg_list, grad_list)):
             # faked an index here, to make optimizer create diff
             # state for the same index but on diff devs, TODO(mli)
-            # use a better solution latter
+            # use a better solution later
             w, g = p
             updater(index*num_device+k, g, w)
 
@@ -913,7 +938,7 @@ class FeedForward(BASE_ESTIMATOR):
             ``ceil(num_train_examples / batch_size)``.
         optimizer : str or Optimizer, optional
             The name of the chosen optimizer, or an optimizer object, used for training.
-        initializier : initializer function, optional
+        initializer : initializer function, optional
             The initialization scheme used.
         eval_data : DataIter or numpy.ndarray pair
             If `eval_set` is ``numpy.ndarray`` pair, it should
@@ -929,7 +954,7 @@ class FeedForward(BASE_ESTIMATOR):
             A callback that is invoked at end of each batch for print purposes.
         kvstore: KVStore or str, optional
            The KVStore or a string kvstore type: 'local', 'dist_sync', 'dis_async'.
-           Defaults to 'local', often no need to change for single machiine.
+           Defaults to 'local', often no need to change for single machine.
         logger : logging logger, optional
             When not specified, default logger will be used.
         work_load_list : list of float or int, optional
