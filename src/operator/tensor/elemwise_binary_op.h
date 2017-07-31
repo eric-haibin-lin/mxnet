@@ -87,7 +87,7 @@ class ElemwiseBinaryOp : public OpBase
 //                << zero_input_val
 //                << std::endl << std::flush;
       #pragma omp parallel for
-      for(int i = static_cast<int>(iter_out), n = index_out_min; i < n; ++i) {
+      for(int i = static_cast<int>(iter_out); i < index_out_min; ++i) {
         MXNET_ASSIGN_REQ_SWITCH(req, Req, {
           Kernel<MapSetToScalar<Req>, xpu>::Launch(s, size, out[i].dptr_, zero_input_val);
         });

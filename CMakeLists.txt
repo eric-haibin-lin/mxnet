@@ -354,7 +354,7 @@ if(USE_CUDA)
     FIND_LIBRARY(CUDA_cufft_LIBRARY nvrtc "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64"  "${CUDA_TOOLKIT_ROOT_DIR}/lib/win32")
     list(APPEND mxnet_LINKER_LIBS "${CUDA_cufft_LIBRARY}/../cufft.lib") # For fft operator
   else(MSVC)
-    list(APPEND mxnet_LINKER_LIBS nvrtc cuda cufft)
+    list(APPEND mxnet_LINKER_LIBS nvrtc cuda cufft cusolver)
     link_directories("${CUDA_TOOLKIT_ROOT_DIR}/lib64")
   endif()
   list(APPEND SOURCE ${cuda_objs} ${CUDA})
