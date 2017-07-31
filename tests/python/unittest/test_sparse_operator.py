@@ -473,11 +473,13 @@ def test_elemwise_binary_ops():
                                                   force_grad_overlap=force_grad_overlap,
                                                   ograd_density=ograd_density)
 
+
 def as_dense(arr):
   if arr.stype != 'default':
     return mx.nd.cast_storage(arr, stype='default')
   else:
     return arr;
+
 
 # Make sure that 0's look like 0's when we do a comparison
 def do_normalize(l):
@@ -672,7 +674,6 @@ def test_sparse_mathematical_core():
                                    output_grad_stype=output_grad_stype,
                                    density=density, ograd_density=ograd_density,
                                    force_overlap=force_overlap,
-                                   #input_grad_stype='default',
                                    verbose=False)
 
   # Check many basic unary operators

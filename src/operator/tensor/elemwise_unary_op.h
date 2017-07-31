@@ -272,6 +272,24 @@ class UnaryOp : public OpBase {
     });
   }
 
+  template<typename xpu, typename op>
+  static void LaunchWithHalf2(const nnvm::NodeAttrs& attrs,
+                     const OpContext& ctx,
+                     const std::vector<TBlob>& inputs,
+                     const std::vector<OpReqType>& req,
+                     const std::vector<TBlob>& outputs) {
+    using namespace mshadow;
+    using namespace mxnet_op;
+    Stream<xpu> *s = ctx.get_stream<xpu>();
+
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
+      Kernel<op, xpu>::Launch(s, outputs[0].Size(),
+                              outputs[0].dptr<DType>(), inputs[0].dptr<DType>());
+    });
+  }
+
   template<typename xpu, typename OP>
   static void LaunchEx(const nnvm::NodeAttrs& attrs,
                        const OpContext& ctx,
@@ -284,6 +302,20 @@ class UnaryOp : public OpBase {
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
     MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
+  }
+
+  template<typename xpu, typename OP>
+  static void LaunchWithHalf2Ex(const nnvm::NodeAttrs& attrs,
+                       const OpContext& ctx,
+                       const std::vector<NDArray>& inputs,
+                       const std::vector<OpReqType>& req,
+                       const std::vector<NDArray>& outputs) {
+    CHECK_EQ(inputs.size(), 1U);
+    CHECK_EQ(outputs.size(), 1U);
+    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
+    CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
+      << "Operation requires a sparse output storage type";
+    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
   }
 
   template<typename xpu, typename OP>
