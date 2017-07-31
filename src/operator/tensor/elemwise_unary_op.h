@@ -132,10 +132,10 @@ class OpBase {
     std::vector<TBlob> in_blobs, out_blobs;
     in_blobs.reserve(inputs.size());
     out_blobs.reserve(outputs.size());
-    for(size_t i = 0, n = inputs.size(); i < n; ++i) {
+    for (size_t i = 0, n = inputs.size(); i < n; ++i) {
       in_blobs.emplace_back(std::move(GetReshapedBlob(inputs[i])));
     }
-    for(size_t i = 0, n = outputs.size(); i < n; ++i) {
+    for (size_t i = 0, n = outputs.size(); i < n; ++i) {
       out_blobs.emplace_back(std::move(GetReshapedBlob(outputs[i])));
     }
     computer(attrs, ctx, in_blobs, req, out_blobs);

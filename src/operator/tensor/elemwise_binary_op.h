@@ -283,11 +283,27 @@ class ElemwiseBinaryOp : public OpBase
     return false;
   }
 
+  /*! \brief For some types or sparse, we can assume 100% density can be computer
+   * more quickly with the standard dense procedure
+   * @param arr the array to test
+   * @return bool, whether the array is effectively dense
+   */
+  static inline bool IsEffectivelyDense(const NDArray& arr) {
+    switch(arr.storage_type()) {
+      case kDefaultStorage:
+        break;
+      case kRowSparseStorage:
+        return arr.shape().Size() == arr.aux_shape(rowsparse::kIdx).Size();
+      default:
+        return false;
+    }
+  }
+
   // TODO(cjolivier01) Precompute parallelizing strategy
   // TODO(cjolivier01) Optimize: change some bool parameters and internally-computed
   //                   bool variables (i.e. rhs_is_dense) to template parameters
   template<typename xpu, typename DType, typename IType, typename OP>
-  static inline void RspRspElemwiseBinaryOp2(const nnvm::NodeAttrs &attrs,
+  static void RspRspElemwiseBinaryOp2(const nnvm::NodeAttrs &attrs,
                                              const OpContext &ctx,
                                              const NDArray& lhs,
                                              const NDArray& rhs,
@@ -308,7 +324,7 @@ class ElemwiseBinaryOp : public OpBase
     const bool rhs_is_dense = rhs.storage_type() == kDefaultStorage;
     CHECK(!lhs_is_dense || lhs_may_be_dense) << "rvalue cannot be dense";
     CHECK(!rhs_is_dense || rhs_may_be_dense) << "rvalue cannot be dense";
-    CHECK(!lhs_is_dense || !rhs_may_be_dense);
+    CHECK(!lhs_is_dense || !rhs_is_dense);
     if (rhs_is_dense) {
       // For right-side dense, lhs input zero should always output zero
       CHECK(fabs(OP::Map(0, 99)) < 1e-4f);
@@ -757,6 +773,16 @@ class ElemwiseBinaryOp : public OpBase
     CHECK_EQ(outputs.size(), 1);
     //PRINT_OP_AND_ARRAYS(OP, inputs);
     if (req[0] != kNullOp) {
+      const NDArray *sparse = &inputs[0];
+      if(sparse->storage_type() == kDefaultStorage) {
+        sparse = &inputs[1];
+        if(sparse->storage_type() == kDefaultStorage) {
+          // Do we need to worry about sparse result here?
+          CHECK_EQ(outputs[0].storage_type(), kDefaultStorage);
+          MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
+          return;
+        }
+      }
       bool allowed = false;
       if(lhs_may_be_dense && rhs_may_be_dense) {
         allowed = common::ContainsNonDefaultStorage(inputs);
@@ -769,7 +795,7 @@ class ElemwiseBinaryOp : public OpBase
       }
       // If any input or output is dense, fallback to FCompute
       if (allowed) {
-        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+        MSHADOW_TYPE_SWITCH(sparse->aux_type(rowsparse::kIdx), IType, {
           MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
             RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
               attrs, ctx, inputs[0], inputs[1],

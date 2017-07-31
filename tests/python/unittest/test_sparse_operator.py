@@ -142,7 +142,6 @@ def test_elemwise_binary_ops():
                                 lhs_grad_stype,
                                 rhs_grad_stype,
                                 expected_result_storage_type=None,
-                                numeric_eps=1e-3,
                                 modifier_func=None,
                                 lhs_density=.5,
                                 rhs_density=.5,
@@ -319,10 +318,11 @@ def test_elemwise_binary_ops():
         return check_all(l, r, lambda a, b: a <= b)
 
     def least_sparse(lstype, rstype):
-        if lstype == 'default' or rstype == 'default':
+        if lstype == 'default' and rstype == 'default':
             return 'default'
-        else:
-            return lstype
+        elif rstype != 'default':
+            return rstype
+        return lstype
 
     def check_elemwise_binary_ops(lhs_stype, rhs_stype, shape,
                                   lhs_grad_stype=None, rhs_grad_stype=None,
@@ -359,7 +359,7 @@ def test_elemwise_binary_ops():
                                 lambda outg, l, r: (outg * r, outg * l),
                                 least_sparse(lhs_stype, rhs_stype),
                                 least_sparse(lhs_stype, rhs_stype),
-                                expected_result_storage_type=lhs_stype,
+                                expected_result_storage_type=least_sparse(lhs_stype, rhs_stype),
                                 ograd_density=ograd_density,
                                 force_lr_overlap=force_lr_overlap,
                                 force_grad_overlap=force_grad_overlap,
@@ -456,11 +456,11 @@ def test_elemwise_binary_ops():
                                                   force_lr_overlap=force_lr_overlap,
                                                   force_grad_overlap=force_grad_overlap,
                                                   ograd_density=ograd_density)
-                        # check_elemwise_binary_ops('default', 'row_sparse', shape,
-                        #                           lhs_density=lhs_density, rhs_density=rhs_density,
-                        #                           force_lr_overlap=force_lr_overlap,
-                        #                           force_grad_overlap=force_grad_overlap,
-                        #                           ograd_density=ograd_density)
+                        check_elemwise_binary_ops('default', 'row_sparse', shape,
+                                                  lhs_density=lhs_density, rhs_density=rhs_density,
+                                                  force_lr_overlap=force_lr_overlap,
+                                                  force_grad_overlap=force_grad_overlap,
+                                                  ograd_density=ograd_density)
                         check_elemwise_binary_ops('row_sparse', 'default', shape,
                                                   lhs_density=lhs_density, rhs_density=rhs_density,
                                                   force_lr_overlap=force_lr_overlap,
@@ -526,8 +526,8 @@ def check_sparse_mathematical_core(name, stype,
 
   grad_stypes = list(expected_grad_result_type)
 
-  #shape = rand_shape_2d()
-  shape = (3,4)
+  shape = rand_shape_2d()
+  #shape = (3,4)
   #shape = (9,1)
   #shape = (1,1)
 
