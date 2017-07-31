@@ -524,39 +524,41 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
     def as_stype(var, stype):
         return mx.nd.cast_storage(mx.nd.array(var), stype=stype)
 
-    print("<<<<<<<<<<<<<<<<<< ENTER NUMERIC_GRAD")
+    #print("<<<<<<<<<<<<<<<<<< ENTER NUMERIC_GRAD")
+    #raw_input("Press Enter to continue...")
 
     approx_grads = {k: np.zeros(v.shape, dtype=np.float32)
                     for k, v in location.items()}
     for k, v in location.items():
-        print(k, v)
+        #print(k, v)
         stype = executor.arg_dict[k].stype
         if stype == 'default':
             executor.arg_dict[k][:] = as_stype(v, stype)
     for k in location:
         location[k] = np.ascontiguousarray(location[k])
-        print(k, location[k])
+        #print(k, location[k])
     for k, v in location.items():
         if v.dtype.kind != 'f':
             continue
         stype = executor.arg_dict[k].stype
         old_value = v.copy()
-        print("================== {} ===============================".format(k))
-        print("old {}: {}".format(k, old_value))
+        #print("================== {} ===============================".format(k))
+        #print("old {}: {}".format(k, old_value))
         #raw_input("Press Enter to continue...")
         for i in range(np.prod(v.shape)):
             # inplace update
             v.ravel()[i] += eps/2.0
             executor.arg_dict[k][:] = as_stype(v, stype)
-            print("executor.arg_dict[k][0]: {}".format(executor.arg_dict[k].asnumpy()))
+            #print("executor.arg_dict[k][0]: {}".format(executor.arg_dict[k].asnumpy()))
             if aux_states is not None:
                 for key, val in aux_states.items():
                     executor.aux_dict[key][:] = val
-            print("{} numeric grad calling fwd 1: {}".format(k, v))
+            #print("{} numeric grad calling fwd 1: {}".format(k, v))
             #raw_input("Press Enter to continue...")
+            #print("before first fwd call: {}".format(executor.outputs[0].asnumpy()))
             executor.forward(is_train=use_forward_train)
             f_peps = executor.outputs[0].asnumpy()
-            print("{} f_peps: {} -> {}".format(k, v, f_peps))
+            #print("{} f_peps: {} -> {}".format(k, v, f_peps))
             #raw_input("Press Enter to continue...")
 
             v.ravel()[i] -= eps
@@ -565,24 +567,25 @@ def numeric_grad(executor, location, aux_states=None, eps=1e-4, use_forward_trai
                 for key, val in aux_states.items():
                     adstype = executor.aux_dict[key].stype
                     executor.aux_dict[key][:] = as_stype(val, adstype)
-            print("{} numeric grad calling fwd 2: {}".format(k, v))
+            #print("{} numeric grad calling fwd 2: {}".format(k, v))
             #raw_input("Press Enter to continue...")
             executor.forward(is_train=use_forward_train)
-            print(k + " numeric grad calling fwd DONE")
+            #print(k + " numeric grad calling fwd DONE")
             f_neps = executor.outputs[0].asnumpy()
-            print("{} f_neps: {} -> {}".format(k, v, f_neps))
+            #print("{} f_neps: {} -> {}".format(k, v, f_neps))
             #raw_input("Press Enter to continue...")
 
             approx_grad = (f_peps - f_neps).sum() / eps
-            if abs(approx_grad) > 5:
-                print("LARGE APPROX GRAD")
+            # if abs(approx_grad) > 5:
+            #     print("LARGE APPROX GRAD")
             approx_grads[k].ravel()[i] = approx_grad
-            print(k + " approx grad", approx_grad)
+            #print(k + " approx grad", approx_grad)
             v.ravel()[i] = old_value.ravel()[i]
         # copy back the original value
         executor.arg_dict[k][:] = as_stype(old_value, stype)
 
-    print(">>>>>>>>>>>>>>>>>>>>> LEAVE NUMERIC_GRAD")
+    #print(">>>>>>>>>>>>>>>>>>>>> LEAVE NUMERIC_GRAD")
+    #raw_input("Press Enter to continue...")
 
     return approx_grads
 
@@ -663,6 +666,7 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
     proj = mx.sym.Variable("__random_proj")
     out = sym * proj
     out = mx.sym.MakeLoss(out)
+    #out = mx.sym.make_loss(out)
 
     location = dict(list(location.items()) +
                     [("__random_proj", mx.nd.array(random_projection(out_shape[0]), ctx=ctx))])
@@ -688,15 +692,15 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
                          "Got %d inputs and %d locations"%(len(inps), len(location)))
     assert len(executor.outputs) == 1
 
-    print("calling forward()")
+    #print("calling forward()")
     executor.forward(is_train=True)
-    print("Forward output: {}".format(executor.outputs[0].asnumpy()))
-    print("calling backward()")
+    #print("Forward output: {}".format(executor.outputs[0].asnumpy()))
+    #print("calling backward()")
     executor.backward()
-    print("returned from backward()")
+    #print("returned from backward()")
     symbolic_grads = {k:executor.grad_dict[k].asnumpy() for k in grad_nodes}
-    for k, v in symbolic_grads.items():
-        print("Backward input grads: [{}] = {}".format(k, v))
+    # for k, v in symbolic_grads.items():
+    #     print("Backward input grads: [{}] = {}".format(k, v))
 
     #print("getting numeric gradients")
     numeric_gradients = numeric_grad(executor, location_npy, aux_states_npy,
@@ -707,9 +711,9 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
         orig_grad = args_grad_npy[name]
         sym_grad = symbolic_grads[name]
         if grad_req[name] == 'write':
-            print(name + " orig_grad:", orig_grad)
-            print(name + " fd_grad: ", fd_grad)
-            print(name + " sym_grad:", sym_grad)
+            # print(name + " orig_grad:", orig_grad)
+            # print(name + " fd_grad: ", fd_grad)
+            # print(name + " sym_grad:", sym_grad)
             assert_almost_equal(fd_grad, sym_grad, rtol, atol,
                                 ("NUMERICAL_%s"%name, "BACKWARD_%s"%name))
         elif grad_req[name] == 'add':

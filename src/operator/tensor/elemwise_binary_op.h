@@ -68,28 +68,8 @@ class ElemwiseBinaryOp : public OpBase
     }
   };
 
-//  /*! \brief Return only lvalue */
-//  template<typename OP>
-//  struct BinaryOpLValue
-//  {
-//    template<typename DType>
-//    MSHADOW_XINLINE static DType Map(DType lvalue, const DType rvalue) {
-//      return OP::Map(lvalue);
-//    }
-//  };
-//
-//  /*! \brief Return only rvalue */
-//  template<typename OP>
-//  struct BinaryOpRValue
-//  {
-//    template<typename DType>
-//    MSHADOW_XINLINE static DType Map(DType lvalue, const DType rvalue) {
-//      return OP::Map(rvalue);
-//    }
-//  };
 
  private:
-
 #if 0
   // TODO(cjolivier01) Precompute parallelizing strategy
   template<typename xpu, typename DType, typename IType, typename OP>
@@ -280,7 +260,7 @@ class ElemwiseBinaryOp : public OpBase
       #pragma omp parallel for
       for(int i = static_cast<int>(iter_out), n = index_out_min; i < n; ++i) {
         MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-          Kernel<MapIdentity<Req>, xpu>::Launch(s, size, out[i].dptr_, zero_input_val);
+          Kernel<MapSetToScalar<Req>, xpu>::Launch(s, size, out[i].dptr_, zero_input_val);
         });
       }
     }
@@ -610,11 +590,7 @@ class ElemwiseBinaryOp : public OpBase
                                    const std::vector<TBlob> &outputs) {
     DCHECK_EQ(outputs.size(), 2U);
     DCHECK_EQ(inputs.size(), 3U);
-//    for(size_t x = 0, n = inputs.size(); x < n; ++x) {
-//      std::stringstream ss;
-//      ss << "BinaryBackwardUseIn_(): inputs[" << x << "]: ";
-//      test::print_blob(&std::cout, ss.str(), inputs[x]);
-//    }
+    //PRINT_NDARRAYS(inputs);
     mxnet_op::Stream<xpu> *s = ctx.get_stream<xpu>();
     const DType *ograd_dptr = inputs[0].dptr<DType>();
     const DType *lhs_dptr = inputs[1].dptr<DType>();
@@ -633,8 +609,7 @@ class ElemwiseBinaryOp : public OpBase
       DType * rgrad_dptr = outputs[1].dptr<DType>();
       mxnet_op::Kernel<BinaryOpBackwardUseIn<ROP, Req>, xpu>::Launch(
         s, size, rgrad_dptr, ograd_dptr, lhs_dptr, rhs_dptr);});
-//    test::print_blob(&std::cout, "output[0]", outputs[0]);
-//    test::print_blob(&std::cout, "output[1]", outputs[1]);
+    //PRINT_NDARRAYS(outputs);
   }
 
  public:
@@ -697,11 +672,7 @@ class ElemwiseBinaryOp : public OpBase
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
     if (req[0] != kNullOp) {
-//      for(size_t x = 0, n = inputs.size(); x < n; ++x) {
-//        std::stringstream ss;
-//        ss << "LaunchEx(): inputs[" << x << "]: ";
-//        test::print(&std::cout, ss.str(), inputs[x]);
-//      }
+      //PRINT_OP_AND_ARRAYS(OP, inputs);
       // If any input or output is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
@@ -717,7 +688,7 @@ class ElemwiseBinaryOp : public OpBase
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              Launch<xpu, OP>, "LaunchEx");
       }
-//      test::print(&std::cout, "output[0]", outputs[0]);
+      //PRINT_OP_AND_ARRAYS(OP, outputs);
     }
   }
 
@@ -759,11 +730,7 @@ class ElemwiseBinaryOp : public OpBase
 //    CHECK_EQ(inputs.size(), 2);
 //    CHECK_EQ(outputs.size(), 1);
 //    if (req[0] != kNullOp) {
-////      for(size_t x = 0, n = inputs.size(); x < n; ++x) {
-////        std::stringstream ss;
-////        ss << "LaunchEx(): inputs[" << x << "]: ";
-////        test::print(&std::cout, ss.str(), inputs[x]);
-////      }
+//      PRINT_NDARRAYS(inputs);
 //      // If any input or output is dense, fallback to FCompute
 //      // TODO(haibin) implement dns + rsp in a separate kernel
 //      if (!common::ContainsDefaultStorage(inputs)) {
@@ -773,7 +740,7 @@ class ElemwiseBinaryOp : public OpBase
 //        FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
 //                             Launch<xpu, OP>, "LaunchEx");
 //      }
-////      test::print(&std::cout, "output[0]", outputs[0]);
+//      PRINT_NDARRAYS(outputs);
 //    }
 //  }
 
@@ -788,14 +755,7 @@ class ElemwiseBinaryOp : public OpBase
     using namespace mshadow::expr;
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
-//    do {
-//      std::stringstream ss;
-//      ss << "LaunchExDenseRValue():" << std::endl;
-//      for (size_t x = 0, n = inputs.size(); x < n; ++x) {
-//        ss << "*inputs[" << x << "]: ";
-//        test::print(&std::cout, ss.str(), inputs[x]);
-//      }
-//    } while (0);
+    //PRINT_OP_AND_ARRAYS(OP, inputs);
     if (req[0] != kNullOp) {
       bool allowed = false;
       if(lhs_may_be_dense && rhs_may_be_dense) {
@@ -823,7 +783,7 @@ class ElemwiseBinaryOp : public OpBase
                              Launch<xpu, OP>, "LaunchEx");
       }
     }
-//    test::print(&std::cout, "*outputs[0]", outputs[0]);
+    //PRINT_OP_AND_ARRAYS(OP, outputs);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -832,9 +792,11 @@ class ElemwiseBinaryOp : public OpBase
                              const std::vector<TBlob> &inputs,
                              const std::vector<OpReqType> &req,
                              const std::vector<TBlob> &outputs) {
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, inputs);
     MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
       BinaryBackwardUseNone_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
     });
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, outputs);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -845,6 +807,7 @@ class ElemwiseBinaryOp : public OpBase
                                const std::vector<NDArray> &outputs) {
     CHECK_EQ(inputs.size(), 1U);  // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, inputs);
     using namespace mshadow;
     using namespace mshadow::expr;
     auto stype = inputs[0].storage_type();
@@ -870,6 +833,7 @@ class ElemwiseBinaryOp : public OpBase
                              "BinaryBackwardUseNoneEx");
       }
     }
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, outputs);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -878,9 +842,11 @@ class ElemwiseBinaryOp : public OpBase
                                          const std::vector<TBlob> &inputs,
                                          const std::vector<OpReqType> &req,
                                          const std::vector<TBlob> &outputs) {
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, inputs);
     MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
       BinaryBackwardUseIn_<xpu, LOP, ROP, DType>(attrs, ctx, inputs, req, outputs);
     });
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, outputs);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -894,25 +860,34 @@ class ElemwiseBinaryOp : public OpBase
     });
   }
 
-  template<typename xpu, typename LOP, typename ROP>
+  template<
+    typename xpu,
+    typename LOP,
+    typename ROP,
+    bool in0_ok_dense = false,
+    bool in1_ok_dense = false,
+    bool in2_ok_dense = false>
   static inline void BinaryBackwardUseInEx(const nnvm::NodeAttrs &attrs,
                                            const OpContext &ctx,
                                            const std::vector<NDArray> &inputs,
                                            const std::vector<OpReqType> &req,
                                            const std::vector<NDArray> &outputs) {
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, inputs);
     CHECK_EQ(inputs.size(), 3U);  // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
-//    do {
-//      std::stringstream ss;
-//      ss << "BinaryBackwardUseInEx():" << std::endl;
-//      for (size_t x = 0, n = inputs.size(); x < n; ++x) {
-//        ss << "*inputs[" << x << "]: ";
-//        test::print(&std::cout, ss.str(), inputs[x]);
-//      }
-//    } while (0);
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
+//      bool allow = true;
+//      if(!in0_ok_dense && inputs[0].storage_type() == kDefaultStorage) {
+//        allow = false;
+//      }
+//      if(allow && !in1_ok_dense && inputs[1].storage_type() == kDefaultStorage) {
+//        allow = false;
+//      }
+//      if(allow && !in2_ok_dense && inputs[2].storage_type() == kDefaultStorage) {
+//        allow = false;
+//      }
       if (!common::ContainsDefaultStorage(inputs)) {
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
         MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
@@ -953,8 +928,7 @@ class ElemwiseBinaryOp : public OpBase
                              "BinaryBackwardUseInEx");
       }
     }
-//    test::print(&std::cout, "output[0]", outputs[0]);
-//    test::print(&std::cout, "output[1]", outputs[1]);
+    //PRINT_OP2_AND_ARRAYS(LOP, ROP, outputs);
   }
 
   template<typename xpu, typename LOP, typename ROP>
@@ -964,10 +938,10 @@ class ElemwiseBinaryOp : public OpBase
                                                 const std::vector<OpReqType> &req,
                                                 const std::vector<NDArray> &outputs) {
 //    do {
-//      std::stringstream ss;
-//      ss << "BinaryBackwardUseInExDense():" << std::endl;
+//      std::cout << "BinaryBackwardUseInExDense():" << std::endl;
 //      for (size_t x = 0, n = inputs.size(); x < n; ++x) {
-//        ss << "*inputs[" << x << "]: ";
+//        std::stringstream ss;
+//        ss << "*INPUTS[" << x << "]: ";
 //        test::print(&std::cout, ss.str(), inputs[x]);
 //      }
 //    } while (0);

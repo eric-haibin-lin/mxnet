@@ -25,8 +25,8 @@ NNVM_REGISTER_OP(_backward_add)
   [](const NodeAttrs& attrs){
     return std::vector<std::pair<int, int> >{{0, 0}, {0, 1}};
   })
-.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseNone<cpu, mshadow_op::identity,
-                                                                mshadow_op::identity>)
+.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseNone<
+  cpu, mshadow_op::identity, mshadow_op::identity>)
 .set_attr<FComputeEx>("FComputeEx<cpu>",
                       ElemwiseBinaryOp::BinaryBackwardUseNoneEx<cpu, mshadow_op::identity,
                         mshadow_op::identity>)

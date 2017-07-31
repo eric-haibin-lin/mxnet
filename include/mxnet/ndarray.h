@@ -806,7 +806,6 @@ class NDArray {
       dptr += byte_offset_;
     } else if (stype == kCSRStorage || stype == kRowSparseStorage) {
       shape = storage_shape();
-      dptr += byte_offset_;
     } else {
       LOG(FATAL) << "unknown storage type " << stype;
     }

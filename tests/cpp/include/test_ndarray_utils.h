@@ -249,9 +249,11 @@ class Array
         mxnet::op::CastStorageComputeImpl<gpu>(s, src, dest);
         break;
 #endif  // MNXNET_USE_CUDA
-      default:  // CPU
-        mxnet::op::CastStorageComputeImpl<cpu>(nullptr, src, *pArray);
+      default: {  // CPU
+        OpContext op_ctx;
+        mxnet::op::CastStorageComputeImpl<cpu>(op_ctx, src, *pArray);
         break;
+      }
     }
     return *pArray;
   }

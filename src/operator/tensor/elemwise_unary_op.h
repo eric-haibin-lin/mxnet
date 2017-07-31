@@ -25,7 +25,7 @@ class OpBase {
   //enum WithHalf2 { WITH_HALF2, WITHOUT_HALF2 };
 
   template<int Req>
-  struct MapIdentity {
+  struct MapSetToScalar {
     template<typename DType>
     MSHADOW_XINLINE static void Map(int i, DType *out, const DType value) {
       KERNEL_ASSIGN(out[i], Req, value);
@@ -35,8 +35,10 @@ class OpBase {
  protected:
   /*! \brief Copy blob data */
   template<typename xpu>
-  static void CopyBlob(mshadow::Stream<xpu> *s,
-                       const TBlob& dest_blob, const OpReqType reqi, const TBlob& src_blob) {
+  static void inline CopyBlob(mshadow::Stream<xpu> *s,
+                              const TBlob& dest_blob,
+                              const OpReqType reqi,
+                              const TBlob& src_blob) {
     using namespace mshadow;
     using namespace mshadow::expr;
     CHECK_EQ(src_blob.type_flag_, dest_blob.type_flag_);

@@ -430,7 +430,6 @@ void CopyFromToImpl(const NDArray from, NDArray *to, RunContext rctx) {
     << " to stype = " << to_stype << " is not supported";
   const auto from_ctx = from.ctx();
   const auto to_ctx = to->ctx();
-  auto s = rctx.get_stream<from_xpu>();
   bool is_train = mxnet::autograd::AutogradRuntime::Get()->IsTraining();
   std::vector<Resource> requested;
   if (is_same<from_xpu, mshadow::gpu>::value && from_stype != to_stype) {

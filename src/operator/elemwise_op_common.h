@@ -19,10 +19,6 @@
 #include "./operator_common.h"
 #include "./mxnet_op.h"
 
-#ifndef NEBUG
-#include "../../tests/cpp/include/test_util.h"
-#endif
-
 namespace mxnet {
 namespace op {
 template<typename AttrType, bool (*is_none)(const AttrType&),

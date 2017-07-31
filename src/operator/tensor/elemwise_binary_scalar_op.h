@@ -54,7 +54,7 @@ class BinaryScalarOp : public UnaryOp
             const long dense_block_count = next_input_row - output_row;
             if (dense_block_count > 0) {
               MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-                mxnet_op::Kernel<MapIdentity<Req>, xpu>::Launch(
+                mxnet_op::Kernel<MapSetToScalar<Req>, xpu>::Launch(
                   s,
                   items_per_row * dense_block_count,
                   output_data.dptr_ + items_per_row * output_row,
@@ -104,18 +104,19 @@ class BinaryScalarOp : public UnaryOp
       }
       case kCSRStorage: {
         test::print(&std::cout, "LaunchExDenseResult(): input", input);
-        CHECK_EQ(output.shape(), input.shape());
-        const size_t  row_count = input.shape()[0];
-        const size_t item_count = input.aux_shape(csr::kIdx).Size();
-        const TBlob  row_starts = input.aux_data(csr::kIndPtr);
-        const TBlob  column_pos =  input.aux_data(csr::kIdx);
-        #pragma omp parallel for
-        for(size_t i = 0; i < row_count; ++i)  {
-          // Split up into blocks of contiguous data and do those together
-          //const size_t start_col_iter =
-          size_t start_col = 0;
-          size_t end_col = 0;
-        }
+        CHECK(false);
+//        CHECK_EQ(output.shape(), input.shape());
+//        const size_t  row_count = input.shape()[0];
+//        const size_t item_count = input.aux_shape(csr::kIdx).Size();
+//        const TBlob  row_starts = input.aux_data(csr::kIndPtr);
+//        const TBlob  column_pos =  input.aux_data(csr::kIdx);
+//        #pragma omp parallel for
+//        for(size_t i = 0; i < row_count; ++i)  {
+//          // Split up into blocks of contiguous data and do those together
+//          //const size_t start_col_iter =
+//          size_t start_col = 0;
+//          size_t end_col = 0;
+//        }
         test::print(&std::cout, "LaunchExDenseResult(): output", output);
         break;
       }

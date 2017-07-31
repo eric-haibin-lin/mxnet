@@ -19,7 +19,7 @@
 #include <vector>
 #include "./exec_pass.h"
 
-#define EXECUTOR_DEBUG 1
+#define EXECUTOR_DEBUG 0
 
 namespace mxnet {
 

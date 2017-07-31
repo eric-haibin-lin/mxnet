@@ -44,6 +44,18 @@ class StatefulComputeExecutor : public OpExecutor {
       LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
     } else {
+      if(!in_array.empty()) {
+        const TBlob &b_in = in_array[0].data();
+        if (b_in.Size()) {
+          MSHADOW_REAL_TYPE_SWITCH(b_in.type_flag_, DType, {
+            DType *iin = b_in.dptr<DType>();
+            if (iin) {
+              DType val = iin[0];
+            }
+          });
+          //exit(0);
+        }
+      }
       GetDefaultBlobs<cpu>(in_array, &in_data_, &temp_in_, op_ctx);
       GetDefaultBlobs<cpu>(out_array, &out_data_, &temp_out_, op_ctx);
       fcompute_(state_, op_ctx, in_data_, req, out_data_);

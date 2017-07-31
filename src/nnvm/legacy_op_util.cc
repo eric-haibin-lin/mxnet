@@ -88,7 +88,7 @@ class OperatorState {
                const std::vector<TBlob>& inputs,
                const std::vector<OpReqType>& req,
                const std::vector<TBlob>& outputs) {
-    if (!fwd_init_) {
+    if (true || !fwd_init_) {
       CHECK_EQ(inputs.size(), in_data_.size() + aux_data_.size());
       CHECK_EQ(outputs.size(), out_data_.size());
       for (size_t i = 0; i < in_data_.size(); ++i) in_data_[i] = inputs[i];

@@ -424,7 +424,7 @@ static StreamType& PRT(
   *os << test::op::BasicOperatorData<DType, AccReal>::bvt2String(bvt) << ": " << idx
       << ": ";
   const TBlob& blob = obj.getBlobVect(bvt)[idx];
-  test::print_blob(os, blob);
+  test::print(os, blob);
   return *os;
 }
 
