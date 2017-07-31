@@ -506,7 +506,6 @@ void SliceCsrImpl(const SliceParam &param, const OpContext& ctx,
   if (req == kNullOp) return;
   CHECK_NE(req, kAddTo) << "kAddTo for Slice on CSR input is not supported";
   CHECK_NE(req, kWriteInplace) << "kWriteInplace for Slice on CSR input is not supported";
-  Stream<xpu> *s = ctx.get_stream<xpu>();
   int begin = *param.begin[0];
   int end = *param.end[0];
   int indptr_len = end - begin + 1;
