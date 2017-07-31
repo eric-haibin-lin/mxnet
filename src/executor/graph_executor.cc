@@ -535,8 +535,9 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       ++arg_top;
     }
 #if EXECUTOR_DEBUG
-    LOG(INFO) << "\tassign data entry\t" << eid << " as stype "
-              << data_entry_[eid].storage_type() << " (input)";
+    LOG(INFO) << "\tassign data entry\t" << eid << " as stype: "
+              << op::stype_string(data_entry_[eid].storage_type())
+              << " (input)";
 #endif
   }
 
@@ -1070,7 +1071,8 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
 #if EXECUTOR_DEBUG
-    LOG(INFO) << "\tinit head_g entry\t" << data_eid << "\tas stype " << stype;
+    LOG(INFO) << "\tinit head_g entry\t" << data_eid << "\tas stype: "
+              << op::stype_string(stype);
 #endif
   }
   // get maximum bytes in each pool
@@ -1154,7 +1156,7 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[i] = NDArray(storage_type, vshape[i], data_context[i]);
     }
 #if EXECUTOR_DEBUG
-    LOG(INFO) << "\tinit data entry\t" << i << "\tas stype " << storage_type;
+    LOG(INFO) << "\tinit data entry\t" << i << "\tas stype: " << op::stype_string(storage_type);
 #endif
   }
 }
