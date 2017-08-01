@@ -15,7 +15,7 @@
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
 #include <cstdlib>
-
+#include "../../../src/operator/tensor/elemwise_unary_op.h"
 #include "test_util.h"
 #include "test_op.h"
 
@@ -31,19 +31,19 @@ using namespace mxnet;
 #define TEST_DTYPE float
 #define TEST_ITYPE int32_t
 
-void CheckDataRegion(const TBlob &src, const TBlob &dst) {
+inline void CheckDataRegion(const TBlob &src, const TBlob &dst) {
   auto size = src.shape_.Size() * mshadow::mshadow_sizeof(src.type_flag_);
   auto equals = memcmp(src.dptr_, dst.dptr_, size);
   EXPECT_EQ(equals, 0);
 }
 
-float RandFloat() {
+inline float RandFloat() {
   double v = rand() * 1.0 / RAND_MAX;
   return static_cast<float>(v);
 }
 
 // Get an NDArray with provided indices, prepared for a RowSparse NDArray.
-NDArray RspIdxND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> &values) {
+inline NDArray RspIdxND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> &values) {
   NDArray nd(shape, ctx, false, ROW_SPARSE_IDX_TYPE);
   size_t num_val = values.size();
   MSHADOW_TYPE_SWITCH(nd.dtype(), DType, {
@@ -56,7 +56,7 @@ NDArray RspIdxND(const TShape shape, const Context ctx, const std::vector<TEST_I
 }
 
 // Get a dense NDArray with provided values.
-NDArray DnsND(const TShape shape, const Context ctx, std::vector<TEST_DTYPE> vs) {
+inline NDArray DnsND(const TShape shape, const Context ctx, std::vector<TEST_DTYPE> vs) {
   NDArray nd(shape, ctx, false);
   size_t num_val = shape.Size();
   // generate random values
@@ -75,7 +75,7 @@ NDArray DnsND(const TShape shape, const Context ctx, std::vector<TEST_DTYPE> vs)
 }
 
 // Get a RowSparse NDArray with provided indices and values
-NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> idx,
+inline NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> idx,
               std::vector<TEST_DTYPE> vals) {
   CHECK(shape.ndim() <= 2) << "High dimensional row sparse not implemented yet";
   index_t num_rows = idx.size();
@@ -97,7 +97,7 @@ NDArray RspND(const TShape shape, const Context ctx, const std::vector<TEST_ITYP
 }
 
 // TODO(haibin) support other types
-NDArray Convert(NDArrayStorageType type, NDArray src) {
+inline NDArray Convert(NDArrayStorageType type, NDArray src) {
   CHECK_EQ(type, kDefaultStorage);
   NDArray converted(src.shape(), src.ctx(), false);
   Engine::Get()->PushSync([src, converted](RunContext ctx) {
@@ -127,7 +127,7 @@ template<typename DType>
 class Array
 {
   typedef std::map<size_t, std::map<size_t, DType> > TItems;
-  static constexpr DType EPSILON = 1e-5;
+  static constexpr double EPSILON = 1e-5;
 
   static const char *st2str(const NDArrayStorageType storageType) {
     switch (storageType) {
@@ -202,6 +202,11 @@ class Array
 
   Array(const TShape &shape)
     : shape_(shape) {}
+
+  Array(const NDArray &arr)
+    : shape_(arr.shape()) {
+    Load(arr);
+  }
 
   void clear() {
     items_.clear();
@@ -321,6 +326,14 @@ class Array
   TShape shape_;
   TItems items_;
 };
+
+template<typename StreamType>
+inline StreamType& print_dense(StreamType *_os, const std::string& label, const NDArray& arr) {
+  MSHADOW_TYPE_SWITCH(arr.data().type_flag_, DType, {
+    return print(_os, label, test::Array<DType>(arr).Save(arr.ctx(), kDefaultStorage))
+      << std::endl;
+  });
+}
 
 }  // namespace test
 }  // namespace mxnet

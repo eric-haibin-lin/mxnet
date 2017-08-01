@@ -141,6 +141,21 @@ class OpBase {
     computer(attrs, ctx, in_blobs, req, out_blobs);
   }
 
+  template<typename DType, typename xpu>
+  static inline mshadow::Tensor<xpu, 2, DType> AsRowise2D(mshadow::Stream<xpu> *s,
+                                                          const TBlob& blob) {
+    const size_t dim = blob.shape_.ndim();
+    if (dim) {
+      TShape shape({blob.shape_[0], 1});
+      for (size_t i = 1; i < dim; ++i) {
+        shape[1] *= blob.shape_[i];
+      }
+      return mshadow::Tensor<xpu, 2, DType>(
+        blob.dptr<DType>(), mshadow::Shape2(shape[0], shape[1]), s);
+    }
+    return mshadow::Tensor<xpu, 2, DType>();
+  }
+
 };  // OpBase
 
 /*! \brief Unary operator class */

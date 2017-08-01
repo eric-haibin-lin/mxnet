@@ -120,7 +120,7 @@ MXNET_OPERATOR_REGISTER_UNARY(make_loss)
     return ret;
   });
 
-// identity output as first input, but attributes are constrainted to be like rhs
+// identity output as first input, but attributes are constrained to be like rhs
 NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 .set_num_inputs(2)
 .set_attr<nnvm::FListInputNames>("FListInputNames",

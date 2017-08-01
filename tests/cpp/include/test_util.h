@@ -330,7 +330,7 @@ inline StreamType& print(StreamType *_os, const std::string &label,
 }
 
 template<typename StreamType>
-inline void print(StreamType *_os, const std::string& label, const NDArray& arr) {
+inline StreamType& print(StreamType *_os, const std::string& label, const NDArray& arr) {
   if(!label.empty()) {
     *_os << label << ": ";
   }
@@ -374,7 +374,7 @@ inline void print(StreamType *_os, const std::string& label, const NDArray& arr)
       // data
       const TShape& shape = arr.shape();
       const bool is_one_row = shape[0] < 2;
-      print_shape(_os, "[dense] main shape", shape, false);
+      print_shape(_os, "[dense] main shape", shape, !is_one_row);
       print(_os, arr.data(), true, true, !is_one_row) << std::endl;
       break;
     }
@@ -382,7 +382,7 @@ inline void print(StreamType *_os, const std::string& label, const NDArray& arr)
       CHECK(false) << "Unsupported storage type:" << arr.storage_type();
       break;
   }
-  *_os << std::flush;
+  return *_os << std::flush;
 }
 
 inline void print(const std::string& label,

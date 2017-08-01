@@ -148,6 +148,8 @@ def rand_sparse_ndarray(shape, stype, density=None, data_init=None,
     elif stype == 'csr':
         assert(len(shape) == 2)
         csr = sp.rand(shape[0], shape[1], density=density, format='csr')
+        if data_init is not None:
+            csr.data.fill(data_init)
         result = mx.nd.csr(csr.data, csr.indptr, csr.indices, shape)
         return result, (csr.indptr, csr.indices, csr.data)
     else:
@@ -180,7 +182,7 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
 
 def create_sparse_array_zd(shape, stype, density, data_init=None,
                            rsp_indices=None, modifier_func=None):
-    """Create sparse array, rsp_indices will override density for row_sparse"""
+    """Create sparse array, using only rsp_indices to determine density"""
     if stype == 'row_sparse':
         density = 0.0
     return create_sparse_array(shape, stype,

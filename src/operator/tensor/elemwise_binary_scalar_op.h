@@ -13,11 +13,188 @@
 #include "../elemwise_op_common.h"
 #include "elemwise_unary_op.h"
 
+#ifndef NDEBUG
+#include "../../../tests/cpp/include/test_ndarray_utils.h"
+#endif
+
 namespace mxnet {
 namespace op {
 
 class BinaryScalarOp : public UnaryOp
 {
+
+  template<typename xpu, typename DType, typename OP>
+  static inline void FillDense(mshadow::Stream<xpu> *s,
+                               const size_t size,
+                               const DType val,
+                               const OpReqType req,
+                               DType *out) {
+    using namespace mxnet_op;
+    using namespace mshadow::expr;
+    MXNET_ASSIGN_REQ_SWITCH(req, Req, {
+      Kernel<MapSetToScalar<Req>, xpu>::Launch(s, size, out, val);
+    });
+  }
+
+  template<typename xpu, typename OP, typename DType, typename IType, typename CType>
+  static void LaunchExDenseResultCSR(const nnvm::NodeAttrs &attrs,
+                                     const OpContext &ctx,
+                                     const NDArray& input,
+                                     const OpReqType req,
+                                     const NDArray& output) {
+    test::print(&std::cout, "LaunchExDenseResult(): input", input) << std::endl;
+    test::print_dense(&std::cout, "LaunchExDenseResult(): DENSE input", input) << std::endl;
+    CHECK_EQ(output.shape(), input.shape());
+
+    mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
+    const double alpha = nnvm::get<double>(attrs.parsed);
+
+    const DType dense_fill_val = OP::Map(DType(0), DType(alpha));
+    //const DType dense_fill_val = 1;
+
+    const auto row_count = static_cast<size_t>(input.shape()[0]);
+    const TBlob  column_indexes = input.aux_data(csr::kIdx);
+    const size_t item_count = column_indexes.Size();
+
+    const DType *in = input.data().dptr<DType>();
+
+#ifndef NDEBUG
+    // Fill with recognizable garbage
+    FillDense<xpu, DType, OP>(s, output.shape().Size(), DType(99),
+                              req, output.data().dptr<DType>());
+#endif
+
+    mshadow::Tensor<xpu, 2, DType> out = AsRowise2D<DType>(s, output.data());
+    if(item_count) {
+      const long last_real_col = out.shape_[1] - 1;
+      const IType *column_indexes_ptr = column_indexes.dptr<IType>();
+
+      const TBlob row_starts = input.aux_data(csr::kIndPtr);
+      const CType *row_starts_ptr = row_starts.dptr<CType>();
+
+      #pragma omp parallel for
+      for (int i = 0; i < row_count; ++i) {
+        std::cout << "** ROW " << i << "**" << std::endl << std::flush;
+        const bool last_row = i == row_count - 1;
+        // Split up into blocks of contiguous data and do those together
+        const size_t row_item_start_iter = row_starts_ptr[i];
+        const size_t input_items_this_row = !last_row
+                                      ? static_cast<size_t>(row_starts_ptr[i + 1])
+                                        - row_item_start_iter
+                                      : item_count - row_item_start_iter;
+        if(input_items_this_row) {
+          const IType *this_row_column_indexes = column_indexes_ptr + row_item_start_iter;
+          const DType *row_data_start = in + row_item_start_iter;
+          const size_t this_row_first_col = this_row_column_indexes[0];
+          const size_t this_row_last_col_iter = !last_row
+                                                ? static_cast<size_t>(row_starts_ptr[i + 1] - 1)
+                                                : static_cast<size_t>(item_count - 1);
+          //const size_t this_row_last_col = column_indexes_ptr[this_row_last_col_iter];
+          const size_t this_row_last_col = this_row_column_indexes[input_items_this_row - 1];
+
+          std::cout << "row: " << i
+                    << ", first col: " << this_row_first_col
+                    << ", last col: " << this_row_last_col
+                    << std::endl << std::flush;
+
+          size_t set_item_count = 0;
+
+          // Fill dense up to first sparse column
+          if(this_row_first_col) {
+            std::cout << "PRE Dense: " << 0 << " -> "
+                      << (this_row_first_col - 1)
+                      << std::endl << std::flush;
+            FillDense<xpu, DType, OP>(s, this_row_first_col, dense_fill_val,
+                                      req, out[i].dptr_);
+            set_item_count += this_row_first_col;
+          }
+
+          size_t last_column = this_row_first_col;
+          //long items_to_do = input_items_this_row;
+          //long prev_col = -1;
+          long last_filled_csr_col = -1;
+          size_t col_iter = 0;
+          //size_t last_input_col = this_row_column_indexes[col_iter];
+          while(col_iter < input_items_this_row) {
+            // Fill dense between end of last pass and beginning of this pass
+            const size_t start_input_col = this_row_column_indexes[col_iter];
+            if(last_filled_csr_col >= 0) {
+              const long output_from_col = last_filled_csr_col + 1;
+              const long output_to_col = start_input_col - 1;
+              DCHECK_GE(output_to_col, output_from_col);
+              std::cout << "Backfill Dense: " << output_from_col << " -> " << output_to_col << std::endl << std::flush;
+              const auto size = static_cast<size_t>(output_to_col - output_from_col + 1);
+              FillDense<xpu, DType, OP>(s, size, dense_fill_val,
+                                        req, out[i].dptr_ + output_from_col);
+              set_item_count += size;
+            }
+
+            const size_t start_col_iter = col_iter;
+            size_t next_col_iter = start_col_iter + 1;
+            size_t csr_adjacent_count = 0;
+            do {
+              size_t tmp_col = start_input_col;
+              for (; next_col_iter < input_items_this_row; ++next_col_iter) {
+                const size_t next_input_col = this_row_column_indexes[next_col_iter];
+                if (next_input_col != tmp_col + 1) {
+                  break;
+                }
+                tmp_col = next_input_col;
+                ++csr_adjacent_count;
+              }
+            } while (0);
+            const size_t csr_col_end = start_input_col + csr_adjacent_count;
+            std::cout << "CSR block: row: " << i
+                      << ", left col: " << start_input_col
+                      << ", right col: " << csr_col_end
+                      //<< ", last col this row: " << prev_col
+                      << std::endl << std::flush;
+            last_filled_csr_col = csr_col_end;
+            const long nr_csr_to_do = csr_adjacent_count + 1;
+            CHECK_GT(nr_csr_to_do, 0);
+            const size_t off = col_iter;
+            std::cout << "CSR: " << start_input_col << " -> "
+                      << (start_input_col + nr_csr_to_do - 1)
+                      << std::endl << std::flush;
+            MXNET_ASSIGN_REQ_SWITCH(req, Req, {
+              mxnet_op::Kernel<BMap<OP, Req>, xpu>
+              ::Launch(s, nr_csr_to_do, out[i].dptr_ + start_input_col,
+                       (row_data_start + off), DType(alpha));
+              //last_input_col += nr_csr_to_do;
+            });
+            set_item_count += nr_csr_to_do;
+
+            //prev_col = last_input_col;
+            col_iter = next_col_iter;
+            test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
+          }
+
+          // Fill remaining columns
+          if(last_filled_csr_col < last_real_col) {
+            std::cout << "POST Dense: " << (last_filled_csr_col + 1) << " -> "
+                      << ((last_filled_csr_col + 1) + (last_real_col - last_filled_csr_col) - 1)
+                      << std::endl << std::flush;
+            FillDense<xpu, DType, OP>(s, last_real_col - last_filled_csr_col,
+                                      dense_fill_val,
+                                      req, out[i].dptr_ + (last_filled_csr_col + 1));
+            set_item_count += last_real_col - last_filled_csr_col;
+          }
+          test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
+          CHECK_EQ(set_item_count, out[i].shape_.Size());
+        } else {
+          // Fill dense output row with value
+          FillDense<xpu, DType, OP>(s, out[i].shape_.Size(), dense_fill_val,
+                                    req, out[i].dptr_);
+        }
+      }
+    } else {
+      // Fill whole dense tensor with value
+      FillDense<xpu, DType, OP>(s, output.shape().Size(), dense_fill_val,
+                                req, output.data().dptr<DType>());
+    }
+    test::print(&std::cout, "LaunchExDenseResult(): output", output);
+  }
+
   template<typename xpu, typename OP, typename DType, typename IType>
   static void LaunchExDenseResult(const nnvm::NodeAttrs &attrs,
                                   const OpContext &ctx,
@@ -103,21 +280,10 @@ class BinaryScalarOp : public UnaryOp
         break;
       }
       case kCSRStorage: {
-        test::print(&std::cout, "LaunchExDenseResult(): input", input);
-        CHECK(false);
-//        CHECK_EQ(output.shape(), input.shape());
-//        const size_t  row_count = input.shape()[0];
-//        const size_t item_count = input.aux_shape(csr::kIdx).Size();
-//        const TBlob  row_starts = input.aux_data(csr::kIndPtr);
-//        const TBlob  column_pos =  input.aux_data(csr::kIdx);
-//        #pragma omp parallel for
-//        for(size_t i = 0; i < row_count; ++i)  {
-//          // Split up into blocks of contiguous data and do those together
-//          //const size_t start_col_iter =
-//          size_t start_col = 0;
-//          size_t end_col = 0;
-//        }
-        test::print(&std::cout, "LaunchExDenseResult(): output", output);
+        MSHADOW_TYPE_SWITCH(input.aux_data(csr::kIndPtr).type_flag_, CType, {
+          LaunchExDenseResultCSR<xpu, OP, DType, IType, CType>(
+            attrs, ctx, input, req, output);
+        });
         break;
       }
       default:
@@ -157,6 +323,7 @@ class BinaryScalarOp : public UnaryOp
     DCHECK_EQ(inputs.size(), 1);
     DCHECK_EQ(outputs.size(), 1);
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
+    //PRINT_OP_AND_ARRAYS(OP, inputs);
     if(outputs[0].storage_type() != kDefaultStorage) {
       CHECK_EQ(outputs[0].storage_type(), inputs[0].storage_type());
       if (req[0] != kNullOp) {
@@ -177,6 +344,7 @@ class BinaryScalarOp : public UnaryOp
         });
       }
     };
+    //PRINT_OP_AND_ARRAYS(OP, outputs);
   }
 
   template<typename xpu, typename OP>
