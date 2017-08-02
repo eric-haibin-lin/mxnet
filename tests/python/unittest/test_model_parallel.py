@@ -6,6 +6,7 @@ def reldiff(a, b):
     norm = np.sum(np.abs(a))
     if diff == 0:
         return 0
+
     reldiff = diff  / norm
     return reldiff
 
