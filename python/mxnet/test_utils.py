@@ -124,8 +124,6 @@ def rand_sparse_ndarray(shape, stype, density=None, data_init=None,
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     density = rnd.rand() if density is None else density
     if stype == 'row_sparse':
-        # TODO(haibin) support high dim sparse ndarray
-        assert(len(shape) < 3)
         # sample index
         if rsp_indices is not None:
             indices = rsp_indices

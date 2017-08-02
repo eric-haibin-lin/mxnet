@@ -23,6 +23,7 @@ namespace op {
 class BinaryScalarOp : public UnaryOp
 {
 
+  /*! \brief FIll dense output block with a single scalar value */
   template<typename xpu, typename DType, typename OP>
   static inline void FillDense(mshadow::Stream<xpu> *s,
                                const size_t size,
@@ -43,8 +44,8 @@ class BinaryScalarOp : public UnaryOp
                                      const NDArray& input,
                                      const OpReqType req,
                                      const NDArray& output) {
-    test::print(&std::cout, "LaunchExDenseResult(): input", input) << std::endl;
-    test::print_dense(&std::cout, "LaunchExDenseResult(): DENSE input", input) << std::endl;
+//    test::print(&std::cout, "LaunchExDenseResult(): input", input) << std::endl;
+//    test::print_dense(&std::cout, "LaunchExDenseResult(): DENSE input", input) << std::endl;
     CHECK_EQ(output.shape(), input.shape());
 
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -75,7 +76,7 @@ class BinaryScalarOp : public UnaryOp
 
       #pragma omp parallel for
       for (int i = 0; i < row_count; ++i) {
-        std::cout << "** ROW " << i << "**" << std::endl << std::flush;
+        //std::cout << "** ROW " << i << "**" << std::endl << std::flush;
         const bool last_row = i == row_count - 1;
         // Split up into blocks of contiguous data and do those together
         const size_t row_item_start_iter = row_starts_ptr[i];
@@ -88,20 +89,20 @@ class BinaryScalarOp : public UnaryOp
           const DType *row_data_start = in + row_item_start_iter;
           const size_t this_row_first_col = this_row_column_indexes[0];
           //const size_t this_row_last_col = column_indexes_ptr[this_row_last_col_iter];
-          const size_t this_row_last_col = this_row_column_indexes[input_items_this_row - 1];
+          //const size_t this_row_last_col = this_row_column_indexes[input_items_this_row - 1];
 
-          std::cout << "row: " << i
-                    << ", first col: " << this_row_first_col
-                    << ", last col: " << this_row_last_col
-                    << std::endl << std::flush;
+//          std::cout << "row: " << i
+//                    << ", first col: " << this_row_first_col
+//                    << ", last col: " << this_row_last_col
+//                    << std::endl << std::flush;
 
           size_t set_item_count = 0;
 
           // Fill dense up to first sparse column
           if(this_row_first_col) {
-            std::cout << "PRE Dense: " << 0 << " -> "
-                      << (this_row_first_col - 1)
-                      << std::endl << std::flush;
+//            std::cout << "PRE Dense: " << 0 << " -> "
+//                      << (this_row_first_col - 1)
+//                      << std::endl << std::flush;
             FillDense<xpu, DType, OP>(s, this_row_first_col, dense_fill_val,
                                       req, out[i].dptr_);
             set_item_count += this_row_first_col;
@@ -116,7 +117,7 @@ class BinaryScalarOp : public UnaryOp
               const long output_from_col = last_filled_csr_col + 1;
               const long output_to_col = start_input_col - 1;
               DCHECK_GE(output_to_col, output_from_col);
-              std::cout << "Backfill Dense: " << output_from_col << " -> " << output_to_col << std::endl << std::flush;
+              //std::cout << "Backfill Dense: " << output_from_col << " -> " << output_to_col << std::endl << std::flush;
               const auto size = static_cast<size_t>(output_to_col - output_from_col + 1);
               FillDense<xpu, DType, OP>(s, size, dense_fill_val,
                                         req, out[i].dptr_ + output_from_col);
@@ -138,18 +139,17 @@ class BinaryScalarOp : public UnaryOp
               }
             } while (0);
             const size_t csr_col_end = start_input_col + csr_adjacent_count;
-            std::cout << "CSR block: row: " << i
-                      << ", left col: " << start_input_col
-                      << ", right col: " << csr_col_end
-                      //<< ", last col this row: " << prev_col
-                      << std::endl << std::flush;
+//            std::cout << "CSR block: row: " << i
+//                      << ", left col: " << start_input_col
+//                      << ", right col: " << csr_col_end
+//                      << std::endl << std::flush;
             last_filled_csr_col = csr_col_end;
             const long nr_csr_to_do = csr_adjacent_count + 1;
             CHECK_GT(nr_csr_to_do, 0);
             const size_t off = col_iter;
-            std::cout << "CSR: " << start_input_col << " -> "
-                      << (start_input_col + nr_csr_to_do - 1)
-                      << std::endl << std::flush;
+//            std::cout << "CSR: " << start_input_col << " -> "
+//                      << (start_input_col + nr_csr_to_do - 1)
+//                      << std::endl << std::flush;
             MXNET_ASSIGN_REQ_SWITCH(req, Req, {
               mxnet_op::Kernel<BMap<OP, Req>, xpu>
               ::Launch(s, nr_csr_to_do, out[i].dptr_ + start_input_col,
@@ -160,20 +160,20 @@ class BinaryScalarOp : public UnaryOp
 
             //prev_col = last_input_col;
             col_iter = next_col_iter;
-            test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
+            //test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
           }
 
           // Fill remaining columns
           if(last_filled_csr_col < last_real_col) {
-            std::cout << "POST Dense: " << (last_filled_csr_col + 1) << " -> "
-                      << ((last_filled_csr_col + 1) + (last_real_col - last_filled_csr_col) - 1)
-                      << std::endl << std::flush;
+//            std::cout << "POST Dense: " << (last_filled_csr_col + 1) << " -> "
+//                      << ((last_filled_csr_col + 1) + (last_real_col - last_filled_csr_col) - 1)
+//                      << std::endl << std::flush;
             FillDense<xpu, DType, OP>(s, last_real_col - last_filled_csr_col,
                                       dense_fill_val,
                                       req, out[i].dptr_ + (last_filled_csr_col + 1));
             set_item_count += last_real_col - last_filled_csr_col;
           }
-          test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
+          //test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
           // Make sure that we did the exact correct number of writes
           DCHECK_EQ(set_item_count, out[i].shape_.Size());
         } else {
@@ -187,7 +187,7 @@ class BinaryScalarOp : public UnaryOp
       FillDense<xpu, DType, OP>(s, output.shape().Size(), dense_fill_val,
                                 req, output.data().dptr<DType>());
     }
-    test::print(&std::cout, "LaunchExDenseResult(): output", output);
+    //test::print(&std::cout, "LaunchExDenseResult(): output", output);
   }
 
   template<typename xpu, typename OP, typename DType, typename IType>

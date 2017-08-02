@@ -208,9 +208,9 @@ class ElemwiseBinaryOp : public OpBase
 
     // Data
     // TODO(cjolivier01): Change to get_with_shape() calls
-    Tensor<xpu, 2, DType> data_l = lhs.data().FlatTo2D<xpu, DType>(s);
-    Tensor<xpu, 2, DType> data_r = rhs.data().FlatTo2D<xpu, DType>(s);
-    Tensor<xpu, 2, DType> out = output.data().FlatTo2D<xpu, DType>(s);
+    Tensor<xpu, 2, DType> data_l = AsRowise2D<DType>(s, lhs.data());
+    Tensor<xpu, 2, DType> data_r = AsRowise2D<DType>(s, rhs.data());
+    Tensor<xpu, 2, DType> out = AsRowise2D<DType>(s, output.data());
 
     size_t iter_l = 0;
     size_t iter_r = 0;

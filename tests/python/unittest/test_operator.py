@@ -7,7 +7,6 @@ import itertools
 from numpy.testing import assert_allclose, assert_array_equal
 from mxnet.test_utils import *
 
-
 def np_softmax(x, axis=-1):
     # fix for old numpy on Travis not supporting keepdims
     # x = x - np.max(x, axis=-1, keepdims=True)
@@ -96,7 +95,6 @@ def check_concat_with_shape(shapes, dimension, skip_second):
             np_grad = arr_np[i]
             assert_almost_equal(grad.asnumpy(), np_grad + 1)
 
-
 def test_concat():
     for dimension in range(4):
         n = 2
@@ -142,7 +140,6 @@ def test_concat():
                     shapes.append((a,b,c,merge[i]))
             check_concat_with_shape(shapes,dimension,True)
             check_concat_with_shape(shapes,dimension,False)
-
 
 def test_slice_channel():
     def check_slice_channel(data_ndim, axis, num_outputs, squeeze_axis):
@@ -207,7 +204,6 @@ def check_regression(symbol, forward, backward):
     npout = backward(npout,  arr_label.asnumpy().reshape(npout.shape))
     assert_almost_equal(npout, arr_grad.asnumpy())
 
-
 def test_regression():
     check_regression(mx.symbol.LogisticRegressionOutput,
                      lambda x: 1.0 / (1.0 + np.exp(-x)),
@@ -215,7 +211,6 @@ def test_regression():
     check_regression(mx.symbol.LinearRegressionOutput,
                      lambda x: x,
                      lambda x, y : x - y)
-
 
 def check_softmax_with_ignore_label(xpu):
     X = mx.symbol.Variable('X')
@@ -249,7 +244,6 @@ def check_softmax_with_ignore_label(xpu):
     assert abs(np.sum(grad1[:int(shape[0]/2)])) < 1e-5
     assert_almost_equal(grad0[int(shape[0]/2):], grad1[int(shape[0]/2):])
 
-
 def check_softmax_with_shape(shape, xpu, preserve_shape=False):
     # bind with label
     X = mx.symbol.Variable('X')
@@ -266,12 +260,10 @@ def check_softmax_with_shape(shape, xpu, preserve_shape=False):
     exec1.backward()
     assert_almost_equal(grad.asnumpy(), np_softmax(x.asnumpy()) - l.asnumpy(), rtol=1e-4)
 
-
 def test_softmax():
     check_softmax_with_shape((3, 4), default_context(), preserve_shape=False)
     check_softmax_with_shape((3, 4), default_context(), preserve_shape=True)
     check_softmax_with_shape((3, 4, 2), default_context(), preserve_shape=True)
-
 
 def test_python_op():
     X = mx.symbol.Variable('X')
@@ -286,7 +278,6 @@ def test_python_op():
     assert_almost_equal(x.asnumpy(), exec1.outputs[0].asnumpy())
     exec1.backward(dy)
     assert_almost_equal(dy.asnumpy(), dx.asnumpy())
-
 
 def test_swapaxes():
     data = mx.symbol.Variable('data')
@@ -305,7 +296,6 @@ def test_swapaxes():
     swap_ = np.swapaxes(swap0_, 1, 2)
 
     assert_almost_equal(out, swap_)
-
 
 def test_scalarop():
     data = mx.symbol.Variable('data')
@@ -337,7 +327,6 @@ def test_scalar_pow():
     check_symbolic_forward(test, [data_tmp], [data_tmp ** 2])
     check_symbolic_backward(test, [data_tmp], [np.ones(shape)], [2 * data_tmp])
 
-
 def test_symbol_pow():
     shape = (1, 1)
 
@@ -356,7 +345,6 @@ def test_symbol_pow():
     exp_dir = data_tmp**(exp_tmp) * np.log(data_tmp)
     check_symbolic_backward(test, [data_tmp, exp_tmp], [np.ones(shape)], [data_dir, exp_dir])
 
-
 def test_pow_fn():
     shape = (3, 4)
     exp = mx.symbol.Variable("exp")
@@ -365,7 +353,6 @@ def test_pow_fn():
     check_numeric_gradient(y, [x], numeric_eps=1E-3)
     check_symbolic_forward(y, [x], [2**x])
     check_symbolic_backward(y, [x], [np.ones(shape)], [np.log(2) * 2**x])
-
 
 def test_relu():
     def frelu(x):
@@ -382,7 +369,6 @@ def test_relu():
     check_symbolic_forward(y, [xa], [ya])
     check_symbolic_backward(y, [xa], [np.ones(shape)], [ga])
 
-
 def test_sigmoid():
     def fsigmoid(a):
         return np.divide(1.0, (1.0 + np.exp(-a)))
@@ -394,7 +380,6 @@ def test_sigmoid():
     check_numeric_gradient(y, [xa], numeric_eps=1E-3)
     check_symbolic_forward(y, [xa], [ya])
     check_symbolic_backward(y, [xa], [np.ones(shape)], [ya * (1 - ya)])
-
 
 def test_binary_logic():
     def _inner_test(forward_gt, logic_sym, x_shape, y_shape, test_scalar=True):
@@ -451,7 +436,6 @@ def test_binary_logic():
                 logic_sym=lambda x, y: mx.sym.broadcast_not_equal(x, y),
                 x_shape=(1, 10), y_shape=(10, 1), test_scalar=False)
 
-
 def test_embedding():
     in_dim = 10
     out_dim = 4
@@ -478,7 +462,6 @@ def test_embedding():
     exe_test.backward([grad])
     assert_almost_equal(grad_map["embed_weight"].asnumpy(), np.dot(np_onehot.T, np_grad))
 
-
 # check ops handle duplicate input correctly.
 def test_binary_op_duplicate_input():
     data = mx.symbol.Variable('data')
@@ -496,7 +479,6 @@ def test_binary_op_duplicate_input():
     assert_almost_equal(exe_square.outputs[0].asnumpy(), data_tmp * data_tmp)
     exe_square.backward(out_grad)
     assert_almost_equal(arr_grad.asnumpy(), 2.0 * data_tmp)
-
 
 def test_sign():
     data = mx.symbol.Variable('data')
@@ -520,7 +502,6 @@ def test_sign():
     npout_grad = 0;
     exe_test.backward(out_grad)
     assert_almost_equal(arr_grad.asnumpy(), npout_grad)
-
 
 def test_round_ceil_floor():
     data = mx.symbol.Variable('data')
@@ -574,7 +555,6 @@ def test_rsqrt_cos_sin():
     exe_test.backward(out_grad)
     assert_almost_equal(arr_grad.asnumpy(), npout_grad)
 
-
 def test_maximum_minimum():
     data1 = mx.symbol.Variable('data')
     data2 = mx.symbol.Variable('data')
@@ -613,7 +593,6 @@ def test_maximum_minimum():
     assert_almost_equal(arr_grad1.asnumpy(), npout_grad1)
     assert_almost_equal(arr_grad2.asnumpy(), npout_grad2)
 
-
 def test_maximum_minimum_scalar():
     data1 = mx.symbol.Variable('data')
     shape = (3, 4)
@@ -644,7 +623,6 @@ def test_maximum_minimum_scalar():
 
     assert_almost_equal(arr_grad1.asnumpy(), npout_grad1)
 
-
 def test_abs():
     data = mx.symbol.Variable('data')
     shape = (3, 4)
@@ -667,7 +645,6 @@ def test_abs():
     npout_grad = npout_grad * np.sign(data_tmp)
     exe_test.backward(out_grad)
     assert_almost_equal(arr_grad.asnumpy(), npout_grad)
-
 
 def check_deconvolution_forward_backward(input_shape, num_filter, kernel, stride, pad):
     """configure A: input --> conv --> deconv --> output.
@@ -767,7 +744,6 @@ def check_deconvolution_gradient(input_shape, num_filter, pad):
     assert_almost_equal(conv_args_grad[1].asnumpy() + deconv_addto_args_grad_npy[1],
                         deconv_addto_args_grad[1].asnumpy(), rtol=1e-3, atol=1e-2)
 
-
 def check_deconvolution_target_shape(input_shape, kernel, stride, pad, adj, target_shape=None):
     data = mx.sym.Variable(name="data")
     if target_shape:
@@ -780,7 +756,6 @@ def check_deconvolution_target_shape(input_shape, kernel, stride, pad, adj, targ
     arg_names = deconv.list_arguments()
     arg_shapes, out_shapes, _ = deconv.infer_shape(data=input_shape)
     assert out_shapes[0] == (input_shape[0], 5, 8, 8)
-
 
 def test_deconvolution():
     check_deconvolution_target_shape(
@@ -830,7 +805,6 @@ def test_deconvolution():
         pad = (3,3)
     )
 
-
 def check_nearest_upsampling_with_shape(shapes, scale, root_scale):
     arr = {'arg_%d'%i: mx.random.uniform(-10.0, 10.0, shape, ctx=mx.cpu()).copyto(default_context()) for i, shape in zip(range(len(shapes)), shapes)}
     arr_grad = {'arg_%d'%i: mx.nd.zeros(shape) for i, shape in zip(range(len(shapes)), shapes)}
@@ -842,7 +816,6 @@ def check_nearest_upsampling_with_shape(shapes, scale, root_scale):
     for k in range(len(shapes)):
         name = 'arg_%d'%k
         assert_allclose(arr[name].asnumpy()*root_scale**2*scale**(2*k), arr_grad[name].asnumpy(), rtol=1e-4)
-
 
 def check_bilinear_upsampling_with_shape(shapes, scale, root_scale):
     arr = {'arg_%d'%i: mx.random.uniform(-10.0, 10.0, shape, ctx=mx.cpu()).copyto(default_context()) for i, shape in zip(range(len(shapes)), shapes)}
@@ -856,7 +829,6 @@ def check_bilinear_upsampling_with_shape(shapes, scale, root_scale):
         name = 'arg_%d'%k
         assert_allclose(arr[name].asnumpy()*root_scale**2*scale**(2*k), arr_grad[name].asnumpy(), rtol=1e-4)
 
-
 def test_nearest_upsampling():
     for root_scale in [1,2,3]:
         for scale in [1,2,3]:
@@ -864,7 +836,6 @@ def test_nearest_upsampling():
                 for base in [1,2,3]:
                     shapes = [(1,3,base*root_scale*scale**(num_shape-1-i),base*root_scale*scale**(num_shape-1-i)) for i in range(num_shape)]
                     check_nearest_upsampling_with_shape(shapes, scale, root_scale)
-
 
 def test_batchnorm_training():
     for shape in [(2, 3), (2, 3, 2, 2)]:
@@ -937,7 +908,6 @@ def test_batchnorm_training():
             test = mx.symbol.BatchNorm(data, fix_gamma=False, use_global_stats=True, axis=chaxis)
             check_numeric_gradient(test, [data_tmp, gamma, beta], [xrolling_mean, xrolling_std], numeric_eps=1e-2, rtol=0.2, atol=0.01)
 
-
 def test_convolution_grouping():
     num_filter = 4
     num_group = 2
@@ -967,7 +937,6 @@ def test_convolution_grouping():
 
     for arr1, arr2 in zip(exe1.outputs + exe1.grad_arrays, exe2.outputs + exe2.grad_arrays):
         np.testing.assert_allclose(arr1.asnumpy(), arr2.asnumpy(), rtol=1e-3, atol=1e-4)
-
 
 def gen_broadcast_data(idx):
     # Manually set test cases
@@ -1024,11 +993,9 @@ def gen_broadcast_data(idx):
         r_shape[np.where(r_axis_flags == 0)] = 1
     return [np.random.random(l_shape), np.random.random(r_shape)]
 
-
 def gen_broadcast_data_int(idx):
     d = gen_broadcast_data(idx);
     return [np.round(d[0]*100).astype(int), np.round(d[1]*100).astype(int)]
-
 
 def gen_binary_data(dummy):
     ndim = np.random.randint(1, 6)
@@ -1088,7 +1055,6 @@ def check_binary_op_backward(symbol, baseline, gen_data, rtol=1e-3, atol=1e-5):
         assert_allclose(y_1.asnumpy(), x_1, rtol=rtol, atol=atol)
         assert_allclose(y_2.asnumpy(), x_2, rtol=rtol, atol=atol)
 
-
 def test_binary_op():
     a = mx.sym.Variable('a')
     b = mx.sym.Variable('b')
@@ -1143,7 +1109,6 @@ def test_binary_op():
     test_bpow(a, b)
     test_bneq(a, b)
 
-
 def test_broadcast_binary_op():
     a = mx.sym.Variable('a')
     b = mx.sym.Variable('b')
@@ -1197,7 +1162,6 @@ def test_broadcast_binary_op():
     test_bmod_int(a, b)
     test_bpow(a, b)
     test_bequal(a, b)
-
 
 def test_run_convolution_dilated_impulse_response(dil=(1,1), kernel_shape=(3,3), verbose=False):
     # Input for spike response
@@ -1341,7 +1305,6 @@ def test_reshape():
     assert_allclose(outputs, data_npy.reshape((5, 4 * 3 * 7)))
     exe.backward(out_grads=[mx.nd.array(out_grad_npy, ctx=default_context())])
     assert_allclose(exe.grad_arrays[0].asnumpy(), out_grad_npy.reshape((5, 4, 3, 7)))
-
 
 def test_reduce():
     sample_num = 500
@@ -1560,7 +1523,6 @@ def test_slice_axis():
             xx[idx] = x.asnumpy()[idx]
             assert_allclose(xx + x_grad_npy, xgrad.asnumpy(), atol=1E-5)
 
-
 def test_flip():
     for ndim in range(1, 6):
         for t in range(5):
@@ -1672,7 +1634,6 @@ def test_dot(ctx=default_context()):
             check_numeric_gradient(dot_sym_yT(data_type), [m1_npy, m2_npy.T], numeric_eps=1e-1, rtol=2e-2, atol=1e-3)
             check_numeric_gradient(dot_sym_xT_yT(data_type), [m1_npy.T, m2_npy.T], numeric_eps=1e-1, rtol=2e-2, atol=1e-3)
 
-
 def test_batch_dot():
     dtypes = ['float32', 'float64']
 
@@ -1729,14 +1690,12 @@ def test_batch_dot():
                             assert_almost_equal(exe_add.grad_dict['b'].asnumpy(),
                                 bgrad_npy + b_init_grad_npy, rtol=1e-3, atol=1e-4)
 
-
 def get_correlation(data1,data2,kernel_size,max_displacement,stride1,stride2,pad_size,is_multiply):
 
     img1 = mx.sym.Variable('img1')
     img2 = mx.sym.Variable('img2')
     return mx.sym.Correlation(data1=img1,data2=img2,kernel_size =kernel_size,max_displacement = max_displacement,
                               stride1 = stride1,stride2 = stride2,pad_size= pad_size,is_multiply = is_multiply)
-
 
 def correlation_forward(data1,data2,pad_size,kernel_size,stride1,stride2,max_displacement,is_multiply):
 
@@ -1784,7 +1743,6 @@ def correlation_forward(data1,data2,pad_size,kernel_size,stride1,stride2,max_dis
                                     out[nbatch, top_channel, i, j] += abs(tmp1[nbatch, channel, y1 + h, x1 + w] - tmp2[nbatch, channel, y2 + h, x2 + w])
     out /= float(kernel_size**2*data1.shape[1])
     return out,tmp1,tmp2
-
 
 def correlation_backward(out_grad,tmp1,tmp2,data1,data2,pad_size,kernel_size,stride1,stride2,max_displacement,is_multiply):
 
@@ -1834,7 +1792,6 @@ def correlation_backward(out_grad,tmp1,tmp2,data1,data2,pad_size,kernel_size,str
     tmp1_grad = tmp1_grad / float(kernel_size**2*data1.shape[1])
     tmp2_grad = tmp2_grad / float(kernel_size**2*data1.shape[1])
     return tmp1_grad[:,:,pad_size:pad_size+data1.shape[2],pad_size:pad_size+data1.shape[3]],tmp2_grad[:,:,pad_size:pad_size+data1.shape[2],pad_size:pad_size+data1.shape[3]],
-
 
 def unittest_correlation(data_shape,kernel_size,max_displacement,stride1,stride2,pad_size,is_multiply):
 
@@ -1910,7 +1867,6 @@ def test_support_vector_machine_l1_svm():
 
     assert_almost_equal(grad_np, grad.asnumpy())
 
-
 def test_support_vector_machine_l2_svm():
     xpu = default_context()
     shape = (20, 10)
@@ -1958,7 +1914,6 @@ def test_roipooling():
                            grad_nodes={'data':'add', 'rois':'null'},
                            numeric_eps=1e-4, rtol=1e-1, atol=1E-4)
 
-
 def check_pad_with_shape(shape, xpu, pad_width, mode):
     # bind with label
     X = mx.symbol.Variable('X')
@@ -1977,7 +1932,6 @@ def check_pad_with_shape(shape, xpu, pad_width, mode):
     # grad check
     check_numeric_gradient(Y, [x.asnumpy()], numeric_eps=1e-2, rtol=1e-2)
 
-
 def test_pad():
     shape1 = (2, 3, 3, 5)
     pad1 = (0, 0, 0, 0, 1, 2, 3, 4)
@@ -1989,7 +1943,6 @@ def test_pad():
     check_pad_with_shape(shape2, default_context(), pad2, 'edge')
     check_pad_with_shape(shape1, default_context(), pad1, 'reflect')
     check_pad_with_shape(shape2, default_context(), pad2, 'reflect')
-
 
 def np_instance_norm(data, weight, bias, eps):
     spatial_dims = data.shape[2::]
@@ -2006,7 +1959,6 @@ def np_instance_norm(data, weight, bias, eps):
     biasBatch = np.tile(bias, (data.shape[0], 1))
     biasBatch = np.reshape(np.repeat(biasBatch, num_spatial_vals), data.shape)
     return weightBatch * (data - mean)/np.sqrt(var + eps) + biasBatch
-
 
 def check_instance_norm_with_shape(shape, xpu):
     # bind with label
@@ -2028,13 +1980,11 @@ def check_instance_norm_with_shape(shape, xpu):
     check_numeric_gradient(Y, {'X':x.asnumpy(), 'G':gamma.asnumpy(), 'B':beta.asnumpy()},
                            numeric_eps=1e-2, rtol=1e-2, atol=1e-2)
 
-
 def test_instance_normalization():
     check_instance_norm_with_shape((1, 1, 1), default_context())
     check_instance_norm_with_shape((2, 1, 2), default_context())
     check_instance_norm_with_shape((2,4,5,6), default_context())
     check_instance_norm_with_shape((3,3,2,3,2,1,1), default_context())
-
 
 def check_l2_normalization(in_shape, mode, ctx=default_context(), norm_eps=1e-10):
     data = mx.symbol.Variable('data')
@@ -2068,7 +2018,6 @@ def check_l2_normalization(in_shape, mode, ctx=default_context(), norm_eps=1e-10
     # check gradient
     check_numeric_gradient(out, [in_data], numeric_eps=1e-3, rtol=1e-2, atol=1e-3)
 
-
 def test_l2_normalization():
     for mode in ['channel', 'spatial', 'instance']:
         for nbatch in [1, 4]:
@@ -2078,7 +2027,6 @@ def test_l2_normalization():
                     for width in [5, 7]:
                         check_l2_normalization((nbatch, nchannel, height, width), mode)
 
-
 def sequence_mask_numpy(array, lengths, value):
     arrayMask = array.copy()
     shape = array.shape
@@ -2086,7 +2034,6 @@ def sequence_mask_numpy(array, lengths, value):
     for i in range(batch):
         arrayMask[int(lengths[i]):, i] = value
     return arrayMask
-
 
 def check_sequence_mask(shape, xpu, mask_value):
     # bind with label
@@ -2109,7 +2056,6 @@ def check_sequence_mask(shape, xpu, mask_value):
     # grad check
     check_numeric_gradient(Y, [x.asnumpy(), l.asnumpy()], grad_nodes={'X':'write'},
         numeric_eps=1e-3, rtol=1e-2)
-
 
 def test_sequence_mask():
     shape1 = (4, 2, 2, 3)
