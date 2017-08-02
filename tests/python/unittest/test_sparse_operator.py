@@ -410,8 +410,10 @@ def test_elemwise_binary_ops():
                                 lambda l, r: mx.sym.hypot(l, r),
                                 lambda l, r: np.hypot(l, r),
                                 lambda outg, l, r: (
-                                                outg * assign_each2(l, r, lambda a, b: a/np.sqrt(a * a + b * b)),
-                                                outg * assign_each2(l, r, lambda a, b: b/np.sqrt(a * a + b * b))
+                                                outg * assign_each2(
+                                                  l, r, lambda a, b: a/np.sqrt(a * a + b * b)),
+                                                outg * assign_each2(
+                                                  l, r, lambda a, b: b/np.sqrt(a * a + b * b))
                                             ),
                                 lhs_grad_stype, rhs_grad_stype,
                                 force_lr_overlap=force_lr_overlap,
@@ -420,6 +422,25 @@ def test_elemwise_binary_ops():
                                 ograd_density=ograd_density,
                                 skip_gradient_check=True,
                                 verbose=False)
+
+        # def test_bmod(a, b):
+        #   c = a % b
+        #   check_binary_op_forward(c, lambda a, b: a % b, gen_binary_data)
+        #   check_binary_op_backward(c, lambda g_out, a, b: (g_out, - g_out * (a // b)), gen_binary_data)
+
+        # mod
+        # test_elemwise_binary_op("mod", lhs_stype, rhs_stype, shape,
+        #                         lambda l, r: l % r,
+        #                         lambda l, r: np.mod(l, r),
+        #                         lambda outg, l, r: (outg, - outg * (l // r))
+        #                         lhs_grad_stype, rhs_grad_stype,
+        #                         force_lr_overlap=force_lr_overlap,
+        #                         force_grad_overlap=force_grad_overlap,
+        #                         lhs_density=lhs_density, rhs_density=rhs_density,
+        #                         ograd_density=ograd_density,
+        #                         skip_gradient_check=True,
+        #                         verbose=False)
+        #
 
         # test_elemwise_binary_op("power", lhs_stype, rhs_stype, shape,
         #                         lambda l, r: mx.sym.pow(l, r),
@@ -533,10 +554,10 @@ def check_sparse_mathematical_core(name, stype,
 
   grad_stypes = list(expected_grad_result_type)
 
-  #shape = rand_shape_2d()
+  shape = rand_shape_2d()
   #shape = (3,4)
   #shape = (9,1)
-  shape = (1,1)
+  #shape = (1,1)
   #shape = (10, 8)
   #shape = (2, 5)
 
@@ -1171,65 +1192,6 @@ def check_is_type(arr, stype):
   else:
     assert arr.stype == 'default'
 
-# TODO: Requires add_n for backward pass
-# def test_sparse_maximum_minimum():
-#     def check_sparse_maximum_minimum(stype, grad_stype, expected_result_stype=None):
-#         data1 = mx.symbol.Variable('data')
-#         data2 = mx.symbol.Variable('data')
-#         shape = (3, 4)
-#
-#         if stype is None or stype == 'default':
-#             data_tmp1 = np.random.rand(3,4)
-#             data_tmp2 = np.random.rand(3,4)
-#             arr_data1 = mx.nd.array(data_tmp1)
-#             arr_data2 = mx.nd.array(data_tmp2)
-#             data_tmp1 = arr_data1.asnumpy()
-#             data_tmp2 = arr_data2.asnumpy()
-#             arr_grad1 = mx.nd.empty(shape)
-#             arr_grad2 = mx.nd.empty(shape)
-#         else:
-#             arr_data1 = create_sparse_array(shape, stype, rsp_indices=(1, 3))
-#             arr_data2 = create_sparse_array(shape, stype, rsp_indices=(2, 1))
-#             data_tmp1 = arr_data1.asnumpy()
-#             data_tmp2 = arr_data2.asnumpy()
-#             arr_grad1 = create_sparse_array(shape, grad_stype, rsp_indices=(1, 3))
-#             arr_grad2 = create_sparse_array(shape, grad_stype, rsp_indices=(2, 1))
-#
-#         test = mx.sym.maximum(data1,data2) + mx.sym.minimum(data1,data2);
-#         exe_test = test.bind(default_context(), args=[arr_data1,arr_data2], args_grad=[arr_grad1,arr_grad2])
-#         print("BEGIN FORWARD")
-#         exe_test.forward(is_train=True)
-#         print("END FORWARD")
-#
-#         output = exe_test.outputs[0]
-#         check_is_type(output, expected_result_stype)
-#         print("BEGIN CAST")
-#         out = output.asnumpy()
-#         print("END CAST")
-#         npout = np.maximum(data_tmp1, data_tmp2) \
-#                 + np.minimum(data_tmp1, data_tmp2)
-#         assert_almost_equal(out, npout)
-#
-#         out_grad = mx.nd.empty(shape)
-#         out_grad[:] = 2
-#         print(out_grad.asnumpy())
-#         exe_test.backward(out_grad)
-#         np_arr_grad1 = arr_grad1.asnumpy()
-#         np_arr_grad2 = arr_grad2.asnumpy()
-#
-#         npout_grad = np.ones(shape)
-#         npout_grad[:] = 2
-#         mask1 = (data_tmp1 > data_tmp2).astype('float')
-#         mask2 = (data_tmp1 < data_tmp2).astype('float')
-#         npout_grad1 = npout_grad * mask1 + npout_grad * mask2
-#         npout_grad2 = (npout_grad - npout_grad * mask1) + (npout_grad - npout_grad * mask2)
-#
-#         assert_almost_equal(np_arr_grad1, npout_grad1)
-#         assert_almost_equal(np_arr_grad2, npout_grad2)
-#
-#     #check_sparse_maximum_minimum('default', 'default', 'default')
-#     check_sparse_maximum_minimum('row_sparse', 'row_sparse', 'row_sparse')
-#
 
 def test_sparse_unary_with_numerics():
   def check_sparse_simple(name, stype, mxnet_func, forward_numpy_call,
@@ -1341,6 +1303,66 @@ def test_sparse_square_sum():
                 check_numeric_gradient(test, [rsp], grad_stype_dict={'data': 'row_sparse'},
                                        atol=1e-2, rtol=0.1)
 
+def test_sparse_storage_fallback():
+  """ test operators which don't implement FComputeEx or FStatefulComputeEx """
+  def check_broadcast_add(shape, lhs_stype, rhs_stype):
+    lhs = mx.symbol.Variable('lhs', stype=lhs_stype)
+    rhs = mx.symbol.Variable('rhs', stype=rhs_stype)
+    lhs_nd = rand_ndarray(shape, lhs_stype)
+    rhs_nd = rand_ndarray(shape, rhs_stype)
+    lhs_dns = mx.nd.cast_storage(lhs_nd, stype='default')
+    rhs_dns = mx.nd.cast_storage(rhs_nd, stype='default')
+
+    out_dns = (lhs_dns + rhs_dns).asnumpy()
+    test = mx.symbol.broadcast_add(lhs, rhs)
+    location = {'lhs': lhs_nd, 'rhs': rhs_nd}
+    check_symbolic_forward(test, location, [out_dns])
+    check_numeric_gradient(test, location)
+    check_symbolic_backward(test, location, [out_dns], [out_dns, out_dns])
+
+  def np_softmax(x, axis=-1):
+    # fix for old numpy on Travis not supporting keepdims
+    # x = x - np.max(x, axis=-1, keepdims=True)
+    x = x - np.max(x, axis=axis, keepdims=True)
+    x = np.exp(x)
+    # x /= np.sum(x, axis=-1, keepdims=True)
+    x /= np.sum(x, axis=axis, keepdims=True)
+    return x
+
+  def check_softmax_with_shape(lhs_stype, rhs_stype, shape, preserve_shape=False):
+    # bind with label
+    ctx = default_context()
+    X = mx.symbol.Variable('X', stype=lhs_stype)
+    L = mx.symbol.Variable('L', stype=rhs_stype)
+    Y = mx.symbol.SoftmaxOutput(data=X, label=L, preserve_shape=preserve_shape)
+    x = rand_ndarray(shape, lhs_stype)
+    l = rand_ndarray(shape, rhs_stype)
+    l[:] = np_softmax(l.asnumpy())
+    grad = mx.nd.empty(shape, ctx=ctx)
+    exec1 = Y.bind(ctx, args = [x, l], args_grad = {'X': grad})
+    exec1.forward(is_train=True)
+    out = exec1.outputs[0].asnumpy()
+    assert_almost_equal(out, np_softmax(x.asnumpy()), rtol=1e-4)
+    exec1.backward()
+    assert_almost_equal(grad.asnumpy(), np_softmax(x.asnumpy()) - l.asnumpy(), rtol=1e-4)
+
+  def check_concat(shape, lhs_stype, rhs_stype):
+    x = mx.symbol.Variable('x', stype=lhs_stype)
+    w = mx.symbol.Variable('w', stype=rhs_stype)
+    test = mx.sym.Concat(x, w)
+    x_nd = rand_ndarray(shape, lhs_stype)
+    w_nd = rand_ndarray(shape, rhs_stype)
+    location = {'x': x_nd, 'w': w_nd}
+    check_numeric_gradient(test, location)
+
+  shape = rand_shape_2d()
+  stypes = ['default', 'csr', 'row_sparse']
+  for lhs in stypes:
+    for rhs in stypes:
+      check_broadcast_add(shape, lhs, rhs)
+      check_concat(shape, lhs, rhs)
+      check_softmax_with_shape(lhs, rhs, shape, preserve_shape=False)
+      check_softmax_with_shape(rhs, rhs, shape, preserve_shape=True)
 
 def test_sparse_elementwise_sum():
     def check_sparse_elementwise_sum_with_shape(stype, shape, n):
@@ -1363,6 +1385,7 @@ def test_sparse_elementwise_sum():
 
         out_grad = mx.nd.empty(shape)
         out_grad[:] = np.random.uniform(-10, 10, shape)
+
         # backward
         exec1.backward([out_grad])
         for a in arr_grad:
@@ -1374,16 +1397,11 @@ def test_sparse_elementwise_sum():
         print shape
         check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
 
-def test_inplace_elemwise_add():
-  print("test_inplace_elemwise_add")
-
-
 if __name__ == '__main__':
   import nose
   nose.runmodule()
-
-  #test_inplace_elemwise_add()
-  #test_sparse_mathematical_core()
+  # test_sparse_elementwise_sum()
+  # test_sparse_mathematical_core()
   # test_sparse_unary_with_numerics()
   # test_elemwise_binary_ops()
   print("Done")
