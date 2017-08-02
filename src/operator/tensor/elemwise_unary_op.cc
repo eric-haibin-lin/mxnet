@@ -44,7 +44,6 @@ MXNET_OPERATOR_REGISTER_UNARY(_copy)
   [](const NodeAttrs& attrs){
     return std::vector<bool>{true};
   })
-.set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_copy"});
 
 NNVM_REGISTER_OP(_backward_copy)
@@ -60,8 +59,7 @@ NNVM_REGISTER_OP(_backward_copy)
 .set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
   [](const NodeAttrs& attrs){
     return std::vector<bool>{true};
-  })
-.set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>);
+  });
 
 MXNET_OPERATOR_REGISTER_UNARY(BlockGrad)
 .add_alias("stop_gradient")
