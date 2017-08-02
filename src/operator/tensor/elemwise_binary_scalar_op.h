@@ -36,6 +36,7 @@ class BinaryScalarOp : public UnaryOp
     });
   }
 
+  /*! \brief Tensor operation against a scalar with a dense result */
   template<typename xpu, typename OP, typename DType, typename IType, typename CType>
   static void LaunchExDenseResultCSR(const nnvm::NodeAttrs &attrs,
                                      const OpContext &ctx,
@@ -58,11 +59,11 @@ class BinaryScalarOp : public UnaryOp
 
     const DType *in = input.data().dptr<DType>();
 
-#ifndef NDEBUG
-    // Fill with recognizable garbage
-    FillDense<xpu, DType, OP>(s, output.shape().Size(), DType(99),
-                              req, output.data().dptr<DType>());
-#endif
+//#ifndef NDEBUG
+//    // Fill with recognizable garbage
+//    FillDense<xpu, DType, OP>(s, output.shape().Size(), DType(99),
+//                              req, output.data().dptr<DType>());
+//#endif
 
     mshadow::Tensor<xpu, 2, DType> out = AsRowise2D<DType>(s, output.data());
     if(item_count) {
@@ -110,11 +111,8 @@ class BinaryScalarOp : public UnaryOp
           }
 
           size_t last_column = this_row_first_col;
-          //long items_to_do = input_items_this_row;
-          //long prev_col = -1;
           long last_filled_csr_col = -1;
           size_t col_iter = 0;
-          //size_t last_input_col = this_row_column_indexes[col_iter];
           while(col_iter < input_items_this_row) {
             // Fill dense between end of last pass and beginning of this pass
             const size_t start_input_col = this_row_column_indexes[col_iter];
@@ -180,7 +178,8 @@ class BinaryScalarOp : public UnaryOp
             set_item_count += last_real_col - last_filled_csr_col;
           }
           test::print(&std::cout, "output row", out[i]) << std::endl << std::flush;
-          CHECK_EQ(set_item_count, out[i].shape_.Size());
+          // Make sure that we did the exact correct number of writes
+          DCHECK_EQ(set_item_count, out[i].shape_.Size());
         } else {
           // Fill dense output row with value
           FillDense<xpu, DType, OP>(s, out[i].shape_.Size(), dense_fill_val,
