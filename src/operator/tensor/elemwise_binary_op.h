@@ -593,14 +593,21 @@ class ElemwiseBinaryOp : public OpBase
       // If any input or output is dense, fallback to FCompute
       // TODO(haibin) implement dns + rsp in a separate kernel
       if (!common::ContainsDefaultStorage(inputs)) {
-        MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
-          MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
-            RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
-              attrs, ctx, inputs[0], inputs[1],
-              req[0], outputs[0],
-              false, false, false);
-          });
-        });
+        switch(inputs[0].storage_type()) {
+          case kRowSparseStorage:
+            MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+              MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
+                RspRspElemwiseBinaryOp2<xpu, DType, IType, OP>(
+                  attrs, ctx, inputs[0], inputs[1],
+                  req[0], outputs[0],
+                  false, false, false);
+              });
+            });
+            break;
+          case kCSRStorage:
+            CHECK(false);
+            break;
+        }
       } else {
         FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                              Launch<xpu, OP>, "LaunchEx");
