@@ -87,9 +87,6 @@ class BinaryScalarOp : public UnaryOp
           const IType *this_row_column_indexes = column_indexes_ptr + row_item_start_iter;
           const DType *row_data_start = in + row_item_start_iter;
           const size_t this_row_first_col = this_row_column_indexes[0];
-          const size_t this_row_last_col_iter = !last_row
-                                                ? static_cast<size_t>(row_starts_ptr[i + 1] - 1)
-                                                : static_cast<size_t>(item_count - 1);
           //const size_t this_row_last_col = column_indexes_ptr[this_row_last_col_iter];
           const size_t this_row_last_col = this_row_column_indexes[input_items_this_row - 1];
 
@@ -110,7 +107,6 @@ class BinaryScalarOp : public UnaryOp
             set_item_count += this_row_first_col;
           }
 
-          size_t last_column = this_row_first_col;
           long last_filled_csr_col = -1;
           size_t col_iter = 0;
           while(col_iter < input_items_this_row) {
