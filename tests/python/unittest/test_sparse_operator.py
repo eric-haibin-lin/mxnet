@@ -725,6 +725,7 @@ def test_sparse_mathematical_core():
                                    lambda x: 2 * x,
                                    output_grad_stype=output_grad_stype, force_overlap=force_overlap,
                                    density=density, ograd_density=ograd_density)
+
     if stype != "csr":
       # sqrt
       check_sparse_mathematical_core("sqrt", stype,
@@ -958,9 +959,9 @@ def test_sparse_mathematical_core():
           #                         force_overlap=force_overlap,
           #                         density=density, ograd_density=ograd_density)
           #
-          # check_mathematical_core('csr', output_grad_stype='csr',
-          #                         force_overlap=force_overlap,
-          #                         density=density, ograd_density=ograd_density)
+          check_mathematical_core('csr', output_grad_stype='csr',
+                                  force_overlap=force_overlap,
+                                  density=density, ograd_density=ograd_density)
 
         # Check binary with scalar ops
           check_binary_op_with_scalar('default',
