@@ -1414,9 +1414,6 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
 #else
       bool profiling = false;
 #endif
-#if EXECUTOR_DEBUG
-      LOG(INFO) << "Run node " << nid << " - " << seg_op.topo_end - 1;
-#endif
       Engine::Get()->Push(seg_op.opr, seg_op.ctx, 0, profiling);
       nid = seg_op.topo_end - 1;
       continue;
@@ -1440,9 +1437,6 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
       bool profiling = engine::Profiler::Get()->GetState() == engine::Profiler::kRunning;
 #else
       bool profiling = false;
-#endif
-#if EXECUTOR_DEBUG
-      LOG(INFO) << "Run node " << nid;
 #endif
       Engine::Get()->Push(opnode.cached_opr, opnode.ctx, 0, profiling);
     } else {

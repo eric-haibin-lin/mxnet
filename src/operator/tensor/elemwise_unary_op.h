@@ -142,6 +142,21 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   }
 }
 
+inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
+                                           const Context& ctx,
+                                           std::vector<int> *in_attrs,
+                                           std::vector<int> *out_attrs) {
+  // TODO(junwu): add ctx info into storage inference logic
+  CHECK_EQ(in_attrs->size(), static_cast<size_t>(2)) << " in operator " << attrs.name;
+  CHECK_EQ(out_attrs->size(), static_cast<size_t>(1)) << " in operator " << attrs.name;
+  auto &in = *in_attrs;
+  auto &out = *out_attrs;
+  CHECK_NE(in[1], kUndefinedStorage) << "rhs storage type must be known";
+  if (in[0] == kUndefinedStorage) STORAGE_TYPE_ASSIGN_CHECK(in, 0, in[1]);
+  if (out[0] == kUndefinedStorage) STORAGE_TYPE_ASSIGN_CHECK(out, 0, in[1]);
+  return true;
+}
+
 template<typename xpu>
 void IdentityLikeRhsComputeEx(const nnvm::NodeAttrs& attrs,
                               const OpContext& ctx,

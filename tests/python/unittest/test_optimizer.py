@@ -35,7 +35,7 @@ def compare_optimizer(opt1, opt2, shape, dtype, w_stype='default', g_stype='defa
         w2 = mx.random.uniform(shape=shape, ctx=default_context(), dtype=dtype)
         w1 = w2.copyto(default_context())
     elif w_stype == 'row_sparse':
-        w2 = rand_ndarray(shape, w_stype, density=1)
+        w2 = rand_ndarray(shape, w_stype, density=1, dtype=dtype)
         w1 = w2.copyto(default_context()).todense()
     else:
         raise Exception("type not supported yet")
@@ -43,7 +43,7 @@ def compare_optimizer(opt1, opt2, shape, dtype, w_stype='default', g_stype='defa
         g2 = mx.random.uniform(shape=shape, ctx=default_context(), dtype=dtype)
         g1 = g2.copyto(default_context())
     elif g_stype == 'row_sparse':
-        g2 = rand_ndarray(shape, g_stype)
+        g2 = rand_ndarray(shape, g_stype, dtype=dtype)
         g1 = g2.copyto(default_context()).todense()
     else:
         raise Exception("type not supported yet")
@@ -260,24 +260,28 @@ def test_sparse_sgd():
     mx.random.seed(0)
     opt1 = PySparseSGD
     opt2 = mx.optimizer.SGD
-    shape = (3, 4)
-    kwargs = [{},
-              {'momentum': 0.9},
-              {'clip_gradient': 0.5},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14},
-              {'rescale_grad': 0.8},
-              {'clip_gradient': 0.5, 'wd': 0.07},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03},
-              {'rescale_grad': 0.8, 'wd': 0.05},
-              {'clip_gradient': 0.5, 'momentum': 0.9},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'momentum': 0.9},
-              {'rescale_grad': 0.8, 'momentum': 0.9},
-              {'clip_gradient': 0.5, 'wd': 0.07, 'momentum': 0.9},
-              {'clip_gradient': 0.4, 'rescale_grad': 0.14, 'wd': 0.03, 'momentum': 0.9},
-              {'rescale_grad': 0.8, 'wd': 0.05, 'momentum': 0.9}]
-    for kwarg in kwargs:
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, 'float32', w_stype='row_sparse', g_stype='row_sparse')
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, 'float32', w_stype='row_sparse', g_stype='default')
+    shape = (3, 4, 5)
+    mom_options = [{}, {'momentum': 0.9}]
+    cg_options = [{}, {'clip_gradient': 0.4}, {'clip_gradient': 0.5}]
+    rg_options = [{}, {'rescale_grad': 0.14}, {'rescale_grad': 0.8}]
+    wd_options = [{}, {'wd': 0.03}, {'wd': 0.05}, {'wd': 0.07}]
+    mp_options = [{}]
+    for dtype in [np.float32]:
+        for mom_option in mom_options:
+            for cg_option in cg_options:
+                for rg_option in rg_options:
+                    for wd_option in wd_options:
+                        for mp_option in mp_options:
+                            kwarg = {}
+                            kwarg.update(mom_option)
+                            kwarg.update(cg_option)
+                            kwarg.update(rg_option)
+                            kwarg.update(wd_option)
+                            kwarg.update(mp_option)
+                            compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype,
+                                              w_stype='row_sparse', g_stype='row_sparse')
+                            compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype,
+                                              w_stype='row_sparse', g_stype='default')
 
 # ADAM
 

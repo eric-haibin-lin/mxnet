@@ -241,7 +241,7 @@ inline void SGDUpdateEx(const nnvm::NodeAttrs& attrs,
   } else if (weight_stype == kRowSparseStorage && grad_stype == kDefaultStorage) {
     NDArray out = outputs[0];
     SGDUpdateRspDnsImpl<xpu>(param, ctx, inputs[0], inputs[1].data(), req[0], &out);
-  } else if (weight_stype == kDefaultStorage && grad_stype == kDefaultStorage) {
+  } else {
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDUpdate<xpu>, "SGDUpdate");
   }
 }
@@ -600,8 +600,7 @@ inline void SGDMomUpdateEx(const nnvm::NodeAttrs& attrs,
       mom_stype == kRowSparseStorage) {
      NDArray out = outputs[0];
      SGDMomUpdateRspDnsImpl<xpu>(param, ctx, weight, grad.data(), mom, req[0], &out);
-  } else if (weight_stype == kDefaultStorage && grad_stype == kDefaultStorage &&
-      mom_stype == kDefaultStorage) {
+  } else {
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDMomUpdate<xpu>, "SGDMomUpdate");
   }
 }

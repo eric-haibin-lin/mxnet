@@ -851,7 +851,6 @@ size_t num_aux_data(NDArrayStorageType stype);
  * \param from the ndarray we want to copy data from
  * \param to the target ndarray
  * \param priority Priority of the action.
- * \param alloc_output whether to allocate memory for the output ndarray
  * \note The function name explicitly marks the order of from and to
  *     due to different possible convention carried by copy function.
  */

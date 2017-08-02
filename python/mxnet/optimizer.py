@@ -322,8 +322,8 @@ class SGD(Optimizer):
         state = momentum * state + lr * rescale_grad * clip(grad, clip_gradient) + wd * weight
         weight = weight - state
 
-    For details of the update algorithm see :class:`~mxnet.ndarray.sgd_update` and
-    :class:`~mxnet.ndarray.sgd_mom_update`.
+    Sparse updating is supported. For details of the update algorithm see
+    :class:`~mxnet.ndarray.sgd_update` and :class:`~mxnet.ndarray.sgd_mom_update`.
 
     This optimizer accepts the following parameters in addition to those accepted
     by :class:`.Optimizer`.

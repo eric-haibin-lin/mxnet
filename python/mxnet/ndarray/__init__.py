@@ -7,4 +7,4 @@ from .op import CachedOp
 from .ndarray import *
 from .ndarray_utils import load, save, zeros, empty, array
 from .sparse_ndarray import _ndarray_cls, todense
-from .sparse_ndarray import csr, row_sparse, BaseSparseNDArray, RowSparseNDArray, CSRNDArray
+from .sparse_ndarray import csr_matrix, row_sparse_array, BaseSparseNDArray, RowSparseNDArray, CSRNDArray

@@ -79,7 +79,7 @@ def random_sample(population, k):
     return population_copy[0:k]
 
 
-def rand_sparse_ndarray(shape, stype, density=None):
+def rand_sparse_ndarray(shape, stype, density=None, dtype=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     density = rnd.rand() if density is None else density
     if stype == 'row_sparse':
@@ -87,26 +87,26 @@ def rand_sparse_ndarray(shape, stype, density=None):
         idx_sample = rnd.rand(shape[0])
         indices = np.argwhere(idx_sample < density).flatten()
         if indices.shape[0] == 0:
-            result = mx.nd.zeros(shape, stype='row_sparse')
+            result = mx.nd.zeros(shape, stype='row_sparse', dtype=dtype)
             return result, (np.array([], dtype='int64'), np.array([], dtype='int64'))
         # generate random values
-        val = rnd.rand(indices.shape[0], *shape[1:])
-        arr = mx.nd.row_sparse(val, indices, shape, indices_type=np.int64)
+        val = rnd.rand(indices.shape[0], *shape[1:]).astype(dtype)
+        arr = mx.nd.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
         return arr, (val, indices)
     elif stype == 'csr':
         assert(len(shape) == 2)
         csr = sp.rand(shape[0], shape[1], density=density, format='csr')
-        result = mx.nd.csr(csr.data, csr.indptr, csr.indices, shape)
+        result = mx.nd.csr_matrix(csr.data, csr.indptr, csr.indices, shape, dtype=dtype)
         return result, (csr.indptr, csr.indices, csr.data)
     else:
         assert(False), "unknown storage type"
 
 
-def rand_ndarray(shape, stype, density=None):
+def rand_ndarray(shape, stype, density=None, dtype=None):
     if stype == 'default':
-        arr = mx.nd.array(random_arrays(shape))
+        arr = mx.nd.array(random_arrays(shape), dtype=dtype)
     else:
-        arr, _ = rand_sparse_ndarray(shape, stype, density=density)
+        arr, _ = rand_sparse_ndarray(shape, stype, density=density, dtype=dtype)
     return arr
 
 
