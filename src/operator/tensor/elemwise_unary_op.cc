@@ -56,6 +56,7 @@ NNVM_REGISTER_OP(_backward_copy)
   })
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::IdentityCompute<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::IdentityComputeEx<cpu>)
+.set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>)
 .set_attr<nnvm::FInplaceIdentity>("FInplaceIdentity",
   [](const NodeAttrs& attrs){
     return std::vector<bool>{true};

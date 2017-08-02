@@ -179,9 +179,6 @@ class UnaryOp : public OpBase {
         if (i < n_out) {
           output = const_cast<NDArray *>(&outputs[i]);
         }
-        //TShape sshape = output->storage_shape();
-        //CHECK(shape_assign(&sshape, ishape));
-        //output->set_storage_shape(sshape);
         CHECK_EQ(output->storage_type(), input.storage_type());
         CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
         for (size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
@@ -375,7 +372,12 @@ class UnaryOp : public OpBase {
                                 const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
-    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, IdentityCompute<xpu>);
+    if(inputs[0].storage_type() == outputs[0].storage_type()) {
+      MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, IdentityCompute<xpu>);
+    } else {
+      FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                           IdentityCompute<xpu>, "IdentityComputeEx");
+    }
   }
 
   template<typename xpu>
