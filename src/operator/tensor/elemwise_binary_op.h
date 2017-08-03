@@ -345,7 +345,6 @@ class ElemwiseBinaryOp : public OpBase
     }
   }
 
-#if 1
   /*! \brief CSR -op- CSR binary operator for non-canonical NDARray */
   template<typename xpu, typename DType, typename IType, typename CType, typename OP>
   static inline void CsrCsrElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
@@ -357,7 +356,6 @@ class ElemwiseBinaryOp : public OpBase
                                             const bool lhs_may_be_dense,
                                             const bool rhs_may_be_dense,
                                             const bool allow_inplace) {
-#if 1
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
@@ -437,7 +435,6 @@ class ElemwiseBinaryOp : public OpBase
     Fill<xpu, IType>(s, -1, req, next);
     Fill<xpu, IType>(s, IType(0),  req, lhs_row);
     Fill<xpu, IType>(s, IType(0),  req, rhs_row);
-#endif
     // Indices
 //    Tensor<xpu, 1, IType> col_indices_l =
 //      lhs_is_dense ? Tensor<xpu, 1, IType>()
@@ -514,7 +511,6 @@ class ElemwiseBinaryOp : public OpBase
    */
 
   }
-#endif
 
   /*! \brief Minimum of three */
   static MSHADOW_XINLINE size_t minthree(const size_t a, const size_t b, const size_t c) {
@@ -790,7 +786,6 @@ class ElemwiseBinaryOp : public OpBase
             });
             break;
           case kCSRStorage:
-#if 1
             MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(csr::kIdx), IType, {
               MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(csr::kIndPtr), CType, {
                 MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
@@ -802,7 +797,6 @@ class ElemwiseBinaryOp : public OpBase
               });
             });
             break;
-#endif
           default:
             CHECK(false) << "Unsupported storage type for LaunchEx" << inputs[0].storage_type();
             break;
