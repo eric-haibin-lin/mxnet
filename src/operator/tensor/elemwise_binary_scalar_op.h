@@ -275,7 +275,7 @@ class BinaryScalarOp : public UnaryOp
         break;
       }
       case kCSRStorage: {
-        MSHADOW_TYPE_SWITCH(input.aux_data(csr::kIndPtr).type_flag_, CType, {
+        MSHADOW_IDX_TYPE_SWITCH(input.aux_data(csr::kIndPtr).type_flag_, CType, {
           LaunchExDenseResultCSR<xpu, OP, DType, IType, CType>(
             attrs, ctx, input, req, output);
         });
@@ -333,7 +333,7 @@ class BinaryScalarOp : public UnaryOp
                                         "BinaryScalarComputeEx");
       } else {
         MSHADOW_TYPE_SWITCH(outputs[0].data().type_flag_, DType, {
-          MSHADOW_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
+          MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
             LaunchExDenseResult<xpu, OP, DType, IType>(attrs, ctx, inputs[0], req[0], outputs[0]);
           });
         });
