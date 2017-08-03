@@ -48,18 +48,6 @@ def test_sparse_nd_elemwise_add():
                        shape, ['row_sparse', 'row_sparse'], op, g)
 
 
-# Test a operator which doesn't implement FComputeEx
-def test_sparse_nd_elementwise_fallback():
-    num_repeats = 10
-    g = lambda x,y: x + y
-    op = mx.nd.add_n
-    for i in range(num_repeats):
-        shape = [rand_shape_2d()] * 2
-        check_sparse_nd_elemwise_binary(shape, ['default'] * 2, op, g)
-        check_sparse_nd_elemwise_binary(shape, ['default', 'row_sparse'], op, g)
-        check_sparse_nd_elemwise_binary(shape, ['row_sparse', 'row_sparse'], op, g)
-
-
 def test_sparse_nd_copy():
     def check_sparse_nd_copy(from_stype, to_stype, shape):
         from_nd = rand_ndarray(shape, from_stype)
@@ -73,12 +61,13 @@ def test_sparse_nd_copy():
 
     shape = rand_shape_2d()
     shape_3d = rand_shape_3d()
-    check_sparse_nd_copy('row_sparse', 'row_sparse', shape)
-    check_sparse_nd_copy('row_sparse', 'default', shape)
-    check_sparse_nd_copy('default', 'row_sparse', shape)
-    check_sparse_nd_copy('default', 'csr', shape)
+    stypes = ['row_sparse', 'csr']
+    for stype in stypes:
+        check_sparse_nd_copy(stype, 'default', shape)
+        check_sparse_nd_copy('default', stype, shape)
     check_sparse_nd_copy('row_sparse', 'row_sparse', shape_3d)
-
+    check_sparse_nd_copy('row_sparse', 'default', shape_3d)
+    check_sparse_nd_copy('default', 'row_sparse', shape_3d)
 
 def test_sparse_nd_basic():
     def check_sparse_nd_basic_rsp():
@@ -88,6 +77,7 @@ def test_sparse_nd_basic():
         assert(nd._num_aux == 1)
         assert(nd.indices.dtype == np.int64)
         assert(nd.stype == 'row_sparse')
+
     check_sparse_nd_basic_rsp()
 
 
@@ -436,6 +426,8 @@ def test_create_csr():
         assert same(csr_created.data.asnumpy(), data.asnumpy())
         assert same(csr_created.indptr.asnumpy(), indptr.asnumpy())
         assert same(csr_created.indices.asnumpy(), indices.asnumpy())
+        csr_copy = mx.nd.array(csr_created)
+        assert(same(csr_copy.asnumpy(), csr_created.asnumpy()))
 
 
 def test_create_row_sparse():
@@ -451,6 +443,14 @@ def test_create_row_sparse():
         assert rsp_created.stype == 'row_sparse'
         assert same(rsp_created.data.asnumpy(), data.asnumpy())
         assert same(rsp_created.indices.asnumpy(), indices.asnumpy())
+        rsp_copy = mx.nd.array(rsp_created)
+        assert(same(rsp_copy.asnumpy(), rsp_created.asnumpy()))
+
+def test_sparse_nd_empty():
+    stypes = ['csr', 'row_sparse', 'default']
+    for stype in stypes:
+        nd = mx.nd.empty((2,2), stype=stype)
+        assert(nd.stype == stype)
 
 
 if __name__ == '__main__':
