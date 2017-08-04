@@ -180,12 +180,13 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
         raise str("Unknown storage type: " + stype)
     return arr_data
 
-
 def create_sparse_array_zd(shape, stype, density, data_init=None,
                            rsp_indices=None, modifier_func=None):
     """Create sparse array, using only rsp_indices to determine density"""
     if stype == 'row_sparse':
         density = 0.0
+        if rsp_indices is not None:
+            assert len(rsp_indices) <= shape[0]
     return create_sparse_array(shape, stype,
                                data_init=data_init,
                                rsp_indices=rsp_indices,
