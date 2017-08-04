@@ -121,7 +121,18 @@ def assign_each2(input1, input2, function):
 
 # TODO(haibin) also include types in arguments
 def rand_sparse_ndarray(shape, stype, density=None, data_init=None,
-                        rsp_indices=None, modifier_func=None):
+                        rsp_indices=None, modifier_func=None,
+                        shuffle_csr_indices=True):
+
+    def shuffle_csr_column_indices(arr):
+        row_count = len(csr.indptr) - 1
+        for i in range(row_count):
+            start_index = csr.indptr[i]
+            end_index = csr.indptr[i + 1]
+            sublist = np.array(csr.indices[start_index : end_index])
+            np.random.shuffle(sublist)
+            csr.indices[start_index : end_index] = sublist
+
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     density = rnd.rand() if density is None else density
     if stype == 'row_sparse':
@@ -151,6 +162,8 @@ def rand_sparse_ndarray(shape, stype, density=None, data_init=None,
         csr = sp.rand(shape[0], shape[1], density=density, format='csr')
         if data_init is not None:
             csr.data.fill(data_init)
+        if shuffle_csr_indices is True:
+            shuffle_csr_column_indices(csr)
         result = mx.nd.csr(csr.data, csr.indptr, csr.indices, shape)
         return result, (csr.indptr, csr.indices, csr.data)
     else:

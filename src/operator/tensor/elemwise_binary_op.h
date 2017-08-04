@@ -211,20 +211,20 @@ class ElemwiseBinaryOp : public OpBase
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
 
     // Indices
-    Tensor<xpu, 1, IType> indices_l = lhs_is_dense
-                                      ? Tensor<xpu, 1, IType>()
-                                      : lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-    Tensor<xpu, 1, IType> indices_r = rhs_is_dense
-                                      ? Tensor<xpu, 1, IType>()
-                                      : rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+    const Tensor<xpu, 1, IType> indices_l = lhs_is_dense
+                                            ? Tensor<xpu, 1, IType>()
+                                            : lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+    const Tensor<xpu, 1, IType> indices_r = rhs_is_dense
+                                            ? Tensor<xpu, 1, IType>()
+                                            : rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
     Tensor<xpu, 1, IType> indices_out = is_dense_result
                                         ? Tensor<xpu, 1, IType>()
                                         : output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
 
     // Data
     // TODO(cjolivier01): Change to get_with_shape() calls
-    Tensor<xpu, 2, DType> data_l = AsRowise2D<DType>(s, lhs.data());
-    Tensor<xpu, 2, DType> data_r = AsRowise2D<DType>(s, rhs.data());
+    const Tensor<xpu, 2, DType> data_l = AsRowise2D<DType>(s, lhs.data());
+    const Tensor<xpu, 2, DType> data_r = AsRowise2D<DType>(s, rhs.data());
     Tensor<xpu, 2, DType> out = AsRowise2D<DType>(s, output.data());
 
     size_t iter_l = 0;
@@ -345,6 +345,16 @@ class ElemwiseBinaryOp : public OpBase
     }
   }
 
+  static inline int64_t atomic_add(int64_t *dest, int64_t value) {
+    int64_t res = 0;
+#ifdef _WIN32
+    return ::InterlockedAdd64(dest, value);
+#else
+    return __atomic_add_fetch(dest, value, __ATOMIC_SEQ_CST);
+#endif
+    return res;
+  }
+
   /*! \brief CSR -op- CSR binary operator for non-canonical NDARray */
   template<typename xpu, typename DType, typename IType, typename CType, typename OP>
   static inline void CsrCsrElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
@@ -359,6 +369,9 @@ class ElemwiseBinaryOp : public OpBase
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
+
+//    test::print(&std::cout, "lhs", lhs);
+//    test::print(&std::cout, "rhs", rhs);
 
     const bool is_dense_result = output.storage_type() == kDefaultStorage;
     const bool lhs_is_dense = lhs.storage_type() == kDefaultStorage;
@@ -381,7 +394,7 @@ class ElemwiseBinaryOp : public OpBase
     // need to subtract the number of common rows
     bool lhs_in_place = false, rhs_in_place = false;
 
-    const size_t nr_rows = lhs.shape()[0];
+    const size_t nr_rows = static_cast<size_t>(lhs.shape()[0]);
     const size_t nr_cols = lhs.shape().Size() / nr_rows;
 
     const long lhs_rows = lhs_is_dense ? static_cast<size_t>(lhs.shape()[0])
@@ -412,10 +425,10 @@ class ElemwiseBinaryOp : public OpBase
           CHECK_EQ(is_dense_result, false);
           if(lhs_in_place) {
             // For in-place, zero L-value must always be zero output
-            //CHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
+            CHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
           } else {
             // For in-place, zero R-value must always be zero output
-            //CHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
+            CHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
           }
         }
       }
@@ -442,10 +455,10 @@ class ElemwiseBinaryOp : public OpBase
     Fill<xpu, DType>(s, DType(0),  req, rhs_row);
 
     // Column indices
-    Tensor<xpu, 1, IType> col_indices_l =
+    const Tensor<xpu, 1, IType> col_indices_l =
       lhs_is_dense ? Tensor<xpu, 1, IType>()
                    : lhs.aux_data(csr::kIdx).FlatTo1D<xpu, IType>(s);
-    Tensor<xpu, 1, IType> col_indices_r =
+    const Tensor<xpu, 1, IType> col_indices_r =
       rhs_is_dense ? Tensor<xpu, 1, IType>()
                    : rhs.aux_data(csr::kIdx).FlatTo1D<xpu, IType>(s);
     Tensor<xpu, 1, IType> col_indices_out =
@@ -453,10 +466,10 @@ class ElemwiseBinaryOp : public OpBase
                       : output.aux_data(csr::kIdx).FlatTo1D<xpu, IType>(s);
 
     // Row pointers
-    Tensor<xpu, 1, CType> row_ptr_l =
+    const Tensor<xpu, 1, CType> row_ptr_l =
       lhs_is_dense ? Tensor<xpu, 1, CType>()
                    : lhs.aux_data(csr::kIndPtr).FlatTo1D<xpu, CType>(s);
-    Tensor<xpu, 1, CType> row_ptr_r =
+    const Tensor<xpu, 1, CType> row_ptr_r =
       rhs_is_dense ? Tensor<xpu, 1, CType>()
                    : rhs.aux_data(csr::kIndPtr).FlatTo1D<xpu, CType>(s);
     Tensor<xpu, 1, CType> row_ptr_out =
@@ -470,21 +483,19 @@ class ElemwiseBinaryOp : public OpBase
     IType nnz = 0;
     row_ptr_out[0] = 0;
 
-    row_ptr_out[0] = 0;
-
-    for(IType i = 0; i < nr_rows; i++){
-      IType head   = -2;
-      IType length =  0;
+    for (IType i = 0; i < nr_rows; i++) {
+      IType head = -2;
+      IType length = 0;
 
       //add a row of A to lhs_row
       IType i_start = row_ptr_l[i];
-      IType i_end   = row_ptr_l[i+1];
-      for(IType jj = i_start; jj < i_end; jj++){
+      IType i_end = row_ptr_l[i + 1];
+      for (IType jj = i_start; jj < i_end; jj++) {
         IType j = col_indices_l[jj];
 
         lhs_row[j] += data_l[jj];
 
-        if(next[j] == -1){
+        if (next[j] == -1) {
           next[j] = head;
           head = j;
           length++;
@@ -493,37 +504,36 @@ class ElemwiseBinaryOp : public OpBase
 
       //add a row of B to rhs_row
       i_start = row_ptr_r[i];
-      i_end   = row_ptr_r[i+1];
-      for(IType jj = i_start; jj < i_end; jj++){
-        IType j = col_indices_r[jj];
+      i_end = row_ptr_r[i + 1];
+      for (IType jj = i_start; jj < i_end; jj++) {
+        const IType j = col_indices_r[jj];
 
         rhs_row[j] += data_r[jj];
 
-        if(next[j] == -1){
+        if (next[j] == -1) {
           next[j] = head;
           head = j;
           length++;
         }
       }
 
-
       // scan through columns where A or B has
       // contributed a non-zero entry
-      for(IType jj = 0; jj < length; jj++){
-        DType result = OP::Map(lhs_row[head], rhs_row[head]);
+      for (IType jj = 0; jj < length; jj++) {
+        const DType result = OP::Map(lhs_row[head], rhs_row[head]);
 
-        if(result != 0){
+        if (result != 0) {
           col_indices_out[nnz] = head;
           data_out[nnz] = result;
           nnz++;
         }
 
-        IType temp = head;
+        const IType temp = head;
         head = next[head];
 
-        next[temp]  = -1;
-        lhs_row[temp] =  0;
-        rhs_row[temp] =  0;
+        next[temp] = -1;
+        lhs_row[temp] = 0;
+        rhs_row[temp] = 0;
       }
 
       row_ptr_out[i + 1] = nnz;

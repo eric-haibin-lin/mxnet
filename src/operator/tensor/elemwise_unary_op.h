@@ -388,19 +388,11 @@ class UnaryOp : public OpBase {
                                           const std::vector<NDArray>& outputs) {
     using namespace mshadow;
     using namespace mshadow::expr;
+    //PRINT_NDARRAYS(inputs);
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
-#if 0
-  size_t rhs_idx = 1;
-  NDArrayStorageType stype = inputs[rhs_idx].storage_type();
-  if (stype == kRowSparseStorage) {
-    IdentityComputeRsp<xpu>(attrs, ctx, inputs, req, outputs);
-  } else {
-    LOG(FATAL) << "Not implemented yet";
-  }
-#else
     OpBase::CopyNDArray(ctx.get_stream<xpu>(), outputs[0], req[0], inputs[0]);
-#endif
+    //PRINT_NDARRAYS(outputs);
   }
 };
 
