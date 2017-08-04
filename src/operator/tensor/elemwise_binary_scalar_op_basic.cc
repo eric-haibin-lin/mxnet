@@ -26,8 +26,13 @@ MXNET_OPERATOR_REGISTER_BINARY_SCALAR(_rminus_scalar)
 MXNET_OPERATOR_REGISTER_BINARY_SCALAR(_mul_scalar)
 .set_attr<FCompute>("FCompute<cpu>", BinaryScalarOp::BinaryScalarCompute<cpu, mshadow::op::mul>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryScalarOp::BinaryScalarComputeEx<cpu, mshadow::op::mul>)
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_mul_scalar"})
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_mul_scalar"})
 .add_alias("_MulScalar");
+
+MXNET_OPERATOR_REGISTER_BINARY_SCALAR_DR(_backward_mul_scalar)
+.set_attr<nnvm::TIsBackward>("TIsBackward", true)
+.set_attr<FCompute>("FCompute<cpu>", BinaryScalarOp::BinaryScalarCompute<cpu, mshadow::op::mul>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", BinaryScalarOp::BinaryScalarComputeEx<cpu, mshadow::op::mul>);
 
 MXNET_OPERATOR_REGISTER_BINARY_SCALAR(_div_scalar)
 .set_attr<FCompute>("FCompute<cpu>", BinaryScalarOp::BinaryScalarCompute<cpu, mshadow::op::div>)
