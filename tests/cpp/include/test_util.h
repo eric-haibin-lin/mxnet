@@ -359,15 +359,16 @@ inline StreamType& print(StreamType *_os, const std::string& label, const NDArra
       print_shape(_os, "storage shape", storage_shape, false);
       print(_os, arr.data(), true, true, !is_one_row);
 
-      // indices
-      const TShape& indices_shape = arr.aux_shape(csr::kIdx);
-      print_shape(_os, "indices shape", indices_shape, false);
-      print(_os, arr.aux_data(csr::kIdx), true, true, false);
-
-      // ind_ptr
+      // row ptrs
       const TShape& ind_ptr_shape = arr.aux_shape(csr::kIndPtr);
-      print_shape(_os, "indices ptr", ind_ptr_shape, false);
-      print(_os, arr.aux_data(csr::kIndPtr), true, true, false);
+      print_shape(_os, "row ptrs shape", ind_ptr_shape, false);
+      print(_os, arr.aux_data(csr::kIndPtr), true, true, false) << std::endl;
+
+      // col indices
+      const TShape& indices_shape = arr.aux_shape(csr::kIdx);
+      print_shape(_os, "col indices shape", indices_shape, false);
+      print(_os, arr.aux_data(csr::kIdx), true, true, false) << std::endl;
+
       break;
     }
     case kDefaultStorage: {
