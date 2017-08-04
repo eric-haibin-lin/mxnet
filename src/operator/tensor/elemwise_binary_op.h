@@ -381,7 +381,8 @@ class ElemwiseBinaryOp : public OpBase
     // need to subtract the number of common rows
     bool lhs_in_place = false, rhs_in_place = false;
 
-    const size_t nr_cols = lhs.shape().Size() / lhs.shape()[0];
+    const size_t nr_rows = lhs.shape()[0];
+    const size_t nr_cols = lhs.shape().Size() / nr_rows;
 
     const long lhs_rows = lhs_is_dense ? static_cast<size_t>(lhs.shape()[0])
                                        : lhs.aux_shape(csr::kIndPtr).Size() - 1;
@@ -424,91 +425,109 @@ class ElemwiseBinaryOp : public OpBase
 
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
 
-    mshadow::Tensor<xpu, 1, IType> workspace =
-      ctx.requested[kTempSpace].get_space_typed<xpu, 1, IType>(mshadow::Shape1(nr_cols * 3), s);
+    const size_t alloc_size = nr_cols * sizeof(IType) + 2 * nr_cols * sizeof(DType);
+    mshadow::Tensor<xpu, 1, uint8_t> workspace =
+      ctx.requested[kTempSpace].get_space_typed<xpu, 1, uint8_t>(mshadow::Shape1(alloc_size), s);
 
-    // Allocate temp space
-    mshadow::Tensor<xpu, 1, IType> next(workspace.dptr_, Shape1(nr_cols));
-    mshadow::Tensor<xpu, 1, IType> lhs_row(next.dptr_ + nr_cols, Shape1(nr_cols));
-    mshadow::Tensor<xpu, 1, IType> rhs_row(lhs_row.dptr_ + nr_cols, Shape1(nr_cols));
+    // Allocate temp space and partition into three tensors
+    mshadow::Tensor<xpu, 1, IType> next(reinterpret_cast<IType *>(workspace.dptr_),
+                                        Shape1(nr_cols));
+    mshadow::Tensor<xpu, 1, DType> lhs_row(reinterpret_cast<DType *>(workspace.dptr_
+                                                                     + nr_cols * sizeof(IType)),
+                                           Shape1(nr_cols));
+    mshadow::Tensor<xpu, 1, DType> rhs_row(lhs_row.dptr_ + nr_cols, Shape1(nr_cols));
 
-    Fill<xpu, IType>(s, -1, req, next);
-    Fill<xpu, IType>(s, IType(0),  req, lhs_row);
-    Fill<xpu, IType>(s, IType(0),  req, rhs_row);
-    // Indices
-//    Tensor<xpu, 1, IType> col_indices_l =
-//      lhs_is_dense ? Tensor<xpu, 1, IType>()
-//                   : lhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-//    Tensor<xpu, 1, IType> col_indices_r =
-//      rhs_is_dense ? Tensor<xpu, 1, IType>()
-//                   : rhs.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-//    Tensor<xpu, 1, IType> col_indices_out =
-//      is_dense_result ? Tensor<xpu, 1, IType>()
-//                      : output.aux_data(rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+    Fill<xpu, IType>(s, IType(-1), req, next);
+    Fill<xpu, DType>(s, DType(0),  req, lhs_row);
+    Fill<xpu, DType>(s, DType(0),  req, rhs_row);
 
-    CHECK(false);
+    // Column indices
+    Tensor<xpu, 1, IType> col_indices_l =
+      lhs_is_dense ? Tensor<xpu, 1, IType>()
+                   : lhs.aux_data(csr::kIdx).FlatTo1D<xpu, IType>(s);
+    Tensor<xpu, 1, IType> col_indices_r =
+      rhs_is_dense ? Tensor<xpu, 1, IType>()
+                   : rhs.aux_data(csr::kIdx).FlatTo1D<xpu, IType>(s);
+    Tensor<xpu, 1, IType> col_indices_out =
+      is_dense_result ? Tensor<xpu, 1, IType>()
+                      : output.aux_data(csr::kIdx).FlatTo1D<xpu, IType>(s);
 
-    /*
-    I nnz = 0;
-    Cp[0] = 0;
+    // Row pointers
+    Tensor<xpu, 1, CType> row_ptr_l =
+      lhs_is_dense ? Tensor<xpu, 1, CType>()
+                   : lhs.aux_data(csr::kIndPtr).FlatTo1D<xpu, CType>(s);
+    Tensor<xpu, 1, CType> row_ptr_r =
+      rhs_is_dense ? Tensor<xpu, 1, CType>()
+                   : rhs.aux_data(csr::kIndPtr).FlatTo1D<xpu, CType>(s);
+    Tensor<xpu, 1, CType> row_ptr_out =
+      is_dense_result ? Tensor<xpu, 1, CType>()
+                      : output.aux_data(csr::kIndPtr).FlatTo1D<xpu, CType>(s);
 
-    for(I i = 0; i < n_row; i++){
-        I head   = -2;
-        I length =  0;
+    Tensor<xpu, 1, DType>   data_l = lhs.data().FlatTo1D<xpu, DType>(s);
+    Tensor<xpu, 1, DType>   data_r = rhs.data().FlatTo1D<xpu, DType>(s);
+    Tensor<xpu, 1, DType> data_out = output.data().FlatTo1D<xpu, DType>(s);
 
-        //add a row of A to A_row
-        I i_start = Ap[i];
-        I i_end   = Ap[i+1];
-        for(I jj = i_start; jj < i_end; jj++){
-            I j = Aj[jj];
+    IType nnz = 0;
+    row_ptr_out[0] = 0;
 
-            A_row[j] += Ax[jj];
+    row_ptr_out[0] = 0;
 
-            if(next[j] == -1){
-                next[j] = head;
-                head = j;
-                length++;
-            }
+    for(IType i = 0; i < nr_rows; i++){
+      IType head   = -2;
+      IType length =  0;
+
+      //add a row of A to lhs_row
+      IType i_start = row_ptr_l[i];
+      IType i_end   = row_ptr_l[i+1];
+      for(IType jj = i_start; jj < i_end; jj++){
+        IType j = col_indices_l[jj];
+
+        lhs_row[j] += data_l[jj];
+
+        if(next[j] == -1){
+          next[j] = head;
+          head = j;
+          length++;
+        }
+      }
+
+      //add a row of B to rhs_row
+      i_start = row_ptr_r[i];
+      i_end   = row_ptr_r[i+1];
+      for(IType jj = i_start; jj < i_end; jj++){
+        IType j = col_indices_r[jj];
+
+        rhs_row[j] += data_r[jj];
+
+        if(next[j] == -1){
+          next[j] = head;
+          head = j;
+          length++;
+        }
+      }
+
+
+      // scan through columns where A or B has
+      // contributed a non-zero entry
+      for(IType jj = 0; jj < length; jj++){
+        DType result = OP::Map(lhs_row[head], rhs_row[head]);
+
+        if(result != 0){
+          col_indices_out[nnz] = head;
+          data_out[nnz] = result;
+          nnz++;
         }
 
-        //add a row of B to B_row
-        i_start = Bp[i];
-        i_end   = Bp[i+1];
-        for(I jj = i_start; jj < i_end; jj++){
-            I j = Bj[jj];
+        IType temp = head;
+        head = next[head];
 
-            B_row[j] += Bx[jj];
+        next[temp]  = -1;
+        lhs_row[temp] =  0;
+        rhs_row[temp] =  0;
+      }
 
-            if(next[j] == -1){
-                next[j] = head;
-                head = j;
-                length++;
-            }
-        }
-
-
-        // scan through columns where A or B has
-        // contributed a non-zero entry
-        for(I jj = 0; jj < length; jj++){
-            T result = op(A_row[head], B_row[head]);
-
-            if(result != 0){
-                Cj[nnz] = head;
-                Cx[nnz] = result;
-                nnz++;
-            }
-
-            I temp = head;
-            head = next[head];
-
-            next[temp]  = -1;
-            A_row[temp] =  0;
-            B_row[temp] =  0;
-        }
-
-        Cp[i + 1] = nnz;
+      row_ptr_out[i + 1] = nnz;
     }
-   */
 
   }
 

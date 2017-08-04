@@ -556,11 +556,11 @@ def check_sparse_mathematical_core(name, stype,
 
   grad_stypes = list(expected_grad_result_type)
 
-  #shape = rand_shape_2d()
+  shape = rand_shape_2d()
   #shape = (3,4)
   #shape = (9,1)
   #shape = (1,1)
-  shape = (10, 8)
+  #shape = (10, 8)
   #shape = (2, 5)
 
   if verbose is True:
@@ -713,12 +713,12 @@ def test_sparse_mathematical_core():
                               density=.5, ograd_density=.5):
 
     # negative
-    # check_sparse_mathematical_core("negative", stype,
-    #                                lambda x: mx.sym.negative(x),
-    #                                lambda x: np.negative(x),
-    #                                force_overlap=force_overlap,
-    #                                density=density,
-    #                                ograd_density=ograd_density)
+    check_sparse_mathematical_core("negative", stype,
+                                   lambda x: mx.sym.negative(x),
+                                   lambda x: np.negative(x),
+                                   force_overlap=force_overlap,
+                                   density=density,
+                                   ograd_density=ograd_density)
 
     # square
     check_sparse_mathematical_core("square", stype,
@@ -726,7 +726,8 @@ def test_sparse_mathematical_core():
                                    lambda x: np.square(x),
                                    lambda x: 2 * x,
                                    output_grad_stype=output_grad_stype, force_overlap=force_overlap,
-                                   density=density, ograd_density=ograd_density)
+                                   density=density, ograd_density=ograd_density,
+                                   verbose=False)
 
     if stype != "csr":
       # sqrt
@@ -933,13 +934,13 @@ def test_sparse_mathematical_core():
 
   for i in range(1):
     print("pass", i)
-    #for density in [0.0, random.uniform(0, 1), 1.0]:
+    for density in [0.0, random.uniform(0, 1), 1.0]:
     #for density in [1.0]:
-    for density in [0.0]:
-      #for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
+    #for density in [0.0]:
+      for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
       #for ograd_density in [1.0]:
       #for ograd_density in [.25]:
-      for ograd_density in [0.0]:
+      #for ograd_density in [0.0]:
         #for force_overlap in [False, True]:
         #for force_overlap in [True]:
         for force_overlap in [False]:
