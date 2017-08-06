@@ -11,8 +11,8 @@ import sys
 import os
 import errno
 import logging
-import scipy.sparse as sp
 from contextlib import contextmanager
+import scipy.sparse as sp
 import numpy as np
 import numpy.testing as npt
 import numpy.random as rnd
@@ -79,10 +79,105 @@ def random_sample(population, k):
     return population_copy[0:k]
 
 
-def rand_sparse_ndarray(shape, stype, density=None):
-    """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
+def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
+    """Returns CSRNDArray with uniform distribution
+    """
+    if (num_rows <= 0 or num_cols <= 0):
+        raise ValueError("num_rows or num_cols should be greater than 0")
+
+    if (density < 0 or density > 1):
+        raise ValueError("density has to be between 0 and 1")
+
+    return mx.nd.array(sp.rand(num_rows, num_cols, density).toarray())._to_csr()
+
+
+def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
+    """Returns CSRNDArray with powerlaw distribution
+    with exponentially increasing number of non zeros in each row.
+    In case of num_rows >> num_cols this will end up just filling 
+    the first row if nnz < num_rows. This is because the first col
+    is filled up with non zero entries to avoid rows with non zeros.
+    """
+    if (num_rows <= 0 or num_cols <= 0):
+        raise ValueError("num_rows or num_cols should be greater than 0")
+
+    if (density < 0 or density > 1):
+        raise ValueError("density has to be between 0 and 1")
+
+    totalnnz = int(num_rows * num_cols * density)
+    unusednnz = totalnnz
+    output_arr = np.zeros((num_rows, num_cols))
+    # Start with ones on each row so that no row is empty
+    for row in range(num_rows):
+        output_arr[row][0] = rnd.uniform(0.001, 1)
+        unusednnz = unusednnz - 1
+        if unusednnz <= 0:
+            return mx.nd.array(output_arr)._to_csr()
+
+    # Populate rest of matrix with 2^i items in ith row.
+    # if we have used all total nnz return the sparse matrix
+    # else if we reached max column size then fill up full columns unit we use all nnz
+    col_max = 2
+    for row in range(num_rows):
+        col_limit = min(num_cols, col_max)
+        # In case col_limit reached assign same value to all elements, which is much faster
+        if (col_limit == num_cols) and unusednnz > col_limit:
+            output_arr[row] = rnd.uniform(0.001, 1)
+            unusednnz = unusednnz - col_limit + 1
+            if unusednnz <= 0:
+                return mx.nd.array(output_arr)._to_csr()
+            else:
+                continue
+        for col_index in range(1, col_limit):
+            output_arr[row][col_index] = rnd.uniform(0.001, 1)
+            unusednnz = unusednnz - 1
+            if unusednnz <= 0:
+                return mx.nd.array(output_arr)._to_csr()
+        col_max = col_max * 2
+
+    if unusednnz >= 0:
+        #return mx.nd.array(sp.random(num_rows, num_cols, density).toarray())._to_csr()
+        raise ValueError("not supported for this density: %s"
+                         " for this shape (%s,%s)" % (density, num_rows, num_cols))
+    else:
+        return mx.nd.array(output_arr)._to_csr()
+
+
+def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
+    """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) 
+    Parameters
+    ----------
+    shape: list or tuple
+    stype: str, valid values: "csr" or "row_sparse"
+    density, optional: float, should be between 0 and 1
+    distribution, optional: str, valid values: "uniform" or "powerlaw"
+    Returns
+    -------
+    Result of type SparseNDArray or RowSparseNDArray
+    Examples
+    --------
+    Below is an example of the powerlaw distribution with csr as the stype.
+    It calculates the nnz using the shape and density.
+    It fills up the ndarray with exponentially increasing number of elements.
+    If there are enough unusednnzs, n+1th row will have twice more nnzs compared to nth row.
+    else, remaining unusednnzs will be used in n+1th row
+    If number of cols is too small and we have already reached column size it will fill up 
+    all following columns in all followings rows until we reach the required density. 
+    
+    >>> csr_arr, _ = rand_sparse_ndarray(shape=(5, 16), stype="csr", density=0.50, distribution="powerlaw") 
+    >>> indptr = csr_arr.indptr.asnumpy()
+    >>> indices = csr_arr.indices.asnumpy()
+    >>> data = csr_arr.data.asnumpy()
+    >>> row2nnz = len(data[indptr[1]:indptr[2]])
+    >>> row3nnz = len(data[indptr[2]:indptr[3]])
+    >>> assert(row3nnz == 2*row2nnz)
+    >>> row4nnz = len(data[indptr[3]:indptr[4]])
+    >>> assert(row4nnz == 2*row3nnz)
+    """
     density = rnd.rand() if density is None else density
     if stype == 'row_sparse':
+        assert (distribution == "uniform"), \
+               "Distribution %s not supported for row_sparse" % (distribution)
         # sample index
         idx_sample = rnd.rand(shape[0])
         indices = np.argwhere(idx_sample < density).flatten()
@@ -95,9 +190,14 @@ def rand_sparse_ndarray(shape, stype, density=None):
         return arr, (val, indices)
     elif stype == 'csr':
         assert(len(shape) == 2)
-        csr = sp.rand(shape[0], shape[1], density=density, format='csr')
-        result = mx.nd.csr(csr.data, csr.indptr, csr.indices, shape)
-        return result, (csr.indptr, csr.indices, csr.data)
+        if distribution == "uniform":
+            csr = _get_uniform_dataset_csr(shape[0], shape[1], density)
+            return csr, (csr.indptr, csr.indices, csr.data)
+        elif distribution == "powerlaw":
+            csr = _get_powerlaw_dataset_csr(shape[0], shape[1], density)
+            return csr, (csr.indptr, csr.indices, csr.data)
+        else:
+            assert(False), "Distribution not supported: %s" % (distribution)
     else:
         assert(False), "unknown storage type"
 
