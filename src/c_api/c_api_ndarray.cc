@@ -418,7 +418,7 @@ void PushOperator(const OpStatePtr& state,
 #if MXNET_USE_CUDA
           CastNonDefaultStorage<gpu>(pre_temp_src, pre_temp_dst, opctx);
           fcompute(state, opctx, input_blobs, req, output_blobs);
-          CastNonDefaultStorage<gpu>(temp_out_dst, post_temp_dst, opctx);
+          CastNonDefaultStorage<gpu>(post_temp_src, post_temp_dst, opctx);
 #else
           LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
