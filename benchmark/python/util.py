@@ -1,6 +1,5 @@
 import os
 import random
-from mxnet.test_utils import *
 
 
 def get_data(data_dir, data_name, url, data_origin_name):
@@ -31,17 +30,4 @@ def estimate_density(DATA_PATH, feature_size):
                     num_sample += 1
         density.append(num_non_zero * 1.0 / (feature_size * num_sample))
     return sum(density) / len(density)
-
-
-def _get_uniform_dataset(num_rows, num_cols, density=0.1):
-    """Returns CSRNDArray with uniform distribution
-    """
-    if (num_rows <= 0 or num_cols <= 0):
-        raise ValueError("num_rows or num_cols should be greater than 0")
-
-    if (density < 0 or density > 1):
-        raise ValueError("density has to be between 0 and 1")
-
-    return mx.nd.array(sp.rand(num_rows, num_cols, density).toarray())._to_csr()
-
 
