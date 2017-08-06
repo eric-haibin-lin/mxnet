@@ -271,13 +271,16 @@ class CSRNDArray(BaseSparseNDArray):
 
         Examples
         --------
-        >>> x = mx.nd.zeros((2, 3), stype='csr')
-        >>> x[:] = mx.nd.arange(0,6).reshape((2,3))
-        >>> x.asnumpy()
-        array([[ 0.,  1.,  2.],
-               [ 3.,  4.,  5.]], dtype=float32)
-        >>> x[1:2].asnumpy()
-        array([[ 3.,  4.,  5.]], dtype=float32)
+        >>> indptr = np.array([0, 2, 3, 6])
+        >>> indices = np.array([0, 2, 2, 0, 1, 2])
+        >>> data = np.array([1, 2, 3, 4, 5, 6])
+        >>> a = mx.nd.csr_matrix(data, indptr, indices, (3, 3))
+        >>> a.asnumpy()
+        array([[1, 0, 2],
+               [0, 0, 3],
+               [4, 5, 6]])
+        >>> a[1:2].asnumpy()
+        array([[0, 0, 3]], dtype=float32)
         """
         if isinstance(key, int):
             raise ValueError("__getitem__ with int key is not implemented for CSRNDArray")

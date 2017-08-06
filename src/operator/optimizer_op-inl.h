@@ -592,6 +592,8 @@ inline void SGDMomUpdateEx(const nnvm::NodeAttrs& attrs,
   auto weight_stype = weight.storage_type();
   auto grad_stype = grad.storage_type();
   auto mom_stype = mom.storage_type();
+  CHECK_EQ(weight_stype, mom_stype) << "Inconsistent storage type detected between mom.stype = "
+           << mom_stype << " and weight.stype = " << weight_stype;
   if (weight_stype == kRowSparseStorage && grad_stype == kRowSparseStorage &&
       mom_stype == kRowSparseStorage) {
      NDArray out = outputs[0];

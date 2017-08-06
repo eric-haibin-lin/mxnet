@@ -88,8 +88,8 @@ void IdentityComputeRspRspImpl(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mshadow::expr;
   using namespace rowsparse;
-  CHECK_NE(req, kNullOp) << "kNullOp in IdentityComputeEx not supported yet";
-  CHECK_NE(req, kWriteInplace) << "kWriteInplace in IdentityComputeEx not supported yet";
+  if (req == kNullOp) return;
+  CHECK_EQ(req, kWriteTo) << "kWriteTo is expected for IdentityComputeRspRspImpl";
   if (!input.storage_initialized()) {
     FillZerosRspImpl(s, output);
     return;
@@ -120,6 +120,7 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   const auto in_stype = inputs[0].storage_type();
   const auto out_stype = outputs[0].storage_type();
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
+  if (req[0] == kNullOp) return;
   if (in_stype == out_stype) {
     if (in_stype == kDefaultStorage) {  // dense ndarray
       IdentityCompute<xpu>(attrs, ctx, {inputs[0].data()}, req, {outputs[0].data()});
@@ -128,6 +129,7 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
         FillComputeZerosEx<xpu>(attrs, ctx, inputs, req, outputs);
         return;
       }
+      CHECK_NE(req[0], kAddTo) << "kAddTo is not supported for IdentityComputeEx";
       const size_t n = mxnet::num_aux_data(out_stype);
       outputs[0].CheckAndAlloc(inputs[0].aux_shapes());
       IdentityCompute<xpu>(attrs, ctx, {inputs[0].data()}, req, {outputs[0].data()});

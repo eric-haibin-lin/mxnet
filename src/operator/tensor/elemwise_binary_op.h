@@ -133,6 +133,7 @@ void BinaryComputeRspRspImpl(const nnvm::NodeAttrs& attrs,
                              const std::vector<NDArray>& inputs,
                              const std::vector<OpReqType>& req,
                              const std::vector<NDArray>& outputs) {
+  if (req[0] == kNullOp) return;
   CHECK(req[0] == kWriteTo) << "only kWriteTo is supported for rowsparse elemwise_add";
   using namespace rowsparse;
   using namespace mshadow;
