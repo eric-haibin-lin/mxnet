@@ -311,8 +311,9 @@ void PushFCompute(const FCompute& fn,
       SetupDefaultBlobs(ndoutputs, &output_blobs, &post_temp_dst, &post_temp_src);
       // add mutable inputs to post temp list
       for (const auto idx : mutate_idx) {
-        if (in_temp_idx_map.find(idx) != in_temp_idx_map.end()) {
-          post_temp_src.push_back(pre_temp_dst[in_temp_idx_map[idx]]);
+        auto map_iter = in_temp_idx_map.find(idx);
+        if (map_iter != in_temp_idx_map.end()) {
+          post_temp_src.push_back(pre_temp_dst[map_iter->second]);
           post_temp_dst.push_back(ndinputs[idx]);
         }
       }
@@ -418,7 +419,6 @@ void PushOperator(const OpStatePtr& state,
           CastNonDefaultStorage<gpu>(pre_temp_src, pre_temp_dst, opctx);
           fcompute(state, opctx, input_blobs, req, output_blobs);
           CastNonDefaultStorage<gpu>(temp_out_dst, post_temp_dst, opctx);
->>>>>>> include mutatable inputs in storage fallback. refactor executor
 #else
           LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif

@@ -25,6 +25,7 @@ namespace exec {
 
 // abstract OpExecutor which provides storage fallback procedure on
 // non-default inputs and outputs
+// FComputeExecutor and FStatefulComputeExecutor inherit from this class
 class StorageFallbackOpExecutor : public OpExecutor {
  public:
   explicit StorageFallbackOpExecutor(const std::vector<uint32_t> &mutate_idx)
@@ -39,8 +40,9 @@ class StorageFallbackOpExecutor : public OpExecutor {
     SetupDefaultBlobs(in_array, &in_data_, &pre_temp_src_, &pre_temp_dst_, &in_temp_idx_map_);
     SetupDefaultBlobs(out_array, &out_data_, &post_temp_dst_, &post_temp_src_);
     for (const auto idx : mutate_idx_) {
-      if (in_temp_idx_map_.find(idx) != in_temp_idx_map_.end()) {
-        post_temp_src_.push_back(pre_temp_dst_[in_temp_idx_map_[idx]]);
+      auto map_iter = in_temp_idx_map_.find(idx);
+      if (map_iter != in_temp_idx_map_.end()) {
+        post_temp_src_.push_back(pre_temp_dst_[map_iter->second]);
         post_temp_dst_.push_back(in_array[idx]);
       }
     }
