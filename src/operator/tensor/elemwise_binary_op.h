@@ -346,13 +346,11 @@ class ElemwiseBinaryOp : public OpBase
   }
 
   static inline int64_t atomic_add(int64_t *dest, int64_t value) {
-    int64_t res = 0;
 #ifdef _WIN32
     return ::InterlockedAdd64(dest, value);
 #else
     return __atomic_add_fetch(dest, value, __ATOMIC_SEQ_CST);
 #endif
-    return res;
   }
 
   /*! \brief CSR -op- CSR binary operator for non-canonical NDARray */

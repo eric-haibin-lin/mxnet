@@ -330,9 +330,10 @@ class Array
 template<typename StreamType>
 inline StreamType& print_dense(StreamType *_os, const std::string& label, const NDArray& arr) {
   MSHADOW_TYPE_SWITCH(arr.data().type_flag_, DType, {
-    return print(_os, label, test::Array<DType>(arr).Save(arr.ctx(), kDefaultStorage))
+    print(_os, label, test::Array<DType>(arr).Save(arr.ctx(), kDefaultStorage))
       << std::endl;
   });
+  return *_os;
 }
 
 }  // namespace test

@@ -602,26 +602,23 @@ class Validator {
   /*! \brief Compare blob data */
   static bool compare(const TBlob& b1, const TBlob& b2) {
     if (b1.shape_ == b2.shape_) {
-      MSHADOW_REAL_TYPE_SWITCH(
-        b1.type_flag_,
-        DTypeX,
-        {
-          CHECK_EQ(b1.type_flag_, b2.type_flag_)
-            << "Can't compare blobs of different data types";
-          const DTypeX *d1 = b1.dptr<DTypeX>();
-          const DTypeX *d2 = b2.dptr<DTypeX>();
-          CHECK_NE(d1, d2);  // don't compare the same memory
-          for (size_t i = 0, n = b1.Size(), warningCount = 0; i < n; ++i) {
-            const DTypeX v1 = *d1++;
-            const DTypeX v2 = *d2++;
-            const DType kErrorBound = ErrorBound(&b1, v1, v2);
-            EXPECT_NEAR(v1, v2, kErrorBound);
-            if (!isNear(v1, v2, kErrorBound) && !warningCount++) {
-              on_failure(i, n, v1, v2, kErrorBound);
-            }
+      MSHADOW_REAL_TYPE_SWITCH(b1.type_flag_, DTypeX, {
+        CHECK_EQ(b1.type_flag_, b2.type_flag_) << "Can't compare blobs of different data types";
+        const DTypeX *d1 = b1.dptr<DTypeX>();
+        const DTypeX *d2 = b2.dptr<DTypeX>();
+        CHECK_NE(d1, d2);  // don't compare the same memory
+        for (size_t i = 0, n = b1.Size(), warningCount = 0; i < n; ++i) {
+          const DTypeX v1 = *d1++;
+          const DTypeX v2 = *d2++;
+          const DType kErrorBound = ErrorBound(&b1, v1, v2);
+          EXPECT_NEAR(v1, v2, kErrorBound);
+          if (!isNear(v1, v2, kErrorBound) && !warningCount++) {
+            on_failure(i, n, v1, v2, kErrorBound);
+            return false;
           }
-          return true;
-        });
+        }
+      });
+      return true;
     }
     return false;
   }
@@ -679,20 +676,7 @@ static test::op::OpInfo<OperatorProp, DType, AccReal> createOpAndInfoF(const boo
   test::op::OpInfo<OperatorProp, DType, AccReal> info;
   info.data_ = std::make_shared<OperatorData>(isGPU, inputShape);
   info.prop_ = std::make_shared<OperatorProp>();
-  // Note, assuming floating point
-  switch (sizeof(DType)) {
-    case sizeof(float):
-      info.in_type_ = {mshadow::kFloat32};
-      break;
-    case sizeof(double):
-      info.in_type_ = {mshadow::kFloat64};
-      break;
-    case sizeof(mshadow::half::half_t::half_):
-      info.in_type_ = {mshadow::kFloat16};
-      break;
-    default:
-      break;
-  }
+  info.in_type_ = { mshadow::DataType<DType>::kFlag };
   info.prop_->Init(kwargs);
   info.data_->initForward(*info.prop_, &info.in_type_);
   return info;
