@@ -46,7 +46,7 @@ class OpBase {
     MSHADOW_TYPE_SWITCH(src_blob.type_flag_, DType, {
       // Check if the pointers are the same (in-place operation needs no copy)
       if(src_blob.dptr<DType>() != dest_blob.dptr<DType>()) {
-        mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s));
+        mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s), s);
       }
     });
   }
@@ -247,7 +247,9 @@ class UnaryOp : public OpBase {
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
-    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute<xpu, OP>);
+    if(inputs[0].storage_shape().Size()) {
+      MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute<xpu, OP>);
+    }
   }
 
   /*! \brief Fall back to dense and compute */
@@ -313,7 +315,9 @@ class UnaryOp : public OpBase {
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
-    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
+    if(inputs[0].storage_shape().Size()) {
+      MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
+    }
   }
 
   template<typename xpu, typename OP>
@@ -327,7 +331,9 @@ class UnaryOp : public OpBase {
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
-    MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
+    if(inputs[0].storage_shape().Size()) {
+      MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
+    }
   }
 
   template<typename xpu, typename OP>
@@ -388,11 +394,9 @@ class UnaryOp : public OpBase {
                                           const std::vector<NDArray>& outputs) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    //PRINT_NDARRAYS(inputs);
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
     OpBase::CopyNDArray(ctx.get_stream<xpu>(), outputs[0], req[0], inputs[0]);
-    //PRINT_NDARRAYS(outputs);
   }
 };
 
