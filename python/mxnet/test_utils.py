@@ -731,7 +731,7 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     for k, v in args_grad_npy.items():
         nd = mx.nd.array(v, ctx=ctx)
         if grad_stypes is not None and k in grad_stypes:
-            out = mx.nd.cast_storage(nd, stype=grad_stypes[k])
+            out = nd.tostype(grad_stypes[k])
             args_grad_data[k] = out
         else:
             args_grad_data[k] = nd

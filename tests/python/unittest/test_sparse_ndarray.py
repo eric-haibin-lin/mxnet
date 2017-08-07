@@ -15,7 +15,7 @@ def assert_fcompex(f, *args, **kwargs):
 
 
 def sparse_nd_ones(shape, stype):
-    return mx.nd.cast_storage(mx.nd.ones(shape), stype=stype)
+    return mx.nd.ones(shape).tostype(stype)
 
 
 def check_sparse_nd_elemwise_binary(shapes, stypes, f, g):
@@ -259,8 +259,8 @@ def test_sparse_nd_binary_iop():
             rshape = list(oshape)
             lhs = np.random.uniform(0, 1, size=lshape)
             rhs = np.random.uniform(0, 1, size=rshape)
-            lhs_nd = mx.nd.cast_storage(mx.nd.array(lhs), stype=stype)
-            rhs_nd = mx.nd.cast_storage(mx.nd.array(rhs), stype=stype)
+            lhs_nd = mx.nd.array(lhs).tostype(stype)
+            rhs_nd = mx.nd.array(rhs).tostype(stype)
             assert_allclose(fn(lhs, rhs),
                             fn(lhs_nd, rhs_nd).asnumpy(),
                             rtol=1e-4, atol=1e-4)
@@ -309,7 +309,7 @@ def test_sparse_nd_broadcast():
                     shape[axis] = 1
             dat = np.random.rand(*shape) - 0.5
             numpy_ret = dat
-            ndarray = mx.nd.cast_storage(mx.nd.array(dat), stype=stype)
+            ndarray = mx.nd.array(dat).tostype(stype)
             ndarray_ret = ndarray.broadcast_to(shape=target_shape)
             if type(ndarray_ret) is mx.ndarray.NDArray:
                 ndarray_ret = ndarray_ret.asnumpy()
@@ -325,7 +325,7 @@ def test_sparse_nd_transpose():
     npy = np.random.uniform(-10, 10, rand_shape_2d())
     stypes = ['csr', 'row_sparse']
     for stype in stypes:
-        nd = mx.nd.cast_storage(mx.nd.array(npy), stype=stype)
+        nd = mx.nd.array(npy).tostype(stype)
         assert_almost_equal(npy.T, (nd.T).asnumpy())
 
 def test_sparse_nd_output_fallback():
