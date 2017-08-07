@@ -186,10 +186,12 @@ def test_sgd():
                                         not kwarg['multi_precision'])):
                                 continue
                             compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype)
-                            compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype,
-                                              g_stype='row_sparse')
-                            compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape[:2], dtype,
-                                              w_stype='csr', g_stype='csr')
+                            # test operator fallback on cpu
+                            if (default_context() == mx.cpu()):
+                                compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype,
+                                                  g_stype='row_sparse')
+                                compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape[:2], dtype,
+                                                  w_stype='csr', g_stype='csr')
 
 class PySparseSGD(mx.optimizer.Optimizer):
     """python reference implemenation of sgd"""
@@ -366,7 +368,10 @@ def test_adam():
               {'rescale_grad': 0.8, 'wd': 0.05}]
     for kwarg in kwargs:
         compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, np.float32)
-        compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, np.float32, g_stype='row_sparse')
+        # test operator fallback on cpu
+        if (default_context() == mx.cpu()):
+            compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape,
+                              np.float32, g_stype='row_sparse')
 
 # RMSProp
 class PyRMSProp(mx.optimizer.Optimizer):
