@@ -190,8 +190,9 @@ def test_sgd():
                             if (default_context() == mx.cpu()):
                                 compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape, dtype,
                                                   g_stype='row_sparse')
-                                compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape[:2], dtype,
-                                                  w_stype='csr', g_stype='csr')
+                                if dtype != np.float16:
+                                    compare_optimizer(opt1(**kwarg), opt2(**kwarg), shape[:2],
+                                                      dtype, w_stype='csr', g_stype='csr')
 
 class PySparseSGD(mx.optimizer.Optimizer):
     """python reference implemenation of sgd"""
