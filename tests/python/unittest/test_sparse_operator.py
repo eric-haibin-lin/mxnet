@@ -67,50 +67,48 @@ def test_elemwise_add_ex_multiple_stages():
     exec_test.backward(out_grads=exec_test.outputs)
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
-# TODO(haibin) also add test for backward pass.
 def test_cast_storage_ex():
-    def test_rsp_to_dns(shape, density):
-        rsp_in, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse', density)
-        dns_out = mx.nd.cast_storage(rsp_in, stype='default')
-        assert same(rsp_in.asnumpy(), dns_out.asnumpy())
-
-    def test_dns_to_rsp(shape, density):
-        rsp_in, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse', density)
-        rsp_out = mx.nd.cast_storage(mx.nd.array(rsp_in.tostype('default'), dtype=default_dtype()), stype='row_sparse')
-        assert same(rsp_in.asnumpy(), rsp_out.asnumpy())
-
-    def test_csr_to_dns(shape, density):
-        csr_in, (indptr, indices, values) = rand_sparse_ndarray(shape, 'csr', density)
-        dns_out = mx.nd.cast_storage(csr_in, stype='default')
-        assert same(csr_in.asnumpy(), dns_out.asnumpy())
-
-    def test_dns_to_csr(shape, density):
-        csr_in, (indptr, colidx, data) = rand_sparse_ndarray(shape, 'csr', density)
-        csr_out = mx.nd.cast_storage(mx.nd.array(csr_in.tostype('default'), dtype=default_dtype()), stype='csr')
-        assert same(csr_in.asnumpy(), csr_out.asnumpy())
+    def check_cast_storage(shape, density, from_stype, to_stype):
+        x = mx.symbol.Variable('x', stype=from_stype)
+        x_nd = rand_ndarray(shape, from_stype, density=density)
+        x_np = x_nd.asnumpy()
+        out_np = x_np
+        test = mx.symbol.cast_storage(x, stype=to_stype)
+        location = {'x': x_nd}
+        check_symbolic_forward(test, location, [out_np])
+        check_numeric_gradient(test, location)
+        grad_stypes = {'x': to_stype}
+        check_symbolic_backward(test, location, [out_np], [out_np], grad_stypes=grad_stypes)
 
     density = [1.00, 0.50, 0.10, 0.05, 0.01]
     for d in density:
         shape_2d = rand_shape_2d()
         shape_3d = rand_shape_3d()
-        test_csr_to_dns(shape_2d, d)
-        test_dns_to_csr(shape_2d, d)
-        test_rsp_to_dns(shape_2d, d)
-        test_dns_to_rsp(shape_2d, d)
-        test_rsp_to_dns(shape_3d, d)
-        test_dns_to_rsp(shape_3d, d)
+        check_cast_storage(shape_2d, d, 'csr', 'default')
+        check_cast_storage(shape_2d, d, 'default', 'csr')
+        check_cast_storage(shape_2d, d, 'row_sparse', 'default')
+        check_cast_storage(shape_2d, d, 'default', 'row_sparse')
+        check_cast_storage(shape_3d, d, 'row_sparse', 'default')
+        check_cast_storage(shape_3d, d, 'default', 'row_sparse')
         for i in range(4, 6):
             shape = rand_shape_nd(i, 5)
-            test_dns_to_rsp(shape, d)
-            test_rsp_to_dns(shape, d)
+            check_cast_storage(shape_2d, d, 'row_sparse', 'default')
+            check_cast_storage(shape_2d, d, 'default', 'row_sparse')
         # Test specific gpu kernels
         if default_context().device_type is 'gpu':
-            test_dns_to_csr((rnd.randint(1, 10), rnd.randint(  1,   32)), d) # test gpu thread kernel
-            test_dns_to_csr((rnd.randint(1, 10), rnd.randint( 32,  512)), d) # test gpu warp   kernel
-            test_dns_to_csr((rnd.randint(1, 10), rnd.randint(512, 1024)), d) # test gpu block  kernel
-            test_dns_to_rsp((rnd.randint(1, 10), rnd.randint(  1,   32)), d) # test gpu thread kernel
-            test_dns_to_rsp((rnd.randint(1, 10), rnd.randint( 32,  512)), d) # test gpu warp   kernel
-            test_dns_to_rsp((rnd.randint(1, 10), rnd.randint(512, 1024)), d) # test gpu block  kernel
+            dim0 = rnd.randint(1, 10)
+            # test gpu thread kernel
+            test_dns_to_csr((dim0, rnd.randint(  1,   32)), d, 'default', 'csr')
+            # test gpu warp   kernel
+            test_dns_to_csr((dim0, rnd.randint( 32,  512)), d, 'default', 'csr')
+            # test gpu block  kernel
+            test_dns_to_csr((dim0, rnd.randint(512, 1024)), d, 'default', 'csr')
+            # test gpu thread kernel
+            test_dns_to_rsp((dim0, rnd.randint(  1,   32)), d, 'default', 'row_sparse')
+            # test gpu warp   kernel
+            test_dns_to_rsp((dim0, rnd.randint( 32,  512)), d, 'default', 'row_sparse')
+            # test gpu block  kernel
+            test_dns_to_rsp((dim0, rnd.randint(512, 1024)), d, 'default', 'row_sparse')
 
 
 

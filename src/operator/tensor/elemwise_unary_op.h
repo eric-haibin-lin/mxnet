@@ -172,12 +172,12 @@ void IdentityLikeRhsComputeEx(const nnvm::NodeAttrs& attrs,
   Stream<xpu> *s = ctx.get_stream<xpu>();
   const auto in_stype = inputs[0].storage_type();
   const auto out_stype = outputs[0].storage_type();
-  // row_sparse -> row_sparse
-  if (in_stype == kRowSparseStorage && out_stype == kRowSparseStorage) {
-    NDArray out = outputs[0];
-    IdentityComputeRspRspImpl<xpu>(attrs, s, inputs[0], req[0], &out);
+  if (in_stype == out_stype) {
+    std::vector<NDArray> in{inputs[0]};
+    IdentityComputeEx<xpu>(attrs, ctx, in, req, outputs);
   } else {
-    LOG(FATAL) << "Not implemented yet";
+    LOG(FATAL) << "IdentityLikeRhsComputeEx not implemented for in_stype = " << in_stype
+               << " out_stype = " << out_stype;
   }
 }
 
