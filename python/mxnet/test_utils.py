@@ -82,20 +82,21 @@ def random_sample(population, k):
 def rand_sparse_ndarray(shape, stype, density=None, dtype=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np) """
     density = rnd.rand() if density is None else density
+    dtype = default_dtype() if dtype is None else dtype
     if stype == 'row_sparse':
         # sample index
         idx_sample = rnd.rand(shape[0])
         indices = np.argwhere(idx_sample < density).flatten()
         if indices.shape[0] == 0:
             result = mx.nd.zeros(shape, stype='row_sparse', dtype=dtype)
-            return result, (np.array([], dtype='int64'), np.array([], dtype='int64'))
+            return result, (np.array([], dtype=dtype), np.array([], dtype='int64'))
         # generate random values
         val = rnd.rand(indices.shape[0], *shape[1:]).astype(dtype)
         arr = mx.nd.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
         return arr, (val, indices)
     elif stype == 'csr':
         assert(len(shape) == 2)
-        csr = sp.rand(shape[0], shape[1], density=density, format='csr')
+        csr = sp.rand(shape[0], shape[1], density=density, format='csr', dtype=dtype)
         result = mx.nd.csr_matrix(csr.data, csr.indptr, csr.indices, shape, dtype=dtype)
         return result, (csr.indptr, csr.indices, csr.data)
     else:
