@@ -603,7 +603,8 @@ inline void SGDMomUpdateEx(const nnvm::NodeAttrs& attrs,
      NDArray out = outputs[0];
      SGDMomUpdateRspDnsImpl<xpu>(param, ctx, weight, grad.data(), mom, req[0], &out);
   } else {
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDMomUpdate<xpu>, "SGDMomUpdate");
+    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                         SGDMomUpdate<xpu>, "SGDMomUpdate", {2});
   }
 }
 
