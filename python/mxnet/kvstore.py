@@ -259,7 +259,7 @@ class KVStore(object):
         Examples
         --------
         >>> shape = (3, 3)
-        >>> kv.init('3', mx.nd.ones(shape)._to_rsp())
+        >>> kv.init('3', mx.nd.ones(shape).tostype('row_sparse'))
         >>> a = mx.nd.zeros(shape, stype='row_sparse')
         >>> row_ids = mx.nd.array([0, 2], dtype='int64')
         >>> kv.row_sparse_pull('3', out=a, row_ids=row_ids)

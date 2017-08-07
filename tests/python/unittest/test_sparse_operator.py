@@ -76,7 +76,7 @@ def test_cast_storage_ex():
 
     def test_dns_to_rsp(shape, density):
         rsp_in, (data, row_idx) = rand_sparse_ndarray(shape, 'row_sparse', density)
-        rsp_out = mx.nd.cast_storage(mx.nd.array(rsp_in.todense(), dtype=default_dtype()), stype='row_sparse')
+        rsp_out = mx.nd.cast_storage(mx.nd.array(rsp_in.tostype('default'), dtype=default_dtype()), stype='row_sparse')
         assert same(rsp_in.asnumpy(), rsp_out.asnumpy())
 
     def test_csr_to_dns(shape, density):
@@ -86,7 +86,7 @@ def test_cast_storage_ex():
 
     def test_dns_to_csr(shape, density):
         csr_in, (indptr, colidx, data) = rand_sparse_ndarray(shape, 'csr', density)
-        csr_out = mx.nd.cast_storage(mx.nd.array(csr_in.todense(), dtype=default_dtype()), stype='csr')
+        csr_out = mx.nd.cast_storage(mx.nd.array(csr_in.tostype('default'), dtype=default_dtype()), stype='csr')
         assert same(csr_in.asnumpy(), csr_out.asnumpy())
 
     density = [1.00, 0.50, 0.10, 0.05, 0.01]
@@ -117,9 +117,9 @@ def test_cast_storage_ex():
 def test_sparse_dot():
     def test_dot_csr(lhs_shape, rhs_shape, rhs_stype, trans_lhs, density=1):
         lhs_nd = rand_ndarray(lhs_shape, 'csr', 1)
-        lhs_dns = lhs_nd.todense()
+        lhs_dns = lhs_nd.tostype('default')
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=density)
-        rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.todense()
+        rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
         out = mx.nd.dot(lhs_nd, rhs_dns, transpose_a=trans_lhs)
         if trans_lhs and default_context().device_type is 'cpu':
             assert out.stype == 'row_sparse'
@@ -221,7 +221,7 @@ def test_sparse_square_sum():
     for density in densities:
         shape = rand_shape_2d(dim0, dim1)
         rsp = rand_ndarray(shape, 'row_sparse', density)
-        dns = rsp.todense()
+        dns = rsp.tostype('default')
         for axis in axes:
             for keepdim in keepdims:
                 ret = mx.nd._internal._square_sum(rsp, axis=axis, keepdims=keepdim)

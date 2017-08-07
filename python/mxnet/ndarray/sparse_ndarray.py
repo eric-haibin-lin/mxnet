@@ -144,7 +144,7 @@ class BaseSparseNDArray(NDArray):
     def asnumpy(self):
         """Return a dense ``numpy.ndarray`` object with value copied from this array
         """
-        return self.todense().asnumpy()
+        return self.tostype('default').asnumpy()
 
     def astype(self, dtype):
         """Returns a copy of the array after casting to a specified type.
@@ -189,9 +189,6 @@ class BaseSparseNDArray(NDArray):
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
 
-    def todense(self):
-        return todense(self)
-
     def _data(self):
         """A deep copy NDArray of the data array associated with the BaseSparseNDArray.
 
@@ -227,7 +224,7 @@ class CSRNDArray(BaseSparseNDArray):
     Example
     -------
     >>> a = mx.nd.array([[0, 1, 0], [2, 0, 0], [0, 0, 0], [0, 0, 3]])
-    >>> a = a._to_csr()
+    >>> a = a.tostype('csr')
     >>> a.indices.asnumpy()
     array([1, 0, 2])
     >>> a.indptr.asnumpy()
@@ -316,7 +313,7 @@ class CSRNDArray(BaseSparseNDArray):
                [ 0.,  0.,  0.],
                [ 0.,  0.,  0.]], dtype=float32)
         >>> # assign CSRNDArray with same storage type
-        >>> x = mx.nd.ones('row_sparse', (3,3))._to_csr()
+        >>> x = mx.nd.ones('row_sparse', (3,3)).tostype('csr')
         >>> x[:] = src
         >>> x.asnumpy()
         array([[ 1.,  1.,  1.],
@@ -391,6 +388,18 @@ class CSRNDArray(BaseSparseNDArray):
         """
         return self._data()
 
+    def tostype(self, stype):
+        """Return a copy of the array with chosen storage type.
+
+        Returns
+        -------
+        NDArray or CSRNDArray
+            A copy of the array with the chosen storage stype
+        """
+        if stype == 'row_sparse':
+            raise ValueError("cast_storage from csr to row_sparse is not supported")
+        return cast_storage(self, stype=stype)
+
     def copyto(self, other):
         """Copies the value of this array to another array.
 
@@ -450,7 +459,7 @@ class RowSparseNDArray(BaseSparseNDArray):
     --------
     >>> import mxnet as mx
     >>> dense = mx.nd.array([[1,2],[0,0],[3,0],[0,0],[0,0],[0,0]])
-    >>> rsp = dense._to_rsp()
+    >>> rsp = dense.tostype('row_sparse')
     >>> rsp.indices.asnumpy()
     array([0, 2], dtype=int64)
     >>> rsp.data.asnumpy()
@@ -562,7 +571,7 @@ class RowSparseNDArray(BaseSparseNDArray):
                 raise TypeError('type %s not supported' % str(type(value)))
         else:
             assert(isinstance(key, (int, tuple)))
-            raise Exception('RowSparseNDArray only supports [:] for assignment')
+            raise TypeError('RowSparseNDArray only supports [:] for assignment')
 
     @property
     def indices(self):
@@ -587,6 +596,18 @@ class RowSparseNDArray(BaseSparseNDArray):
             This RowSparseNDArray's data array.
         """
         return self._data()
+
+    def tostype(self, stype):
+        """Return a copy of the array with chosen storage type.
+
+        Returns
+        -------
+        NDArray or RowSparseNDArray
+            A copy of the array with the chosen storage stype
+        """
+        if stype == 'csr':
+            raise ValueError("cast_storage from row_sparse to csr is not supported")
+        return cast_storage(self, stype=stype)
 
     def copyto(self, other):
         """Copies the value of this array to another array.
@@ -774,18 +795,6 @@ def row_sparse_array(data, indices, shape, ctx=None, dtype=None, indices_type=No
     check_call(_LIB.MXNDArraySyncCopyFromNDArray(result.handle, data.handle, ctypes.c_int(-1)))
     check_call(_LIB.MXNDArraySyncCopyFromNDArray(result.handle, indices.handle, ctypes.c_int(0)))
     return result
-
-
-def todense(source):
-    """ Return a dense array representation of a BaseSparseNDArray.
-
-    Returns
-    -------
-    NDArray
-        A copy of the array with `default` storage stype
-    """
-    return cast_storage(source, stype='default')
-
 
 def _ndarray_cls(handle, writable=True, stype=None):
     if stype is None:
