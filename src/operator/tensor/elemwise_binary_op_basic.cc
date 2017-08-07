@@ -15,7 +15,7 @@ MXNET_OPERATOR_REGISTER_BINARY(elemwise_add)
 The storage type of ``elemwise_add`` output depends on storage types of inputs
 
 - elemwise_add(row_sparse, row_sparse) = row_sparse
-- elemwise_add(row_sparse, default) = default
+- otherwise, ``elemwise_add`` generates output with default storage
 
 )code")
 .set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::plus>)
