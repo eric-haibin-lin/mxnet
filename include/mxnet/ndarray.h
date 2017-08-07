@@ -197,7 +197,7 @@ class NDArray {
    * \param index the index of the aux data
    * \return the shape of aux data at given index
    */
-  inline const TShape aux_shape(size_t index) const {
+  inline const TShape& aux_shape(size_t index) const {
     CHECK(storage_type() != kDefaultStorage);
     return ptr_->aux_shapes[index];
   }
