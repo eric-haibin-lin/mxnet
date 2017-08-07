@@ -427,8 +427,8 @@ class CSRNDArray(BaseSparseNDArray):
 class RowSparseNDArray(BaseSparseNDArray):
     """A sparse representation of a set of tensor slices at given indices.
 
-    A RowSparseNDArray represents an K-dimensional NDArray as two separate arrays: `data` and
-    `indices`. The `indices` stores the indices of the K-dimensional `data` slices extracted
+    A RowSparseNDArray represents a multidimensional NDArray as two separate arrays: `data` and
+    `indices`. The `indices` stores the indices of the multidimensional `data` slices extracted
     from the dense NDArray in the first dimension. The corresponding NDArray ``dense``
     represented by RowSparseNDArray ``rsp`` has
 
@@ -714,7 +714,7 @@ def csr_matrix(data, indptr, indices, shape, ctx=None, dtype=None, indptr_type=N
 
 
 def row_sparse_array(data, indices, shape, ctx=None, dtype=None, indices_type=None):
-    """Creates a K-dimensional row sparse array with a set of tensor slices at given indices.
+    """Creates a multidimensional row sparse array with a set of tensor slices at given indices.
 
     Parameters
     ----------
