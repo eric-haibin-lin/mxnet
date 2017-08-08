@@ -48,7 +48,8 @@ NNVM_REGISTER_OP(_backward_cast)
 
 // negative
 NNVM_REGISTER_OP(negative)
-.set_attr<FCompute>("FCompute<gpu>", UnaryOp::Compute<gpu, mshadow_op::negation>);
+.set_attr<FCompute>("FCompute<gpu>", UnaryOp::Compute<gpu, mshadow_op::negation>)
+.set_attr<FComputeEx>("FComputeEx<gpu>", UnaryOp::ComputeEx<gpu, mshadow_op::negation>);
 
 // reciprocal
 NNVM_REGISTER_OP(reciprocal)
@@ -98,7 +99,8 @@ NNVM_REGISTER_OP(fix)
 
 // square
 NNVM_REGISTER_OP(square)
-.set_attr<FCompute>("FCompute<gpu>", UnaryOp::Compute<gpu, mshadow_op::square>);
+.set_attr<FCompute>("FCompute<gpu>", UnaryOp::Compute<gpu, mshadow_op::square>)
+.set_attr<FComputeEx>("FComputeEx<gpu>", UnaryOp::ComputeEx<gpu, mshadow_op::square>);
 
 NNVM_REGISTER_OP(_backward_square)
 .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, unary_bwd<mshadow_op::square_grad> >);
