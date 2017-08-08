@@ -72,7 +72,7 @@ class ElemwiseBinaryOp : public OpBase
 
   enum Resource { kTempSpace };
 
-  /*! \brief FIll dense output block with a single scalar value */
+  /*! \brief Fill dense output block with a single scalar value */
   template<typename xpu, typename DType>
   static inline void Fill(mshadow::Stream<xpu> *s,
                           const DType val,
@@ -98,9 +98,6 @@ class ElemwiseBinaryOp : public OpBase
     if (index_out_min > iter_out) {
       const size_t size = out[iter_out].shape_.Size();
       const DType zero_input_val = OP::Map(DType(0), DType(0));
-//      std::cout << "FillDense( " << iter_out << " - " << (index_out_min-1) << " ) = "
-//                << zero_input_val
-//                << std::endl << std::flush;
       #pragma omp parallel for
       for(int i = static_cast<int>(iter_out); i < index_out_min; ++i) {
         MXNET_ASSIGN_REQ_SWITCH(req, Req, {
@@ -147,15 +144,15 @@ class ElemwiseBinaryOp : public OpBase
   //                   in order to remove runtime checks for these invariant vars
   //                   (i.e. lhs_is_dense, rhs_is_dense, is_dense_result, etc.)
   template<typename xpu, typename DType, typename IType, typename OP>
-  static inline void RspRspElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
-                                            const OpContext &ctx,
-                                            const NDArray& lhs,
-                                            const NDArray& rhs,
-                                            const OpReqType req,
-                                            const NDArray& output,
-                                            const bool lhs_may_be_dense,
-                                            const bool rhs_may_be_dense,
-                                            const bool allow_inplace) {
+  static void RspRspElemwiseBinaryOp(const nnvm::NodeAttrs &attrs,
+                                     const OpContext &ctx,
+                                     const NDArray& lhs,
+                                     const NDArray& rhs,
+                                     const OpReqType req,
+                                     const NDArray& output,
+                                     const bool lhs_may_be_dense,
+                                     const bool rhs_may_be_dense,
+                                     const bool allow_inplace) {
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
@@ -199,10 +196,10 @@ class ElemwiseBinaryOp : public OpBase
           CHECK_EQ(is_dense_result, false);
           if(lhs_in_place) {
             // For in-place, zero L-value must always be zero output
-            //CHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
+            DCHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
           } else {
             // For in-place, zero R-value must always be zero output
-            //CHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
+            DCHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
           }
         }
       }
@@ -367,9 +364,6 @@ class ElemwiseBinaryOp : public OpBase
     using namespace mshadow;
     using namespace mxnet_op;
     using namespace mshadow::expr;
-
-//    test::print(&std::cout, "lhs", lhs);
-//    test::print(&std::cout, "rhs", rhs);
 
     const bool is_dense_result = output.storage_type() == kDefaultStorage;
     const bool lhs_is_dense = lhs.storage_type() == kDefaultStorage;
@@ -899,12 +893,10 @@ class ElemwiseBinaryOp : public OpBase
     using namespace mshadow;
     using namespace mshadow::expr;
     auto stype = inputs[0].storage_type();
-    CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
       if (!common::ContainsDefaultStorage(inputs)) {
         CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-        CHECK_EQ(inputs.size(), 1U);
         DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output (sparse<->sparse)
         DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output (sparse<->sparse)
         MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
@@ -1063,16 +1055,6 @@ class ElemwiseBinaryOp : public OpBase
   .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::LaunchEx<cpu, __kernel$>)
 
 /*! \brief Binary launch, dense rvalue */
-/*
-//#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_RVALUE(__name$, __kernel$)            \
-//  MXNET_OPERATOR_REGISTER_BINARY(__name$)                                                     \
-//  .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageTypeForce<2, 1, 0>)        \
-//  .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
-//  .set_attr<FComputeEx>("FComputeEx<cpu>",                                                    \
-//    ElemwiseBinaryOp::LaunchExDenseLRValue<cpu, __kernel$, false, true>)
-*/
-
-/*! \brief Binary launch, dense rvalue */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_LRVALUE(__name$, __kernel$)           \
   MXNET_OPERATOR_REGISTER_BINARY(__name$)                                                     \
   .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageTypeLeastDense<2, 1>)      \
@@ -1081,49 +1063,18 @@ class ElemwiseBinaryOp : public OpBase
     ElemwiseBinaryOp::LaunchExDenseLRValue<cpu, __kernel$, true, true>)
 
 /*! \brief Binary CUDA launch */
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA(__name$, __kernel$)               \
-  NNVM_REGISTER_OP(__name$)                                                          \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, __kernel$>)     \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchEx<gpu, __kernel$>)
-
-/*! \brief Binary CUDA launch */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_WITH_HALF2(__name$, __kernel$)             \
   NNVM_REGISTER_OP(__name$)                                                                   \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)     \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchWithHalf2Ex<gpu, __kernel$>)
-
-/*! \brief Binary CUDA launch, dense result */
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DR(__name$, __kernel$)                       \
-  NNVM_REGISTER_OP(__name$)                                                                     \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<gpu, __kernel$>)                \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchEx<gpu, __kernel$>)
+  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)
 
 /*! \brief Binary CUDA launch, dense result */
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_WITH_HALF2_CUDA_DR(__name$, __kernel$)            \
   NNVM_REGISTER_OP(__name$)                                                                     \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)       \
-  .set_attr<FComputeEx>("FComputeEx<gpu>", ElemwiseBinaryOp::LaunchWithHalf2Ex<gpu, __kernel$>)
-
-/*! \brief Binary CUDA launch, dense rvalue */
-/*
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_RVALUE(__name$, __kernel$)           \
-  NNVM_REGISTER_OP(__name$)                                                                   \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
-  .set_attr<FComputeEx>("FComputeEx<gpu>",                                                    \
-    ElemwiseBinaryOp::LaunchExDenseLRValue<gpu, __kernel$, false, true>)
-*/
-
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_DENSE_LRVALUE(__name$, __kernel$)           \
-  NNVM_REGISTER_OP(__name$)                                                                   \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
-  .set_attr<FComputeEx>("FComputeEx<gpu>",                                                    \
-    ElemwiseBinaryOp::LaunchExDenseLRValue<gpu, __kernel$, true, true>)
+  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)
 
 #define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_WITH_HALF2_DENSE_LRVALUE(__name$, __kernel$) \
   NNVM_REGISTER_OP(__name$)                                                                     \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<cpu, __kernel$>)       \
-  .set_attr<FComputeEx>("FComputeEx<gpu>",                                                      \
-    ElemwiseBinaryOp::LaunchExDenseWithHalf2LRValue<gpu, __kernel$, true, true>)
+  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)
 
 }  // namespace op
 }  // namespace mxnet
