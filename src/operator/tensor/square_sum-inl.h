@@ -49,7 +49,6 @@ inline bool SquareSumBackwardInferStorageType(const nnvm::NodeAttrs& attrs,
                                               std::vector<int>* out_attrs) {
   CHECK_EQ(in_attrs->size(), 2U);
   CHECK_EQ(out_attrs->size(), 1U);
-  const ReduceAxesParam& param = nnvm::get<ReduceAxesParam>(attrs.parsed);
   if (in_attrs->at(0) == kDefaultStorage || in_attrs->at(0) == kRowSparseStorage) {
     STORAGE_TYPE_ASSIGN_CHECK(*in_attrs, 1, kRowSparseStorage);
     STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, 0, kRowSparseStorage);
