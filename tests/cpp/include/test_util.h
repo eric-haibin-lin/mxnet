@@ -113,7 +113,6 @@ inline index_t offset(const TShape& shape, const std::vector<size_t>& indices) {
   for (size_t i = 0; i < dim; ++i) {
     offset *= shape[i];
     if (indices.size() > i) {
-      CHECK_GE(indices[i], 0U);
       CHECK_LT(indices[i], shape[i]);
       offset += indices[i];
     }
