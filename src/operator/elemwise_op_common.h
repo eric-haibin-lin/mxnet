@@ -145,7 +145,7 @@ inline bool ElemwiseStorageTypeDenseOutput(const nnvm::NodeAttrs& attrs,
                                            std::vector<int> */*in_attrs*/,
                                            std::vector<int> *out_attrs) {
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
-  for(size_t i = 0; i < n_out; ++i) {
+  for (size_t i = 0; i < n_out; ++i) {
     STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, i, kDefaultStorage);
   }
   return true;
@@ -159,7 +159,7 @@ inline bool ElemwiseStorageTypeForce(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   CHECK_LT(n_force_out_as_input_index, n_in) << "";
-  for(size_t i = 0; i < n_out; ++i) {
+  for (size_t i = 0; i < n_out; ++i) {
     STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, i, (*in_attrs)[n_force_out_as_input_index]);
   }
   return true;
@@ -176,18 +176,18 @@ inline bool ElemwiseStorageTypeLeastDense(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), static_cast<size_t>(n_in)) << " in operator " << attrs.name;
   CHECK_EQ(out_attrs->size(), static_cast<size_t>(n_out)) << " in operator " << attrs.name;
   NDArrayStorageType stype = kDefaultStorage;
-  for(size_t i = 0; i < n_in; ++i) {
+  for (size_t i = 0; i < n_in; ++i) {
     const NDArrayStorageType in_stype = static_cast<NDArrayStorageType>((*in_attrs)[i]);
-    if(in_stype != kDefaultStorage) {
-      if(stype == kDefaultStorage || in_stype == prefer) {
+    if (in_stype != kDefaultStorage) {
+      if (stype == kDefaultStorage || in_stype == prefer) {
         stype = in_stype;
       }
-      if(prefer == kUndefinedStorage || stype == prefer) {
+      if (prefer == kUndefinedStorage || stype == prefer) {
         break;
       }
     }
   }
-  for(size_t i = 0; i < n_out; ++i) {
+  for (size_t i = 0; i < n_out; ++i) {
     STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, i, stype);
   }
   return true;
@@ -259,8 +259,7 @@ struct ElemwiseGradUseNone {
 
 /*! \brief Generic conversion of F<OP> kernel mapping to Kernel::Launch mapping */
 template<typename OP, int Req>
-struct BMap
-{
+struct BMap {
   template<typename DType>
   MSHADOW_XINLINE static void Map(int i, DType *out,
                                   const DType *lhs,

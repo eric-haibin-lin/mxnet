@@ -97,8 +97,8 @@ inline std::string shape_string(const TShape& x) {
 template<typename VType>
 inline std::string vector_string(const std::vector<VType>& x) {
   std::ostringstream os;
-  for(size_t i = 0, n = x.size(); i < n; ++i) {
-    if(i) {
+  for (size_t i = 0, n = x.size(); i < n; ++i) {
+    if (i) {
       os << ", ";
     }
     os << x[i];
@@ -176,7 +176,7 @@ inline bool shape_vector_assign(std::vector<TShape> *y, const std::vector<TShape
     return x.size() == 0;
   } else {
     for (size_t i = 0; i < y->size(); ++i) {
-      if(!shape_assign(&(*y)[i], x[i])) {
+      if (!shape_assign(&(*y)[i], x[i])) {
         return false;
       }
     }
@@ -215,7 +215,7 @@ inline bool type_vector_assign(std::vector<int> *y, const std::vector<int>& x) {
     return x.size() == 0;
   } else {
     for (size_t i = 0; i < y->size(); ++i) {
-      if(!type_assign(&(*y)[i], x[i])) {
+      if (!type_assign(&(*y)[i], x[i])) {
         return false;
       }
     }

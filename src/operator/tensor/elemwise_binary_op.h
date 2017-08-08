@@ -12,22 +12,20 @@
 #include <string>
 #include <utility>
 #include <typeinfo>
+#include <algorithm>
 #include "../mxnet_op.h"
 #include "../mshadow_op.h"
 #include "elemwise_unary_op.h"
 #include "../../common/utils.h"
 
 namespace mxnet {
-namespace op
-{
+namespace op {
 
 /*! Gather binary operator functions into BinaryOp class */
-class ElemwiseBinaryOp : public OpBase
-{
+class ElemwiseBinaryOp : public OpBase {
  public:
   template<typename OP, int Req>
-  struct BinaryOpBackwardUseNone
-  {
+  struct BinaryOpBackwardUseNone {
     template<typename DType>
     MSHADOW_XINLINE static void Map(int i, DType *igrad, const DType *ograd) {
       KERNEL_ASSIGN(igrad[i], Req, OP::Map(ograd[i]));
@@ -39,8 +37,7 @@ class ElemwiseBinaryOp : public OpBase
   };
 
   template<typename OP, int Req>
-  struct BinaryOpBackwardUseIn
-  {
+  struct BinaryOpBackwardUseIn {
     template<typename DType>
     MSHADOW_XINLINE static void Map(int i, DType *igrad,
                                     const DType *ograd, const DType *lhs, const DType *rhs) {
@@ -50,8 +47,7 @@ class ElemwiseBinaryOp : public OpBase
 
   /*! \brief For sparse, assume missing rvalue is 0 */
   template<typename OP, int Req>
-  struct BinaryOpMissingRValue
-  {
+  struct BinaryOpMissingRValue {
     template<typename DType>
     MSHADOW_XINLINE static void Map(int i, DType *out, const DType *lhs) {
       KERNEL_ASSIGN(out[i], Req, OP::Map(lhs[i], DType(0)));
@@ -60,8 +56,7 @@ class ElemwiseBinaryOp : public OpBase
 
   /*! \brief For sparse, assume missing lvalue is 0 */
   template<typename OP, int Req>
-  struct BinaryOpMissingLValue
-  {
+  struct BinaryOpMissingLValue {
     template<typename DType>
     MSHADOW_XINLINE static void Map(int i, DType *out, const DType *rhs) {
       KERNEL_ASSIGN(out[i], Req, OP::Map(DType(0), rhs[i]));
@@ -69,7 +64,6 @@ class ElemwiseBinaryOp : public OpBase
   };
 
  private:
-
   enum Resource { kTempSpace };
 
   /*! \brief Fill dense output block with a single scalar value */
@@ -90,7 +84,7 @@ class ElemwiseBinaryOp : public OpBase
                                  const size_t idx_l,
                                  const size_t idx_r,
                                  const OpReqType req,
-                                 mshadow::Tensor<xpu, 2, DType>& out,
+                                 mshadow::Tensor<xpu, 2, DType> *out,
                                  const size_t iter_out) {
     using namespace mxnet_op;
     using namespace mshadow::expr;
@@ -99,7 +93,7 @@ class ElemwiseBinaryOp : public OpBase
       const size_t size = out[iter_out].shape_.Size();
       const DType zero_input_val = OP::Map(DType(0), DType(0));
       #pragma omp parallel for
-      for(int i = static_cast<int>(iter_out); i < index_out_min; ++i) {
+      for (int i = static_cast<int>(iter_out); i < index_out_min; ++i) {
         MXNET_ASSIGN_REQ_SWITCH(req, Req, {
           Kernel<MapSetToScalar<Req>, xpu>::Launch(s, size, out[i].dptr_, zero_input_val);
         });
@@ -130,7 +124,7 @@ class ElemwiseBinaryOp : public OpBase
    * @return bool, whether the array is effectively dense
    */
   static inline bool IsEffectivelyDense(const NDArray& arr) {
-    switch(arr.storage_type()) {
+    switch (arr.storage_type()) {
       case kDefaultStorage:
         return true;
       case kRowSparseStorage:
@@ -184,7 +178,7 @@ class ElemwiseBinaryOp : public OpBase
     } else {
       if (rhs_is_dense) {
         output.CheckAndAlloc({mshadow::Shape1(num_rows_l)});
-      } else if(lhs_is_dense) {
+      } else if (lhs_is_dense) {
         output.CheckAndAlloc({mshadow::Shape1(num_rows_r)});
       } else {
         lhs_in_place = IsSameArray<DType>(&lhs, &output);
@@ -194,12 +188,12 @@ class ElemwiseBinaryOp : public OpBase
         } else {
           CHECK_EQ(allow_inplace, true);
           CHECK_EQ(is_dense_result, false);
-          if(lhs_in_place) {
+          if (lhs_in_place) {
             // For in-place, zero L-value must always be zero output
-            DCHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
+            DCHECK(fabs(static_cast<float>(OP::Map(DType(0), DType(99)))) < DType(1e-3));
           } else {
             // For in-place, zero R-value must always be zero output
-            DCHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
+            DCHECK(fabs(static_cast<float>(OP::Map(DType(99), DType(0)))) < DType(1e-3));
           }
         }
       }
@@ -232,30 +226,30 @@ class ElemwiseBinaryOp : public OpBase
     if (is_dense_result) {
       if (!num_rows_l && !num_rows_r) {
         const size_t all_rows = static_cast<size_t>(lhs.shape()[0]);
-        iter_out = FillDense<xpu, DType, OP>(s, all_rows, all_rows, req, out, iter_out);
+        iter_out = FillDense<xpu, DType, OP>(s, all_rows, all_rows, req, &out, iter_out);
       }
     }
 
     while (iter_l < num_rows_l && iter_r < num_rows_r) {
       IType idx_l = lhs_is_dense ? indices_r[iter_r] : indices_l[iter_l];
       IType idx_r = rhs_is_dense ? idx_l : indices_r[iter_r];
-      if(lhs_in_place) {
-        while(idx_r < idx_l && ++iter_r < num_rows_r) {
+      if (lhs_in_place) {
+        while (idx_r < idx_l && ++iter_r < num_rows_r) {
           idx_r = indices_r[iter_r];
         }
-        if(iter_r >= num_rows_r) {
+        if (iter_r >= num_rows_r) {
           break;
         }
-      } else if(rhs_in_place) {
-        while(idx_l < idx_r && ++iter_l < num_rows_l) {
+      } else if (rhs_in_place) {
+        while (idx_l < idx_r && ++iter_l < num_rows_l) {
           idx_l = indices_l[iter_l];
         }
-        if(iter_l >= num_rows_l) {
+        if (iter_l >= num_rows_l) {
           break;
         }
       }
       if (is_dense_result) {
-        iter_out = FillDense<xpu, DType, OP>(s, idx_l, idx_r, req, out, iter_out);
+        iter_out = FillDense<xpu, DType, OP>(s, idx_l, idx_r, req, &out, iter_out);
         DCHECK_EQ(iter_out, std::min(idx_l, idx_r));
       }
       if (idx_l == idx_r) {
@@ -300,7 +294,7 @@ class ElemwiseBinaryOp : public OpBase
         indices_out[iter_out] = indices_l[iter_l];
       } else {
         const IType idx_l = indices_l[iter_l];
-        iter_out = FillDense<xpu, DType, OP>(s, lhs.shape()[0], idx_l, req, out, iter_out);
+        iter_out = FillDense<xpu, DType, OP>(s, lhs.shape()[0], idx_l, req, &out, iter_out);
       }
       Tensor<xpu, 1, DType> lvalue = data_l[iter_l++];
       MXNET_ASSIGN_REQ_SWITCH(req, Req, {
@@ -313,7 +307,7 @@ class ElemwiseBinaryOp : public OpBase
         indices_out[iter_out] = indices_r[iter_r];
       } else {
         const IType idx_r = indices_r[iter_r];
-        iter_out = FillDense<xpu, DType, OP>(s, lhs.shape()[0], idx_r, req, out, iter_out);
+        iter_out = FillDense<xpu, DType, OP>(s, lhs.shape()[0], idx_r, req, &out, iter_out);
       }
       Tensor<xpu, 1, DType> rvalue = data_r[iter_r++];
       MXNET_ASSIGN_REQ_SWITCH(req, Req, {
@@ -323,12 +317,12 @@ class ElemwiseBinaryOp : public OpBase
     }
     if (is_dense_result) {
       const size_t all_rows = static_cast<size_t>(lhs.shape()[0]);
-      iter_out = FillDense<xpu, DType, OP>(s, all_rows, all_rows, req, out, iter_out);
+      iter_out = FillDense<xpu, DType, OP>(s, all_rows, all_rows, req, &out, iter_out);
     } else {
-      if(lhs_in_place) {
+      if (lhs_in_place) {
         CHECK_LE(iter_out, num_rows_l);
       }
-      if(rhs_in_place) {
+      if (rhs_in_place) {
         CHECK_LE(iter_out, num_rows_r);
       }
       DCHECK_LE(iter_out, num_rows_l + num_rows_r);  // Make sure that we didn't overrun
@@ -340,14 +334,6 @@ class ElemwiseBinaryOp : public OpBase
         output.set_aux_shape(rowsparse::kIdx, new_shape);
       }
     }
-  }
-
-  static inline int64_t atomic_add(int64_t *dest, int64_t value) {
-#ifdef _WIN32
-    return ::InterlockedAdd64(dest, value);
-#else
-    return __atomic_add_fetch(dest, value, __ATOMIC_SEQ_CST);
-#endif
   }
 
   /*! \brief CSR -op- CSR binary operator for non-canonical NDARray */
@@ -389,9 +375,9 @@ class ElemwiseBinaryOp : public OpBase
     const size_t nr_rows = static_cast<size_t>(lhs.shape()[0]);
     const size_t nr_cols = lhs.shape().Size() / nr_rows;
 
-    const long lhs_rows = lhs_is_dense ? static_cast<size_t>(lhs.shape()[0])
+    const int64_t lhs_rows = lhs_is_dense ? static_cast<size_t>(lhs.shape()[0])
                                        : lhs.aux_shape(csr::kIndPtr).Size() - 1;
-    const long rhs_rows = rhs_is_dense ? static_cast<size_t>(rhs.shape()[0])
+    const int64_t rhs_rows = rhs_is_dense ? static_cast<size_t>(rhs.shape()[0])
                                        : rhs.aux_shape(csr::kIndPtr).Size() - 1;
     const size_t lhs_nnz = lhs_is_dense ? lhs.shape().Size() : lhs.storage_shape().Size();
     const size_t rhs_nnz = rhs_is_dense ? rhs.shape().Size() : rhs.storage_shape().Size();
@@ -404,7 +390,7 @@ class ElemwiseBinaryOp : public OpBase
     } else {
       if (rhs_is_dense) {
         output.CheckAndAlloc({mshadow::Shape1(lhs_nnz)});
-      } else if(lhs_is_dense) {
+      } else if (lhs_is_dense) {
         output.CheckAndAlloc({mshadow::Shape1(rhs_nnz)});
       } else {
         lhs_in_place = IsSameArray<DType>(&lhs, &output);
@@ -415,12 +401,12 @@ class ElemwiseBinaryOp : public OpBase
         } else {
           CHECK_EQ(allow_inplace, true);
           CHECK_EQ(is_dense_result, false);
-          if(lhs_in_place) {
+          if (lhs_in_place) {
             // For in-place, zero L-value must always be zero output
-            CHECK(fabs(float(OP::Map(DType(0), DType(99)))) < DType(1e-3));
+            CHECK(fabs(static_cast<float>(OP::Map(DType(0), DType(99)))) < DType(1e-3));
           } else {
             // For in-place, zero R-value must always be zero output
-            CHECK(fabs(float(OP::Map(DType(99), DType(0)))) < DType(1e-3));
+            CHECK(fabs(static_cast<float>(OP::Map(DType(99), DType(0)))) < DType(1e-3));
           }
         }
       }
@@ -479,7 +465,7 @@ class ElemwiseBinaryOp : public OpBase
       IType head = -2;
       IType length = 0;
 
-      //add a row of A to lhs_row
+      // add a row of A to lhs_row
       IType i_start = row_ptr_l[i];
       IType i_end = row_ptr_l[i + 1];
       for (IType jj = i_start; jj < i_end; jj++) {
@@ -494,7 +480,7 @@ class ElemwiseBinaryOp : public OpBase
         }
       }
 
-      //add a row of B to rhs_row
+      // add a row of B to rhs_row
       i_start = row_ptr_r[i];
       i_end = row_ptr_r[i + 1];
       for (IType jj = i_start; jj < i_end; jj++) {
@@ -530,7 +516,6 @@ class ElemwiseBinaryOp : public OpBase
 
       row_ptr_out[i + 1] = nnz;
     }
-
   }
 
   /*! \brief Minimum of three */
@@ -564,9 +549,9 @@ class ElemwiseBinaryOp : public OpBase
     CHECK_EQ(outputs.size(), 1);
     if (req[0] != kNullOp) {
       const NDArray *sparse = &inputs[0];
-      if(sparse->storage_type() == kDefaultStorage) {
+      if (sparse->storage_type() == kDefaultStorage) {
         sparse = &inputs[1];
-        if(sparse->storage_type() == kDefaultStorage) {
+        if (sparse->storage_type() == kDefaultStorage) {
           // Do we need to worry about sparse result here?
           CHECK_EQ(outputs[0].storage_type(), kDefaultStorage);
           MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
@@ -574,11 +559,11 @@ class ElemwiseBinaryOp : public OpBase
         }
       }
       bool allowed = false;
-      if(lhs_may_be_dense && rhs_may_be_dense) {
+      if (lhs_may_be_dense && rhs_may_be_dense) {
         allowed = common::ContainsNonDefaultStorage(inputs);
       } else if (lhs_may_be_dense) {
         allowed = inputs[1].storage_type() != kDefaultStorage;
-      } else if(rhs_may_be_dense) {
+      } else if (rhs_may_be_dense) {
         allowed = inputs[0].storage_type() != kDefaultStorage;
       } else {
         allowed = !common::ContainsNonDefaultStorage(inputs);
@@ -610,9 +595,9 @@ class ElemwiseBinaryOp : public OpBase
     Stream<xpu> *s = ctx.get_stream<xpu>();
     const int size = static_cast<int>((outputs[0].Size() + DataType<DType>::kLanes - 1)
                                 / DataType<DType>::kLanes);
-    DCHECK_EQ(size, outputs[0].Size());
-    DCHECK_EQ(size, outputs[1].Size());
-    DCHECK_EQ(size, inputs[0].Size());
+//    DCHECK_EQ(size, outputs[0].Size());
+//    DCHECK_EQ(size, outputs[1].Size());
+//    DCHECK_EQ(size, inputs[0].Size());
     const DType *ograd_dptr = inputs[0].dptr<DType>();
     if (std::is_same<LOP, mshadow_op::identity>::value && req[0] == kWriteInplace) {
       CHECK_EQ(ograd_dptr, outputs[0].dptr<DType>());
@@ -684,8 +669,7 @@ class ElemwiseBinaryOp : public OpBase
         MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
             RspRspElemwiseBinaryOp<xpu, DType, IType, LOP>(
               attrs, ctx, inputs[1], inputs[2], req[0], outputs[0],
-              false, false, false
-            );
+              false, false, false);
         });
         // LHS in-place
         MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
@@ -711,6 +695,7 @@ class ElemwiseBinaryOp : public OpBase
       }
     }
   }
+
  public:
   template<typename xpu, typename OP>
   static void Launch(const nnvm::NodeAttrs &attrs,
@@ -725,7 +710,6 @@ class ElemwiseBinaryOp : public OpBase
       CHECK_EQ(outputs.size(), 1U);
       MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
         MSHADOW_TYPE_SWITCH(outputs[0].type_flag_, DType, {
-          // Why is 'size' necessary?
           const size_t size = (minthree(outputs[0].Size(), inputs[0].Size(), inputs[1].Size())
           + DataType<DType>::kLanes - 1) / DataType<DType>::kLanes;
           Kernel<BMap<OP, Req>, xpu>::Launch(s, size,
@@ -749,7 +733,6 @@ class ElemwiseBinaryOp : public OpBase
       CHECK_EQ(outputs.size(), 1U);
       MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
         MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].type_flag_, DType, {
-          // Why is 'size' necessary?
           const size_t size = (minthree(outputs[0].Size(), inputs[0].Size(), inputs[1].Size())
           + DataType<DType>::kLanes - 1) / DataType<DType>::kLanes;
           Kernel<BMap<OP, Req>, xpu>::Launch(s, size,
@@ -773,7 +756,7 @@ class ElemwiseBinaryOp : public OpBase
     if (req[0] != kNullOp) {
       // If any input or output is dense, fallback to FCompute
       if (!common::ContainsDefaultStorage(inputs)) {
-        switch(inputs[0].storage_type()) {
+        switch (inputs[0].storage_type()) {
           case kRowSparseStorage:
             MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
               MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
@@ -888,17 +871,16 @@ class ElemwiseBinaryOp : public OpBase
                                const std::vector<NDArray> &inputs,
                                const std::vector<OpReqType> &req,
                                const std::vector<NDArray> &outputs) {
-    CHECK_EQ(inputs.size(), 1U);  // output grad,
+    CHECK_EQ(inputs.size(), 1U);   // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
     using namespace mshadow;
     using namespace mshadow::expr;
-    auto stype = inputs[0].storage_type();
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
       if (!common::ContainsDefaultStorage(inputs)) {
         CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-        DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output (sparse<->sparse)
-        DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output (sparse<->sparse)
+        DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
+        DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
         MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
           UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<LOP, Req>>(attrs, ctx, inputs,
                                                                     req, {outputs[0]});
@@ -921,7 +903,7 @@ class ElemwiseBinaryOp : public OpBase
                                                       const std::vector<NDArray> &inputs,
                                                       const std::vector<OpReqType> &req,
                                                       const std::vector<NDArray> &outputs) {
-    CHECK_EQ(inputs.size(), 1U);  // output grad,
+    CHECK_EQ(inputs.size(), 1U);   // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
     using namespace mshadow;
     using namespace mshadow::expr;
@@ -931,9 +913,8 @@ class ElemwiseBinaryOp : public OpBase
       // If any input is dense, fallback to FCompute
       if (!common::ContainsDefaultStorage(inputs)) {
         CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-        CHECK_EQ(inputs.size(), 1U);
-        DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output (sparse<->sparse)
-        DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output (sparse<->sparse)
+        DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
+        DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
         MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
           UnaryOp::LaunchWithHalf2Ex<xpu, BinaryOpBackwardUseNone<LOP, Req>>(
             attrs, ctx, inputs, req, {outputs[0]});

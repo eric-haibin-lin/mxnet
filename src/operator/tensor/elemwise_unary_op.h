@@ -21,9 +21,6 @@ namespace op {
 
 class OpBase {
  public:
-
-  //enum WithHalf2 { WITH_HALF2, WITHOUT_HALF2 };
-
   template<int Req>
   struct MapSetToScalar {
     template<typename DType>
@@ -45,7 +42,7 @@ class OpBase {
     CHECK_EQ(src_blob.shape_, dest_blob.shape_);
     MSHADOW_TYPE_SWITCH(src_blob.type_flag_, DType, {
       // Check if the pointers are the same (in-place operation needs no copy)
-      if(src_blob.dptr<DType>() != dest_blob.dptr<DType>()) {
+      if (src_blob.dptr<DType>() != dest_blob.dptr<DType>()) {
         mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s), s);
       }
     });
@@ -59,7 +56,7 @@ class OpBase {
       CHECK(shape_assign(&sshape, ishape));
       dest->CheckAndAllocData(sshape);
       CHECK_EQ(dest->storage_type(), clone_from->storage_type());
-      for(size_t i = 0, n = clone_from->aux_shape_count(); i < n; ++i) {
+      for (size_t i = 0, n = clone_from->aux_shape_count(); i < n; ++i) {
         TShape ashape = dest->aux_shape(i);
         CHECK(shape_assign(&ashape, clone_from->aux_shape(i)));
         dest->CheckAndAllocAuxData(i, ashape);
@@ -83,7 +80,7 @@ class OpBase {
     // My assumption is that the geometry blobs are not large enough to justify an omp loop here,
     // since the thread synchronization calls for each fork will take longer
     // than copying a few floats
-    for(size_t i = 0, n = src.aux_shape_count(); i < n; ++i) {
+    for (size_t i = 0, n = src.aux_shape_count(); i < n; ++i) {
       const TBlob src_blob = src.aux_data(i);
       const TBlob dest_blob = dest->aux_data(i);
       CopyBlob<xpu>(s, dest_blob, reqi, src_blob);
@@ -107,7 +104,7 @@ class OpBase {
    *         number of stored items */
   static inline TBlob GetReshapedBlob(const NDArray& arr) {
     TBlob blob = arr.data();
-    switch(arr.storage_type()) {
+    switch (arr.storage_type()) {
       case kDefaultStorage:  // most common first
         break;
       case kRowSparseStorage:
@@ -141,6 +138,7 @@ class OpBase {
     computer(attrs, ctx, in_blobs, req, out_blobs);
   }
 
+  /*! \brief Keep row shape[0] dimension and gather the remaining dimensions in location shape[1] */
   template<typename DType, typename xpu>
   static inline mshadow::Tensor<xpu, 2, DType> AsRowise2D(mshadow::Stream<xpu> *s,
                                                           const TBlob& blob) {
@@ -155,7 +153,6 @@ class OpBase {
     }
     return mshadow::Tensor<xpu, 2, DType>();
   }
-
 };  // OpBase
 
 /*! \brief Unary operator class */
@@ -171,7 +168,7 @@ class UnaryOp : public OpBase {
       << " in operator " << attrs.name;
     CHECK(n_in > 0 && n_out > 0);
     const TShape& isshape = inputs[0].storage_shape();
-    if(!shape_is_none(isshape)) {
+    if (!shape_is_none(isshape)) {
       NDArray *output = nullptr;
       for (size_t i = 0, n = inputs.size(); i < n; ++i) {
         const NDArray &input = inputs[i];
@@ -191,7 +188,7 @@ class UnaryOp : public OpBase {
         DCHECK_EQ(output->storage_shape(), input.storage_shape());
       }
       return true;
-    } else if(isshape.ndim() > 0 && !isshape.Size()
+    } else if (isshape.ndim() > 0 && !isshape.Size()
       && inputs[0].storage_type() != kDefaultStorage) {
       return true;  // 0% density
     } else {
@@ -213,7 +210,7 @@ class UnaryOp : public OpBase {
     DCHECK_EQ(inputs.size(), 1U);
     DCHECK_EQ(outputs.size(), 1U);
     InitStorageGeometry<1, 1>(attrs, inputs, outputs);
-    CHECK_EQ(inputs.size(), outputs.size()); // need to figure out what to do for binary type
+    CHECK_EQ(inputs.size(), outputs.size());  // need to figure out what to do for binary type
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
     CHECK_EQ(inputs[0].storage_type(), outputs[0].storage_type());
     AllocateGeometry(&outputs[0], &inputs[0]);
@@ -249,7 +246,7 @@ class UnaryOp : public OpBase {
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
-    if(inputs[0].storage_shape().Size()) {
+    if (inputs[0].storage_shape().Size()) {
       MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Compute<xpu, OP>);
     }
   }
@@ -317,7 +314,7 @@ class UnaryOp : public OpBase {
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
-    if(inputs[0].storage_shape().Size()) {
+    if (inputs[0].storage_shape().Size()) {
       MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
     }
   }
@@ -333,7 +330,7 @@ class UnaryOp : public OpBase {
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
       << "Operation requires a sparse output storage type";
-    if(inputs[0].storage_shape().Size()) {
+    if (inputs[0].storage_shape().Size()) {
       MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
     }
   }
@@ -380,7 +377,7 @@ class UnaryOp : public OpBase {
                                 const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 1U);
     CHECK_EQ(outputs.size(), 1U);
-    if(inputs[0].storage_type() == outputs[0].storage_type()) {
+    if (inputs[0].storage_type() == outputs[0].storage_type()) {
       MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, IdentityCompute<xpu>);
     } else {
       FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,

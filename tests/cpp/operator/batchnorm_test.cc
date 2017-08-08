@@ -706,7 +706,7 @@ static void timingTest(const std::string& label,
 #else
   size_t COUNT = 5;
 #endif
-  if(mxnet::test::quick_test) {
+  if (mxnet::test::quick_test) {
     COUNT = 2;
     count = 1;
   }
@@ -801,7 +801,7 @@ TEST(BATCH_NORM, TestTiming_2D) {
 #else
   size_t THISCOUNT = 2;
 #endif
-  if(mxnet::test::quick_test) {
+  if (mxnet::test::quick_test) {
     THISCOUNT = 1;
   }
   MSHADOW_REAL_TYPE_SWITCH_EX(

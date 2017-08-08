@@ -156,18 +156,18 @@ inline std::string repeatedStr(const char *s, const signed int count,
 template<typename StreamType>
 inline StreamType& print_shape(StreamType *_os, const std::string& label, const TShape& shape,
                                const bool add_endl = true) {
-  if(!label.empty()) {
+  if (!label.empty()) {
     *_os << label << ": ";
   }
   *_os << "(";
-  for(size_t i = 0, n = shape.ndim(); i < n; ++i) {
-    if(i) {
+  for (size_t i = 0, n = shape.ndim(); i < n; ++i) {
+    if (i) {
       *_os << ", ";
     }
     *_os << shape[i];
   }
   *_os << ")";
-  if(add_endl) {
+  if (add_endl) {
     *_os << std::endl;
   } else {
     *_os << " ";
@@ -229,7 +229,6 @@ inline StreamType& print_blob_(StreamType *_os,
     }
   }
 
-  //os << std::endl;
   for (size_t r = 0; r < height; ++r) {
     for (size_t thisBatch = 0; thisBatch < batchSize; ++thisBatch) {
       if (doBatches) {
@@ -250,8 +249,6 @@ inline StreamType& print_blob_(StreamType *_os,
         for (size_t c = 0; c < width; ++c) {
           if (c) {
             os << ", ";
-          } else {
-            //os << "[";
           }
           for (size_t dd = 0; dd < depth; ++dd) {
             DType val;
@@ -287,17 +284,17 @@ inline StreamType& print_blob_(StreamType *_os,
         os << " |" << std::flush;;
       }
     }
-    if(r < height - 1) {
+    if (r < height - 1) {
       os << std::endl;
     }
   }
-  if(!height) {
+  if (!height) {
     os << "[]";
-    if(add_endl) {
+    if (add_endl) {
       os << std::endl;
     }
   }
-  if(!add_endl) {
+  if (!add_endl) {
     os << " ";
   }
   os << std::flush;
@@ -322,7 +319,7 @@ inline StreamType& print(StreamType *_os, const std::string &label,
                          const bool doChannels = true,
                          bool doBatches = true,
                          const bool add_endl = true) {
-  if(!label.empty()) {
+  if (!label.empty()) {
     *_os << label << ": ";
   }
   return print(_os, blob, doChannels, doBatches, add_endl);
@@ -330,10 +327,10 @@ inline StreamType& print(StreamType *_os, const std::string &label,
 
 template<typename StreamType>
 inline StreamType& print(StreamType *_os, const std::string& label, const NDArray& arr) {
-  if(!label.empty()) {
+  if (!label.empty()) {
     *_os << label << ": ";
   }
-  switch(arr.storage_type()) {
+  switch (arr.storage_type()) {
     case kRowSparseStorage: {
       // data
       const TShape& shape = arr.shape();

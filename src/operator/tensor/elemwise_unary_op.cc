@@ -340,8 +340,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_square, unary_bwd<mshadow_op
 .set_attr<FResourceRequest>("FResourceRequest",
                             [](const NodeAttrs& attrs) {
                               return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
-                            })
-;
+                            });
 
 // sqrt
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sqrt, cpu, mshadow_op::square_root)
@@ -357,7 +356,8 @@ Example::
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_backward_sqrt"});
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_sqrt, unary_bwd<mshadow_op::square_root_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_sqrt,
+                                             unary_bwd<mshadow_op::square_root_grad>);
 
 // rsqrt
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(rsqrt, cpu, mshadow_op::reciprocal_square_root)
@@ -373,7 +373,8 @@ Example::
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_rsqrt"});
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_rsqrt, unary_bwd<mshadow_op::reciprocal_square_root_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_rsqrt,
+                                             unary_bwd<mshadow_op::reciprocal_square_root_grad>);
 
 // exp
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(exp, cpu, mshadow_op::exp)
@@ -537,7 +538,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(degrees, cpu, mshadow_op::degrees)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_degrees" });
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_degrees, unary_bwd<mshadow_op::degrees_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_degrees,
+                                             unary_bwd<mshadow_op::degrees_grad>);
 
 // radians
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(radians, cpu, mshadow_op::radians)
@@ -549,7 +551,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(radians, cpu, mshadow_op::radians)
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_radians" });
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_radians, unary_bwd<mshadow_op::radians_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_radians,
+                                             unary_bwd<mshadow_op::radians_grad>);
 
 // sinh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sinh, cpu, mshadow_op::sinh)
@@ -589,27 +592,33 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_tanh, unary_bwd<mshadow_o
 
 // arcsinh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arcsinh, cpu, mshadow_op::arcsinh)
-.describe(R"code(Returns the element-wise inverse hyperbolic sine of the input array, computed element-wise.
+.describe(R"code(Returns the element-wise inverse hyperbolic sine of the input array, \
+computed element-wise.
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arcsinh" });
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arcsinh, unary_bwd<mshadow_op::arcsinh_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arcsinh,
+                                             unary_bwd<mshadow_op::arcsinh_grad>);
 
 // arccosh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccosh, cpu, mshadow_op::arccosh)
-.describe(R"code(Returns the element-wise inverse hyperbolic cosine of the input array, computed element-wise.
+.describe(R"code(Returns the element-wise inverse hyperbolic cosine of the input array, \
+computed element-wise.
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arccosh" });
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccosh, unary_bwd<mshadow_op::arccosh_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccosh,
+                                             unary_bwd<mshadow_op::arccosh_grad>);
 
 // arctanh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctanh, cpu, mshadow_op::arctanh)
-.describe(R"code(Returns the element-wise inverse hyperbolic tangent of the input array, computed element-wise.
+.describe(R"code(Returns the element-wise inverse hyperbolic tangent of the input array, \
+computed element-wise.
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arctanh" });
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctanh, unary_bwd<mshadow_op::arctanh_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctanh,
+                                             unary_bwd<mshadow_op::arctanh_grad>);
 
 // gamma
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gamma, cpu, mshadow_op::gamma)
@@ -625,7 +634,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gammaln, cpu, mshadow_op::gammaln)
   " of the input.")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_gammaln"});
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gammaln, unary_bwd<mshadow_op::gammaln_grad>);
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gammaln,
+                                             unary_bwd<mshadow_op::gammaln_grad>);
 
 }  // namespace op
 }  // namespace mxnet

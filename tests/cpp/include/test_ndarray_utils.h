@@ -4,26 +4,24 @@
  * \brief operator unit test utility functions
  * \author Haibin Lin
 */
-#ifndef TESTS_CPP_INCLUDE_TEST_NDARRAY_UTILS_H_
-#define TESTS_CPP_INCLUDE_TEST_NDARRAY_UTILS_H_
+#ifndef TEST_NDARRAY_UTILS_H_
+#define TEST_NDARRAY_UTILS_H_
 
 #include <unistd.h>
 #include <dmlc/logging.h>
-#include <cstdio>
 #include <gtest/gtest.h>
-#include <vector>
 #include <mxnet/engine.h>
 #include <mxnet/ndarray.h>
+#include <cstdio>
+#include <vector>
 #include <cstdlib>
-#include "../../../src/operator/tensor/elemwise_unary_op.h"
+#include <string>
+#include <map>
 #include "test_util.h"
 #include "test_op.h"
 
-namespace mxnet
-{
-namespace test
-{
-
+namespace mxnet {
+namespace test {
 
 #define ROW_SPARSE_IDX_TYPE mshadow::kInt64
 
@@ -37,13 +35,21 @@ inline void CheckDataRegion(const TBlob &src, const TBlob &dst) {
   EXPECT_EQ(equals, 0);
 }
 
+inline unsigned gen_rand_seed() {
+  time_t timer;
+  ::time(&timer);
+  return static_cast<unsigned>(timer);
+}
+
 inline float RandFloat() {
-  double v = rand() * 1.0 / RAND_MAX;
+  static unsigned seed = gen_rand_seed();
+  double v = rand_r(&seed) * 1.0 / RAND_MAX;
   return static_cast<float>(v);
 }
 
 // Get an NDArray with provided indices, prepared for a RowSparse NDArray.
-inline NDArray RspIdxND(const TShape shape, const Context ctx, const std::vector<TEST_ITYPE> &values) {
+inline NDArray RspIdxND(const TShape shape, const Context ctx,
+                        const std::vector<TEST_ITYPE> &values) {
   NDArray nd(shape, ctx, false, ROW_SPARSE_IDX_TYPE);
   size_t num_val = values.size();
   MSHADOW_TYPE_SWITCH(nd.dtype(), DType, {
@@ -101,7 +107,7 @@ inline NDArray Convert(NDArrayStorageType type, NDArray src) {
   CHECK_EQ(type, kDefaultStorage);
   NDArray converted(src.shape(), src.ctx(), false);
   Engine::Get()->PushSync([src, converted](RunContext ctx) {
-                            // TODO provide type in attrs, which is empty now
+                            // TODO(haibin) provide type in attrs, which is empty now
                             OpContext op_ctx;
                             op_ctx.run_ctx = ctx;
                             if (src.storage_type() == kRowSparseStorage) {
@@ -109,7 +115,8 @@ inline NDArray Convert(NDArrayStorageType type, NDArray src) {
                               mxnet::op::CastStorageComputeEx<cpu>({}, op_ctx, inputs, {}, outputs);
                             } else if (src.storage_type() == kDefaultStorage) {
                               std::vector<TBlob> inputs({src.data()}), outputs({converted.data()});
-                              mxnet::op::UnaryOp::IdentityCompute<cpu>({}, op_ctx, inputs, {kWriteTo}, outputs);
+                              mxnet::op::UnaryOp::IdentityCompute<cpu>({}, op_ctx, inputs,
+                                                                       {kWriteTo}, outputs);
                             } else {
                               LOG(FATAL) << "unsupported storage type";
                             }
@@ -124,8 +131,7 @@ inline NDArray Convert(NDArrayStorageType type, NDArray src) {
  *           simplicity has been chosen over performance.
  **/
 template<typename DType>
-class Array
-{
+class Array {
   typedef std::map<size_t, std::map<size_t, DType> > TItems;
   static constexpr double EPSILON = 1e-5;
 
@@ -187,7 +193,7 @@ class Array
         }
       }
     }
-    if(ctx.dev_type == Context::kGPU) {
+    if (ctx.dev_type == Context::kGPU) {
       NDArray argpu(shape_, ctx);
       CopyFromTo(array, &argpu);
       return argpu;
@@ -197,13 +203,12 @@ class Array
   }
 
  public:
-
   Array() = default;
 
-  Array(const TShape &shape)
+  explicit Array(const TShape &shape)
     : shape_(shape) {}
 
-  Array(const NDArray &arr)
+  explicit Array(const NDArray &arr)
     : shape_(arr.shape()) {
     Load(arr);
   }
@@ -230,9 +235,9 @@ class Array
 
   bool Contains(const size_t row, const size_t col) const {
     typename TItems::const_iterator i = items_.find(row);
-    if(i != items_.end()) {
+    if (i != items_.end()) {
       typename std::map<size_t, DType>::const_iterator j = i->second.find(col);
-      if(j != i->second.end()) {
+      if (j != i->second.end()) {
         return true;
       }
     }
@@ -240,14 +245,15 @@ class Array
   }
 
   /*! \brief Convert from one storage type NDArray to another */
-  static NDArray Convert(const Context& ctx, const NDArray& src, const NDArrayStorageType storageType) {
+  static NDArray Convert(const Context& ctx, const NDArray& src,
+                         const NDArrayStorageType storageType) {
     std::unique_ptr<NDArray> pArray(
       storageType == kDefaultStorage
       ? new NDArray(src.shape(), ctx)
       : new NDArray(storageType, src.shape(), ctx));
     OpContext opContext;
     MXNET_CUDA_ONLY(std::unique_ptr<test::op::GPUStreamScope> gpuScope;);
-    switch(ctx.dev_type) {
+    switch (ctx.dev_type) {
 #if MNXNET_USE_CUDA
       case Context::kGPU:
         gpuScope.reset(new test::op::GPUStreamScope(&opContext));
@@ -281,11 +287,11 @@ class Array
   void Load(NDArray array) {
     clear();
     shape_ = array.shape();
-    if(array.storage_type() != kDefaultStorage) {
+    if (array.storage_type() != kDefaultStorage) {
       array = Convert(array.ctx(), array, kDefaultStorage);
     }
 #if MXNET_USE_CUDA
-    if(array.ctx().dev_type == Context::kGPU) {
+    if (array.ctx().dev_type == Context::kGPU) {
       NDArray tmp(array.shape(), Context::CPU(-1));
       CopyFromTo(array, &tmp);
       array = tmp;
@@ -294,10 +300,10 @@ class Array
     const TBlob blob = array.data();
     DType *p = blob.dptr<DType>();
     CHECK_EQ(shape_.ndim(), 2U);
-    for(size_t row = 0, nrow = shape_[0]; row < nrow; ++row) {
-      for(size_t col = 0, ncol = shape_[1]; col < ncol; ++col) {
+    for (size_t row = 0, nrow = shape_[0]; row < nrow; ++row) {
+      for (size_t col = 0, ncol = shape_[1]; col < ncol; ++col) {
         const size_t off = test::offset(shape_, {row, col});
-        if(!IsZero(p[off])) {
+        if (!IsZero(p[off])) {
           (*this)[row][col] = p[off];
         }
       }
@@ -339,4 +345,4 @@ inline StreamType& print_dense(StreamType *_os, const std::string& label, const 
 }  // namespace test
 }  // namespace mxnet
 
-#endif  // TESTS_CPP_INCLUDE_TEST_NDARRAY_UTILS_H_
+#endif  // TEST_NDARRAY_UTILS_H_

@@ -20,9 +20,7 @@
 namespace mxnet {
 namespace op {
 
-class BinaryScalarOp : public UnaryOp
-{
-
+class BinaryScalarOp : public UnaryOp {
   /*! \brief FIll dense output block with a single scalar value */
   template<typename xpu, typename DType, typename OP>
   static inline void FillDense(mshadow::Stream<xpu> *s,
@@ -47,24 +45,25 @@ class BinaryScalarOp : public UnaryOp
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
     const double alpha = nnvm::get<double>(attrs.parsed);
     CHECK_EQ(output.shape(), input.shape());
-    const long row_count = output.shape()[0];
-    const long items_per_row = output.shape().Size() / row_count;
+    const int64_t row_count = output.shape()[0];
+    const int64_t items_per_row = output.shape().Size() / row_count;
     const DType result_for_zero = OP::Map(DType(0), DType(alpha));
     mshadow::Tensor<xpu, 1, DType> input_data = input.data().FlatTo1D<xpu, DType>(s);
     mshadow::Tensor<xpu, 1, DType> output_data = output.data().FlatTo1D<xpu, DType>(s);
-    const long sparse_row_count = input.aux_shape(rowsparse::kIdx).Size();
-    if(sparse_row_count != row_count) {
+    const int64_t sparse_row_count = input.aux_shape(rowsparse::kIdx).Size();
+    if (sparse_row_count != row_count) {
       mshadow::Tensor<xpu, 1, IType> row_indexes = input.aux_data(
         rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
-      long input_iter = 0;
-      long output_row = 0;
+      int64_t input_iter = 0;
+      int64_t output_row = 0;
       IType next_input_row = 0;
       while (output_row < row_count) {
-        next_input_row = input_iter < sparse_row_count ? long(row_indexes[input_iter]) : row_count;
+        next_input_row = input_iter < sparse_row_count ? int64_t(row_indexes[input_iter])
+                                                       : row_count;
         // Split up into blocks of contiguous data and do those together
 
         // Do contiguous dense blocks
-        const long dense_block_count = next_input_row - output_row;
+        const int64_t dense_block_count = next_input_row - output_row;
         if (dense_block_count > 0) {
           MXNET_ASSIGN_REQ_SWITCH(req, Req, {
             mxnet_op::Kernel<MapSetToScalar<Req>, xpu>::Launch(
@@ -78,7 +77,7 @@ class BinaryScalarOp : public UnaryOp
         }
 
         // Do contiguous sparse blocks
-        long next_non_contiguous_sparse = input_iter;
+        int64_t next_non_contiguous_sparse = input_iter;
         while (next_non_contiguous_sparse < sparse_row_count - 1) {
           if (row_indexes[next_non_contiguous_sparse + 1]
               != row_indexes[next_non_contiguous_sparse] + 1) {
@@ -86,7 +85,7 @@ class BinaryScalarOp : public UnaryOp
           }
           ++next_non_contiguous_sparse;
         }
-        const long sparse_block_count = next_non_contiguous_sparse - input_iter + 1;
+        const int64_t sparse_block_count = next_non_contiguous_sparse - input_iter + 1;
         if (sparse_block_count > 0) {
           MXNET_ASSIGN_REQ_SWITCH(req, Req, {
             mxnet_op::Kernel<BMap<OP, Req>, xpu>::Launch(
@@ -140,7 +139,7 @@ class BinaryScalarOp : public UnaryOp
                               req, output.data().dptr<DType>());
 
     mshadow::Tensor<xpu, 2, DType> out = AsRowise2D<DType>(s, output.data());
-    if(item_count) {
+    if (item_count) {
       const IType *column_indexes_ptr = column_indexes.dptr<IType>();
 
       const TBlob row_starts = input.aux_data(csr::kIndPtr);
@@ -155,11 +154,11 @@ class BinaryScalarOp : public UnaryOp
                                       ? static_cast<size_t>(row_starts_ptr[i + 1])
                                         - row_item_start_iter
                                       : item_count - row_item_start_iter;
-        if(input_items_this_row) {
+        if (input_items_this_row) {
           const IType *this_row_column_indexes = column_indexes_ptr + row_item_start_iter;
           const DType *row_data_start = in + row_item_start_iter;
           size_t col_iter = 0;
-          while(col_iter < input_items_this_row) {
+          while (col_iter < input_items_this_row) {
             // Fill dense between end of last pass and beginning of this pass
             const size_t start_input_col = this_row_column_indexes[col_iter];
             const size_t start_col_iter = col_iter;
@@ -176,7 +175,7 @@ class BinaryScalarOp : public UnaryOp
                 ++csr_adjacent_count;
               }
             } while (false);
-            const long nr_csr_to_do = csr_adjacent_count + 1;
+            const int64_t nr_csr_to_do = csr_adjacent_count + 1;
             CHECK_GT(nr_csr_to_do, 0);
             const size_t off = col_iter;
             MXNET_ASSIGN_REQ_SWITCH(req, Req, {
@@ -187,7 +186,6 @@ class BinaryScalarOp : public UnaryOp
             });
             col_iter = next_col_iter;
           }
-
         }
       }
     }
@@ -200,7 +198,7 @@ class BinaryScalarOp : public UnaryOp
                                   const OpReqType req,
                                   const NDArray output) {
     CHECK_EQ(output.storage_type(), kDefaultStorage);
-    switch(input.storage_type()) {
+    switch (input.storage_type()) {
       case kRowSparseStorage: {
         LaunchExDenseResultRSP<xpu, OP, DType, IType>(attrs, ctx, input, req, output);
         break;
@@ -219,7 +217,6 @@ class BinaryScalarOp : public UnaryOp
   }
 
  public:
-
   struct scalar_only {
     template<typename DType>
     MSHADOW_XINLINE static DType Map(DType a) {
@@ -255,13 +252,13 @@ class BinaryScalarOp : public UnaryOp
     DCHECK_EQ(inputs.size(), 1);
     DCHECK_EQ(outputs.size(), 1);
     CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
-    if(outputs[0].storage_type() != kDefaultStorage) {
+    if (outputs[0].storage_type() != kDefaultStorage) {
       CHECK_EQ(outputs[0].storage_type(), inputs[0].storage_type());
       if (req[0] != kNullOp) {
         UnaryOp::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, BinaryScalarCompute<xpu, OP>);
       }
     } else {
-      if(typeid(xpu) == typeid(gpu)) {
+      if (typeid(xpu) == typeid(gpu)) {
         mxnet::op::FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
                                         BinaryScalarCompute<xpu, OP>,
                                         "BinaryScalarComputeEx");
@@ -272,7 +269,7 @@ class BinaryScalarOp : public UnaryOp
           });
         });
       }
-    };
+    }
   }
 
   template<typename xpu, typename OP>

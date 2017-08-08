@@ -68,7 +68,7 @@ int main(int argc, char ** argv) {
       mxnet::test::unitTestsWithCuda = true;
     } else if (!strcmp(argv[x], "--debug")) {
       mxnet::test::debugOutput = true;
-    } else if(!strcmp(argv[x], "--quick") || !strcmp(argv[x], "-q")) {
+    } else if (!strcmp(argv[x], "--quick") || !strcmp(argv[x], "-q")) {
       mxnet::test::quick_test = true;
     }
   }

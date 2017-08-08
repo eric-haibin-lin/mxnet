@@ -74,38 +74,6 @@ void InferElemwiseStorageTest() {
   EXPECT_EQ(out_attrs[1], kRowSparseStorage);
 }
 
-// Optimizer
-//void SGDDnsRspTest() {
-//  TShape shape({4, 2});
-//  Context ctx = Context::CPU();
-//  NDArray weight = DnsND(shape, ctx, {1, 2, 3, 4, 5, 6, 7, 8});
-//  NDArray rsp_grad = RspND(shape, ctx, {0, 3}, {1, 2, 3, 4});
-//  NDArray output = weight;
-//  float lr = RandFloat();
-//  float wd = RandFloat();
-//  float rescale = RandFloat();
-//  op::SGDParam param;
-//  param.lr = lr;
-//  param.wd = wd;
-//  param.rescale_grad = rescale;
-//  param.clip_gradient = -1.0f;
-//  Engine::Get()->PushSync([weight, rsp_grad, output, param](RunContext ctx) {
-//      std::vector<NDArray> inputs{weight, rsp_grad}, outputs{output};
-//      std::vector<OpReqType> req({kAddTo});
-//      op::SparseSGDUpdateDnsRspImpl<cpu>(param, {}, inputs, req, outputs);
-//    }, weight.ctx(), {rsp_grad.var()}, {output.var()},
-//    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
-//  auto sgd = [lr, wd, rescale] (TEST_DTYPE weight, TEST_DTYPE grad) {
-//     return (1.f-lr*wd)*weight - (lr*rescale)*grad;
-//    };
-//
-//  NDArray expected = DnsND(shape, ctx,
-//                           {1 + sgd(1, 1), 2 + sgd(2, 2), 3, 4, 5, 6,
-//                           7 + sgd(7, 3), 8 + sgd(8, 4)});
-//  output.WaitToRead();
-//  CheckDataRegion(output.data(), expected.data());
-//}
-
 void CopyFromToRspDnsTest() {
   Context ctx;
   // Sparse ndarray
@@ -122,9 +90,9 @@ void CopyFromToRspRspReuseTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({3, 2});
-  NDArray nd = test::RspND(shape, ctx, {0}, {1,2});
+  NDArray nd = test::RspND(shape, ctx, {0}, {1, 2});
   // Sparse ndarray with enough memory. It's expected to reuse the memory
-  NDArray dst_nd = test::RspND(shape, ctx, {0, 1, 2}, {6,6,6,6,6,6});
+  NDArray dst_nd = test::RspND(shape, ctx, {0, 1, 2}, {6, 6, 6, 6, 6, 6});
   nd.WaitToRead();
   CopyFromTo(nd, &dst_nd);
   dst_nd.WaitToRead();
@@ -139,9 +107,9 @@ void CopyFromToRspRspFreeTest() {
   Context ctx;
   // Sparse ndarray
   TShape shape({3, 2});
-  NDArray nd = test::RspND(shape, ctx, {0, 1}, {1,1,1,1});
+  NDArray nd = test::RspND(shape, ctx, {0, 1}, {1, 1, 1, 1});
   // Sparse ndarray with enough memory. It's expected to reuse the memory
-  NDArray dst_nd = test::RspND(shape, ctx, {0}, {2,2});
+  NDArray dst_nd = test::RspND(shape, ctx, {0}, {2, 2});
   nd.WaitToRead();
   CopyFromTo(nd, &dst_nd);
   dst_nd.WaitToRead();
@@ -153,8 +121,8 @@ void BinaryOpForwardRspRsp() {
   Context ctx = Context::CPU();
 
   TShape output_shape({4, 2});
-  NDArray input_nd0 = test::RspND(output_shape, ctx, {0, 1}, {10,10,10,10});
-  NDArray input_nd1 = test::RspND(output_shape, ctx, {0, 2}, {5,5,5,5});
+  NDArray input_nd0 = test::RspND(output_shape, ctx, {0, 1}, {10, 10, 10, 10});
+  NDArray input_nd1 = test::RspND(output_shape, ctx, {0, 2}, {5, 5, 5, 5});
 
   NDArray output(kRowSparseStorage, output_shape, ctx);
   std::vector<Engine::VarHandle> const_vars;
@@ -177,39 +145,6 @@ void BinaryOpForwardRspRsp() {
   NDArray copy = test::Convert(kDefaultStorage, output);
   test::CheckDataRegion(dense_output.data(), copy.data());
 }
-
-//template<typename Operator, typename Params, typename Function>
-//static void BackwardTest(Context ctx,
-//                         const TShape& shape,
-//                         const test::Array& output, const NDArrayStorageType outputStorage,
-//                         const test::Array& grad, const NDArrayStorageType gradStorage,
-//                         const Params& params, Function function) {
-//  Context ctx = Context::CPU();
-//  // d1 .. dk
-//  // idx shape : (2, 3)
-//  // input dim 4, output dim 2
-//  NDArray output = output.Save(ctx, outputStorage);
-//  NDArray ograd = grad.Save(ctx, gradStorage);
-//
-//  Engine::Get()->PushSync([ograd, output, params](RunContext ctx) {
-//      std::vector<NDArray> inputs{grad};
-//      std::vector<OpReqType> req({kWriteTo, kWriteTo});
-//      std::vector<NDArray> outputs{output, output};
-//      op::SparseEmbeddingOpBackwardEx<cpu>({}, {}, inputs, req, outputs);
-//    }, output.ctx(), {ograd.var()}, {output.var()},
-//    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
-//
-//  NDArray expected = DnsND(out_shape, ctx, {0,0,0,0,0,0,0,0});
-//  Engine::Get()->PushSync([idx, grad, expected, param](RunContext ctx) {
-//      std::vector<TBlob> inputs{grad.data(), idx.data()}, outputs{expected.data(), expected.data()};
-//      std::vector<OpReqType> req({kNullOp, kWriteTo});
-//      op::EmbeddingOpBackward<cpu>({}, {}, inputs, req, outputs);
-//    }, expected.ctx(), {grad.var(), idx.var()}, {expected.var()},
-//    FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
-//  NDArray converted = Convert(kDefaultStorage, output);
-//  expected.WaitToRead();
-//  CheckDataRegion(converted.data(), expected.data());
-//}
 
 class TestOldCode {
   template<OpReqType req>
@@ -270,8 +205,6 @@ class TestOldCode {
     CHECK_EQ(grad.storage_type(), kDefaultStorage);
     CHECK_EQ(output.dtype(), grad.dtype());
     CHECK_EQ(idx.dtype(), output.aux_type(rowsparse::kIdx)) << "Index type doesn't match";
-    // CHECK_EQ(req[embedding::kData], kNullOp)
-    //       << "Embedding layer doesn't support calculate data gradient" << req[embedding::kData];
 
     const nnvm::TShape& ishape = idx.shape();
     const nnvm::TShape& oshape = grad.shape();
@@ -321,8 +254,6 @@ class TestOldCode {
                                    const std::vector<NDArray>& outputs) {
     CHECK_EQ(inputs.size(), 2U);
     CHECK_EQ(outputs.size(), 2U);
-    // CHECK_EQ(req[embedding::kData], kNullOp)
-    //       << "Embedding layer doesn't support calculate data gradient" << req[0] << " " << req[1];
     // idx shape (d1, d2 .. dk)
     auto idx_stype = inputs[1].storage_type();
     // grad shape (d1, d2, .. dk, out_dim)
@@ -348,7 +279,8 @@ static void SparseEmbeddingBackwardTest() {
   TShape idx_shape({2, 3});
   NDArray idx = test::RspIdxND(idx_shape, ctx, {1, 2, 3, 1, 2, 3});
   TShape grad_shape({2, 3, 2});
-  NDArray grad = test::DnsND(grad_shape, ctx, {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2});
+  NDArray grad = test::DnsND(grad_shape, ctx, {0.1, 0.2, 0.3, 0.4, 0.5, 0.6,
+                                               0.7, 0.8, 0.9, 1.0, 1.1, 1.2});
   TShape out_shape({4, 2});
   NDArray output = NDArray(kRowSparseStorage, out_shape, ctx);
   op::EmbeddingParam param;
@@ -364,7 +296,7 @@ static void SparseEmbeddingBackwardTest() {
     }, output.ctx(), {grad.var(), idx.var()}, {output.var()},
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
 
-  NDArray expected = test::DnsND(out_shape, ctx, {0,0,0,0,0,0,0,0});
+  NDArray expected = test::DnsND(out_shape, ctx, {0, 0, 0, 0, 0, 0, 0, 0});
   Engine::Get()->PushSync([idx, grad, expected, param](RunContext ctx) {
       std::vector<TBlob> inputs{grad.data(), idx.data()}, outputs{expected.data(), expected.data()};
       std::vector<OpReqType> req({kNullOp, kWriteTo});
@@ -373,7 +305,6 @@ static void SparseEmbeddingBackwardTest() {
     FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
   NDArray converted = test::Convert(kDefaultStorage, output);
   expected.WaitToRead();
-  //test::CheckDataRegion(converted.data(), expected.data());
 }
 
 TEST(NDArray, BinaryOps) {
@@ -391,10 +322,6 @@ TEST(NDArray, conversion) {
 TEST(NDArray, functions) {
   SetValueTest();
 }
-
-//TEST(NDArray, optimizer) {
-//  SGDDnsRspTest();
-//}
 
 TEST(NDArray, copy) {
   CopyFromToRspDnsTest();
@@ -440,7 +367,7 @@ TEST(NDArray, sparse_embedding) {
 }
 
 struct TPosition : public TShape {
-  inline TPosition(const TShape& o) : TShape(o) {}
+  inline explicit TPosition(const TShape& o) : TShape(o) {}
 };
 
 template<typename DType>
@@ -455,9 +382,8 @@ class ArrayIterator {
 
 template<typename DType, typename IType>
 class RowSparseArrayIterator : public ArrayIterator<DType> {
-
  public:
-  RowSparseArrayIterator(const NDArray& array)
+  explicit RowSparseArrayIterator(const NDArray& array)
   : array_(array)
     , position_(array.shape().ndim())
     , row_count_(array_.aux_shape(rowsparse::kIdx)[0])
@@ -465,13 +391,13 @@ class RowSparseArrayIterator : public ArrayIterator<DType> {
     CHECK_EQ(array.storage_type(), kRowSparseStorage);
     DCHECK_NE(array_.shape().Size(), 0);
     DCHECK_GT(row_count_, 0);
-    for(size_t i = 0, n = position_.ndim(); i < n; ++i) {
+    for (size_t i = 0, n = position_.ndim(); i < n; ++i) {
       position_[i] = 0;
     }
   }
 
   DType *Begin() override {
-    for(size_t i = 0, n = position_.ndim(); i < n; ++i) {
+    for (size_t i = 0, n = position_.ndim(); i < n; ++i) {
       position_[i] = 0;
     }
     dptr_ = array_.data().dptr<DType>();
@@ -490,7 +416,7 @@ class RowSparseArrayIterator : public ArrayIterator<DType> {
         ++curr;
       }
       const int limit = i ? shape[i] : row_count_;
-      if(curr >= limit) {
+      if (curr >= limit) {
         if (!i) {
           return nullptr;
         }
@@ -522,18 +448,12 @@ class RowSparseArrayIterator : public ArrayIterator<DType> {
                              // (ie up to 4 pos don't need new allocations)
   const int      row_count_;
   DType *        dptr_;
-
 };
 
 TEST(NDArray, SparseArrayIteratorRSP) {
   typedef float DType;
   const TShape shape({3, 2});
-  //const TShape shape({150, 55});
   test::Array<DType> array(shape);  // shape is H, W
-//  array[2][5] = 0.1;  // [x][y] <-- [col][row]
-//  array[6][17] = 0.2;
-//  array[6][52] = 0.3;
-//  array[115][220] = 0.4;
   array[1][0] = 0.1;
   array[2][1] = 0.2;
 
@@ -545,8 +465,8 @@ TEST(NDArray, SparseArrayIteratorRSP) {
   do {
     TPosition position = rsp_iter.Position();
     std::cout << "( ";
-    for(size_t i = 0, n = position.ndim(); i < n; ++i) {
-      if(i) {
+    for (size_t i = 0, n = position.ndim(); i < n; ++i) {
+      if (i) {
         std::cout << ", ";
       }
       std::cout << position[i];
@@ -554,13 +474,13 @@ TEST(NDArray, SparseArrayIteratorRSP) {
     std::cout << " ): ";
     const DType val = *rsp_iter.Current();
     std::cout << val << std::endl << std::flush;
-  } while(rsp_iter.Next());
+  } while (rsp_iter.Next());
 }
 
 template<typename DType, typename IType>
 class CSRSparseArrayIterator : public ArrayIterator<DType> {
  public:
-  CSRSparseArrayIterator(const NDArray& array)
+  explicit CSRSparseArrayIterator(const NDArray& array)
     : array_(array)
       , position_(array.shape().ndim())
       , dptr_(array.data().dptr<DType>())  {
@@ -589,12 +509,7 @@ class CSRSparseArrayIterator : public ArrayIterator<DType> {
 TEST(NDArray, SparseArrayIteratorCSR) {
   typedef float DType;
   const TShape shape({3, 2});
-  //const TShape shape({150, 55});
   test::Array<DType> array(shape);  // shape is H, W
-//  array[2][5] = 0.1;  // [x][y] <-- [col][row]
-//  array[6][17] = 0.2;
-//  array[6][52] = 0.3;
-//  array[115][220] = 0.4;
   array[1][0] = 0.1;
   array[2][1] = 0.2;
 
@@ -606,8 +521,8 @@ TEST(NDArray, SparseArrayIteratorCSR) {
   do {
     TPosition position = rsp_iter.Position();
     std::cout << "( ";
-    for(size_t i = 0, n = position.ndim(); i < n; ++i) {
-      if(i) {
+    for (size_t i = 0, n = position.ndim(); i < n; ++i) {
+      if (i) {
         std::cout << ", ";
       }
       std::cout << position[i];
@@ -615,7 +530,7 @@ TEST(NDArray, SparseArrayIteratorCSR) {
     std::cout << " ): ";
     const DType val = *rsp_iter.Current();
     std::cout << val << std::endl << std::flush;
-  } while(rsp_iter.Next());
+  } while (rsp_iter.Next());
 }
 
 #endif

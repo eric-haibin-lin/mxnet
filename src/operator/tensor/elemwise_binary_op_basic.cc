@@ -66,8 +66,7 @@ NNVM_REGISTER_OP(_backward_mul)
 .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<
   cpu, mshadow_op::right, mshadow_op::left>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<
-  cpu, mshadow_op::right, mshadow_op::left>);
-;
+  cpu, mshadow_op::right, mshadow_op::left>);;
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(elemwise_div, mshadow::op::div)
 .add_alias("_div").add_alias("_Div")
@@ -85,13 +84,11 @@ NNVM_REGISTER_OP(_backward_div)
 .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<
   cpu, mshadow_op::div_grad, mshadow_op::div_rgrad>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInExDense<
-  cpu, mshadow_op::div_grad, mshadow_op::div_rgrad>)
-;
+  cpu, mshadow_op::div_grad, mshadow_op::div_rgrad>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_mod, mshadow_op::mod)
 .add_alias("_Mod")
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mod"})
-;
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mod"});
 
 NNVM_REGISTER_OP(_backward_mod)
 .set_num_inputs(3)
@@ -104,8 +101,7 @@ NNVM_REGISTER_OP(_backward_mod)
 .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<
   cpu, mshadow_op::mod_grad, mshadow_op::mod_rgrad>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInEx<
-  cpu, mshadow_op::mod_grad, mshadow_op::mod_rgrad>)
-;
+  cpu, mshadow_op::mod_grad, mshadow_op::mod_rgrad>);
 
 }  // namespace op
 }  // namespace mxnet
