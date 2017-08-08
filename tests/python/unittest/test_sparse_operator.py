@@ -68,7 +68,7 @@ def test_elemwise_add_ex_multiple_stages():
     assert_almost_equal(arr_grads[0].asnumpy(), arr_grads[1].asnumpy())
 
 def test_cast_storage_ex():
-    def check_cast_storage(shape, density, from_stype, to_stype):
+    def check_cast_storage(shape, density, from_stype, to_stype, check_numeric_grad=True):
         x = mx.symbol.Variable('x', stype=from_stype)
         x_nd = rand_ndarray(shape, from_stype, density=density)
         x_np = x_nd.asnumpy()
@@ -76,7 +76,9 @@ def test_cast_storage_ex():
         test = mx.symbol.cast_storage(x, stype=to_stype)
         location = {'x': x_nd}
         check_symbolic_forward(test, location, [out_np])
-        check_numeric_gradient(test, location)
+        # consider disable the numeric grad check for gpu block kernel since the input is large
+        if check_numeric_grad:
+            check_numeric_gradient(test, location)
         grad_stypes = {'x': to_stype}
         check_symbolic_backward(test, location, [out_np], [out_np], grad_stypes=grad_stypes)
 
@@ -92,24 +94,25 @@ def test_cast_storage_ex():
         check_cast_storage(shape_3d, d, 'default', 'row_sparse')
         for i in range(4, 6):
             shape = rand_shape_nd(i, 5)
-            check_cast_storage(shape_2d, d, 'row_sparse', 'default')
-            check_cast_storage(shape_2d, d, 'default', 'row_sparse')
+            check_cast_storage(shape, d, 'default', 'row_sparse')
+            check_cast_storage(shape, d, 'row_sparse', 'default')
         # Test specific gpu kernels
         if default_context().device_type is 'gpu':
             dim0 = rnd.randint(1, 10)
             # test gpu thread kernel
-            test_dns_to_csr((dim0, rnd.randint(  1,   32)), d, 'default', 'csr')
+            check_cast_storage((dim0, rnd.randint(  1,   32)), d, 'default', 'csr')
             # test gpu warp   kernel
-            test_dns_to_csr((dim0, rnd.randint( 32,  512)), d, 'default', 'csr')
+            check_cast_storage((dim0, rnd.randint( 32,  512)), d, 'default', 'csr')
             # test gpu block  kernel
-            test_dns_to_csr((dim0, rnd.randint(512, 1024)), d, 'default', 'csr')
+            check_cast_storage((dim0, rnd.randint(512, 1024)), d, 'default', 'csr',
+                               check_numeric_grad=False)
             # test gpu thread kernel
-            test_dns_to_rsp((dim0, rnd.randint(  1,   32)), d, 'default', 'row_sparse')
+            check_cast_storage((dim0, rnd.randint(  1,   32)), d, 'default', 'row_sparse')
             # test gpu warp   kernel
-            test_dns_to_rsp((dim0, rnd.randint( 32,  512)), d, 'default', 'row_sparse')
+            check_cast_storage((dim0, rnd.randint( 32,  512)), d, 'default', 'row_sparse')
             # test gpu block  kernel
-            test_dns_to_rsp((dim0, rnd.randint(512, 1024)), d, 'default', 'row_sparse')
-
+            check_cast_storage((dim0, rnd.randint(512, 1024)), d, 'default', 'row_sparse',
+                               check_numeric_grad=False)
 
 
 def test_sparse_dot():
