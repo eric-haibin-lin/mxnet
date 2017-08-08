@@ -79,75 +79,82 @@ def random_sample(population, k):
     return population_copy[0:k]
 
 
-def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
-    """Returns CSRNDArray with uniform distribution
+def _validate_csr_generation_inputs(num_rows, num_cols, density,
+                                    distribution="uniform"):
+    """Validates inputs for csr generation helper functions
     """
-    if num_rows <= 0 or num_cols <= 0:
-        raise ValueError("num_rows or num_cols should be greater than 0")
-
+    total_nnz = int(num_rows * num_cols * density)
     if density < 0 or density > 1:
         raise ValueError("density has to be between 0 and 1")
 
+    if num_rows <= 0 or num_cols <= 0:
+        raise ValueError("num_rows or num_cols should be greater than 0")
+
+    if distribution == "powerlaw":
+        if total_nnz < 2 * num_rows:
+            raise ValueError("not supported for this density: %s"
+                             " for this shape (%s, %s)"
+                             " Please keep :"
+                             " num_rows * num_cols * density >= 2 * num_rows"
+                             % (density, num_rows, num_cols))
+
+
+def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
+    """Returns CSRNDArray with uniform distribution
+    This generates a csr matrix with totalnnz unique randomly chosen numbers
+    from num_rows*num_cols and arranges them in the 2d array in the
+    following way: row_index = (random_number_generated / num_rows)
+    col_index = random_number_generated - row_index * num_cols
+    """
+    _validate_csr_generation_inputs(num_rows, num_cols, density,
+                                    distribution="uniform")
     return mx.nd.array(sp.rand(num_rows, num_cols, density).toarray())._to_csr()
 
 
 def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
     """Returns CSRNDArray with powerlaw distribution
     with exponentially increasing number of non zeros in each row.
-    Not supported for cases where totalnnz < 2*num_rows. This is because
+    Not supported for cases where total_nnz < 2*num_rows. This is because
     the algorithm first tries to ensure that there are rows with no zeros by
     putting non zeros at beginning of each row.
     """
 
-    def validate_inputs(totalnnz, num_rows, num_cols):
-        """Validate inputs"""
-        if num_rows <= 0 or num_cols <= 0:
-            raise ValueError("num_rows or num_cols should be greater than 0")
+    _validate_csr_generation_inputs(num_rows, num_cols, density,
+                                    distribution="powerlaw")
 
-        if density < 0 or density > 1:
-            raise ValueError("density has to be between 0 and 1")
+    total_nnz = int(num_rows * num_cols * density)
 
-        if totalnnz < 2 * num_rows:
-            raise ValueError("not supported for this density: %s"
-                             " for this shape (%s,%s)"
-                             " Please keep :"
-                             " num_rows * num_cols * density >= 2 * num_rows"
-                             % (density, num_rows, num_cols))
-
-    totalnnz = int(num_rows * num_cols * density)
-    validate_inputs(totalnnz, num_rows, num_cols)
-
-    unusednnz = totalnnz
+    unused_nnz = total_nnz
     output_arr = np.zeros((num_rows, num_cols))
     # Start with ones on each row so that no row is empty
     for row in range(num_rows):
         output_arr[row][0] = rnd.uniform(0.001, 1)
-        unusednnz = unusednnz - 1
-        if unusednnz <= 0:
+        unused_nnz = unused_nnz - 1
+        if unused_nnz <= 0:
             return mx.nd.array(output_arr)._to_csr()
 
     # Populate rest of matrix with 2^i items in ith row.
     # if we have used all total nnz return the sparse matrix
-    # else if we reached max column size then fill up full columns unit we use all nnz
+    # else if we reached max column size then fill up full columns until we use all nnz
     col_max = 2
     for row in range(num_rows):
         col_limit = min(num_cols, col_max)
         # In case col_limit reached assign same value to all elements, which is much faster
-        if col_limit == num_cols and unusednnz > col_limit:
+        if col_limit == num_cols and unused_nnz > col_limit:
             output_arr[row] = rnd.uniform(0.001, 1)
-            unusednnz = unusednnz - col_limit + 1
-            if unusednnz <= 0:
+            unused_nnz = unused_nnz - col_limit + 1
+            if unused_nnz <= 0:
                 return mx.nd.array(output_arr)._to_csr()
             else:
                 continue
         for col_index in range(1, col_limit):
             output_arr[row][col_index] = rnd.uniform(0.001, 1)
-            unusednnz = unusednnz - 1
-            if unusednnz <= 0:
+            unused_nnz = unused_nnz - 1
+            if unused_nnz <= 0:
                 return mx.nd.array(output_arr)._to_csr()
         col_max = col_max * 2
 
-    if unusednnz >= 0:
+    if unused_nnz > 0:
         #return mx.nd.array(sp.random(num_rows, num_cols, density).toarray())._to_csr()
         raise ValueError("not supported for this density: %s"
                          " for this shape (%s,%s)" % (density, num_rows, num_cols))
@@ -171,8 +178,8 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
     Below is an example of the powerlaw distribution with csr as the stype.
     It calculates the nnz using the shape and density.
     It fills up the ndarray with exponentially increasing number of elements.
-    If there are enough unusednnzs, n+1th row will have twice more nnzs compared to nth row.
-    else, remaining unusednnzs will be used in n+1th row
+    If there are enough unused_nnzs, n+1th row will have twice more nnzs compared to nth row.
+    else, remaining unused_nnzs will be used in n+1th row
     If number of cols is too small and we have already reached column size it will fill up
     all following columns in all followings rows until we reach the required density.
 
