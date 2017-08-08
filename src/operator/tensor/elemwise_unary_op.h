@@ -175,17 +175,19 @@ class UnaryOp : public OpBase {
       NDArray *output = nullptr;
       for (size_t i = 0, n = inputs.size(); i < n; ++i) {
         const NDArray &input = inputs[i];
-        //const TShape &ishape = input.storage_shape();
         if (i < n_out) {
           output = const_cast<NDArray *>(&outputs[i]);
         }
+        CHECK_EQ(output->shape(), inputs[i].shape());
         CHECK_EQ(output->storage_type(), input.storage_type());
         CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
-        for (size_t j = 0, jn = input.aux_shape_count(); j < jn; ++j) {
-          TShape ashape = output->aux_shape(j);
-          CHECK(shape_assign(&ashape, input.aux_shape(j)));
-          output->set_aux_shape(j, ashape);
+        std::vector<TShape> aux_shapes;
+        const size_t aux_shape_count = input.aux_shape_count();
+        aux_shapes.reserve(aux_shape_count);
+        for (size_t j = 0; j < aux_shape_count; ++j) {
+          aux_shapes.emplace_back(input.aux_shape(j));
         }
+        output->CheckAndAlloc(aux_shapes);
         DCHECK_EQ(output->storage_shape(), input.storage_shape());
       }
       return true;
