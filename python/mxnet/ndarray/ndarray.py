@@ -26,6 +26,12 @@ from . import broadcast_sub, broadcast_div, broadcast_to, broadcast_equal, cast_
 from . import broadcast_greater, broadcast_greater_equal, broadcast_lesser, broadcast_lesser_equal
 from . import zeros_like, slice
 
+__all__ = ["NDArray", "concatenate", "_DTYPE_NP_TO_MX", "_DTYPE_MX_TO_NP",                   \
+           "ones", "add", "arange", "divide", "equal", "full", "greater", "greater_equal",   \
+           "imdecode", "lesser", "lesser_equal", "maximum", "minimum", "moveaxis",           \
+           "multiply", "negative", "not_equal", "onehot_encode", "power", "subtract",        \
+           "true_divide", "waitall", "_new_empty_handle"]
+
 # pylint: disable= no-member
 _DTYPE_NP_TO_MX = {
     None       : -1,
@@ -113,6 +119,7 @@ fixed-size items.
 
     """
     __slots__ = []
+    # make numpy functions return NDArray instead of numpy object array
     __array_priority__ = 1000.0
     # pylint: disable= no-member, undefined-variable
 
@@ -818,6 +825,8 @@ fixed-size items.
 
     @property
     def stype(self):
+        """Storage-type of the array.
+        """
         return _storage_type(self.handle)
 
     @property
@@ -1055,30 +1064,40 @@ fixed-size items.
         check_call(_LIB.MXNDArrayDetach(self.handle, ctypes.byref(hdl)))
         return NDArray(hdl)
 
-    def backward(self, out_grad=None, retain_graph=False):
+    def backward(self, out_grad=None, retain_graph=False, is_train=True):
         """Compute the gradients of this NDArray w.r.t variables.
 
         Parameters
         ----------
-        out_grad: list of NDArray or None
+        out_grad : NDArray, optional
+            Gradient with respect to head.
+        retain_graph : bool, optional
+            Whether to retain the computaion graph for another backward
+            pass on the same graph. By default the computaion history
+            is cleared.
+        is_train : bool, optional
+            Whether to compute gradient for training or inference.
         """
         if out_grad is None:
             ograd_handles = [NDArrayHandle(0)]
         else:
             ograd_handles = [out_grad.handle]
 
-        check_call(_LIB.MXAutogradBackward(
+        check_call(_LIB.MXAutogradBackwardEx(
             1, c_array(NDArrayHandle, [self.handle]),
             c_array(NDArrayHandle, ograd_handles),
-            ctypes.c_int(retain_graph)))
+            ctypes.c_int(retain_graph),
+            ctypes.c_int(is_train)))
 
-    def _to_csr(self):
-        # pylint: disable=undefined-variable
-        return cast_storage(self, stype='csr')
+    def tostype(self, stype):
+        """Return a copy of the array with chosen storage type.
 
-    def _to_rsp(self):
-        # pylint: disable=undefined-variable
-        return cast_storage(self, stype='row_sparse')
+        Returns
+        -------
+        NDArray, CSRNDArray or RowSparseNDArray
+            A copy of the array with the chosen storage stype
+        """
+        return cast_storage(self, stype=stype)
 
 def onehot_encode(indices, out):
     """One-hot encoding indices into matrix out.

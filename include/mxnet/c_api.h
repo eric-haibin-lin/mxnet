@@ -654,6 +654,13 @@ MXNET_DLL int MXImperativeInvokeEx(AtomicSymbolCreator creator,
                                    const int **out_stypes);
 /*!
  * \brief set whether to record operator for autograd
+ * \param is_recording 1 when recording, 0 when not recording.
+ * \param prev returns the previous status before this set.
+ * \return 0 when success, -1 when failure happens
+ */
+MXNET_DLL int MXAutogradSetIsRecording(int is_recording, int* prev);
+/*!
+ * \brief set whether to record operator for autograd
  * \param is_train 1 when training, 0 when testing
  * \param prev returns the previous status before this set.
  * \return 0 when success, -1 when failure happens
@@ -690,6 +697,20 @@ MXNET_DLL int MXAutogradBackward(mx_uint num_output,
                                  NDArrayHandle* ograd_handles,
                                  int retain_graph);
 /*!
+* \brief compute the gradient of outputs w.r.t variabels
+* \param num_output number of output NDArray
+* \param output_handles output NDArrays
+* \param ograd_handles head gradient for NDArrays
+* \param retain_graph whether to keep the graph after backward
+* \param is_train whether to do backward for training or inference
+* \return 0 when success, -1 when failure happens
+*/
+MXNET_DLL int MXAutogradBackwardEx(mx_uint num_output,
+                                   NDArrayHandle* output_handles,
+                                   NDArrayHandle* ograd_handles,
+                                   int retain_graph,
+                                   int is_train);
+/*!
  * \brief create cached operator
  */
 MXNET_DLL int MXCreateCachedOp(SymbolHandle handle,
@@ -698,6 +719,30 @@ MXNET_DLL int MXCreateCachedOp(SymbolHandle handle,
  * \brief free cached operator
  */
 MXNET_DLL int MXFreeCachedOp(CachedOpHandle handle);
+/*!
+ * \brief invoke cached operator
+ */
+MXNET_DLL int MXInvokeCachedOp(CachedOpHandle handle,
+                               int num_inputs,
+                               NDArrayHandle *inputs,
+                               int *num_outputs,
+                               NDArrayHandle **outputs);
+/*!
+ * \brief invoke a cached op
+ * \param handle the handle to the cached op
+ * \param num_inputs number of input NDArrays
+ * \param inputs input NDArrays
+ * \param num_outputs number of output NDArrays
+ * \param outputs output NDArrays
+ * \param out_stypes output ndarrays' stypes
+ * \return 0 when success, -1 when failure happens
+ */
+MXNET_DLL int MXInvokeCachedOpEx(CachedOpHandle handle,
+                                 int num_inputs,
+                                 NDArrayHandle *inputs,
+                                 int *num_outputs,
+                                 NDArrayHandle **outputs,
+                                 const int** out_stypes);
 /*!
  * \brief invoke cached operator
  */
@@ -1133,7 +1178,20 @@ MXNET_DLL int MXExecutorForward(ExecutorHandle handle, int is_train);
 MXNET_DLL int MXExecutorBackward(ExecutorHandle handle,
                                  mx_uint len,
                                  NDArrayHandle *head_grads);
-
+/*!
+ * \brief Excecutor run backward
+ *
+ * \param handle execute handle
+ * \param len lenth
+ * \param head_grads NDArray handle for heads' gradient
+ * \param is_train int value to indicate whether the backward pass is for evaluation
+ *
+ * \return 0 when success, -1 when failure happens
+ */
+MXNET_DLL int MXExecutorBackwardEx(ExecutorHandle handle,
+                                   mx_uint len,
+                                   NDArrayHandle *head_grads,
+                                   int is_train);
 /*!
  * \brief Get executor's head NDArray
  *

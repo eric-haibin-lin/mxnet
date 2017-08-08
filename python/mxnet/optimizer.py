@@ -43,7 +43,8 @@ class Optimizer(object):
     """
     def __init__(self, rescale_grad=1., param_idx2name=None, wd=0.,
                  clip_gradient=None, learning_rate=0.01,
-                 lr_scheduler=None, sym=None, begin_num_update=0):
+                 lr_scheduler=None, sym=None, begin_num_update=0,
+                 param_dict=None):
         self.rescale_grad = rescale_grad
         self.lr = learning_rate
         self.lr_scheduler = lr_scheduler
@@ -64,6 +65,7 @@ class Optimizer(object):
             'param_idx2name should be a dict of param indexes to names.'
         self.idx2name = param_idx2name.copy()
         self.sym = sym
+        self.param_dict = param_dict if param_dict else {}
 
         self.set_lr_mult({})
         self.set_wd_mult({})
@@ -277,7 +279,9 @@ class Optimizer(object):
         else:
             lr = self.lr
 
-        if index in self.lr_mult:
+        if index in self.param_dict:
+            lr *= self.param_dict[index].lr_mult
+        elif index in self.lr_mult:
             lr *= self.lr_mult[index]
         elif index in self.idx2name:
             lr *= self.lr_mult.get(self.idx2name[index], 1.0)
@@ -298,7 +302,9 @@ class Optimizer(object):
             Weight decay for this index.
         """
         wd = self.wd
-        if index in self.wd_mult:
+        if index in self.param_dict:
+            wd *= self.param_dict[index].wd_mult
+        elif index in self.wd_mult:
             wd *= self.wd_mult[index]
         elif index in self.idx2name:
             wd *= self.wd_mult.get(self.idx2name[index], 1.0)
@@ -316,8 +322,8 @@ class SGD(Optimizer):
         state = momentum * state + lr * rescale_grad * clip(grad, clip_gradient) + wd * weight
         weight = weight - state
 
-    For details of the update algorithm see :class:`~mxnet.ndarray.sgd_update` and
-    :class:`~mxnet.ndarray.sgd_mom_update`.
+    Sparse updating is supported. For details of the update algorithm see
+    :class:`~mxnet.ndarray.sgd_update` and :class:`~mxnet.ndarray.sgd_mom_update`.
 
     This optimizer accepts the following parameters in addition to those accepted
     by :class:`.Optimizer`.
@@ -342,8 +348,6 @@ class SGD(Optimizer):
         momentum = None
         weight_master_copy = None
         if self.multi_precision and weight.dtype == numpy.float16:
-            assert(weight.stype == 'default'), \
-                  "multi-precision doesn't supprot non-default weight yet"
             weight_master_copy = array(weight, ctx=weight.context, dtype=numpy.float32)
             if self.momentum != 0.0:
                 momentum = zeros(weight.shape, weight.context, dtype=numpy.float32,
@@ -543,8 +547,10 @@ class Adam(Optimizer):
         self.epsilon = epsilon
 
     def create_state(self, index, weight):
-        return (zeros(weight.shape, weight.context, dtype=weight.dtype),  # mean
-                zeros(weight.shape, weight.context, dtype=weight.dtype))  # variance
+        return (zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      stype=weight.stype),  # mean
+                zeros(weight.shape, weight.context, dtype=weight.dtype,
+                      stype=weight.stype))  # variance
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -649,11 +655,11 @@ class RMSProp(Optimizer):
     def create_state(self, index, weight):
         if self.centered:
             return (
-                zeros(weight.shape, weight.context),  # n
-                zeros(weight.shape, weight.context),  # g
-                zeros(weight.shape, weight.context))  # delta
+                zeros(weight.shape, weight.context, stype=weight.stype),  # n
+                zeros(weight.shape, weight.context, stype=weight.stype),  # g
+                zeros(weight.shape, weight.context, stype=weight.stype))  # delta
         else:
-            return (zeros(weight.shape, weight.context),)  # n
+            return (zeros(weight.shape, weight.context, stype=weight.stype),)  # n
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))

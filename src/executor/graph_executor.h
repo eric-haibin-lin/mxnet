@@ -43,10 +43,11 @@ class GraphExecutor : public Executor {
   friend class autograd::AutogradRuntime;
   using Executor::MonitorCallback;
 
+  GraphExecutor();
   virtual ~GraphExecutor();
   void Forward(bool is_train) override;
   void PartialForward(bool is_train, int step, int *step_left) override;
-  void Backward(const std::vector<NDArray> &head_grads) override;
+  void Backward(const std::vector<NDArray> &head_grads, bool is_train = true) override;
   const std::vector<NDArray>& outputs() const override;
   const std::unordered_map<std::string, NDArray>& in_arg_map() const override;
   const std::unordered_map<std::string, NDArray>& arg_grad_map() const override;
@@ -221,6 +222,8 @@ class GraphExecutor : public Executor {
   bool prefer_bulk_execution_;
   // cached segment operator
   std::vector<CachedSegOpr> cached_seg_opr_;
+  // verbose logging
+  bool log_verbose_ = false;
 };
 
 }  // namespace exec
