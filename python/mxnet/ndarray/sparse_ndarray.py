@@ -434,37 +434,40 @@ class CSRNDArray(BaseSparseNDArray):
 
 # pylint: disable=abstract-method
 class RowSparseNDArray(BaseSparseNDArray):
-    """A sparse representation of a set of tensor slices at given indices.
+    """A sparse representation of a set of NDArray row slices at given indices.
 
     A RowSparseNDArray represents a multidimensional NDArray as two separate arrays: `data` and
-    `indices`. The `indices` stores the indices of the multidimensional `data` slices extracted
-    from the dense NDArray in the first dimension. The corresponding NDArray ``dense``
+    `indices`.
+
+    - data: an NDArray of any dtype with shape [D0, D1, ..., Dn].
+    - indices: a 1-D int64 NDArray with shape [D0].
+
+    The `indices` stores the indices of the row slices with non-zeros,
+    while the values are stored in `data`. The corresponding NDArray ``dense``
     represented by RowSparseNDArray ``rsp`` has
 
-    ``dense[rsp.indices[i], :, :, :, ...] = rsp.data[i, :, :, :, ...]``,
+    ``dense[rsp.indices[i], :, :, :, ...] = rsp.data[i, :, :, :, ...]``
 
-    where `indices` is an 1-D integer NDArray with shape [D0], and `data` is an NDArray of any
-    dtype with shape [D0, D1, .., DK]. If the index of a slice in the first dimension
-    doesn't appear in `indices`, its values are zeros.
+        >>> dense.asnumpy()
+        array([[ 1.,  2., 3.],
+               [ 0.,  0., 0.],
+               [ 4.,  0., 5.],
+               [ 0.,  0., 0.],
+               [ 0.,  0., 0.]], dtype=float32)
+        >>> rsp = dense.tostype('row_sparse')
+        >>> rsp.indices.asnumpy()
+        array([0, 2], dtype=int64)
+        >>> rsp.data.asnumpy()
+        array([[ 1.,  2., 3.],
+               [ 4.,  0., 5.]], dtype=float32)
 
-    A RowSparseNDArray is typically used to represent a subset of a larger dense NDArray of
-    shape [LARGE0, D1, .. , DK] where LARGE0 >> D0 and most row slices are zeros.
+    A RowSparseNDArray is typically used to represent non-zero row-slices of a large NDArray
+    of shape [LARGE0, D1, .. , Dn] where LARGE0 >> D0 and most row slices are zeros.
 
     The indices are expected to be sorted in ascending order.
 
     RowSparseNDArray is used principally in the definition of gradients for operations
-    that have sparse gradients (e.g. dot with sparse inputs).
-
-    Examples
-    --------
-    >>> import mxnet as mx
-    >>> dense = mx.nd.array([[1,2],[0,0],[3,0],[0,0],[0,0],[0,0]])
-    >>> rsp = dense.tostype('row_sparse')
-    >>> rsp.indices.asnumpy()
-    array([0, 2], dtype=int64)
-    >>> rsp.data.asnumpy()
-    array([[ 1.,  2.],
-           [ 3.,  0.]], dtype=float32)
+    that have sparse gradients (e.g. sparse dot and sparse embedding).
     """
     def __reduce__(self):
         return RowSparseNDArray, (None,), super(RowSparseNDArray, self).__getstate__()
