@@ -172,7 +172,7 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
     distribution, optional: str, valid values: "uniform" or "powerlaw"
     Returns
     -------
-    Result of type SparseNDArray or RowSparseNDArray
+    Result of type CSRNDArray or RowSparseNDArray
     Examples
     --------
     Below is an example of the powerlaw distribution with csr as the stype.
