@@ -21,6 +21,9 @@ NNVM_REGISTER_OP(_rminus_scalar)
 NNVM_REGISTER_OP(_mul_scalar)
 .set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarCompute<gpu, mshadow::op::mul>);
 
+NNVM_REGISTER_OP(_backward_mul_scalar)
+.set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarCompute<gpu, mshadow::op::mul>);
+
 NNVM_REGISTER_OP(_div_scalar)
 .set_attr<FCompute>("FCompute<gpu>", BinaryScalarOp::BinaryScalarCompute<gpu, mshadow::op::div>);
 
