@@ -20,9 +20,6 @@
 #include <vector>
 #include "../common/cuda_utils.h"
 #include "../common/utils.h"
-#ifndef NEBUG
-#include "../../tests/cpp/include/test_util.h"
-#endif
 
 namespace mxnet {
 namespace op {
