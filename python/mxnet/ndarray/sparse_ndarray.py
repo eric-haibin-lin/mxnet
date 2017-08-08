@@ -214,7 +214,7 @@ class BaseSparseNDArray(NDArray):
 
 # pylint: disable=abstract-method
 class CSRNDArray(BaseSparseNDArray):
-    """A sparse representation of tensor in standard CSR format.
+    """A sparse representation of 2D NDArray in the standard CSR format.
 
     A CSRNDArray represents an NDArray as three separate arrays: `data`,
     `indptr` and `indices`. It uses the standard CSR representation where the column indices for
@@ -436,7 +436,7 @@ class CSRNDArray(BaseSparseNDArray):
 class RowSparseNDArray(BaseSparseNDArray):
     """A sparse representation of a set of NDArray row slices at given indices.
 
-    A RowSparseNDArray represents a multidimensional NDArray as two separate arrays: `data` and
+    A RowSparseNDArray represents a multidimensional NDArray using two separate arrays: `data` and
     `indices`.
 
     - data: an NDArray of any dtype with shape [D0, D1, ..., Dn].
