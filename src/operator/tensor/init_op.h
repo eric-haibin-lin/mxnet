@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2015 by Contributors
  * \file init_op.h
  * \brief Function definition of initialization op
  */
@@ -169,7 +187,6 @@ void FillZerosCsrImpl(mshadow::Stream<xpu> *s, NDArray *dst) {
   dst->set_aux_shape(csr::kIdx, new_shape);
 }
 
-// This operator never needs to fall back, since there's no input NDArray
 template<typename xpu>
 void FillComputeZerosEx(const nnvm::NodeAttrs& attrs,
                         const OpContext& ctx,
@@ -180,8 +197,9 @@ void FillComputeZerosEx(const nnvm::NodeAttrs& attrs,
   using namespace mshadow::expr;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   CHECK_EQ(outputs.size(), 1);
-  CHECK_EQ(inputs.size(), 0);
   auto stype = outputs[0].storage_type();
+  if (req[0] == kNullOp) return;
+  CHECK_EQ(req[0], kWriteTo) << "kWriteTo is expected for FillComputeZerosEx";
   if (stype == kRowSparseStorage) {
     NDArray nd(outputs[0]);
     FillZerosRspImpl<xpu>(s, &nd);
@@ -189,7 +207,8 @@ void FillComputeZerosEx(const nnvm::NodeAttrs& attrs,
     NDArray nd(outputs[0]);
     FillZerosCsrImpl<xpu>(s, &nd);
   } else {
-    LOG(FATAL) << "storage type not implemented.";
+    // no fallback is required since the output doesn't depend on input
+    LOG(FATAL) << "storage type " << stype << " not implemented.";
   }
 }
 

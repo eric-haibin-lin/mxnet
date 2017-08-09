@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # coding: utf-8
 # pylint: disable=invalid-name, no-member
 """ctypes library of mxnet and helper functions."""
@@ -18,14 +35,14 @@ __all__ = ['MXNetError']
 #----------------------------
 if sys.version_info[0] == 3:
     string_types = str,
-    numeric_types = (float, int, np.float32, np.int32)
+    numeric_types = (float, int, np.generic)
     integer_types = int
     # this function is needed for python3
     # to convert ctypes.char_p .value back to python str
     py_str = lambda x: x.decode('utf-8')
 else:
     string_types = basestring,
-    numeric_types = (float, int, long, np.float32, np.int32)
+    numeric_types = (float, int, long, np.generic)
     integer_types = (int, long)
     py_str = lambda x: x
 

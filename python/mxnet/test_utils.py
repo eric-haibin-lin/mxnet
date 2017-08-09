@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 """Tools for testing."""
 # pylint: disable=too-many-lines
 from __future__ import absolute_import, print_function, division
@@ -99,7 +116,7 @@ def _validate_csr_generation_inputs(num_rows, num_cols, density,
                              % (density, num_rows, num_cols))
 
 
-def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
+def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
     """Returns CSRNDArray with uniform distribution
     This generates a csr matrix with totalnnz unique randomly chosen numbers
     from num_rows*num_cols and arranges them in the 2d array in the
@@ -107,11 +124,14 @@ def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
     col_index = random_number_generated - row_index * num_cols
     """
     _validate_csr_generation_inputs(num_rows, num_cols, density,
-                                    distribution="uniform")
-    return mx.nd.array(sp.rand(num_rows, num_cols, density).toarray())._to_csr()
+                                    distribution="uniform", dtype=dtype)
+    csr = sp.rand(num_rows, num_cols, density, dtype=dtype)
+    result = mx.nd.csr_matrix(csr.data, csr.indptr, csr.indices,
+                              (num_rows, num_cols), dtype=dtype)
+    return result
 
 
-def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
+def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
     """Returns CSRNDArray with powerlaw distribution
     with exponentially increasing number of non zeros in each row.
     Not supported for cases where total_nnz < 2*num_rows. This is because
@@ -125,10 +145,10 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
     total_nnz = int(num_rows * num_cols * density)
 
     unused_nnz = total_nnz
-    output_arr = np.zeros((num_rows, num_cols))
+    output_arr = np.zeros((num_rows, num_cols), dtype=dtype)
     # Start with ones on each row so that no row is empty
     for row in range(num_rows):
-        output_arr[row][0] = rnd.uniform(0.001, 1)
+        output_arr[row][0] = rnd.uniform(0.001, 2)
         unused_nnz = unused_nnz - 1
         if unused_nnz <= 0:
             return mx.nd.array(output_arr)._to_csr()
@@ -141,14 +161,14 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
         col_limit = min(num_cols, col_max)
         # In case col_limit reached assign same value to all elements, which is much faster
         if col_limit == num_cols and unused_nnz > col_limit:
-            output_arr[row] = rnd.uniform(0.001, 1)
+            output_arr[row] = rnd.uniform(0.001, 2)
             unused_nnz = unused_nnz - col_limit + 1
             if unused_nnz <= 0:
                 return mx.nd.array(output_arr)._to_csr()
             else:
                 continue
         for col_index in range(1, col_limit):
-            output_arr[row][col_index] = rnd.uniform(0.001, 1)
+            output_arr[row][col_index] = rnd.uniform(0.001, 2)
             unused_nnz = unused_nnz - 1
             if unused_nnz <= 0:
                 return mx.nd.array(output_arr)._to_csr()
@@ -162,7 +182,7 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
         return mx.nd.array(output_arr)._to_csr()
 
 
-def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
+def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform", dtype=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np)
     Parameters
     ----------
@@ -170,6 +190,7 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
     stype: str, valid values: "csr" or "row_sparse"
     density, optional: float, should be between 0 and 1
     distribution, optional: str, valid values: "uniform" or "powerlaw"
+    dtype, optional: numpy.dtype, default value is None
     Returns
     -------
     Result of type CSRNDArray or RowSparseNDArray
@@ -194,6 +215,7 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
     >>> assert(row4nnz == 2*row3nnz)
     """
     density = rnd.rand() if density is None else density
+    dtype = default_dtype() if dtype is None else dtype
     if stype == 'row_sparse':
         assert (distribution == "uniform"), \
                "Distribution %s not supported for row_sparse" % (distribution)
@@ -201,19 +223,19 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
         idx_sample = rnd.rand(shape[0])
         indices = np.argwhere(idx_sample < density).flatten()
         if indices.shape[0] == 0:
-            result = mx.nd.zeros(shape, stype='row_sparse')
-            return result, (np.array([], dtype='int64'), np.array([], dtype='int64'))
+            result = mx.nd.zeros(shape, stype='row_sparse', dtype=dtype)
+            return result, (np.array([], dtype=dtype), np.array([], dtype='int64'))
         # generate random values
-        val = rnd.rand(indices.shape[0], *shape[1:])
-        arr = mx.nd.row_sparse(val, indices, shape, indices_type=np.int64)
+        val = rnd.rand(indices.shape[0], *shape[1:]).astype(dtype)
+        arr = mx.nd.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
         return arr, (val, indices)
     elif stype == 'csr':
         assert(len(shape) == 2)
         if distribution == "uniform":
-            csr = _get_uniform_dataset_csr(shape[0], shape[1], density)
+            csr = _get_uniform_dataset_csr(shape[0], shape[1], density, dtype=dtype)
             return csr, (csr.indptr, csr.indices, csr.data)
         elif distribution == "powerlaw":
-            csr = _get_powerlaw_dataset_csr(shape[0], shape[1], density)
+            csr = _get_powerlaw_dataset_csr(shape[0], shape[1], density, dtype=dtype)
             return csr, (csr.indptr, csr.indices, csr.data)
         else:
             assert(False), "Distribution not supported: %s" % (distribution)
@@ -221,11 +243,11 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
         assert(False), "unknown storage type"
 
 
-def rand_ndarray(shape, stype, density=None):
+def rand_ndarray(shape, stype, density=None, dtype=None):
     if stype == 'default':
-        arr = mx.nd.array(random_arrays(shape))
+        arr = mx.nd.array(random_arrays(shape), dtype=dtype)
     else:
-        arr, _ = rand_sparse_ndarray(shape, stype, density=density)
+        arr, _ = rand_sparse_ndarray(shape, stype, density=density, dtype=dtype)
     return arr
 
 
@@ -850,7 +872,7 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
     for k, v in args_grad_npy.items():
         nd = mx.nd.array(v, ctx=ctx)
         if grad_stypes is not None and k in grad_stypes:
-            out = mx.nd.cast_storage(nd, stype=grad_stypes[k])
+            out = nd.tostype(grad_stypes[k])
             args_grad_data[k] = out
         else:
             args_grad_data[k] = nd

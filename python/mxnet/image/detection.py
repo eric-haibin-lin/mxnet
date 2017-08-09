@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # pylint: disable=unused-import
 """Read images and perform augmentations for object detection."""
 
@@ -756,8 +773,9 @@ class ImageDetIter(ImageIter):
                     assert i < batch_size, 'Batch size must be multiples of augmenter output length'
                     batch_data[i][:] = self.postprocess_data(datum)
                     num_object = label.shape[0]
-                    batch_label[i][0:num_object][:] = nd.array(label)
-                    batch_label[i][num_object:][:] = -1
+                    batch_label[i][0:num_object] = nd.array(label)
+                    if num_object < batch_label[i].shape[0]:
+                        batch_label[i][num_object:] = -1
                     i += 1
         except StopIteration:
             if not i:

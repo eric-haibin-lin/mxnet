@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # coding: utf-8
 # pylint: disable= arguments-differ
 """ResNets, implemented in Gluon."""
@@ -177,11 +194,11 @@ class BottleneckV2(HybridBlock):
     def __init__(self, channels, stride, downsample=False, in_channels=0, **kwargs):
         super(BottleneckV2, self).__init__(**kwargs)
         self.bn1 = nn.BatchNorm()
-        self.conv1 = _conv3x3(channels//4, 1, in_channels)
+        self.conv1 = nn.Conv2D(channels//4, kernel_size=1, strides=1, use_bias=False)
         self.bn2 = nn.BatchNorm()
         self.conv2 = _conv3x3(channels//4, stride, channels//4)
         self.bn3 = nn.BatchNorm()
-        self.conv3 = _conv3x3(channels, 1, channels//4)
+        self.conv3 = nn.Conv2D(channels, kernel_size=1, strides=1, use_bias=False)
         if downsample:
             self.downsample = nn.Conv2D(channels, 1, stride, use_bias=False,
                                         in_channels=in_channels)

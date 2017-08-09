@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # coding: utf-8
 """SparseNDArray API of mxnet."""
 from __future__ import absolute_import
@@ -101,100 +118,8 @@ class BaseSparseNDArray(NDArray):
     def __itruediv__(self, other):
         raise NotImplementedError()
 
-    def __setitem__(self, key, value):
-        """x.__setitem__(i, y) <=> x[i]=y
-
-        Set self[key] to value. Only slice [:] is supported.
-
-        Parameters
-        ----------
-        key : slice
-            The indexing key.
-        value : NDArray or numpy.ndarray
-            The value to set.
-
-        Examples
-        --------
-        >>> src = mx.nd.row_sparse([[1, 0, 2], [4, 5, 6]], [0, 2], (3,3))
-        >>> src.asnumpy()
-        array([[ 1.,  0.,  2.],
-               [ 0.,  0.,  0.],
-               [ 4.,  5.,  6.]], dtype=float32)
-        >>> # assign BaseSparseNDArray with same storage type
-        >>> x = mx.nd.zeros('row_sparse', (3,3))
-        >>> x[:] = src
-        >>> x.asnumpy()
-        array([[ 1.,  0.,  2.],
-               [ 0.,  0.,  0.],
-               [ 4.,  5.,  6.]], dtype=float32)
-        >>> # assign NDArray to BaseSparseNDArray
-        >>> x[:] = mx.nd.ones((3,3))
-        >>> x.asnumpy()
-        array([[ 1.,  1.,  1.],
-               [ 1.,  1.,  1.],
-               [ 1.,  1.,  1.]], dtype=float32)
-        """
-        if not self.writable:
-            raise ValueError('Failed to assign to a readonly NDArray')
-        if isinstance(key, py_slice):
-            if key.step is not None or key.start is not None or key.stop is not None:
-                raise ValueError('Assignment with slicing not supported in BaseSparseNDArray.')
-            if isinstance(value, NDArray):
-                # avoid copying to itself
-                if value.handle is not self.handle:
-                    value.copyto(self)
-            elif isinstance(value, numeric_types):
-                raise Exception("Assigning numeric types to BaseSparseNDArray not supported yet.")
-            elif isinstance(value, (np.ndarray, np.generic)):
-                # TODO(haibin) Implement _sync_copyfrom for sparse ndarray to avoid an extra copy
-                warnings.warn('Assigning non-NDArray object to BaseSparseNDArray is not efficient',
-                              RuntimeWarning)
-                tmp = _array(value)
-                tmp.copyto(self)
-            else:
-                raise TypeError('type %s not supported' % str(type(value)))
-        else:
-            assert(isinstance(key, (int, tuple)))
-            raise Exception('BaseSparseNDArray only supports [:] for assignment')
-
-    def __getitem__(self, key):
-        """x.__getitem__(i) <=> x[i]
-
-        Returns a sliced view of this array.
-
-        Parameters
-        ----------
-        key : int or slice
-            Indexing key.
-
-        Examples
-        --------
-        >>> x = mx.nd.zeros((2, 3), stype='row_sparse')
-        >>> x[:] = mx.nd.arange(0,6).reshape((2,3))
-        >>> x.asnumpy()
-        array([[ 0.,  1.,  2.],
-               [ 3.,  4.,  5.]], dtype=float32)
-        >>> x[1:2].asnumpy()
-        array([[ 3.,  4.,  5.]], dtype=float32)
-        """
-        stype = self.stype
-        if isinstance(key, int):
-            raise Exception("__getitem__ with int key is not implemented yet")
-        if isinstance(key, py_slice):
-            if key.step is not None:
-                raise ValueError('NDArray only supports continuous slicing on axis 0')
-            if key.start is not None or key.stop is not None:
-                assert(stype == 'csr'), "__getitem__ with slice is only implemented for CSRNDArray"
-                begin = key.start if key.start else 0
-                end = key.stop if key.stop else self.shape[0]
-                return nd_slice(self, begin=begin, end=end)
-            else:
-                return self
-        if isinstance(key, tuple):
-            raise ValueError('Multi-dimension indexing is not supported')
-
     def _sync_copyfrom(self, source_array):
-        raise Exception('Not implemented for SparseND yet!')
+        raise NotImplementedError()
 
     def _at(self, idx):
         raise NotSupportedForSparseNDArray(self._at, '[idx]', idx)
@@ -218,25 +143,6 @@ class BaseSparseNDArray(NDArray):
         return _DTYPE_MX_TO_NP[aux_type.value]
 
     @property
-    def data(self):
-        """Get a deep copy NDArray of the data array associated with the BaseSparseNDArray.
-
-        This function blocks. Do not use it in performance critical code.
-        """
-        self.wait_to_read()
-        hdl = NDArrayHandle()
-        check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
-        return NDArray(hdl)
-
-    @property
-    def indices(self):
-        """Get a deep copy NDArray of the indices array associated with the BaseSparseNDArray.
-
-        This function blocks. Do not use it in performance critical code.
-        """
-        raise NotImplementedError()
-
-    @property
     def _num_aux(self):
         """The number of aux data used to help store the sparse ndarray.
         """
@@ -255,7 +161,7 @@ class BaseSparseNDArray(NDArray):
     def asnumpy(self):
         """Return a dense ``numpy.ndarray`` object with value copied from this array
         """
-        return self.todense().asnumpy()
+        return self.tostype('default').asnumpy()
 
     def astype(self, dtype):
         """Returns a copy of the array after casting to a specified type.
@@ -278,23 +184,15 @@ class BaseSparseNDArray(NDArray):
     def copyto(self, other):
         """Copies the value of this array to another array.
 
-        If ``other`` is a ``NDArray`` object, then ``other.shape`` and
-        ``self.shape`` should be the same. This function copies the value from
-        ``self`` to ``other``.
-
-        If ``other`` is a context, a new ``NDArray`` will be first created on
-        the target context, and the value of ``self`` is copied.
-
         Parameters
         ----------
-        other : NDArray or Context
+        other : NDArray or CSRNDArray or RowSparseNDArray or Context
             The destination array or context.
 
         Returns
         -------
-        NDArray
-            The copied array. If ``other`` is an ``NDArray``, then the return value
-            and ``other`` will point to the same ``NDArray``.
+        NDArray or CSRNDArray or RowSparseNDArray
+            The copied array.
         """
         if isinstance(other, NDArray):
             if other.handle is self.handle:
@@ -308,8 +206,16 @@ class BaseSparseNDArray(NDArray):
         else:
             raise TypeError('copyto does not support type ' + str(type(other)))
 
-    def todense(self):
-        return todense(self)
+    def _data(self):
+        """A deep copy NDArray of the data array associated with the BaseSparseNDArray.
+
+        This function blocks. Do not use it in performance critical code.
+        """
+        self.wait_to_read()
+        hdl = NDArrayHandle()
+        check_call(_LIB.MXNDArrayGetDataNDArray(self.handle, ctypes.byref(hdl)))
+        return NDArray(hdl)
+
 
     def _aux_data(self, i):
         """ Get a deep copy NDArray of the i-th aux data array associated with the
@@ -325,7 +231,9 @@ class BaseSparseNDArray(NDArray):
 
 # pylint: disable=abstract-method
 class CSRNDArray(BaseSparseNDArray):
-    """A CSRNDArray represents a NDArray as three separate arrays: `data`,
+    """A sparse representation of 2D NDArray in the standard CSR format.
+
+    A CSRNDArray represents an NDArray as three separate arrays: `data`,
     `indptr` and `indices`. It uses the standard CSR representation where the column indices for
     row i are stored in indices[indptr[i]:indptr[i+1]] and their corresponding values are stored
     in values[indptr[i]:indptr[i+1]].
@@ -333,7 +241,7 @@ class CSRNDArray(BaseSparseNDArray):
     Example
     -------
     >>> a = mx.nd.array([[0, 1, 0], [2, 0, 0], [0, 0, 0], [0, 0, 3]])
-    >>> a = a._to_csr()
+    >>> a = a.tostype('csr')
     >>> a.indices.asnumpy()
     array([1, 0, 2])
     >>> a.indptr.asnumpy()
@@ -365,9 +273,105 @@ class CSRNDArray(BaseSparseNDArray):
         (self / other).copyto(self)
         return self
 
+    def __getitem__(self, key):
+        """x.__getitem__(i) <=> x[i]
+
+        Returns a sliced view of this array.
+
+        Parameters
+        ----------
+        key : slice
+            Indexing key.
+
+        Examples
+        --------
+        >>> indptr = np.array([0, 2, 3, 6])
+        >>> indices = np.array([0, 2, 2, 0, 1, 2])
+        >>> data = np.array([1, 2, 3, 4, 5, 6])
+        >>> a = mx.nd.csr_matrix(data, indptr, indices, (3, 3))
+        >>> a.asnumpy()
+        array([[1, 0, 2],
+               [0, 0, 3],
+               [4, 5, 6]])
+        >>> a[1:2].asnumpy()
+        array([[0, 0, 3]], dtype=float32)
+        """
+        if isinstance(key, int):
+            raise ValueError("__getitem__ with int key is not implemented for CSRNDArray")
+        if isinstance(key, py_slice):
+            if key.step is not None:
+                raise ValueError('CSRNDArray only supports continuous slicing on axis 0')
+            if key.start is not None or key.stop is not None:
+                begin = key.start if key.start else 0
+                end = key.stop if key.stop else self.shape[0]
+                return nd_slice(self, begin=begin, end=end)
+            else:
+                return self
+        if isinstance(key, tuple):
+            raise ValueError('Multi-dimension indexing is not supported')
+
+    def __setitem__(self, key, value):
+        """x.__setitem__(i, y) <=> x[i]=y
+
+        Set self[key] to value. Only slice key [:] is supported.
+
+        Parameters
+        ----------
+        key : slice
+            The indexing key.
+        value : NDArray or CSRNDArray or numpy.ndarray
+            The value to set.
+
+        Examples
+        --------
+        >>> src = mx.nd.zeros((3,3), stype='csr')
+        >>> src.asnumpy()
+        array([[ 0.,  0.,  0.],
+               [ 0.,  0.,  0.],
+               [ 0.,  0.,  0.]], dtype=float32)
+        >>> # assign CSRNDArray with same storage type
+        >>> x = mx.nd.ones('row_sparse', (3,3)).tostype('csr')
+        >>> x[:] = src
+        >>> x.asnumpy()
+        array([[ 1.,  1.,  1.],
+               [ 1.,  1.,  1.],
+               [ 1.,  1.,  1.]], dtype=float32)
+        >>> # assign NDArray to CSRNDArray
+        >>> x[:] = mx.nd.ones((3,3)) * 2
+        >>> x.asnumpy()
+        array([[ 2.,  2.,  2.],
+               [ 2.,  2.,  2.],
+               [ 2.,  2.,  2.]], dtype=float32)
+        """
+        if not self.writable:
+            raise ValueError('Failed to assign to a readonly CSRNDArray')
+        if isinstance(key, py_slice):
+            if key.step is not None or key.start is not None or key.stop is not None:
+                raise ValueError('Assignment with slice for CSRNDArray is not ' \
+                                 'implmented yet.')
+            if isinstance(value, NDArray):
+                # avoid copying to itself
+                if value.handle is not self.handle:
+                    value.copyto(self)
+            elif isinstance(value, numeric_types):
+                raise ValueError("Assigning numeric types to CSRNDArray is " \
+                                 "not implemented yet.")
+            elif isinstance(value, (np.ndarray, np.generic)):
+                # TODO(haibin/anisub) check scipy.sparse and use _sync_copy_from to
+                # avoid the temporary copy
+                warnings.warn('Assigning non-NDArray object to CSRNDArray is not efficient',
+                              RuntimeWarning)
+                tmp = _array(value)
+                tmp.copyto(self)
+            else:
+                raise TypeError('type %s not supported' % str(type(value)))
+        else:
+            assert(isinstance(key, (int, tuple)))
+            raise Exception('CSRNDArray only supports [:] for assignment')
+
     @property
     def indices(self):
-        """The indices array of the CSRNDArray.
+        """A deep copy NDArray of the indices array of the CSRNDArray.
         This generates a deep copy of the column indices of the current `csr` matrix.
 
         Returns
@@ -379,7 +383,7 @@ class CSRNDArray(BaseSparseNDArray):
 
     @property
     def indptr(self):
-        """The indptr array of the CSRNDArray with `csr` storage type.
+        """A deep copy NDArray of the indptr array of the CSRNDArray.
         This generates a deep copy of the `indptr` of the current `csr` matrix.
 
         Returns
@@ -389,31 +393,98 @@ class CSRNDArray(BaseSparseNDArray):
         """
         return self._aux_data(0)
 
+    @property
+    def data(self):
+        """A deep copy NDArray of the data array of the CSRNDArray.
+        This generates a deep copy of the `data` of the current `csr` matrix.
+
+        Returns
+        -------
+        NDArray
+            This CSRNDArray's data array.
+        """
+        return self._data()
+
+    def tostype(self, stype):
+        """Return a copy of the array with chosen storage type.
+
+        Returns
+        -------
+        NDArray or CSRNDArray
+            A copy of the array with the chosen storage stype
+        """
+        if stype == 'row_sparse':
+            raise ValueError("cast_storage from csr to row_sparse is not supported")
+        return cast_storage(self, stype=stype)
+
+    def copyto(self, other):
+        """Copies the value of this array to another array.
+
+        If ``other`` is a ``NDArray`` or ``CSRNDArray`` object, then ``other.shape`` and
+        ``self.shape`` should be the same. This function copies the value from
+        ``self`` to ``other``.
+
+        If ``other`` is a context, a new ``CSRNDArray`` will be first created on
+        the target context, and the value of ``self`` is copied.
+
+        Parameters
+        ----------
+        other : NDArray or CSRNDArray or Context
+            The destination array or context.
+
+        Returns
+        -------
+        NDArray or CSRNDArray
+            The copied array. If ``other`` is an ``NDArray`` or ``CSRNDArray``, then the return
+            value and ``other`` will point to the same ``NDArray`` or ``CSRNDArray``.
+        """
+        if isinstance(other, Context):
+            return super(CSRNDArray, self).copyto(other)
+        elif isinstance(other, NDArray):
+            stype = other.stype
+            if stype == 'default' or stype == 'csr':
+                return super(CSRNDArray, self).copyto(other)
+            else:
+                raise TypeError('copyto does not support destination NDArray stype ' + str(stype))
+        else:
+            raise TypeError('copyto does not support type ' + str(type(other)))
+
 # pylint: disable=abstract-method
 class RowSparseNDArray(BaseSparseNDArray):
-    """A RowSparseNDArray is typically used to represent a subset of a larger
-    NDArray  with `default` of shape [LARGE0, D1, .. , DN] where LARGE0 >> D0. The values
-    in indices are the indices in the first dimension of the slices that have been extracted from
-    the larger NDArray. The indices are expected to be sorted in ascending order.
+    """A sparse representation of a set of NDArray row slices at given indices.
 
-    The corresponding NDArray ``dense`` with `default` storage represented by a ``rsp``
-    RowSparseNDArray
+    A RowSparseNDArray represents a multidimensional NDArray using two separate arrays: `data` and
+    `indices`.
 
-    ``dense[rsp.indices[i], :, :, :, ...] = rsp.values[i, :, :, :, ...]``
+    - data: an NDArray of any dtype with shape [D0, D1, ..., Dn].
+    - indices: a 1-D int64 NDArray with shape [D0].
+
+    The `indices` stores the indices of the row slices with non-zeros,
+    while the values are stored in `data`. The corresponding NDArray ``dense``
+    represented by RowSparseNDArray ``rsp`` has
+
+    ``dense[rsp.indices[i], :, :, :, ...] = rsp.data[i, :, :, :, ...]``
+
+        >>> dense.asnumpy()
+        array([[ 1.,  2., 3.],
+               [ 0.,  0., 0.],
+               [ 4.,  0., 5.],
+               [ 0.,  0., 0.],
+               [ 0.,  0., 0.]], dtype=float32)
+        >>> rsp = dense.tostype('row_sparse')
+        >>> rsp.indices.asnumpy()
+        array([0, 2], dtype=int64)
+        >>> rsp.data.asnumpy()
+        array([[ 1.,  2., 3.],
+               [ 4.,  0., 5.]], dtype=float32)
+
+    A RowSparseNDArray is typically used to represent non-zero row-slices of a large NDArray
+    of shape [LARGE0, D1, .. , Dn] where LARGE0 >> D0 and most row slices are zeros.
+
+    The indices are expected to be sorted in ascending order.
 
     RowSparseNDArray is used principally in the definition of gradients for operations
-    that have sparse gradients (e.g. dot with sparse inputs).
-
-    Examples
-    --------
-    >>> import mxnet as mx
-    >>> dense = mx.nd.array([[1,2],[0,0],[3,0],[0,0]])
-    >>> rsp = dense._to_rsp()
-    >>> rsp.indices.asnumpy()
-    array([0, 2], dtype=int32)
-    >>> rsp.data.asnumpy()
-    array([[ 1.,  2.],
-           [ 3.,  0.]], dtype=float32)
+    that have sparse gradients (e.g. sparse dot and sparse embedding).
     """
     def __reduce__(self):
         return RowSparseNDArray, (None,), super(RowSparseNDArray, self).__getstate__()
@@ -438,10 +509,94 @@ class RowSparseNDArray(BaseSparseNDArray):
         (self / other).copyto(self)
         return self
 
+    def __getitem__(self, key):
+        """x.__getitem__(i) <=> x[i]
+
+        Returns a sliced view of this array.
+
+        Parameters
+        ----------
+        key : slice
+            Indexing key.
+
+        Examples
+        --------
+        >>> x = mx.nd.zeros((2, 3), stype='row_sparse')
+        >>> x[:].asnumpy()
+        array([[ 0.,  0.,  0.],
+               [ 0.,  0.,  0.]], dtype=float32)
+        """
+        if isinstance(key, int):
+            raise Exception("__getitem__ with int key is not implemented for RowSparseNDArray yet")
+        if isinstance(key, py_slice):
+            if key.step is not None or key.start is not None or key.stop is not None:
+                raise Exception('RowSparseNDArray only supports [:] for __getitem__')
+            else:
+                return self
+        if isinstance(key, tuple):
+            raise ValueError('Multi-dimension indexing is not supported')
+
+    def __setitem__(self, key, value):
+        """x.__setitem__(i, y) <=> x[i]=y
+
+        Set self[key] to value. Only slice key [:] is supported.
+
+        Parameters
+        ----------
+        key : slice
+            The indexing key.
+        value : NDArray or numpy.ndarray
+            The value to set.
+
+        Examples
+        --------
+        >>> src = mx.nd.row_sparse([[1, 0, 2], [4, 5, 6]], [0, 2], (3,3))
+        >>> src.asnumpy()
+        array([[ 1.,  0.,  2.],
+               [ 0.,  0.,  0.],
+               [ 4.,  5.,  6.]], dtype=float32)
+        >>> # assign RowSparseNDArray with same storage type
+        >>> x = mx.nd.zeros('row_sparse', (3,3))
+        >>> x[:] = src
+        >>> x.asnumpy()
+        array([[ 1.,  0.,  2.],
+               [ 0.,  0.,  0.],
+               [ 4.,  5.,  6.]], dtype=float32)
+        >>> # assign NDArray to RowSparseNDArray
+        >>> x[:] = mx.nd.ones((3,3))
+        >>> x.asnumpy()
+        array([[ 1.,  1.,  1.],
+               [ 1.,  1.,  1.],
+               [ 1.,  1.,  1.]], dtype=float32)
+        """
+        if not self.writable:
+            raise ValueError('Failed to assign to a readonly RowSparseNDArray')
+        if isinstance(key, py_slice):
+            if key.step is not None or key.start is not None or key.stop is not None:
+                raise ValueError('Assignment with slice for RowSparseNDArray ' \
+                                 'is not implmented yet.')
+            if isinstance(value, NDArray):
+                # avoid copying to itself
+                if value.handle is not self.handle:
+                    value.copyto(self)
+            elif isinstance(value, numeric_types):
+                raise ValueError("Assigning numeric types to RowSparseNDArray " \
+                                 "is not implemented yet.")
+            elif isinstance(value, (np.ndarray, np.generic)):
+                warnings.warn('Assigning non-NDArray object to RowSparseNDArray is not efficient',
+                              RuntimeWarning)
+                tmp = _array(value)
+                tmp.copyto(self)
+            else:
+                raise TypeError('type %s not supported' % str(type(value)))
+        else:
+            assert(isinstance(key, (int, tuple)))
+            raise TypeError('RowSparseNDArray only supports [:] for assignment')
+
     @property
     def indices(self):
-        """The indices array of the RowSparseNDArray with `row_sparse` storage type.
-        This generates a deep copy of the row indices of the current row-sparse matrix.
+        """A deep copy NDArray of the indices array of the RowSparseNDArray.
+        This generates a deep copy of the row indices of the current `row_sparse` matrix.
 
         Returns
         -------
@@ -450,8 +605,66 @@ class RowSparseNDArray(BaseSparseNDArray):
         """
         return self._aux_data(0)
 
+    @property
+    def data(self):
+        """A deep copy NDArray of the data array of the RowSparseNDArray.
+        This generates a deep copy of the `data` of the current `row_sparse` matrix.
+
+        Returns
+        -------
+        NDArray
+            This RowSparseNDArray's data array.
+        """
+        return self._data()
+
+    def tostype(self, stype):
+        """Return a copy of the array with chosen storage type.
+
+        Returns
+        -------
+        NDArray or RowSparseNDArray
+            A copy of the array with the chosen storage stype
+        """
+        if stype == 'csr':
+            raise ValueError("cast_storage from row_sparse to csr is not supported")
+        return cast_storage(self, stype=stype)
+
+    def copyto(self, other):
+        """Copies the value of this array to another array.
+
+        If ``other`` is a ``NDArray`` or ``RowSparseNDArray`` object, then ``other.shape``
+        and ``self.shape`` should be the same. This function copies the value from
+        ``self`` to ``other``.
+
+        If ``other`` is a context, a new ``RowSparseNDArray`` will be first created on
+        the target context, and the value of ``self`` is copied.
+
+        Parameters
+        ----------
+        other : NDArray or RowSparseNDArray or Context
+            The destination array or context.
+
+        Returns
+        -------
+        NDArray or RowSparseNDArray
+            The copied array. If ``other`` is an ``NDArray`` or ``RowSparseNDArray``, then the
+            return value and ``other`` will point to the same ``NDArray`` or ``RowSparseNDArray``.
+        """
+        if isinstance(other, Context):
+            return super(RowSparseNDArray, self).copyto(other)
+        elif isinstance(other, NDArray):
+            stype = other.stype
+            if stype == 'default' or stype == 'row_sparse':
+                return super(RowSparseNDArray, self).copyto(other)
+            else:
+                raise TypeError('copyto does not support destination NDArray stype ' + str(stype))
+        else:
+            raise TypeError('copyto does not support type ' + str(type(other)))
 
 def _prepare_src_array(src, dtype, default_dtype):
+    """Prepare `src` and its dtype so that they can be used to construct NDArray.
+    `src` is converted to a `np.ndarray` if it's neither an `NDArray` nor an `np.ndarray`.
+    """
     if isinstance(src, NDArray):
         dtype = src.dtype if dtype is None else dtype
     else:
@@ -464,8 +677,9 @@ def _prepare_src_array(src, dtype, default_dtype):
     return src, dtype
 
 
-def csr(data, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, indices_type=None):
-    """Creates a 2D array with compressed sparse row format.
+def csr_matrix(data, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None,
+               indices_type=None):
+    """Creates a 2D array with compressed sparse row(CSR) format.
 
     Parameters
     ----------
@@ -484,10 +698,10 @@ def csr(data, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, in
         if `values` is an `NDArray`, `float32` otherwise.
     indptr_type: str or numpy.dtype, optional
         The data type of the indices array. The default dtype is ``indptr.dtype``
-        if `indptr` is an `NDArray`, `int32` otherwise.
+        if `indptr` is an `NDArray`, `int64` otherwise.
     indices_type: str or numpy.dtype, optional
         The data type of the indices array. The default dtype is ``indices.dtype``
-        if `indicies` is an `NDArray`, `int32` otherwise.
+        if `indicies` is an `NDArray`, `int64` otherwise.
 
     Returns
     -------
@@ -497,7 +711,7 @@ def csr(data, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, in
     Example
     -------
     >>> import mxnet as mx
-    >>> a = mx.nd.csr([1, 2, 3], [0, 1, 2, 2, 3], [1, 0, 2], (4, 3))
+    >>> a = mx.nd.csr_matrix([1, 2, 3], [0, 1, 2, 2, 3], [1, 0, 2], (4, 3))
     >>> a.asnumpy()
     array([[ 0.,  1.,  0.],
            [ 2.,  0.,  0.],
@@ -540,13 +754,13 @@ def csr(data, indptr, indices, shape, ctx=None, dtype=None, indptr_type=None, in
     return result
 
 
-def row_sparse(data, indices, shape, ctx=None, dtype=None, indices_type=None):
-    """Creates a row sparse array with a set of tensor slices at given indices.
+def row_sparse_array(data, indices, shape, ctx=None, dtype=None, indices_type=None):
+    """Creates a multidimensional row sparse array with a set of tensor slices at given indices.
 
     Parameters
     ----------
     data: array_like
-        An object exposing the array interface, with shape [D0, D1, .. Dn], where D0 is
+        An object exposing the array interface, with shape [D0, D1, .. DK], where D0 is
         the number of rows with non-zeros entries.
     indices: array_like
         An object exposing the array interface, with shape [D0].
@@ -557,7 +771,7 @@ def row_sparse(data, indices, shape, ctx=None, dtype=None, indices_type=None):
         if `data` is an `NDArray`, `float32` otherwise.
     indices_type: str or numpy.dtype, optional
         The data type of the indices array. The default dtype is ``indices.dtype``
-        if `indicies` is an `NDArray`, `int32` otherwise.
+        if `indicies` is an `NDArray`, `int64` otherwise.
 
     Returns
     -------
@@ -566,7 +780,7 @@ def row_sparse(data, indices, shape, ctx=None, dtype=None, indices_type=None):
 
     Example
     -------
-    >>> a = mx.nd.row_sparse([[1, 2], [3, 4]], [1, 4], (6, 2))
+    >>> a = mx.nd.row_sparse_array([[1, 2], [3, 4]], [1, 4], (6, 2))
     >>> a.asnumpy()
     array([[ 0.,  0.],
            [ 1.,  2.],
@@ -601,18 +815,6 @@ def row_sparse(data, indices, shape, ctx=None, dtype=None, indices_type=None):
     check_call(_LIB.MXNDArraySyncCopyFromNDArray(result.handle, data.handle, ctypes.c_int(-1)))
     check_call(_LIB.MXNDArraySyncCopyFromNDArray(result.handle, indices.handle, ctypes.c_int(0)))
     return result
-
-
-def todense(source):
-    """ Return a dense array representation of a BaseSparseNDArray.
-
-    Returns
-    -------
-    NDArray
-        A copy of the array with `default` storage stype
-    """
-    return cast_storage(source, stype='default')
-
 
 def _ndarray_cls(handle, writable=True, stype=None):
     if stype is None:

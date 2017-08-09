@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2016 by Contributors
  * \file optimizer_op-inl.h
  * \brief Optimizer operators
  * \author Junyuan Xie
@@ -241,7 +259,7 @@ inline void SGDUpdateEx(const nnvm::NodeAttrs& attrs,
   } else if (weight_stype == kRowSparseStorage && grad_stype == kDefaultStorage) {
     NDArray out = outputs[0];
     SGDUpdateRspDnsImpl<xpu>(param, ctx, inputs[0], inputs[1].data(), req[0], &out);
-  } else if (weight_stype == kDefaultStorage && grad_stype == kDefaultStorage) {
+  } else {
     FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDUpdate<xpu>, "SGDUpdate");
   }
 }
@@ -592,6 +610,8 @@ inline void SGDMomUpdateEx(const nnvm::NodeAttrs& attrs,
   auto weight_stype = weight.storage_type();
   auto grad_stype = grad.storage_type();
   auto mom_stype = mom.storage_type();
+  CHECK_EQ(weight_stype, mom_stype) << "Inconsistent storage type detected between mom.stype = "
+           << mom_stype << " and weight.stype = " << weight_stype;
   if (weight_stype == kRowSparseStorage && grad_stype == kRowSparseStorage &&
       mom_stype == kRowSparseStorage) {
      NDArray out = outputs[0];
@@ -600,9 +620,10 @@ inline void SGDMomUpdateEx(const nnvm::NodeAttrs& attrs,
       mom_stype == kRowSparseStorage) {
      NDArray out = outputs[0];
      SGDMomUpdateRspDnsImpl<xpu>(param, ctx, weight, grad.data(), mom, req[0], &out);
-  } else if (weight_stype == kDefaultStorage && grad_stype == kDefaultStorage &&
-      mom_stype == kDefaultStorage) {
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, SGDMomUpdate<xpu>, "SGDMomUpdate");
+  } else {
+    // inputs[2] is a mutable input
+    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
+                         SGDMomUpdate<xpu>, "SGDMomUpdate", {2});
   }
 }
 

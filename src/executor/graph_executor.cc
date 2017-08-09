@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2015 by Contributors
  * \file graph_executor.cc
  * \brief graph executor
  */
@@ -16,6 +34,11 @@
 
 namespace mxnet {
 namespace exec {
+
+GraphExecutor::GraphExecutor() {
+  log_verbose_ = dmlc::GetEnv("MXNET_EXEC_VERBOSE_LOGGING", false);
+}
+
 GraphExecutor::~GraphExecutor() {
   for (auto& n : op_nodes_) {
     if (n.cached_opr != nullptr) {
@@ -67,7 +90,7 @@ void GraphExecutor::PartialForward(bool is_train, int step, int *step_left) {
   *step_left = static_cast<int>(num_forward_nodes_ - sstep - 1);
 }
 
-void GraphExecutor::Backward(const std::vector<NDArray>& head_grads) {
+void GraphExecutor::Backward(const std::vector<NDArray>& head_grads, bool is_train) {
   const auto& idx = graph_.indexed_graph();
   if (num_forward_inputs_ != idx.input_nodes().size()) {
     for (size_t i = 0; i < head_grad_array_.size(); ++i) {
@@ -82,7 +105,7 @@ void GraphExecutor::Backward(const std::vector<NDArray>& head_grads) {
       }
     }
   }
-  RunOps(true, num_forward_nodes_, idx.num_nodes());
+  RunOps(is_train, num_forward_nodes_, idx.num_nodes());
 }
 
 void GraphExecutor::Print(std::ostream &os) const {  // NOLINT(*)
@@ -531,10 +554,10 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
       }
       ++arg_top;
     }
-#if EXECUTOR_DEBUG
-    LOG(INFO) << "\tassign data entry\t" << eid << " as stype "
-              << data_entry_[eid].storage_type() << " (input)";
-#endif
+    if (log_verbose_) {
+      LOG(INFO) << "\tassign data entry\t" << eid << " as stype "
+                << data_entry_[eid].storage_type() << " (input)";
+    }
   }
 
   // expand arg_shapes and arg_dtypes to contain backward inputs
@@ -599,16 +622,16 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
       data_entry_[eid] = aux_state_vec->back();
       aux_state_map_.emplace(arg_name, aux_state_vec->back());
       ++aux_top;
-#if EXECUTOR_DEBUG
-    LOG(INFO) << "\tassign aux entry\t" << eid << "\t as stype " << inferred_stype;
-#endif
+      if (log_verbose_) {
+        LOG(INFO) << "\tassign aux entry\t" << eid << "\t as stype " << inferred_stype;
+      }
     } else {  // in_args
       EmplaceBackZeros(inferred_stype, inferred_shape, in_arg_ctxes[arg_top],
                        inferred_dtype, in_arg_vec);
       data_entry_[eid] = in_arg_vec->back();
-#if EXECUTOR_DEBUG
-      LOG(INFO) << "\tassign data entry\t" << eid << "\tas stype " << inferred_stype;
-#endif
+      if (log_verbose_) {
+        LOG(INFO) << "\tassign data entry\t" << eid << "\tas stype " << inferred_stype;
+      }
       // Get the storage type for grad
       if (kNullOp == grad_req_types[arg_top]) {
         arg_grad_vec->emplace_back();
@@ -619,9 +642,9 @@ void GraphExecutor::InitArguments(const nnvm::IndexedGraph& idx,
         auto grad_stype = (NDArrayStorageType) inferred_stypes[grad_eid];
         EmplaceBackZeros(grad_stype, inferred_shape, arg_grad_ctxes[arg_top],
                          inferred_dtype, arg_grad_vec);
-#if EXECUTOR_DEBUG
-        LOG(INFO) << "\tassign grad entry\t" << grad_eid << "\tas stype " << grad_stype;
-#endif
+        if (log_verbose_) {
+          LOG(INFO) << "\tassign grad entry\t" << grad_eid << "\tas stype " << grad_stype;
+        }
         grad_store_.emplace_back(grad_req_types[arg_top], arg_grad_vec->back());
         arg_grad_map_.emplace(arg_name, arg_grad_vec->back());
       }
@@ -1066,9 +1089,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     } else {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
-#if EXECUTOR_DEBUG
-    LOG(INFO) << "\tinit head_g entry\t" << data_eid << "\tas stype " << stype;
-#endif
+    if (log_verbose_) {
+      LOG(INFO) << "\tinit head_g entry\t" << data_eid << "\tas stype " << stype;
+    }
   }
   // get maximum bytes in each pool
   for (size_t i = 0; i < vshape.size(); ++i) {
@@ -1151,9 +1174,9 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
     } else {
       data_entry_[i] = NDArray(storage_type, vshape[i], data_context[i]);
     }
-#if EXECUTOR_DEBUG
-    LOG(INFO) << "\tinit data entry\t" << i << "\tas stype " << storage_type;
-#endif
+    if (log_verbose_) {
+      LOG(INFO) << "\tinit data entry\t" << i << "\tas stype " << storage_type;
+    }
   }
 }
 
@@ -1174,22 +1197,22 @@ void GraphExecutor::InitCachedOps() {
   // setup the array and requirements.
   for (uint32_t nid = 0; nid < idx.num_nodes(); ++nid) {
     const auto& inode = idx[nid];
-#if EXECUTOR_DEBUG
-    if (inode.source->is_variable()) {
-      LOG(INFO) << "node " << nid << " var";
-    } else {
-      LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
-      auto exec = op_execs[nid];
-      for (const auto& e : inode.inputs) {
-        auto eid = idx.entry_id(e);
-        LOG(INFO) << "\t\tinput " << eid << " stype: " << vstorage_type[eid];
-      }
-      for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
-        uint32_t eid = idx.entry_id(nid, index);
-        LOG(INFO) << "\t\toutput " << eid << " stype: " << vstorage_type[eid];
+    if (log_verbose_) {
+      if (inode.source->is_variable()) {
+        LOG(INFO) << "node " << nid << " var";
+      } else {
+        LOG(INFO) << "node " << nid << " " << inode.source->attrs.op->name;
+        auto exec = op_execs[nid];
+        for (const auto& e : inode.inputs) {
+          auto eid = idx.entry_id(e);
+          LOG(INFO) << "\t\tinput " << eid << " stype: " << vstorage_type[eid];
+        }
+        for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
+          uint32_t eid = idx.entry_id(nid, index);
+          LOG(INFO) << "\t\toutput " << eid << " stype: " << vstorage_type[eid];
+        }
       }
     }
-#endif
     if (inode.source->is_variable()) continue;
 #if MXNET_USE_PROFILER
     op_nodes_[nid].opr_name = inode.source->op()->name.c_str();
@@ -1414,9 +1437,6 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
 #else
       bool profiling = false;
 #endif
-#if EXECUTOR_DEBUG
-      LOG(INFO) << "Run node " << nid << " - " << seg_op.topo_end - 1;
-#endif
       Engine::Get()->Push(seg_op.opr, seg_op.ctx, 0, profiling);
       nid = seg_op.topo_end - 1;
       continue;
@@ -1440,9 +1460,6 @@ void GraphExecutor::RunOps(bool is_train, size_t topo_start, size_t topo_end) {
       bool profiling = engine::Profiler::Get()->GetState() == engine::Profiler::kRunning;
 #else
       bool profiling = false;
-#endif
-#if EXECUTOR_DEBUG
-      LOG(INFO) << "Run node " << nid;
 #endif
       Engine::Get()->Push(opnode.cached_opr, opnode.ctx, 0, profiling);
     } else {

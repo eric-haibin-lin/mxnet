@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import ctypes
 
 from mxnet.test_utils import *
@@ -68,7 +85,7 @@ def test_dot_real(data_dict):
             data_dict['data_origin_name']
         )
         assert os.path.exists(path)
-    
+
     k = data_dict['feature_dim']
     m = data_dict['m']
     density = estimate_density(path, data_dict['feature_dim'])
@@ -77,7 +94,7 @@ def test_dot_real(data_dict):
     if not os.path.exists(mini_path):
         os.system("head -n 2000 %r > %r" % (path, mini_path))
         assert os.path.exists(mini_path)
-    
+
     print "Running Benchmarking on %r data" % data_dict['data_mini']
     for batch_size in data_dict['batch_size']:  # iterator through different batch size of choice
         print "batch_size is %d" % batch_size
@@ -92,7 +109,7 @@ def test_dot_real(data_dict):
         for batch in train_iter:
             data = train_iter.getdata()
             csr_data.append(data)
-            dns_data.append(data.todense())
+            dns_data.append(data.tostype('default'))
             num_batch += 1
         bag_of_data = [csr_data, dns_data]
         num_repeat = 5
@@ -140,10 +157,10 @@ def test_dot_synthetic():
         dns = mx.nd.random_uniform(shape=(k, n)).copyto(ctx)
         data_shape = (m, k)
         csr_data = rand_ndarray(data_shape, 'csr', density)
-        dns_data = csr_data.todense()
+        dns_data = csr_data.tostype('default')
         rhs_dns_np = dns.asnumpy()
         lhs_csr_sp = sp.csr_matrix(dns_data.asnumpy())  # csr in scipy
-        lhs_dns_np = lhs_csr_sp.todense()
+        lhs_dns_np = lhs_csr_sp.tostype('default')
 
         data = [dns_data, csr_data]
         costs = []
@@ -169,10 +186,10 @@ def test_dot_synthetic():
         dns = mx.nd.random_uniform(shape=(m, n)).copyto(ctx)
         data_shape = (m, k)
         csr_data = rand_ndarray(data_shape, 'csr', density)
-        dns_data = csr_data.todense()
+        dns_data = csr_data.tostype('default')
         rhs_dns_np = dns.asnumpy()
         lhs_csr_sp = sp.csr_matrix(dns_data.asnumpy())
-        lhs_dns_np = lhs_csr_sp.todense()
+        lhs_dns_np = lhs_csr_sp.tostype('default')
 
         data = [dns_data, csr_data]
         costs = []

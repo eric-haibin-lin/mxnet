@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file utils.h
  * \brief Basic utilility functions.
  */
@@ -31,19 +49,31 @@ template<typename xpu>
 void CastStorageDispatch(const OpContext& ctx, const NDArray& input, const NDArray& output);
 
 /*
- * \brief get the corresponding tensor blobs from default storage NDArrays.
- *        If any NDArray is of non-default storage, it will be added to `temp_src`
- * \return true if any input storage needs to be casted
+ * \brief setup default-storage tblobs from source NDArrays. If any source NDArray has non-default
+ *        storage, it creates a temp NDArray with default storage and uses the temp tblob. The
+ *        function also records the indices of non-default source NDArrays and the indices of
+ *        their corresponding temporary NDArrays in the temp array.
+ * \param src list of source NDArray
+ * \param blobs list of tblobs to return
+ * \param temp_src list of source NDArrays which requires temporary default storage representation
+ * \param temp_dst list of temporary destination NDArrays for default storage representation
+ * \param idx_map mapping from indices in source NDArrays to indices in temp_dst. When not set,
+          indices are not recorded
+ * \return true if any source NDArray need to cast storage
  */
-inline bool GetDefaultBlobs(const std::vector<NDArray>& src,
-                            std::vector<TBlob> *blobs,
-                            std::vector<NDArray> *temp_src,
-                            std::vector<NDArray> *temp_dst) {
+inline bool SetupDefaultBlobs(const std::vector<NDArray>& src,
+                              std::vector<TBlob> *blobs,
+                              std::vector<NDArray> *temp_src,
+                              std::vector<NDArray> *temp_dst,
+                              std::unordered_map<uint32_t, uint32_t> *idx_map = nullptr) {
   bool require_cast = false;
   for (size_t i = 0; i < src.size(); i++) {
     auto& nd = src[i];
     if (nd.storage_type() != kDefaultStorage) {
-      NDArray temp(nd.shape(), nd.ctx(), false);
+      if (idx_map != nullptr) {
+        (*idx_map)[i] = temp_dst->size();
+      }
+      NDArray temp(nd.shape(), nd.ctx(), false, nd.dtype());
       temp_src->emplace_back(nd);
       temp_dst->emplace_back(temp);
       blobs->emplace_back(temp.data());
@@ -56,10 +86,15 @@ inline bool GetDefaultBlobs(const std::vector<NDArray>& src,
 }
 
 /*
- * \brief cast the NDArrays in `src` to NDArrays in `dst`. This is only used
- *        for storage fallback mechanism in executor.
+ * \brief cast the NDArrays in `src` and store the result in NDArrays in `dst`.
+ *        This is only used for storage fallback in executor.
  *        When storage_fallback is false, and `MXNET_EXEC_STORAGE_FALLBACK` == 0,
  *        storage fallback is disallowed.
+ * \param src list of source NDArray to cast
+ * \param dst list of destionation NDArray which hold the result of cast_storage operation
+ * \param ctx operator context for cast_storage operation
+ * \param storage_fallback whether storage_fallback is allowed. When set to false,
+ *        its value depends on `MXNET_EXEC_STORAGE_FALLBACK`.
  */
 template <typename xpu>
 inline void CastNonDefaultStorage(const std::vector<NDArray>& src,
@@ -89,6 +124,7 @@ inline bool ContainsNonDefaultStorage(const StorageTypeVector& vstorage) {
   return false;
 }
 
+// Check if any NDArray in the list has default storage
 inline bool ContainsDefaultStorage(const std::vector<NDArray>& ndarrays) {
   for (const auto &nd : ndarrays) {
     if (nd.storage_type() == kDefaultStorage) {

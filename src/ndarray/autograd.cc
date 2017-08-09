@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2017 by Contributors
  * \file autograd.cc
  * \brief Implementation of AutogradRuntime module.
  */
@@ -23,9 +41,11 @@ using nnvm::NodeEntryMap;
 using exec::GraphExecutor;
 
 #if DMLC_CXX11_THREAD_LOCAL
-thread_local bool AutogradRuntime::is_train_;
+thread_local bool AutogradRuntime::is_train_ = false;
+thread_local bool AutogradRuntime::is_recording_ = false;
 #else
-MX_THREAD_LOCAL bool AutogradRuntime::is_train_;
+MX_THREAD_LOCAL bool AutogradRuntime::is_train_ = false;
+MX_THREAD_LOCAL bool AutogradRuntime::is_recording_ = false;
 #endif
 
 template<typename FVisit>
@@ -149,7 +169,7 @@ AGNodePtr AutogradRuntime::RecordOp(const nnvm::Op* op,
 
 void AutogradRuntime::ComputeGradient(const std::vector<NDArray>& outputs,
                                       const std::vector<NDArray>& ograds,
-                                      bool retain_graph) {
+                                      bool retain_graph, bool is_train) {
   static auto& fmutate_inputs = nnvm::Op::GetAttr<nnvm::FMutateInputs>("FMutateInputs");
   std::vector<AGNodeEntry> heads;
   Symbol sym;
@@ -233,7 +253,7 @@ void AutogradRuntime::ComputeGradient(const std::vector<NDArray>& outputs,
       }
     }
 
-    exec->Backward(head_grads);
+    exec->Backward(head_grads, is_train);
     delete exec;
   }
 

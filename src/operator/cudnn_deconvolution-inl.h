@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2017 by Contributors
  * \file cudnn_deconvolution-inl.h
  * \brief
  * \author Wei Wu, Leonard Lausen
@@ -92,9 +110,8 @@ class CuDNNDeconvolutionOp : public Operator {
     CHECK_EQ(out_data.size(), 1U);
     Stream<gpu> *s = ctx.get_stream<gpu>();
     GetTempSize(ctx);
-    Tensor<gpu, 1, DType> workspace =
-      ctx.requested[deconv::kTempSpace].get_space_typed<gpu, 1, DType>(
-        mshadow::Shape1(forward_workspace_), s);
+    Tensor<gpu, 1, DType> workspace = AllocateTempWorkspace(ctx, forward_workspace_byte_);
+    size_t workspace_size = TensorSizeBytes(workspace);
 
     if (param_.kernel.ndim() == 2) {
       Tensor<gpu, 4, DType> data = in_data[deconv::kData].get<gpu, 4, DType>(s);
@@ -131,7 +148,7 @@ class CuDNNDeconvolutionOp : public Operator {
                  forward_conv_desc_,  // this backward algorithm used for inference
                  back_algo_,
                  workspace.dptr_,
-                 backward_workspace_byte_,
+                 workspace_size,
                  &beta,
                  out_desc_,
                  out.dptr_ + out_offset_ * g));
@@ -145,7 +162,7 @@ class CuDNNDeconvolutionOp : public Operator {
                  forward_conv_desc_,  // this backward algorithm used for inference
                  back_algo_,
                  workspace.dptr_,
-                 backward_workspace_byte_,
+                 workspace_size,
                  &beta,
                  out_desc_,
                  out_ptr + out_offset_ * g));
@@ -222,9 +239,8 @@ class CuDNNDeconvolutionOp : public Operator {
       CHECK_NE(req[deconv::kBias], kWriteInplace);
     }
     CHECK_NE(req[deconv::kData], kWriteInplace);
-    Tensor<gpu, 1, DType> workspace =
-        ctx.requested[deconv::kTempSpace].get_space_typed<gpu, 1, DType>(
-                                 mshadow::Shape1(backward_workspace_), s);
+    Tensor<gpu, 1, DType> workspace = AllocateTempWorkspace(ctx, backward_workspace_byte_);
+    size_t workspace_size = TensorSizeBytes(workspace);
     for (uint32_t g = 0; g < param_.num_group; ++g) {
       typename DataType<DType>::ScaleType alpha = 1.0f;
       typename DataType<DType>::ScaleType bias_beta = 0.0f;
@@ -257,7 +273,7 @@ class CuDNNDeconvolutionOp : public Operator {
           backward_conv_desc_,
           back_algo_w_,
           workspace.dptr_,
-          backward_workspace_byte_,
+          workspace_size,
           &weight_beta,
           filter_desc_,
           gwmat.dptr_ + weight_offset_ * g));
@@ -272,7 +288,7 @@ class CuDNNDeconvolutionOp : public Operator {
           backward_conv_desc_,
           back_algo_w_,
           workspace.dptr_,
-          backward_workspace_byte_,
+          workspace_size,
           &weight_beta,
           filter_desc_,
           gwmat_ptr + weight_offset_ * g));
@@ -288,7 +304,7 @@ class CuDNNDeconvolutionOp : public Operator {
                                            backward_conv_desc_,
                                            algo_,
                                            workspace.dptr_,
-                                           forward_workspace_byte_,
+                                           workspace_size,
                                            &data_beta,
                                            in_desc_,
                                            gdata_ptr + data_offset_ * g));
@@ -664,32 +680,34 @@ class CuDNNDeconvolutionOp : public Operator {
   void GetTempSize(const OpContext& ctx) {
     if (init_temp_size_) return;
     mshadow::Stream<gpu> *s = ctx.get_stream<gpu>();
-    size_t back_size = 0, back_size_w = 0;
+    size_t back_data_algo_workspace_size = 0;
+    size_t back_filter_algo_workspace_size = 0;
+    size_t forward_algo_workspace_size = 0;
     CUDNN_CALL(cudnnGetConvolutionBackwardDataWorkspaceSize(s->dnn_handle_,
                filter_desc_,
                in_desc_,
                forward_conv_desc_,
                out_desc_,
                back_algo_,
-               &back_size));
+               &back_data_algo_workspace_size));
     CUDNN_CALL(cudnnGetConvolutionBackwardFilterWorkspaceSize(s->dnn_handle_,
                out_desc_,
                in_desc_,
                backward_conv_desc_,
                filter_desc_,
                back_algo_w_,
-               &back_size_w));
-    backward_workspace_byte_ = std::max(back_size, back_size_w);
+               &back_filter_algo_workspace_size));
     CUDNN_CALL(cudnnGetConvolutionForwardWorkspaceSize(s->dnn_handle_,
                out_desc_,
                filter_desc_,
                backward_conv_desc_,
                in_desc_,
                algo_,
-               &forward_workspace_byte_));
+               &forward_algo_workspace_size));
 
-    forward_workspace_ = forward_workspace_byte_ / sizeof(DType) + 1;
-    backward_workspace_ = backward_workspace_byte_ / sizeof(DType) + 1;
+    forward_workspace_byte_ = back_data_algo_workspace_size;
+    backward_workspace_byte_ = std::max(forward_algo_workspace_size,
+                                        back_filter_algo_workspace_size);
     init_temp_size_ = true;
   }
 
@@ -704,14 +722,31 @@ class CuDNNDeconvolutionOp : public Operator {
     CastTShapeToIntPtr(param_.dilate, &param_dilate_);
   }
 
+  // Allocates a 1D Tensor of words with size in bytes >= `size_bytes`.
+  // Always allocates at least one word.
+  mshadow::Tensor<gpu, 1, DType> AllocateTempWorkspace(const OpContext &ctx, size_t size_bytes) {
+    mshadow::Stream<gpu> *s = ctx.get_stream<gpu>();
+    size_t size_words = size_bytes / sizeof(DType) + 1;
+    return ctx.requested[deconv::kTempSpace].get_space_typed<gpu, 1, DType>(
+        mshadow::Shape1(size_words), s);
+  }
+
+  // Returns the size in bytes of the 1D Tensor of words.
+  size_t TensorSizeBytes(const mshadow::Tensor<gpu, 1, DType> &tensor) {
+    return tensor.MSize() * sizeof(DType);
+  }
+
   std::vector<int> param_stride_;
   std::vector<int> param_dilate_;
 
   bool init_cudnn_;
   bool init_temp_size_;
-  size_t forward_workspace_;
-  size_t backward_workspace_;
+  // Temp workspace size in bytes needed for Forward() operation.  Note that
+  // in deconvolution, this is handled by the cuDNN backprop-to-data kernel.
   size_t forward_workspace_byte_;
+  // Temp workspace size in bytes needed for Backward() operation.  Note that
+  // in deconvolution, this is handled by the cuDNN forward kernel and the
+  // the cuDNN backprop-to-filter kernel.
   size_t backward_workspace_byte_;
   size_t data_offset_;
   size_t out_offset_;
