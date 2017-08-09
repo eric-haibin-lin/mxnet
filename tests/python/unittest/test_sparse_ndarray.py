@@ -102,7 +102,8 @@ def test_sparse_nd_setitem():
     def check_sparse_nd_setitem(stype, shape, dst):
         x = mx.nd.zeros(shape=shape, stype=stype)
         x[:] = dst
-        dst_nd = mx.nd.array(dst) if isinstance(dst, (np.ndarray, np.generic)) else dst
+        dst_nd = mx.nd.zeros(shape=shape)
+        dst_nd[:] = dst
         assert same(x.asnumpy(), dst_nd.asnumpy())
 
     shape = rand_shape_2d()
@@ -112,6 +113,10 @@ def test_sparse_nd_setitem():
         check_sparse_nd_setitem(stype, shape, rand_ndarray(shape, stype))
         # numpy assignment
         check_sparse_nd_setitem(stype, shape, np.ones(shape))
+        if stype == 'row_sparse':
+            # scalar assignment
+            check_sparse_nd_setitem(stype, shape, 0)
+            check_sparse_nd_setitem(stype, shape, 1)
 
 
 def test_sparse_nd_slice():

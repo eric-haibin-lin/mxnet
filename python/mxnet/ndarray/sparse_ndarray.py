@@ -545,7 +545,7 @@ class RowSparseNDArray(BaseSparseNDArray):
         ----------
         key : slice
             The indexing key.
-        value : NDArray or numpy.ndarray
+        value : scalar, NDArray or numpy.ndarray
             The value to set.
 
         Examples
@@ -568,6 +568,12 @@ class RowSparseNDArray(BaseSparseNDArray):
         array([[ 1.,  1.,  1.],
                [ 1.,  1.,  1.],
                [ 1.,  1.,  1.]], dtype=float32)
+        >>> # assign scalar to RowSparseNDArray
+        >>> x[:] = 7
+        >>> x.asnumpy()
+        array([[ 7.,  7.,  7.],
+               [ 7.,  7.,  7.],
+               [ 7.,  7.,  7.]], dtype=float32)
         """
         if not self.writable:
             raise ValueError('Failed to assign to a readonly RowSparseNDArray')
@@ -580,8 +586,7 @@ class RowSparseNDArray(BaseSparseNDArray):
                 if value.handle is not self.handle:
                     value.copyto(self)
             elif isinstance(value, numeric_types):
-                raise ValueError("Assigning numeric types to RowSparseNDArray " \
-                                 "is not implemented yet.")
+                _internal._set_value(float(value), out=self)
             elif isinstance(value, (np.ndarray, np.generic)):
                 warnings.warn('Assigning non-NDArray object to RowSparseNDArray is not efficient',
                               RuntimeWarning)
