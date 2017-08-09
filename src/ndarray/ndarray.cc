@@ -295,21 +295,9 @@ void SetValueOp(const real_t &rhs, NDArray *out) {
   switch (ret.ctx().dev_mask()) {
     case cpu::kDevMask: {
       Engine::Get()->PushSync([rhs, ret](RunContext ctx) {
-          auto ret_stype = ret.storage_type();
-          mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
-          if (ret_stype == kRowSparseStorage) {
-            NDArray out = ret;
-            // indices
-            nnvm::dim_t nnr = ret.shape()[0];
-            out.CheckAndAlloc({mshadow::Shape1(nnr)});
-            op::PopulateFullIdxRspImpl(s, &out);
-            // data
-            TBlob tmp = out.data();
-            ndarray::Eval<cpu>(rhs, &tmp, ctx);
-          } else {
-            TBlob tmp = ret.data();
-            ndarray::Eval<cpu>(rhs, &tmp, ctx);
-          }
+          CHECK(ret.storage_type() == kDefaultStorage);
+          TBlob tmp = ret.data();
+          ndarray::Eval<cpu>(rhs, &tmp, ctx);
         }, ret.ctx(), {}, {ret.var()},
         FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
       break;
@@ -317,21 +305,8 @@ void SetValueOp(const real_t &rhs, NDArray *out) {
 #if MXNET_USE_CUDA
     case gpu::kDevMask: {
       Engine::Get()->PushSync([rhs, ret](RunContext ctx) {
-          auto ret_stype = ret.storage_type();
-          mshadow::Stream<gpu> *s = ctx.get_stream<gpu>();
-          if (ret_stype == kRowSparseStorage) {
-            NDArray out = ret;
-            // indices
-            nnvm::dim_t nnr = ret.shape()[0];
-            out.CheckAndAlloc({mshadow::Shape1(nnr)});
-            op::PopulateFullIdxRspImpl(s, &out);
-            // data
-            TBlob tmp = out.data();
-            ndarray::Eval<gpu>(rhs, &tmp, ctx);
-          } else {
-            TBlob tmp = ret.data();
-            ndarray::Eval<gpu>(rhs, &tmp, ctx);
-          }
+          TBlob tmp = ret.data();
+          ndarray::Eval<gpu>(rhs, &tmp, ctx);
           // Wait GPU kernel to complete
           ctx.get_stream<gpu>()->Wait();
         }, ret.ctx(), {}, {ret.var()},
