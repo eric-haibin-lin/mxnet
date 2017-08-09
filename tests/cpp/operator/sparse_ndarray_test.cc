@@ -400,7 +400,7 @@ class RowSparseArrayIterator : public ArrayIterator<DType> {
     for (size_t i = 0, n = position_.ndim(); i < n; ++i) {
       position_[i] = 0;
     }
-    dptr_ = array_.data().dptr<DType>();
+    dptr_ = array_.data().template dptr<DType>();
     return dptr_;
   }
 
@@ -434,7 +434,7 @@ class RowSparseArrayIterator : public ArrayIterator<DType> {
 
   TPosition Position() const override {
     TPosition pos = position_;
-    IType *it = array_.aux_data(rowsparse::kIdx).dptr<IType>();
+    IType *it = array_.aux_data(rowsparse::kIdx).template dptr<IType>();
     pos[0] = it[position_[0]];
     return pos;
   }

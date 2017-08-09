@@ -31,10 +31,6 @@
 #include "../elemwise_op_common.h"
 #include "elemwise_unary_op.h"
 
-#ifndef NDEBUG
-#include "../../../tests/cpp/include/test_ndarray_utils.h"
-#endif
-
 namespace mxnet {
 namespace op {
 
@@ -54,24 +50,24 @@ class BinaryScalarOp : public UnaryOp {
   }
 
   /*! \brief Tensor operation against a scalar with a dense result */
-  template<typename xpu, typename OP, typename DType, typename IType>
-  static void LaunchExDenseResultRSP(const nnvm::NodeAttrs &attrs,
+  template<typename OP, typename DType, typename IType>
+  static void LaunchExDenseResultRSP(mshadow::Stream<cpu> *stream,
+                                     const nnvm::NodeAttrs &attrs,
                                      const OpContext &ctx,
                                      const NDArray& input,
                                      const OpReqType req,
                                      const NDArray& output) {
-    mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
     const double alpha = nnvm::get<double>(attrs.parsed);
     CHECK_EQ(output.shape(), input.shape());
     const int64_t row_count = output.shape()[0];
     const int64_t items_per_row = output.shape().Size() / row_count;
     const DType result_for_zero = OP::Map(DType(0), DType(alpha));
-    mshadow::Tensor<xpu, 1, DType> input_data = input.data().FlatTo1D<xpu, DType>(s);
-    mshadow::Tensor<xpu, 1, DType> output_data = output.data().FlatTo1D<xpu, DType>(s);
+    mshadow::Tensor<cpu, 1, DType> input_data = input.data().FlatTo1D<cpu, DType>(stream);
+    mshadow::Tensor<cpu, 1, DType> output_data = output.data().FlatTo1D<cpu, DType>(stream);
     const int64_t sparse_row_count = input.aux_shape(rowsparse::kIdx).Size();
     if (sparse_row_count != row_count) {
-      mshadow::Tensor<xpu, 1, IType> row_indexes = input.aux_data(
-        rowsparse::kIdx).FlatTo1D<xpu, IType>(s);
+      mshadow::Tensor<cpu, 1, IType> row_indexes = input.aux_data(
+        rowsparse::kIdx).FlatTo1D<cpu, IType>(stream);
       int64_t input_iter = 0;
       int64_t output_row = 0;
       IType next_input_row = 0;
@@ -84,8 +80,8 @@ class BinaryScalarOp : public UnaryOp {
         const int64_t dense_block_count = next_input_row - output_row;
         if (dense_block_count > 0) {
           MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-            mxnet_op::Kernel<MapSetToScalar<Req>, xpu>::Launch(
-              s,
+            mxnet_op::Kernel<MapSetToScalar<Req>, cpu>::Launch(
+              stream,
               items_per_row * dense_block_count,
               output_data.dptr_ + items_per_row * output_row,
               result_for_zero);
@@ -106,8 +102,8 @@ class BinaryScalarOp : public UnaryOp {
         const int64_t sparse_block_count = next_non_contiguous_sparse - input_iter + 1;
         if (sparse_block_count > 0) {
           MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-            mxnet_op::Kernel<BMap<OP, Req>, xpu>::Launch(
-              s,
+            mxnet_op::Kernel<BMap<OP, Req>, cpu>::Launch(
+              stream,
               items_per_row * sparse_block_count,
               &output_data.dptr_[items_per_row * output_row],
               &input_data.dptr_[items_per_row * input_iter],
@@ -122,8 +118,8 @@ class BinaryScalarOp : public UnaryOp {
       // All rows exist (eventually we don't have to do complex
       // things to call GPU kernels because we don't need to access row indices)
       MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-        mxnet_op::Kernel<BMap<OP, Req>, xpu>::Launch(
-          s,
+        mxnet_op::Kernel<BMap<OP, Req>, cpu>::Launch(
+          stream,
           items_per_row * row_count,
           output_data.dptr_,
           input_data.dptr_,
@@ -132,34 +128,31 @@ class BinaryScalarOp : public UnaryOp {
     }
   }
 
-    /*! \brief Tensor operation against a scalar with a dense result */
-  template<typename xpu, typename OP, typename DType, typename IType, typename CType>
-  static void LaunchExDenseResultCSR(const nnvm::NodeAttrs &attrs,
+  /*! \brief Tensor operation against a scalar with a dense result */
+  template<typename OP, typename DType, typename IType, typename CType>
+  static void LaunchExDenseResultCSR(mshadow::Stream<cpu> *stream,
+                                     const nnvm::NodeAttrs &attrs,
                                      const OpContext &ctx,
                                      const NDArray& input,
                                      const OpReqType req,
                                      const NDArray& output) {
     CHECK_EQ(output.shape(), input.shape());
 
-    mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
     const double alpha = nnvm::get<double>(attrs.parsed);
-
     const DType dense_fill_val = OP::Map(DType(0), DType(alpha));
-
-    const auto row_count = static_cast<size_t>(input.shape()[0]);
     const TBlob  column_indexes = input.aux_data(csr::kIdx);
     const size_t item_count = column_indexes.Size();
 
-    const DType *in = input.data().dptr<DType>();
-
     // Pre-fill dense with 0-input/output value
-    FillDense<xpu, DType, OP>(s, output.shape().Size(), dense_fill_val,
+    FillDense<cpu, DType, OP>(stream, output.shape().Size(), dense_fill_val,
                               req, output.data().dptr<DType>());
 
-    mshadow::Tensor<xpu, 2, DType> out = AsRowise2D<DType>(s, output.data());
+    mshadow::Tensor<cpu, 2, DType> out = AsRowise2D<DType>(stream, output.data());
     if (item_count) {
+      const DType *in = input.data().dptr<DType>();
       const IType *column_indexes_ptr = column_indexes.dptr<IType>();
 
+      const auto row_count = static_cast<size_t>(input.shape()[0]);
       const TBlob row_starts = input.aux_data(csr::kIndPtr);
       const CType *row_starts_ptr = row_starts.dptr<CType>();
 
@@ -169,40 +162,27 @@ class BinaryScalarOp : public UnaryOp {
         // Split up into blocks of contiguous data and do those together
         const size_t row_item_start_iter = row_starts_ptr[i];
         const size_t input_items_this_row = !last_row
-                                      ? static_cast<size_t>(row_starts_ptr[i + 1])
-                                        - row_item_start_iter
-                                      : item_count - row_item_start_iter;
+                                            ? static_cast<size_t>(row_starts_ptr[i + 1])
+                                              - row_item_start_iter
+                                            : item_count - row_item_start_iter;
         if (input_items_this_row) {
           const IType *this_row_column_indexes = column_indexes_ptr + row_item_start_iter;
           const DType *row_data_start = in + row_item_start_iter;
-          size_t col_iter = 0;
-          while (col_iter < input_items_this_row) {
-            // Fill dense between end of last pass and beginning of this pass
-            const size_t start_input_col = this_row_column_indexes[col_iter];
-            const size_t start_col_iter = col_iter;
-            size_t next_col_iter = start_col_iter + 1;
-            size_t csr_adjacent_count = 0;
-            do {
-              size_t tmp_col = start_input_col;
-              for (; next_col_iter < input_items_this_row; ++next_col_iter) {
-                const size_t next_input_col = this_row_column_indexes[next_col_iter];
-                if (next_input_col != tmp_col + 1) {
-                  break;
-                }
-                tmp_col = next_input_col;
-                ++csr_adjacent_count;
-              }
-            } while (false);
-            const int64_t nr_csr_to_do = csr_adjacent_count + 1;
-            CHECK_GT(nr_csr_to_do, 0);
-            const size_t off = col_iter;
-            MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-              mxnet_op::Kernel<BMap<OP, Req>, xpu>::Launch(s,
-                                                           nr_csr_to_do,
-                                                           out[i].dptr_ + start_input_col,
-                                                           (row_data_start + off), DType(alpha));
-            });
-            col_iter = next_col_iter;
+          DType *output_this_row = out[i].dptr_;
+          // More overhead to use OMP for small loops, so don't
+          if(input_items_this_row > 1000) {
+            #pragma omp parallel for
+            for (CType j = 0; j < input_items_this_row; ++j) {
+              const IType col = this_row_column_indexes[j];
+              const DType val = row_data_start[j];
+              output_this_row[col] = OP::Map(val, DType(alpha));
+            }
+          } else {
+            for (CType j = 0; j < input_items_this_row; ++j) {
+              const IType col = this_row_column_indexes[j];
+              const DType val = row_data_start[j];
+              output_this_row[col] = OP::Map(val, DType(alpha));
+            }
           }
         }
       }
@@ -215,16 +195,16 @@ class BinaryScalarOp : public UnaryOp {
                                   const NDArray &input,
                                   const OpReqType req,
                                   const NDArray output) {
+    mshadow::Stream<xpu> *stream = ctx.get_stream<xpu>();
     CHECK_EQ(output.storage_type(), kDefaultStorage);
     switch (input.storage_type()) {
       case kRowSparseStorage: {
-        LaunchExDenseResultRSP<xpu, OP, DType, IType>(attrs, ctx, input, req, output);
+        LaunchExDenseResultRSP<OP, DType, IType>(stream, attrs, ctx, input, req, output);
         break;
       }
       case kCSRStorage: {
         MSHADOW_IDX_TYPE_SWITCH(input.aux_data(csr::kIndPtr).type_flag_, CType, {
-          LaunchExDenseResultCSR<xpu, OP, DType, IType, CType>(
-            attrs, ctx, input, req, output);
+          LaunchExDenseResultCSR<OP, DType, IType, CType>(stream, attrs, ctx, input, req, output);
         });
         break;
       }

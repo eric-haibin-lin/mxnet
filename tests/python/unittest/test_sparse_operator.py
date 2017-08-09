@@ -1479,11 +1479,10 @@ def test_sparse_elementwise_sum():
 
 
 if __name__ == '__main__':
-  import nose
-  nose.runmodule()
-  # test_sparse_dot()
-  # set_default_context(mx.gpu(0))
-  #manual_test_elemwise()
-  # set_default_context(mx.cpu(0))
-  # manual_test_elemwise()
+  # import nose
+  # nose.runmodule()
+  # test_sparse_elementwise_sum()
+  test_sparse_mathematical_core()
+  # test_sparse_unary_with_numerics()
+  #test_elemwise_binary_ops()
   print("Done")
