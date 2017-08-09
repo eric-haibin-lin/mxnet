@@ -69,7 +69,6 @@ def measure_cost(wait, repeat, f, *args, **kwargs):
     return diff / repeat
 
 def _get_iter(path, data_shape, batch_size):
-    import pdb; pdb.set_trace()
     data_train = mx.io.LibSVMIter(data_libsvm=path,
                                   data_shape=data_shape,
                                   batch_size=batch_size)
