@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 """Tools for testing."""
 # pylint: disable=too-many-lines
 from __future__ import absolute_import, print_function, division
@@ -79,7 +96,6 @@ def random_sample(population, k):
     return population_copy[0:k]
 
 
-
 def _validate_csr_generation_inputs(num_rows, num_cols, density,
                                     distribution="uniform"):
     """Validates inputs for csr generation helper functions
@@ -100,7 +116,7 @@ def _validate_csr_generation_inputs(num_rows, num_cols, density,
                              % (density, num_rows, num_cols))
 
 
-def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
+def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
     """Returns CSRNDArray with uniform distribution
     This generates a csr matrix with totalnnz unique randomly chosen numbers
     from num_rows*num_cols and arranges them in the 2d array in the
@@ -109,10 +125,13 @@ def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1):
     """
     _validate_csr_generation_inputs(num_rows, num_cols, density,
                                     distribution="uniform")
-    return mx.nd.array(sp.rand(num_rows, num_cols, density).toarray())._to_csr()
+    csr = sp.rand(num_rows, num_cols, density, dtype=dtype, format="csr")
+    result = mx.nd.csr_matrix(csr.data, csr.indptr, csr.indices,
+                              (num_rows, num_cols), dtype=dtype)
+    return result
 
 
-def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
+def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
     """Returns CSRNDArray with powerlaw distribution
     with exponentially increasing number of non zeros in each row.
     Not supported for cases where total_nnz < 2*num_rows. This is because
@@ -126,13 +145,13 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
     total_nnz = int(num_rows * num_cols * density)
 
     unused_nnz = total_nnz
-    output_arr = np.zeros((num_rows, num_cols))
+    output_arr = np.zeros((num_rows, num_cols), dtype=dtype)
     # Start with ones on each row so that no row is empty
     for row in range(num_rows):
-        output_arr[row][0] = rnd.uniform(0.001, 1)
+        output_arr[row][0] = 1 + rnd.uniform(0.001, 2)
         unused_nnz = unused_nnz - 1
         if unused_nnz <= 0:
-            return mx.nd.array(output_arr)._to_csr()
+            return mx.nd.array(output_arr).tostype("csr")
 
     # Populate rest of matrix with 2^i items in ith row.
     # if we have used all total nnz return the sparse matrix
@@ -142,28 +161,28 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1):
         col_limit = min(num_cols, col_max)
         # In case col_limit reached assign same value to all elements, which is much faster
         if col_limit == num_cols and unused_nnz > col_limit:
-            output_arr[row] = rnd.uniform(0.001, 1)
+            output_arr[row] = 1 + rnd.uniform(0.001, 2)
             unused_nnz = unused_nnz - col_limit + 1
             if unused_nnz <= 0:
-                return mx.nd.array(output_arr)._to_csr()
+                return mx.nd.array(output_arr).tostype("csr")
             else:
                 continue
         for col_index in range(1, col_limit):
-            output_arr[row][col_index] = rnd.uniform(0.001, 1)
+            output_arr[row][col_index] = 1 + rnd.uniform(0.001, 2)
             unused_nnz = unused_nnz - 1
             if unused_nnz <= 0:
-                return mx.nd.array(output_arr)._to_csr()
+                return mx.nd.array(output_arr).tostype("csr")
         col_max = col_max * 2
 
     if unused_nnz > 0:
-        #return mx.nd.array(sp.random(num_rows, num_cols, density).toarray())._to_csr()
+        #return mx.nd.array(sp.random(num_rows, num_cols, density).toarray()).tostype("csr")
         raise ValueError("not supported for this density: %s"
                          " for this shape (%s,%s)" % (density, num_rows, num_cols))
     else:
-        return mx.nd.array(output_arr)._to_csr()
+        return mx.nd.array(output_arr).tostype("csr")
 
 
-def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
+def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform", dtype=None):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np)
     Parameters
     ----------
@@ -171,6 +190,7 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
     stype: str, valid values: "csr" or "row_sparse"
     density, optional: float, should be between 0 and 1
     distribution, optional: str, valid values: "uniform" or "powerlaw"
+    dtype, optional: numpy.dtype, default value is None
     Returns
     -------
     Result of type CSRNDArray or RowSparseNDArray
@@ -184,7 +204,8 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
     If number of cols is too small and we have already reached column size it will fill up
     all following columns in all followings rows until we reach the required density.
 
-    >>> csr_arr, _ = rand_sparse_ndarray(shape=(5, 16), stype="csr", density=0.50, distribution="powerlaw")
+    >>> csr_arr, _ = rand_sparse_ndarray(shape=(5, 16), stype="csr",
+                                         density=0.50, distribution="powerlaw")
     >>> indptr = csr_arr.indptr.asnumpy()
     >>> indices = csr_arr.indices.asnumpy()
     >>> data = csr_arr.data.asnumpy()
@@ -210,12 +231,12 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform"):
         arr = mx.nd.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
         return arr, (val, indices)
     elif stype == 'csr':
-        assert(len(shape) == 2)
+        assert len(shape) == 2
         if distribution == "uniform":
-            csr = _get_uniform_dataset_csr(shape[0], shape[1], density)
+            csr = _get_uniform_dataset_csr(shape[0], shape[1], density, dtype=dtype)
             return csr, (csr.indptr, csr.indices, csr.data)
         elif distribution == "powerlaw":
-            csr = _get_powerlaw_dataset_csr(shape[0], shape[1], density)
+            csr = _get_powerlaw_dataset_csr(shape[0], shape[1], density, dtype=dtype)
             return csr, (csr.indptr, csr.indices, csr.data)
         else:
             assert(False), "Distribution not supported: %s" % (distribution)
