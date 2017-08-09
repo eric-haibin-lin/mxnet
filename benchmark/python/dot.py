@@ -1,22 +1,40 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import ctypes
 
-from mxnet.test_utils import *
-import scipy.sparse as sp
 import os
 import time
 import argparse
 import subprocess
+import scipy.sparse as sp
 
+from mxnet.test_utils import *
 from mxnet.base import check_call, _LIB
 from util import get_data, estimate_density
 
-parser = argparse.ArgumentParser(description="Benchmark sparse operators",
+PARSER = argparse.ArgumentParser(description="Benchmark sparse operators",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--num-omp-threads', type=int, default=1, help='number of omp threads to set in MXNet')
-args = parser.parse_args()
+PARSER.add_argument('--num-omp-threads', type=int,
+                    default=1, help='number of omp threads to set in MXNet')
+ARGS = PARSER.parse_args()
 
 # some data information
-kdda = {
+KDDA = {
     'data_mini': 'kdda.t.mini',
     'data_name': 'kdda.t',
     'data_origin_name': 'kdda.t.bz2',
@@ -25,11 +43,11 @@ kdda = {
     'm': [1, 8, 32],
     'batch_size': [64, 128],
     'default_index': {'batch_size': 1,
-                       'output_dim': 2},
+                      'output_dim': 2},
     'num_batches': 10
 }
 
-avazu = {
+AVAZU = {
     'data_mini': 'avazu-app.t.mini',
     'data_name': 'avazu-app.t',
     'data_origin_name': 'avazu-app.t.bz2',
@@ -42,7 +60,7 @@ avazu = {
     'num_batches': 10
 }
 
-criteo = {
+CRITEO = {
     'data_mini': 'criteo.t.mini',
     'data_name': 'criteo.t',
     'data_origin_name': 'criteo.t.bz2',
@@ -56,17 +74,18 @@ criteo = {
 }
 
 
-def measure_cost(wait, repeat, f, *args, **kwargs):
+def measure_cost(repeat, func_name, *args, **kwargs):
+    """Measure time cost of running a function
+    """
+    mx.nd.waitall()
     start = time.time()
-    if wait:
-        for i in range(repeat):
-            (f(*args, **kwargs)).wait_to_read()
-    else:
-        for i in range(repeat):
-            f(*args, **kwargs)
+    for _ in range(repeat):
+        func_name(*args, **kwargs)
+    mx.nd.waitall()
     end = time.time()
     diff = end - start
     return diff / repeat
+
 
 def _get_iter(path, data_shape, batch_size):
     data_train = mx.io.LibSVMIter(data_libsvm=path,
@@ -75,22 +94,28 @@ def _get_iter(path, data_shape, batch_size):
     data_iter = iter(data_train)
     return data_iter
 
+
 def _line_count(path):
     return int(subprocess.check_output('wc -l {}'.format(path), shell=True).split()[0])
 
 
-def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,  output_dim, density, batch_size, num_batches=3, num_repeat=5):
+def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
+                          output_dim, density, batch_size, num_batches=3, num_repeat=5):
 
     def create_mini_path(mini_path, path, num_batches):
+        """Create mini path for sparse"""
         if not os.path.exists(mini_path):
             last = _line_count(path) - num_batches * batch_size
             last = last if last >= 1 else 1
             start = int(rnd.uniform(1, last))
-            os.system("sed -n '%d,%dp' %r > %r" %(start,start + num_batches * batch_size, path, mini_path))
+            os.system("sed -n '%d,%dp' %r > %r"
+                      %(start, start + num_batches * batch_size, path, mini_path))
             assert os.path.exists(mini_path)
 
 
     def run_benchmark(mini_path):
+        """Run benchmarks
+        """
         #print("Running Benchmarking on %r data") % mini_file_name
         #print("batch_size is %d") % batch_size
         data_shape = (feature_dim, )
@@ -102,15 +127,15 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,  out
         total_cost["sparse"] = 0.
         total_cost["dense"] = 0.
         weight.wait_to_read()
-        for batch in train_iter:
+        for _ in train_iter:
             csr_data = train_iter.getdata()
             dns_data = csr_data.todense()
             csr_data.wait_to_read()
             dns_data.wait_to_read()
-            cost_sparse = measure_cost(True, num_repeat, mx.nd.dot, csr_data, weight)
-            cost_dense = measure_cost(True, num_repeat, mx.nd.dot, dns_data, weight)
-            total_cost["sparse"] +=  cost_sparse
-            total_cost["dense"]  += cost_dense
+            cost_sparse = measure_cost(num_repeat, mx.nd.dot, csr_data, weight)
+            cost_dense = measure_cost(num_repeat, mx.nd.dot, dns_data, weight)
+            total_cost["sparse"] += cost_sparse
+            total_cost["dense"] += cost_dense
             count = count + 1
         average_cost["sparse"] = total_cost["sparse"] / count
         average_cost["dense"] = total_cost["dense"] / count
@@ -118,11 +143,13 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,  out
 
 
     def print_result(average_cost_sparse, average_cost_dense):
+        """Print result of comparison between sparse and dense
+        """
         ratio = average_cost_dense / average_cost_sparse
         print('density(%)\tn\tm\tk\tt_dense/t_sparse\tt_dense\tt_sparse')
         fmt = "%0.4f\t\t%d\t%d\t%d\t%0.2f\t\t\t%0.4f\t%0.6f"
         print(fmt % (density * 100, batch_size, output_dim, feature_dim,
-              ratio, average_cost_dense, average_cost_sparse))
+                     ratio, average_cost_dense, average_cost_sparse))
 
     mini_path = os.path.join(data_dir, mini_file_name)
     path = os.path.join(data_dir, file_name)
@@ -130,7 +157,9 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,  out
     average_cost_sparse, average_cost_dense = run_benchmark(mini_path)
     print_result(average_cost_sparse, average_cost_dense)
 
+
 def test_dot_real(data_dict):
+    """Dot operator testing with real datasets"""
     data_dir = os.path.join(os.getcwd(), 'data')
 
     path = os.path.join(data_dir, data_dict['data_name'])
@@ -176,8 +205,8 @@ def test_dot_synthetic():
         # Create matrix instances
         lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den)
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den)
-        lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.todense()
-        rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.todense()
+        lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
+        rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
         # One warm up run, verify correctness
         out = mx.nd.dot(lhs_nd, rhs_dns, trans_lhs)
         out_expected = mx.nd.dot(lhs_dns, rhs_dns, trans_lhs)
@@ -185,8 +214,8 @@ def test_dot_synthetic():
         # Start benchmarking
         lhs_nd.wait_to_read()
         rhs_nd.wait_to_read()
-        sparse_cost = measure_cost(True, repeat, mx.nd.dot, lhs_nd, rhs_nd, trans_lhs)
-        dense_cost = measure_cost(True, repeat, mx.nd.dot, lhs_dns, rhs_dns, trans_lhs)
+        sparse_cost = measure_cost(repeat, mx.nd.dot, lhs_nd, rhs_nd, trans_lhs)
+        dense_cost = measure_cost(repeat, mx.nd.dot, lhs_dns, rhs_dns, trans_lhs)
         speedup = dense_cost / sparse_cost
         # Print results
         m = lhs_shape[0]
@@ -212,8 +241,8 @@ def test_dot_synthetic():
         # One warm up run
         out = sp.spmatrix.dot(lhs_csr_sp, rhs_dns_np)
         # Start benchmarking
-        sparse_cost = measure_cost(False, repeat, sp.spmatrix.dot, lhs_csr_sp, rhs_dns_np)
-        dense_cost = measure_cost(False, repeat, np.dot, lhs_dns_np, rhs_dns_np)
+        sparse_cost = measure_cost(repeat, sp.spmatrix.dot, lhs_csr_sp, rhs_dns_np)
+        dense_cost = measure_cost(repeat, np.dot, lhs_dns_np, rhs_dns_np)
         speedup = dense_cost / sparse_cost
         # Print results
         m = lhs_shape[0]
@@ -222,7 +251,7 @@ def test_dot_synthetic():
         results = '{:15.1f} {:15.1f} {:>10} {:8d} {:8d} {:8d} {:13.2f} {:13.2f} {:8.2f}'.format(lhs_den*100, rhs_den*100, str(ctx), m, k, n, sparse_cost*1000, dense_cost*1000, speedup)
         print(results)
 
-    check_call(_LIB.MXSetNumOMPThreads(ctypes.c_int(args.num_omp_threads)))
+    check_call(_LIB.MXSetNumOMPThreads(ctypes.c_int(module_args.num_omp_threads)))
     # TODO(haibin): make these runtime options
     # params
     # m, n, k        rows and columns of lhs and rhs matrix
@@ -242,7 +271,7 @@ def test_dot_synthetic():
     density_lhs = [0.64, 0.32, 0.16, 0.08, 0.04, 0.02, 0.01]
     density_rhs = [0.64, 0.32, 0.16, 0.08, 0.04, 0.02, 0.01]
     num_repeat = 10
-    context = mx.cpu()
+    context = mx.gpu()
     mx_benchmarks = ["csr_dns", "csr.T_dns", "csr_rsp"]
     sp_benchmarks = ["csr_dns", "csr.T_dns"]
 
@@ -313,9 +342,9 @@ def test_dot_synthetic():
 if __name__ == "__main__":
     #test_dot_synthetic()
     start_time = time.time()
-    #test_dot_real(kdda)
-    #test_dot_real(avazu)
-    test_dot_real(criteo)
+    #test_dot_real(KDDA)
+    #test_dot_real(AVAZU)
+    test_dot_real(CRITEO)
     end_time = time.time() - start_time
     print("total time is %f") % end_time
-    #test_dot_real(kdda)
+    #test_dot_real(KDDA)
