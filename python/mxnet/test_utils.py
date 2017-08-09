@@ -124,8 +124,8 @@ def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
     col_index = random_number_generated - row_index * num_cols
     """
     _validate_csr_generation_inputs(num_rows, num_cols, density,
-                                    distribution="uniform", dtype=dtype)
-    csr = sp.rand(num_rows, num_cols, density, dtype=dtype)
+                                    distribution="uniform")
+    csr = sp.rand(num_rows, num_cols, density, dtype=dtype, format="csr")
     result = mx.nd.csr_matrix(csr.data, csr.indptr, csr.indices,
                               (num_rows, num_cols), dtype=dtype)
     return result
@@ -148,10 +148,10 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
     output_arr = np.zeros((num_rows, num_cols), dtype=dtype)
     # Start with ones on each row so that no row is empty
     for row in range(num_rows):
-        output_arr[row][0] = rnd.uniform(0.001, 2)
+        output_arr[row][0] = 1 + rnd.uniform(0.001, 2)
         unused_nnz = unused_nnz - 1
         if unused_nnz <= 0:
-            return mx.nd.array(output_arr)._to_csr()
+            return mx.nd.array(output_arr).tostype("csr")
 
     # Populate rest of matrix with 2^i items in ith row.
     # if we have used all total nnz return the sparse matrix
@@ -161,25 +161,25 @@ def _get_powerlaw_dataset_csr(num_rows, num_cols, density=0.1, dtype=None):
         col_limit = min(num_cols, col_max)
         # In case col_limit reached assign same value to all elements, which is much faster
         if col_limit == num_cols and unused_nnz > col_limit:
-            output_arr[row] = rnd.uniform(0.001, 2)
+            output_arr[row] = 1 + rnd.uniform(0.001, 2)
             unused_nnz = unused_nnz - col_limit + 1
             if unused_nnz <= 0:
-                return mx.nd.array(output_arr)._to_csr()
+                return mx.nd.array(output_arr).tostype("csr")
             else:
                 continue
         for col_index in range(1, col_limit):
-            output_arr[row][col_index] = rnd.uniform(0.001, 2)
+            output_arr[row][col_index] = 1 + rnd.uniform(0.001, 2)
             unused_nnz = unused_nnz - 1
             if unused_nnz <= 0:
-                return mx.nd.array(output_arr)._to_csr()
+                return mx.nd.array(output_arr).tostype("csr")
         col_max = col_max * 2
 
     if unused_nnz > 0:
-        #return mx.nd.array(sp.random(num_rows, num_cols, density).toarray())._to_csr()
+        #return mx.nd.array(sp.random(num_rows, num_cols, density).toarray()).tostype("csr")
         raise ValueError("not supported for this density: %s"
                          " for this shape (%s,%s)" % (density, num_rows, num_cols))
     else:
-        return mx.nd.array(output_arr)._to_csr()
+        return mx.nd.array(output_arr).tostype("csr")
 
 
 def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform", dtype=None):
@@ -204,7 +204,8 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform", dtyp
     If number of cols is too small and we have already reached column size it will fill up
     all following columns in all followings rows until we reach the required density.
 
-    >>> csr_arr, _ = rand_sparse_ndarray(shape=(5, 16), stype="csr", density=0.50, distribution="powerlaw")
+    >>> csr_arr, _ = rand_sparse_ndarray(shape=(5, 16), stype="csr",
+                                         density=0.50, distribution="powerlaw")
     >>> indptr = csr_arr.indptr.asnumpy()
     >>> indices = csr_arr.indices.asnumpy()
     >>> data = csr_arr.data.asnumpy()
@@ -230,7 +231,7 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform", dtyp
         arr = mx.nd.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
         return arr, (val, indices)
     elif stype == 'csr':
-        assert(len(shape) == 2)
+        assert len(shape) == 2
         if distribution == "uniform":
             csr = _get_uniform_dataset_csr(shape[0], shape[1], density, dtype=dtype)
             return csr, (csr.indptr, csr.indices, csr.data)
