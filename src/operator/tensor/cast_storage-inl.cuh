@@ -30,7 +30,6 @@
 #include <nnvm/tuple.h>
 
 #include <cub/cub.cuh>
-#include "cast_storage-inl.h"
 
 namespace mxnet {
 namespace op {

@@ -401,6 +401,15 @@ void FCompExFallback(const nnvm::NodeAttrs& attrs,
           << ") == " << param << ".shape[0] (" << rsp.shape()[0] << ").";          \
   }
 
+template<typename xpu, int ndim, typename DType>
+inline mshadow::Tensor<xpu, ndim, DType> AllocateTempDataForSparseHandling(
+  const OpContext& op_ctx, const mshadow::Shape<ndim>& shape) {
+  Resource rsc = ResourceManager::Get()->Request(op_ctx.run_ctx.ctx,
+                                                 ResourceRequest(ResourceRequest::kTempSpace));
+  mshadow::Stream<xpu> *stream = op_ctx.run_ctx.get_stream<xpu>();
+  return rsc.get_space_typed<xpu, ndim, DType>(shape, stream);
+}
+
 
 }  // namespace op
 }  // namespace mxnet
