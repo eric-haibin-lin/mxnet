@@ -108,12 +108,12 @@ class ElemwiseBinaryOp : public OpBase {
     using namespace mshadow::expr;
     const int index_out_min = std::min(idx_l, idx_r);
     if (index_out_min > iter_out) {
-      const size_t size = out[iter_out].shape_.Size();
+      const size_t size = (*out)[iter_out].shape_.Size();
       const DType zero_input_val = OP::Map(DType(0), DType(0));
       #pragma omp parallel for
       for (int i = static_cast<int>(iter_out); i < index_out_min; ++i) {
         MXNET_ASSIGN_REQ_SWITCH(req, Req, {
-          Kernel<MapSetToScalar<Req>, xpu>::Launch(s, size, out[i].dptr_, zero_input_val);
+          Kernel<MapSetToScalar<Req>, xpu>::Launch(s, size, (*out)[i].dptr_, zero_input_val);
         });
       }
     }
@@ -430,13 +430,16 @@ class ElemwiseBinaryOp : public OpBase {
       }
     }
 
-    CHECK_LT(kTempSpace, ctx.requested.size());
-
     mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
 
     const size_t alloc_size = nr_cols * sizeof(IType) + 2 * nr_cols * sizeof(DType);
+
+//    CHECK_LT(kTempSpace, ctx.requested.size());
+//    mshadow::Tensor<xpu, 1, uint8_t> workspace =
+//      ctx.requested[kTempSpace].get_space_typed<xpu, 1, uint8_t>(mshadow::Shape1(alloc_size), s);
+
     mshadow::Tensor<xpu, 1, uint8_t> workspace =
-      ctx.requested[kTempSpace].get_space_typed<xpu, 1, uint8_t>(mshadow::Shape1(alloc_size), s);
+      AllocateTempDataForSparseHandling<xpu, 1, uint8_t>(ctx, mshadow::Shape1(alloc_size));
 
     // Allocate temp space and partition into three tensors
     mshadow::Tensor<xpu, 1, IType> next(reinterpret_cast<IType *>(workspace.dptr_),
@@ -586,6 +589,9 @@ class ElemwiseBinaryOp : public OpBase {
       } else {
         allowed = !common::ContainsNonDefaultStorage(inputs);
       }
+      if (allowed) {
+        allowed = !common::ContainsStorage(inputs, kCSRStorage);
+      }
       // If any input or output is dense, fallback to FCompute
       if (allowed) {
         MSHADOW_IDX_TYPE_SWITCH(sparse->aux_type(rowsparse::kIdx), IType, {
@@ -613,9 +619,6 @@ class ElemwiseBinaryOp : public OpBase {
     Stream<xpu> *s = ctx.get_stream<xpu>();
     const int size = static_cast<int>((outputs[0].Size() + DataType<DType>::kLanes - 1)
                                 / DataType<DType>::kLanes);
-//    DCHECK_EQ(size, outputs[0].Size());
-//    DCHECK_EQ(size, outputs[1].Size());
-//    DCHECK_EQ(size, inputs[0].Size());
     const DType *ograd_dptr = inputs[0].dptr<DType>();
     if (std::is_same<LOP, mshadow_op::identity>::value && req[0] == kWriteInplace) {
       CHECK_EQ(ograd_dptr, outputs[0].dptr<DType>());

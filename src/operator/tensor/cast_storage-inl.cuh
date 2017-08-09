@@ -30,6 +30,7 @@
 #include <nnvm/tuple.h>
 
 #include <cub/cub.cuh>
+#include "cast_storage-inl.h"
 
 namespace mxnet {
 namespace op {
@@ -207,15 +208,6 @@ struct FillRspValsKernel {
   }
 };
 
-template<typename xpu, int ndim, typename DType>
-inline mshadow::Tensor<xpu, ndim, DType> AllocateTempDataForCast(const OpContext& op_ctx,
-                                                                 const mshadow::Shape<ndim>& shape) {
-  Resource rsc = ResourceManager::Get()->Request(op_ctx.run_ctx.ctx,
-                                                 ResourceRequest(ResourceRequest::kTempSpace));
-  mshadow::Stream<xpu> *stream = op_ctx.run_ctx.get_stream<xpu>();
-  return rsc.get_space_typed<xpu, ndim, DType>(shape, stream);
-};
-
 /*!
  * \brief GPU implementation of casting a dns tensor to rsp type.
  */
@@ -254,7 +246,7 @@ inline void CastStorageDnsRspImpl(const OpContext& ctx,
                                     mshadow::Stream<gpu>::GetStream(s));
 
       // Allocate temp storage for marking non-zero rows and for cub's prefix sum
-      auto workspace = AllocateTempDataForCast<gpu, 1, char>(ctx, Shape1(num_rows*sizeof(RType)
+      auto workspace = AllocateTempDataForSparseHandling<gpu, 1, char>(ctx, Shape1(num_rows*sizeof(RType)
                                                                           + temp_storage_bytes));
       row_flg = reinterpret_cast<RType*>(workspace.dptr_);
       d_temp_storage = workspace.dptr_ + num_rows*sizeof(RType);
@@ -661,7 +653,7 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
                                       mshadow::Stream<gpu>::GetStream(s));
 
         // Allocate temporary storage
-        auto workspace = AllocateTempDataForCast<gpu, 1, char>(ctx, Shape1(temp_storage_bytes));
+        auto workspace = AllocateTempDataForSparseHandling<gpu, 1, char>(ctx, Shape1(temp_storage_bytes));
 
         d_temp_storage = workspace.dptr_;
 

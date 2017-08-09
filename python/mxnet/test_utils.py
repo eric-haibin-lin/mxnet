@@ -137,7 +137,7 @@ def assign_each2(input1, input2, function):
         return np.array(input)
 
 # TODO(haibin) also include types in arguments
-def rand_sparse_ndarray(shape, stype, density=None, dtype=Mone,data_init=None,
+def rand_sparse_ndarray(shape, stype, density=None, dtype=None, data_init=None,
                         rsp_indices=None, modifier_func=None,
                         shuffle_csr_indices=True):
 
@@ -165,7 +165,7 @@ def rand_sparse_ndarray(shape, stype, density=None, dtype=Mone,data_init=None,
             result = mx.nd.zeros(shape, stype='row_sparse', dtype=dtype)
             return result, (np.array([], dtype=dtype), np.array([], dtype='int64'))
         # generate random values
-        val = rnd.rand(indices.shape[0], *shape[1:])
+        val = rnd.rand(indices.shape[0], *shape[1:]).astype(dtype)
 
         # Allow caller to override or adjust random values
         if data_init is not None:
@@ -187,9 +187,17 @@ def rand_sparse_ndarray(shape, stype, density=None, dtype=Mone,data_init=None,
     else:
         assert(False), "unknown storage type"
 
+def rand_ndarray(shape, stype, density=None, dtype=None, modifier_func=None):
+    if stype == 'default':
+        arr = mx.nd.array(random_arrays(shape), dtype=dtype)
+    else:
+        arr, _ = rand_sparse_ndarray(shape, stype, density=density,
+                                     modifier_func=modifier_func, dtype=dtype)
+    return arr
+
 
 def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
-                        modifier_func=None, density=.5):
+                        dtype=None, modifier_func=None, density=.5):
     if stype == 'row_sparse':
         if rsp_indices is not None:
             arr_indices = np.asarray(rsp_indices)
@@ -200,19 +208,22 @@ def create_sparse_array(shape, stype, data_init=None, rsp_indices=None,
                                                density=density,
                                                data_init=data_init,
                                                rsp_indices=arr_indices,
+                                               dtype=dtype,
                                                modifier_func=modifier_func)
     elif stype == 'csr':
         arr_data, (_, _, _) = rand_sparse_ndarray(shape,
                                                   stype,
                                                   density=density,
                                                   data_init=data_init,
+                                                  dtype=dtype,
                                                   modifier_func=modifier_func)
     else:
         raise str("Unknown storage type: " + stype)
     return arr_data
 
+
 def create_sparse_array_zd(shape, stype, density, data_init=None,
-                           rsp_indices=None, modifier_func=None):
+                           rsp_indices=None, dtype=None,modifier_func=None):
     """Create sparse array, using only rsp_indices to determine density"""
     if stype == 'row_sparse':
         density = 0.0
@@ -221,17 +232,9 @@ def create_sparse_array_zd(shape, stype, density, data_init=None,
     return create_sparse_array(shape, stype,
                                data_init=data_init,
                                rsp_indices=rsp_indices,
+                               dtype=dtype,
                                modifier_func=modifier_func,
                                density=density)
-
-def rand_ndarray(shape, stype, density=None, , dtype=None, modifier_func=None):
-    if stype == 'default':
-        arr = mx.nd.array(random_arrays(shape), dtype=dtype)
-    else:
-        arr, _ = rand_sparse_ndarray(shape, stype, density=density,
-                                     modifier_func=modifier_func, dtype=dtype)
-    return arr
-
 
 def rand_shape_2d(dim0=10, dim1=10):
     return rnd.randint(1, dim0 + 1), rnd.randint(1, dim1 + 1)

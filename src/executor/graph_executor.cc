@@ -31,7 +31,6 @@
 #include "./graph_executor.h"
 #include "../engine/profiler.h"
 #include "../common/utils.h"
-#include "../operator/operator_common.h"
 
 namespace mxnet {
 namespace exec {
@@ -557,7 +556,7 @@ void GraphExecutor::Init(nnvm::Symbol symbol,
     }
     if (log_verbose_) {
       LOG(INFO) << "\tassign data entry\t" << eid << " as stype "
-                << op::stype_string(data_entry_[eid].storage_type()) << " (input)";
+                << common::stype_string(data_entry_[eid].storage_type()) << " (input)";
     }
   }
 
@@ -1091,7 +1090,8 @@ void GraphExecutor::InitDataEntryMemory(std::vector<NDArray>* shared_pool) {
       data_entry_[data_eid] = NDArray(vshape[eid], data_context[eid], false, vdtype[eid]);
     }
     if (log_verbose_) {
-      LOG(INFO) << "\tinit head_g entry\t" << data_eid << "\tas stype " << op::stype_string(stype);
+      LOG(INFO) << "\tinit head_g entry\t" << data_eid << "\tas stype "
+                << common::stype_string(stype);
     }
   }
   // get maximum bytes in each pool
@@ -1205,11 +1205,13 @@ void GraphExecutor::InitCachedOps() {
         auto exec = op_execs[nid];
         for (const auto& e : inode.inputs) {
           auto eid = idx.entry_id(e);
-          LOG(INFO) << "\t\tinput " << eid << " stype: " << op::stype_string(vstorage_type[eid]);
+          LOG(INFO) << "\t\tinput " << eid << " stype: "
+                    << common::stype_string(vstorage_type[eid]);
         }
         for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
           uint32_t eid = idx.entry_id(nid, index);
-          LOG(INFO) << "\t\toutput " << eid << " stype: " << op::stype_string(vstorage_type[eid]);
+          LOG(INFO) << "\t\toutput " << eid << " stype: "
+                    << common::stype_string(vstorage_type[eid]);
         }
       }
     }

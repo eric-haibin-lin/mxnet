@@ -691,7 +691,7 @@ def test_sparse_mathematical_core():
                               input_grad_stype=None, force_overlap=False,
                               density=.5, ograd_density=.5):
 
-    # negative
+    # # negative
     check_sparse_mathematical_core("negative", stype,
                                    lambda x: mx.sym.negative(x),
                                    lambda x: np.negative(x),
@@ -1183,7 +1183,8 @@ def test_sparse_dot():
                                 grad_req={'lhs': 'null', 'rhs': 'write'},
                                 rtol=1e-3, atol=1e-4)
 
-    lhs_shape = rand_shape_2d(50, 200)
+    #lhs_shape = rand_shape_2d(50, 200)
+    lhs_shape = (3, 5)
     test_dot_csr(lhs_shape, (lhs_shape[1], 1), 'default', False) # test gpu SpMV
     test_dot_csr(lhs_shape, (lhs_shape[0], 1), 'default', True ) # (vector kernel)
     test_dot_csr(lhs_shape, (lhs_shape[1], rnd.randint(5, 10)), 'default', False) # test gpu SpMM
@@ -1470,18 +1471,19 @@ def test_sparse_elementwise_sum():
         shape = tuple(np.random.randint(5, 10, size=dim))
         check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
 
-def manual_test_elemwise():
-  test_sparse_elementwise_sum()
-  test_sparse_mathematical_core()
-  test_sparse_unary_with_numerics()
-  test_elemwise_binary_ops()
+# def manual_test_elemwise():
+#   test_sparse_elementwise_sum()
+#   test_sparse_mathematical_core()
+#   test_sparse_unary_with_numerics()
+#   test_elemwise_binary_ops()
 
 
 if __name__ == '__main__':
   import nose
   nose.runmodule()
-  #set_default_context(mx.gpu(0))
-  # manual_test_elemwise()
+  # test_sparse_dot()
+  # set_default_context(mx.gpu(0))
+  #manual_test_elemwise()
   # set_default_context(mx.cpu(0))
   # manual_test_elemwise()
   print("Done")

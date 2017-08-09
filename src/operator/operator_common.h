@@ -111,19 +111,6 @@ inline std::string shape_string(const TShape& x) {
   return os.str();
 }
 
-/*! \brief get string representation of shape vector */
-template<typename VType>
-inline std::string vector_string(const std::vector<VType>& x) {
-  std::ostringstream os;
-  for (size_t i = 0, n = x.size(); i < n; ++i) {
-    if (i) {
-      os << ", ";
-    }
-    os << x[i];
-  }
-  return os.str();
-}
-
 /*! \brief get string representation of shape */
 inline std::string type_string(const int& x) {
   switch (x) {
@@ -137,19 +124,6 @@ inline std::string type_string(const int& x) {
       return "uint8";
     case mshadow::kInt32:
       return "int32";
-  }
-  return "unknown";
-}
-
-/*! \brief get string representation of storage_type */
-inline std::string stype_string(const int& x) {
-  switch (x) {
-    case kDefaultStorage:
-      return "default";
-    case kCSRStorage:
-      return "csr";
-    case kRowSparseStorage:
-      return "row_sparse";
   }
   return "unknown";
 }
@@ -180,29 +154,6 @@ inline bool shape_assign(TShape *y, const TShape& x) {
 }
 
 /*!
- * \brief Assign x to y. Checks for compatiblity when y is not empty.
- *  Allow missing dim in both x and y (as 0).
- * \param y target shape.
- * \param x source shape.
- * \return whether x and y are compatible.
- */
-inline bool shape_vector_assign(std::vector<TShape> *y, const std::vector<TShape>& x) {
-  if (y->size() == 0) {
-    *y = x;
-    return true;
-  } else if (y->size() != x.size()) {
-    return x.size() == 0;
-  } else {
-    for (size_t i = 0; i < y->size(); ++i) {
-      if (!shape_assign(&(*y)[i], x[i])) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
-/*!
  * \brief Assign x to y. Checks for compatiblity when y is not -1.
  * \param y target type.
  * \param x source type.
@@ -217,30 +168,6 @@ inline bool type_assign(int *y, const int& x) {
   }
   return true;
 }
-
-/*!
- * \brief Assign x to y. Checks for compatiblity when y is not empty.
- *  Allow missing dim in both x and y (as 0).
- * \param y target shape.
- * \param x source shape.
- * \return whether x and y are compatible.
- */
-inline bool type_vector_assign(std::vector<int> *y, const std::vector<int>& x) {
-  if (y->size() == 0) {
-    *y = x;
-    return true;
-  } else if (y->size() != x.size()) {
-    return x.size() == 0;
-  } else {
-    for (size_t i = 0; i < y->size(); ++i) {
-      if (!type_assign(&(*y)[i], x[i])) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
 
 /*!
  * \brief macro assign shape to out if out is unknown otherwise check consistency
@@ -289,8 +216,8 @@ inline bool type_vector_assign(std::vector<int> *y, const std::vector<int>& x) {
     if (!type_assign(&(type_array)[index], type)) {                         \
       std::ostringstream os;                                                \
       os << "Storage type inconsistent, Provided="                          \
-         << stype_string((type_array)[index]) << ','                        \
-         << " inferred storage type=" << stype_string(type);                \
+         << common::stype_string((type_array)[index]) << ','                \
+         << " inferred storage type=" << common::stype_string(type);        \
       throw ::mxnet::op::InferTypeError(os.str(), index);                   \
     }                                                                       \
   }

@@ -354,11 +354,7 @@ Example::
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_square"});
 
-MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_square, unary_bwd<mshadow_op::square_grad>)
-.set_attr<FResourceRequest>("FResourceRequest",
-                            [](const NodeAttrs& attrs) {
-                              return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
-                            });
+MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_square, unary_bwd<mshadow_op::square_grad>);
 
 // sqrt
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sqrt, cpu, mshadow_op::square_root)
