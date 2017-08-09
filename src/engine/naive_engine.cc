@@ -90,6 +90,7 @@ class NaiveEngine final : public Engine {
     Profiler *profiler = Profiler::Get();
     NaiveOpr *opr = op->Cast<NaiveOpr>();
     opr->profiling = profiling && (profiler->GetMode() == Profiler::kOnlySymbolic);
+    std::cout << "OP push: " << opr->opr_name << std::endl << std::flush;
     this->PushAsync([&](RunContext ctx, CallbackOnComplete on_complete) {
 #if MXNET_USE_PROFILER
         if (opr->profiling) {
@@ -102,6 +103,7 @@ class NaiveEngine final : public Engine {
           SetOprStart(opr->opr_stat);
         }
         opr->fn(ctx, on_complete);
+        std::cout << "OP complete: " << opr->opr_name << std::endl << std::flush;
         if (opr->profiling) {
           SetOprEnd(opr->opr_stat);
         }
