@@ -1,3 +1,22 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
  *  Copyright (c) 2016 by Contributors
  * \file c_api_ndarray.cc
@@ -668,9 +687,39 @@ int MXInvokeCachedOp(CachedOpHandle handle,
   API_END();
 }
 
+int MXInvokeCachedOpEx(CachedOpHandle handle,
+                       int num_inputs,
+                       NDArrayHandle *inputs,
+                       int *num_outputs,
+                       NDArrayHandle **outputs,
+                       const int **out_stypes) {  // outputs storage types
+  API_BEGIN();
+  MXInvokeCachedOp(handle, num_inputs, inputs, num_outputs, outputs);
+  MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
+  NDArray** output_nds = reinterpret_cast<NDArray**>(*outputs);
+  ret->out_types.resize(*num_outputs);
+  for (int i = 0; i < *num_outputs; ++i) {
+    ret->out_types[i] = output_nds[i]->storage_type();
+  }
+  *out_stypes = dmlc::BeginPtr(ret->out_types);
+  API_END();
+}
+
+int MXAutogradIsTraining(bool* curr) {
+  API_BEGIN();
+  *curr = AutogradRuntime::Get()->IsTraining();
+  API_END();
+}
+
 int MXAutogradSetIsTraining(int is_training, int* prev) {
   API_BEGIN();
   *prev = AutogradRuntime::Get()->SetIsTraining(static_cast<bool>(is_training));
+  API_END();
+}
+
+int MXAutogradIsRecording(bool* curr) {
+  API_BEGIN();
+  *curr = AutogradRuntime::Get()->IsRecording();
   API_END();
 }
 

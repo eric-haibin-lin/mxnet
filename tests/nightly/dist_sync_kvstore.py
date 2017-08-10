@@ -1,4 +1,22 @@
 #!/usr/bin/env python
+
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 # pylint: skip-file
 import sys
 sys.path.insert(0, "../../python/")
@@ -26,8 +44,8 @@ def init_kv():
     kv.init(keys, [mx.nd.ones(shape)] * len(keys))
     kv.init('99', mx.nd.ones(big_shape))
     # init kv row_sparse keys
-    kv.init(rsp_keys, [mx.nd.ones(shape)._to_rsp()] * len(rsp_keys))
-    kv.init('100', mx.nd.ones(big_shape)._to_rsp())
+    kv.init(rsp_keys, [mx.nd.ones(shape).tostype('row_sparse')] * len(rsp_keys))
+    kv.init('100', mx.nd.ones(big_shape).tostype('row_sparse'))
     # worker info
     my_rank = kv.rank
     nworker = kv.num_workers
@@ -60,7 +78,7 @@ def test_sync_push_pull():
         v[my_row] = my_rank + 1
         # push
         for i in range(nrepeat):
-            kv.push('9', v._to_rsp())
+            kv.push('9', v.tostype('row_sparse'))
         # select a random subset of rows this worker is interested in
         num_rows = shape[0]
         row_ids_np = np.random.randint(num_rows, size=num_rows)
@@ -86,13 +104,13 @@ def test_sync_push_pull():
         big_v = mx.nd.zeros(big_shape)
         # push
         for i in range(nrepeat):
-            kv.push('11', v._to_rsp())
-            kv.push('100', big_v._to_rsp())
+            kv.push('11', v.tostype('row_sparse'))
+            kv.push('100', big_v.tostype('row_sparse'))
 
         # pull a subset of rows this worker is interested in
         all_row_ids = np.arange(shape[0])
-        val = mx.nd.ones(shape)._to_rsp()
-        big_val = mx.nd.ones(big_shape)._to_rsp()
+        val = mx.nd.ones(shape).tostype('row_sparse')
+        big_val = mx.nd.ones(big_shape).tostype('row_sparse')
         kv.row_sparse_pull('11', out=val, row_ids=mx.nd.array(all_row_ids, dtype='int64'))
         big_num_rows = shape[0]
         big_all_row_ids = np.arange(big_shape[0])
@@ -125,7 +143,7 @@ def test_sync_push_pull():
             v[row] = my_rank + 1
         # push
         for i in range(nrepeat):
-            kv.push('100', v._to_rsp())
+            kv.push('100', v.tostype('row_sparse'))
 
         # select a random subset of rows this worker is interested in
         mx.random.seed(my_rank)

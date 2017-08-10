@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2016 by Contributors
  * \file elemwise_binary_op.h
  * \brief Function definition of elementwise binary operators
  */
@@ -133,6 +151,7 @@ void BinaryComputeRspRspImpl(const nnvm::NodeAttrs& attrs,
                              const std::vector<NDArray>& inputs,
                              const std::vector<OpReqType>& req,
                              const std::vector<NDArray>& outputs) {
+  if (req[0] == kNullOp) return;
   CHECK(req[0] == kWriteTo) << "only kWriteTo is supported for rowsparse elemwise_add";
   using namespace rowsparse;
   using namespace mshadow;
@@ -202,10 +221,10 @@ void BinaryComputeRspRspImpl(const nnvm::NodeAttrs& attrs,
         indices_out[iter_out] = indices_r[iter_r];
         Copy(out[iter_out++], data_r[iter_r++], s);
       }
-      auto new_ashape = output.aux_shape(rowsparse::kIdx);
-      CHECK_GT(new_ashape[0], num_common_rows);
-      new_ashape[0] -= num_common_rows;
-      output.set_aux_shape(rowsparse::kIdx, new_ashape);
+      auto new_sshape = TShape(output.aux_shape(rowsparse::kIdx));
+      CHECK_GT(new_sshape[0], num_common_rows);
+      new_sshape[0] -= num_common_rows;
+      output.set_aux_shape(rowsparse::kIdx, new_sshape);
     });
   });
 }

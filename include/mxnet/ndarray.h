@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- *  Copyright (c) 2015 by Contributors
  * \file ndarray.h
  * \brief NDArray interface that handles array arithematics.
  */
@@ -193,13 +211,16 @@ class NDArray {
   }
 
   /*!
-   * \return the shape of aux data at ith index. If it doesn't exist, return an empty one.
+   * \brief get the shape of aux_data(index)
+   * \param index the index of the aux data
+   * \return the shape of aux data at given index
    */
-  inline const TShape aux_shape(size_t i) const {
+  inline const TShape& aux_shape(size_t index) const {
     CHECK(storage_type() != kDefaultStorage);
-    return ptr_->aux_shapes[i];
+    return ptr_->aux_shapes[index];
   }
 
+  /* \return the shapes of all aux data */
   const std::vector<TShape>& aux_shapes() const {
     CHECK(storage_type() != kDefaultStorage);
     return ptr_->aux_shapes;
@@ -212,8 +233,8 @@ class NDArray {
    * for the final result. After the operation is done, the exact size of
    * the shape is known and need to be reset using this function.
    */
-  inline void set_aux_shape(size_t i, const TShape& shape) const {
-    ptr_->set_aux_shape(i, shape);
+  inline void set_aux_shape(size_t index, const TShape& shape) const {
+    ptr_->set_aux_shape(index, shape);
   }
 
   /*!
@@ -851,7 +872,6 @@ size_t num_aux_data(NDArrayStorageType stype);
  * \param from the ndarray we want to copy data from
  * \param to the target ndarray
  * \param priority Priority of the action.
- * \param alloc_output whether to allocate memory for the output ndarray
  * \note The function name explicitly marks the order of from and to
  *     due to different possible convention carried by copy function.
  */

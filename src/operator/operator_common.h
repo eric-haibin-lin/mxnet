@@ -1,5 +1,23 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 /*!
- * Copyright (c) 2015 by Contributors
  * \file  operator_common.h
  * \brief common internal header of most operators
  *   this header includes utility functions operator can use
@@ -349,6 +367,16 @@ inline void ParamParser(nnvm::NodeAttrs* attrs) {
   attrs->parsed = std::move(param);
 }
 
+/*! \brief Perform storage fallback to invoke fcompute.
+ *  \param attrs attributes of the operator
+ *  \param ctx operator context
+ *  \param inputs inputs of fcompute
+ *  \param req req of fcompute
+ *  \param outputs outputs of fcompute
+ *  \param fcompute
+ *  \param fname name of the operator
+ *  \param mutate_idx the indices of mutable inputs
+ */
 template <typename xpu>
 void FCompExFallback(const nnvm::NodeAttrs& attrs,
                      const OpContext& ctx,
@@ -356,15 +384,25 @@ void FCompExFallback(const nnvm::NodeAttrs& attrs,
                      const std::vector<OpReqType>& req,
                      const std::vector<NDArray>& outputs,
                      FCompute fcompute,
-                     const std::string& fname) {
+                     const std::string& fname,
+                     std::vector<uint32_t> mutate_idx = {}) {
   using namespace mxnet::common;
   std::vector<TBlob> in_blobs, out_blobs;
-  std::vector<NDArray> temp_in_src, temp_in_dst, temp_out_src, temp_out_dst;
-  SetupDefaultBlobs(inputs, &in_blobs, &temp_in_src, &temp_in_dst);
-  SetupDefaultBlobs(outputs, &out_blobs, &temp_out_src, &temp_out_dst);
-  CastNonDefaultStorage<xpu>(temp_in_src, temp_in_dst, ctx, true);
+  std::vector<NDArray> pre_temp_src, pre_temp_dst, post_temp_dst, post_temp_src;
+  // mapping from index in input_blobs to index in pre_temp_dst
+  std::unordered_map<uint32_t, uint32_t> in_temp_idx_map;
+  SetupDefaultBlobs(inputs, &in_blobs, &pre_temp_src, &pre_temp_dst, &in_temp_idx_map);
+  SetupDefaultBlobs(outputs, &out_blobs, &post_temp_dst, &post_temp_src);
+  for (const auto idx : mutate_idx) {
+    auto map_iter = in_temp_idx_map.find(idx);
+    if (map_iter != in_temp_idx_map.end()) {
+      post_temp_src.push_back(pre_temp_dst[map_iter->second]);
+      post_temp_dst.push_back(inputs[idx]);
+    }
+  }
+  CastNonDefaultStorage<xpu>(pre_temp_src, pre_temp_dst, ctx, true);
   fcompute(attrs, ctx, in_blobs, req, out_blobs);
-  CastNonDefaultStorage<xpu>(temp_out_dst, temp_out_src, ctx, true);
+  CastNonDefaultStorage<xpu>(post_temp_src, post_temp_dst, ctx, true);
 }
 
 #define CHECK_RSP_ALL_ROWS_NON_ZERO(rsp, func, param)                              \
