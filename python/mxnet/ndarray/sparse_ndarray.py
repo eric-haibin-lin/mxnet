@@ -846,7 +846,7 @@ def _zeros_sparse_ndarray(stype, shape, ctx=None, dtype=None, aux_types=None, **
     dtype : str or numpy.dtype, optional
         An optional value type (default is `float32`)
     aux_types: list of numpy.dtype, optional
-        An optional list of types for the aux data for RowSparseNDArray or CSRNDArray
+        An optional list of types of the aux data for RowSparseNDArray or CSRNDArray
         (default values depends on the storage type)
 
     Returns
