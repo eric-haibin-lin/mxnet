@@ -154,7 +154,7 @@ struct MarkRspRowIdxBlockKernel {
  * \brief Kernel for filling the row index array of the rsp tensor.
  * Parallelized by tensor rows: 1 thread/row
  */
-struct FillRspRowIdxKernel {
+struct CastFillRspRowIdxKernel {
   /*!
    * \brief
    * \param tid          global thread id
@@ -254,8 +254,8 @@ inline void CastStorageDnsRspImpl(const OpContext& ctx,
                                     mshadow::Stream<gpu>::GetStream(s));
 
       // Allocate temp storage for marking non-zero rows and for cub's prefix sum
-      auto workspace = AllocateTempDataForCast<gpu, 1, char>(ctx, Shape1(num_rows*sizeof(RType)
-                                                                          + temp_storage_bytes));
+      auto workspace = AllocateTempDataForSparseHandling<gpu, 1, char>(
+        ctx, Shape1(num_rows*sizeof(RType) + temp_storage_bytes));
       row_flg = reinterpret_cast<RType*>(workspace.dptr_);
       d_temp_storage = workspace.dptr_ + num_rows*sizeof(RType);
 
@@ -314,7 +314,7 @@ inline void CastStorageDnsRspImpl(const OpContext& ctx,
       if (0 == nnr) return;
       RType* row_idx = rsp->aux_data(rowsparse::kIdx).dptr<RType>();
       num_threads = num_rows;
-      Kernel<FillRspRowIdxKernel, gpu>::Launch(s, num_threads,
+      Kernel<CastFillRspRowIdxKernel, gpu>::Launch(s, num_threads,
           row_idx, row_flg, num_rows);
 
       // Construct shape of rsp tensor data, allocate, and fill
@@ -661,7 +661,8 @@ inline void CastStorageDnsCsrImpl(const OpContext& ctx,
                                       mshadow::Stream<gpu>::GetStream(s));
 
         // Allocate temporary storage
-        auto workspace = AllocateTempDataForCast<gpu, 1, char>(ctx, Shape1(temp_storage_bytes));
+        auto workspace = AllocateTempDataForSparseHandling<gpu, 1, char>(
+          ctx, Shape1(temp_storage_bytes));
 
         d_temp_storage = workspace.dptr_;
 

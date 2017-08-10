@@ -211,6 +211,14 @@ class NDArray {
   }
 
   /*!
+   * \return number of auxiliary shapes
+   */
+  inline size_t aux_shape_count() const {
+    CHECK(storage_type() != kDefaultStorage);
+    return ptr_->aux_shapes.size();
+  }
+
+  /*!
    * \brief get the shape of aux_data(index)
    * \param index the index of the aux data
    * \return the shape of aux data at given index
