@@ -35,6 +35,7 @@ NNVM_REGISTER_OP(cast_storage)
 
 When an NDArray with default storage type is casted to csr or row_sparse storage,
 the result is compact, which means:
+
 - for csr, zero values will not be retained
 - for row_sparse, row slices with zeros will not be retained
 
