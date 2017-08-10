@@ -31,6 +31,8 @@ PARSER = argparse.ArgumentParser(description="Benchmark sparse operators",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 PARSER.add_argument('--num-omp-threads', type=int,
                     default=1, help='number of omp threads to set in MXNet')
+PARSER.add_argument('--gpu', action='store_true',
+                    help="to be run on gpu")
 ARGS = PARSER.parse_args()
 
 # some data information
@@ -73,6 +75,31 @@ CRITEO = {
     'num_batches': 10
 }
 
+SYNTHETIC1 = {
+    'feature_dim': [1000000],
+    'm': [256, 1000],
+    'density': [0.001, 0.005, 0.01, 0.02, 0.05,
+                  0.1, 0.2, 0.5, 0.65],
+    'batch_size': [64, 128],
+    'default_index': {'batch_size': 1,
+                      'density': 2,
+                      'output_dim': 1,
+                      'feature_dim': 0},
+    'num_repeat': 10
+}
+
+SYNTHETIC2 = {
+    'feature_dim': [8000000, 16000000],
+    'm': [1, 32],
+    'density': [0.001, 0.005, 0.01, 0.02, 0.05,
+                0.1, 0.2, 0.5, 0.65],
+    'batch_size': [64, 128],
+    'default_index': {'batch_size': 1,
+                      'density': 2,
+                      'output_dim': 1,
+                      'feature_dim': 0},
+    'num_repeat': 10
+}
 
 def measure_cost(repeat, func_name, *args, **kwargs):
     """Measure time cost of running a function
@@ -129,7 +156,7 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         weight.wait_to_read()
         for _ in train_iter:
             csr_data = train_iter.getdata()
-            dns_data = csr_data.todense()
+            dns_data = csr_data.tostype('default')
             csr_data.wait_to_read()
             dns_data.wait_to_read()
             cost_sparse = measure_cost(num_repeat, mx.nd.dot, csr_data, weight)
@@ -146,10 +173,10 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """Print result of comparison between sparse and dense
         """
         ratio = average_cost_dense / average_cost_sparse
-        print('density(%)\tn\tm\tk\tt_dense/t_sparse\tt_dense\tt_sparse')
-        fmt = "%0.4f\t\t%d\t%d\t%d\t%0.2f\t\t\t%0.4f\t%0.6f"
-        print(fmt % (density * 100, batch_size, output_dim, feature_dim,
-                     ratio, average_cost_dense, average_cost_sparse))
+        #print('density(%)\tn\tm\tk\tt_dense/t_sparse\tt_dense\tt_sparse')
+        fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.1f} {:15.1f} {:15.1f}'
+        print(fmt.format(density * 100, batch_size, output_dim, feature_dim,
+                         ratio, average_cost_dense, average_cost_sparse))
 
     mini_path = os.path.join(data_dir, mini_file_name)
     path = os.path.join(data_dir, file_name)
@@ -183,6 +210,14 @@ def test_dot_real(data_dict):
 
     assert default_batch_size_index < len(batch_size_list)
     assert default_output_index < len(m)
+    print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15}'.format('density(%)',
+                                                                    'n',
+                                                                    'm',
+                                                                    'k',
+                                                                    't_dense/t_sparse',
+                                                                    't_dense',
+                                                                    't_sparse'))
+
 
     for output_dim in m:
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
@@ -194,157 +229,130 @@ def test_dot_real(data_dict):
                               k, m[default_output_index], density, batch_size, num_batches)
 
 
-def test_dot_synthetic():
+def test_dot_synthetic(data_dict):
     """benchmark sparse mxnet dot and scipy dot operator with matrices of given density.
     `t_sparse` is the runtime of the invoked sparse dot operator in ms, while `t_dense` is the 
     runtime of dot(dns, dns), with the same matrices except that they are in default storage type.
     """
-    # Benchmark MXNet's sparse dot operator
-    def bench_mx_dot(lhs_shape, rhs_shape, lhs_stype, rhs_stype, lhs_den, rhs_den, trans_lhs, ctx, repeat):
+    # Benchmark MXNet and Scipys dot operator
+    def bench_dot(lhs_shape, rhs_shape, lhs_stype, rhs_stype,
+                  lhs_den, rhs_den, trans_lhs, ctx, num_repeat=10, fw="mxnet", distribution="uniform"):
         set_default_context(ctx)
+        assert fw == "mxnet" or fw == "scipy"
+        # Set funcs
+        dot_func_sparse = mx.nd.dot if fw == "mxnet" else sp.spmatrix.dot
+        dot_func_dense = mx.nd.dot if fw == "mxnet" else np.dot
         # Create matrix instances
-        lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den)
-        rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den)
+        lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den, distribution=distribution)
+        rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den, distribution=distribution)
         lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
         rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
-        # One warm up run, verify correctness
-        out = mx.nd.dot(lhs_nd, rhs_dns, trans_lhs)
-        out_expected = mx.nd.dot(lhs_dns, rhs_dns, trans_lhs)
+        # ONe warm up run, verify correctness
+        out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
+        out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
         assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-2, atol=1e-3)
         # Start benchmarking
         lhs_nd.wait_to_read()
         rhs_nd.wait_to_read()
-        sparse_cost = measure_cost(repeat, mx.nd.dot, lhs_nd, rhs_nd, trans_lhs)
-        dense_cost = measure_cost(repeat, mx.nd.dot, lhs_dns, rhs_dns, trans_lhs)
+        sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd, trans_lhs)
+        dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns, trans_lhs)
         speedup = dense_cost / sparse_cost
         # Print results
         m = lhs_shape[0]
         k = lhs_shape[1]
         n = rhs_shape[1]
-        results = '{:15.1f} {:15.1f} {:>10} {:8d} {:8d} {:8d} {:13.2f} {:13.2f} {:8.2f}'.format(lhs_den*100, rhs_den*100, str(ctx), m, k, n, sparse_cost*1000, dense_cost*1000, speedup)
+        results = '{:15.1f} {:15.1f} {:>10} {:8d} {:8d} {:8d} {:13.2f} {:13.2f} {:8.2f}'.format(lhs_den*100, rhs_den*100,
+                                                                                                str(ctx), m, k, n,
+                                                                                                sparse_cost*1000,
+                                                                                                dense_cost*1000, speedup)
         print(results)
 
-    # Benchmark Scipy's sparse dot operator
-    def bench_sp_dot(lhs_shape, rhs_shape, lhs_stype, rhs_stype, lhs_den, rhs_den, trans_lhs, ctx, repeat):
-        set_default_context(ctx)
-        assert default_context().device_type is 'cpu'
-        assert lhs_stype is 'csr'
-        assert rhs_stype is 'default'
-        # Create matrix instances
-        lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den)
-        rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den)
-        lhs_nd.wait_to_read()
-        rhs_nd.wait_to_read()
-        lhs_dns_np = np.transpose(lhs_nd.asnumpy()) if trans_lhs else lhs_nd.asnumpy()
-        rhs_dns_np = rhs_nd.asnumpy()
-        lhs_csr_sp = sp.spmatrix.transpose(sp.csr_matrix(lhs_nd.asnumpy())) if trans_lhs else sp.csr_matrix(lhs_nd.asnumpy())
-        # One warm up run
-        out = sp.spmatrix.dot(lhs_csr_sp, rhs_dns_np)
-        # Start benchmarking
-        sparse_cost = measure_cost(repeat, sp.spmatrix.dot, lhs_csr_sp, rhs_dns_np)
-        dense_cost = measure_cost(repeat, np.dot, lhs_dns_np, rhs_dns_np)
-        speedup = dense_cost / sparse_cost
-        # Print results
-        m = lhs_shape[0]
-        k = lhs_shape[1]
-        n = rhs_shape[1]
-        results = '{:15.1f} {:15.1f} {:>10} {:8d} {:8d} {:8d} {:13.2f} {:13.2f} {:8.2f}'.format(lhs_den*100, rhs_den*100, str(ctx), m, k, n, sparse_cost*1000, dense_cost*1000, speedup)
-        print(results)
-
-    check_call(_LIB.MXSetNumOMPThreads(ctypes.c_int(module_args.num_omp_threads)))
-    # TODO(haibin): make these runtime options
-    # params
-    # m, n, k        rows and columns of lhs and rhs matrix
-    #                forward  pass:  m x k    * k x n = m x n
-    #                backward pass: (m x k)^T * m x n = k x n
-    # density_lhs    density of the left-hand side matrix
-    # density_rhs    density of the right-hand side matrix, if applicable
-    # num_repeat     number of benchmark runs to average over
-    # context        mx.cpu(), mx.gpu()
-    #                note: benchmark different contexts separately; to benchmark cpu, compile without CUDA
-    # mx_benchmarks  csr_dns, csr.T_dns, csr_rsp
-    # sp_benchmarks  csr_dns, csr.T_dns
-    #                note: scipy benchmarks are only conducted if context is mx.cpu()
-    m = 512
-    k = [50000, 100000]
-    n = [64, 128]
-    density_lhs = [0.64, 0.32, 0.16, 0.08, 0.04, 0.02, 0.01]
-    density_rhs = [0.64, 0.32, 0.16, 0.08, 0.04, 0.02, 0.01]
-    num_repeat = 10
-    context = mx.gpu()
-    mx_benchmarks = ["csr_dns", "csr.T_dns", "csr_rsp"]
-    sp_benchmarks = ["csr_dns", "csr.T_dns"]
-
-    headline = '{:>15} {:>15} {:>10} {:>8} {:>8} {:>8} {:>13} {:>13} {:>8}'.format('lhs_density(%)', 'rhs_density(%)', 'context', 'm', 'k', 'n', 't_sparse(ms)', 't_dense(ms)', 'speedup')
-    if "csr_dns" in mx_benchmarks:
-        print("==================================================")
-        print("  mxnet sparse dot benchmark: dot(csr, dns) = dns ")
-        print("  (matrix multiplication: m x k * k x n = m x n)  ")
-        print("==================================================")
+    def print_benchmark_info(lhs, rhs, lhs_trans, fw):
+        trans_str = "^T" if lhs_trans else ""
+        print("========================================================")
+        print("  %s sparse dot benchmark: dot(%s, %s) = %s  ") % (fw, lhs, rhs, rhs)
+        print("  (matrix multiplication: (m x k)%s * (k x n) = m x n)  ") % (trans_str)
+        print("========================================================")
+        headline = '{:>15} {:>15} {:>10} {:>8} {:>8} {:>8} {:>13} {:>13} {:>8}'.format('lhs_density(%)',
+                                                                                       'rhs_density(%)',
+                                                                                       'context',
+                                                                                       'm', 'k', 'n',
+                                                                                       't_sparse(ms)',
+                                                                                       't_dense(ms)',
+                                                                                       'speedup')
         print(headline)
-        transpose_lhs = False
-        for i in range(len(n)):
-            for d_lhs in density_lhs:
-                bench_mx_dot((m, k[i]), (k[i], n[i]), 'csr', 'default', d_lhs, 1, transpose_lhs, context, num_repeat)
-            print("")
 
-    if "csr_dns" in sp_benchmarks and mx.cpu() == context:
-        print("==================================================")
-        print("  scipy sparse dot benchmark: dot(csr, dns) = dns ")
-        print("  (matrix multiplication: m x k * k x n = m x n)  ")
-        print("==================================================")
-        print(headline)
-        transpose_lhs = False
-        for i in range(len(n)):
-            for d_lhs in density_lhs:
-                bench_sp_dot((m, k[i]), (k[i], n[i]), 'csr', 'default', d_lhs, 1, transpose_lhs, context, num_repeat)
-            print("")
 
-    if "csr.T_dns" in mx_benchmarks:
-        print("==================================================")
-        print(" mxnet sparse dot benchmark: dot(csr.T, dns) = rsp")
-        print("(matrix multiplication: (m x k)^T * m x n = k x n)")
-        print("==================================================")
-        print(headline)
-        transpose_lhs = True
-        for i in range(len(n)):
-            for d_lhs in density_lhs:
-                bench_mx_dot((m, k[i]), (m, n[i]), 'csr', 'default', d_lhs, 1, transpose_lhs, context, num_repeat)
-            print("")
+    def run_benchmark(ctx=None, lhs="csr", lhs_trans=False, rhs="dns", fw="mxnet", rhs_density=1,
+                      distribution="uniform"):
+        if lhs != "csr":
+            raise ValueError("Value other than csr for lhs not supported")
+        if rhs_density > 1 or rhs_density < 0:
+            raise ValueError("rhs_density has to be between 0 and 1")
 
-    if "csr.T_dns" in sp_benchmarks and mx.cpu() == context:
-        print("==================================================")
-        print(" scipy sparse dot benchmark: dot(csr.T, dns) = dns")
-        print("(matrix multiplication: (m x k)^T * m x n = k x n)")
-        print("==================================================")
-        print(headline)
-        transpose_lhs = True
-        for i in range(len(n)):
-            for d_lhs in density_lhs:
-                bench_sp_dot((m, k[i]), (m, n[i]), 'csr', 'default', d_lhs, 1, transpose_lhs, context, num_repeat)
-            print("")
+        print_benchmark_info(lhs, rhs, lhs_trans, fw)
 
-    if "csr_rsp" in mx_benchmarks:
-        print("==================================================")
-        print("  mxnet sparse dot benchmark: dot(csr, rsp) = dns ")
-        print("  (matrix multiplication: m x k * k x n = m x n)  ")
-        print("==================================================")
-        print(headline)
-        transpose_lhs = False
-        for i in range(len(n)):
-            for d_lhs in density_lhs:
-              for d_rhs in density_rhs:
-                bench_mx_dot((m, k[i]), (k[i], n[i]), 'csr', 'row_sparse', d_lhs, d_rhs, transpose_lhs, context, num_repeat)
-              print("")
-            print("")
+
+        lhs_stype = "csr"
+        rhs_stype = "row_sparse" if rhs == "rsp" else "default"
+
+        feature_dim_list = data_dict['feature_dim']
+        output_dim_list = data_dict['m']
+        batch_size_list = data_dict['batch_size']
+        density_list = data_dict['density']
+
+        default_output_index = data_dict['default_index']['output_dim']
+        default_batch_size_index = data_dict['default_index']['batch_size']
+        default_feature_index = data_dict['default_index']['feature_dim']
+        default_density_index = data_dict['default_index']['density']
+        num_repeat = data_dict['num_repeat']
+
+        for output_dim in output_dim_list:
+            bench_dot((batch_size_list[default_batch_size_index], feature_dim_list[default_feature_index]),
+                      (feature_dim_list[default_feature_index], output_dim), lhs_stype, rhs_stype,
+                      density_list[default_density_index], rhs_density, lhs_trans, ctx, num_repeat=num_repeat,
+                      fw=fw, distribution=distribution)
+
+        for feature_dim in feature_dim_list:
+            bench_dot((batch_size_list[default_batch_size_index], feature_dim),
+                      (feature_dim, output_dim_list[default_output_index]),
+                      lhs_stype, rhs_stype, density_list[default_density_index], rhs_density,
+                      lhs_trans, ctx, num_repeat=num_repeat, fw=fw, distribution=distribution)
+
+        for batch_size in batch_size_list:
+            bench_dot((batch_size, feature_dim_list[default_feature_index]),
+                      (feature_dim_list[default_feature_index], output_dim_list[default_output_index]),
+                      lhs_stype, rhs_stype, density_list[default_density_index],
+                      rhs_density, lhs_trans, ctx, num_repeat=num_repeat,
+                      fw=fw, distribution=distribution)
+
+        for density in density_list:
+            bench_dot((batch_size_list[default_batch_size_index], feature_dim_list[default_feature_index]),
+                      (feature_dim_list[default_feature_index], output_dim_list[default_output_index]),
+                      lhs_stype, rhs_stype, density, rhs_density, lhs_trans, ctx,
+                      num_repeat=num_repeat, fw=fw, distribution=distribution)
+
+    check_call(_LIB.MXSetNumOMPThreads(ctypes.c_int(ARGS.num_omp_threads)))
+    context = mx.gpu() if ARGS.gpu else mx.cpu()
+    # TODO(anirudh): make the data dicts to config which can be passed at runtime
+    distributions = ["uniform", "powerlaw"]
+    for distribution in distributions:
+        run_benchmark(context, lhs="csr", rhs="default", lhs_trans=False, fw="mxnet", rhs_density=1, distribution=distribution)
+        run_benchmark(context, lhs="csr", rhs="default", lhs_trans=True, fw="mxnet", rhs_density=1, distribution=distribution)
+        run_benchmark(context, lhs="csr", rhs="rsp", lhs_trans=True, fw="mxnet", rhs_density=1, distribution=distribution)
+        if not ARGS.gpu:
+            run_benchmark(context, lhs="csr", rhs="default", lhs_trans=False, fw="scipy", rhs_density=1, distribution=distribution)
+            run_benchmark(context, lhs="csr", rhs="default", lhs_trans=True, fw="scipy", rhs_density=1, distribution=distribution)
 
 
 if __name__ == "__main__":
     #test_dot_synthetic()
     start_time = time.time()
     #test_dot_real(KDDA)
-    #test_dot_real(AVAZU)
-    test_dot_real(CRITEO)
+    test_dot_real(AVAZU)
+    #test_dot_real(CRITEO)
+    test_dot_synthetic(SYNTHETIC1)
+    test_dot_synthetic(SYNTHETIC2)
     end_time = time.time() - start_time
     print("total time is %f") % end_time
     #test_dot_real(KDDA)

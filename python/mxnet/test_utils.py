@@ -244,11 +244,12 @@ def rand_sparse_ndarray(shape, stype, density=None, distribution="uniform", dtyp
         assert(False), "unknown storage type"
 
 
-def rand_ndarray(shape, stype, density=None, dtype=None):
+def rand_ndarray(shape, stype, density=None, dtype=None, distribution=None):
     if stype == 'default':
         arr = mx.nd.array(random_arrays(shape), dtype=dtype)
     else:
-        arr, _ = rand_sparse_ndarray(shape, stype, density=density, dtype=dtype)
+        arr, _ = rand_sparse_ndarray(shape, stype, density=density, dtype=dtype,
+                                     distribution=distribution)
     return arr
 
 
