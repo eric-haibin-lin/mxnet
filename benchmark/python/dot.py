@@ -43,8 +43,8 @@ KDDA = {
     'url': "https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary/kdda.t.bz2",
     'feature_dim': 20216830,
     'm': [1, 8, 32],
-    'batch_size': [64, 128],
-    'default_index': {'batch_size': 1,
+    'batch_size': [64],
+    'default_index': {'batch_size': 0,
                       'output_dim': 2},
     'num_batches': 10
 }
@@ -174,7 +174,7 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """
         ratio = average_cost_dense / average_cost_sparse
         #print('density(%)\tn\tm\tk\tt_dense/t_sparse\tt_dense\tt_sparse')
-        fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.1f} {:15.1f} {:15.1f}'
+        fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f}'
         print(fmt.format(density * 100, batch_size, output_dim, feature_dim,
                          ratio, average_cost_dense, average_cost_sparse))
 
@@ -348,7 +348,7 @@ def test_dot_synthetic(data_dict):
 if __name__ == "__main__":
     #test_dot_synthetic()
     start_time = time.time()
-    #test_dot_real(KDDA)
+    test_dot_real(KDDA)
     test_dot_real(AVAZU)
     #test_dot_real(CRITEO)
     test_dot_synthetic(SYNTHETIC1)
