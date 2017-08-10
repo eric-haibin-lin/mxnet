@@ -33,6 +33,9 @@ PARSER.add_argument('--num-omp-threads', type=int,
                     default=1, help='number of omp threads to set in MXNet')
 PARSER.add_argument('--gpu', action='store_true',
                     help="to be run on gpu")
+# TODO: Use logging later
+PARSER.add_argument('--verbose', action='store_true',
+                    help="Verbose output")
 ARGS = PARSER.parse_args()
 
 # some data information
@@ -67,7 +70,7 @@ CRITEO = {
     'data_name': 'criteo.t',
     'data_origin_name': 'criteo.t.bz2',
     'url' : "https://s3-us-west-2.amazonaws.com/sparse-dataset/criteo.t.bz2",
-    'feature_dim': 16000000,
+    'feature_dim': 8388621,
     'm': [1, 8, 16, 32, 64],
     'batch_size': [64, 128],
     'default_index': {'batch_size': 1,
@@ -143,8 +146,9 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
     def run_benchmark(mini_path):
         """Run benchmarks
         """
-        #print("Running Benchmarking on %r data") % mini_file_name
-        #print("batch_size is %d") % batch_size
+        if ARGS.verbose:
+            print("Running Benchmarking on %r data") % mini_file_name
+            print("batch_size is %d") % batch_size
         data_shape = (feature_dim, )
         train_iter = _get_iter(mini_path, data_shape, batch_size)
         weight = mx.nd.random_uniform(low=0, high=1, shape=(feature_dim, output_dim))
@@ -173,7 +177,6 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """Print result of comparison between sparse and dense
         """
         ratio = average_cost_dense / average_cost_sparse
-        #print('density(%)\tn\tm\tk\tt_dense/t_sparse\tt_dense\tt_sparse')
         fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f}'
         print(fmt.format(density * 100, batch_size, output_dim, feature_dim,
                          ratio, average_cost_dense, average_cost_sparse))
@@ -346,13 +349,11 @@ def test_dot_synthetic(data_dict):
 
 
 if __name__ == "__main__":
-    #test_dot_synthetic()
     start_time = time.time()
     test_dot_real(KDDA)
     test_dot_real(AVAZU)
-    #test_dot_real(CRITEO)
+    test_dot_real(CRITEO)
     test_dot_synthetic(SYNTHETIC1)
     test_dot_synthetic(SYNTHETIC2)
     end_time = time.time() - start_time
     print("total time is %f") % end_time
-    #test_dot_real(KDDA)
