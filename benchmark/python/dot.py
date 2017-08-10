@@ -23,7 +23,10 @@ import argparse
 import subprocess
 import scipy.sparse as sp
 
-from mxnet.test_utils import *
+import mxnet as mx
+import numpy as np
+import numpy.random as rnd
+from mxnet.test_utils import rand_ndarray, set_default_context, assert_almost_equal
 from mxnet.base import check_call, _LIB
 from util import get_data, estimate_density
 
@@ -82,7 +85,7 @@ SYNTHETIC1 = {
     'feature_dim': [1000000],
     'm': [256, 1000],
     'density': [0.001, 0.005, 0.01, 0.02, 0.05,
-                  0.1, 0.2, 0.5, 0.65],
+                0.1, 0.2, 0.5, 0.65],
     'batch_size': [64, 128],
     'default_index': {'batch_size': 1,
                       'density': 2,
@@ -146,9 +149,6 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
     def run_benchmark(mini_path):
         """Run benchmarks
         """
-        if ARGS.verbose:
-            print("Running Benchmarking on %r data") % mini_file_name
-            print("batch_size is %d") % batch_size
         data_shape = (feature_dim, )
         train_iter = _get_iter(mini_path, data_shape, batch_size)
         weight = mx.nd.random_uniform(low=0, high=1, shape=(feature_dim, output_dim))
@@ -213,6 +213,8 @@ def test_dot_real(data_dict):
 
     assert default_batch_size_index < len(batch_size_list)
     assert default_output_index < len(m)
+    if ARGS.verbose:
+        print("Running Benchmarking on %r data") % data_dict['data_mini']
     print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15}'.format('density(%)',
                                                                     'n',
                                                                     'm',
@@ -234,7 +236,7 @@ def test_dot_real(data_dict):
 
 def test_dot_synthetic(data_dict):
     """benchmark sparse mxnet dot and scipy dot operator with matrices of given density.
-    `t_sparse` is the runtime of the invoked sparse dot operator in ms, while `t_dense` is the 
+    `t_sparse` is the runtime of the invoked sparse dot operator in ms, while `t_dense` is the
     runtime of dot(dns, dns), with the same matrices except that they are in default storage type.
     """
     # Benchmark MXNet and Scipys dot operator
@@ -264,10 +266,16 @@ def test_dot_synthetic(data_dict):
         m = lhs_shape[0]
         k = lhs_shape[1]
         n = rhs_shape[1]
-        results = '{:15.1f} {:15.1f} {:>10} {:8d} {:8d} {:8d} {:13.2f} {:13.2f} {:8.2f}'.format(lhs_den*100, rhs_den*100,
-                                                                                                str(ctx), m, k, n,
-                                                                                                sparse_cost*1000,
-                                                                                                dense_cost*1000, speedup)
+        result_pattern = '{:15.1f} {:15.1f} {:>10} {:8d} {:8d} {:8d} {:13.2f} {:13.2f} {:8.2f}'
+        results = result_pattern.format(lhs_den*100,
+                                        rhs_den*100,
+                                        str(ctx),
+                                        m,
+                                        k,
+                                        n,
+                                        sparse_cost*1000,
+                                        dense_cost*1000,
+                                        speedup)
         print(results)
 
     def print_benchmark_info(lhs, rhs, lhs_trans, fw):
@@ -276,13 +284,14 @@ def test_dot_synthetic(data_dict):
         print("  %s sparse dot benchmark: dot(%s, %s) = %s  ") % (fw, lhs, rhs, rhs)
         print("  (matrix multiplication: (m x k)%s * (k x n) = m x n)  ") % (trans_str)
         print("========================================================")
-        headline = '{:>15} {:>15} {:>10} {:>8} {:>8} {:>8} {:>13} {:>13} {:>8}'.format('lhs_density(%)',
-                                                                                       'rhs_density(%)',
-                                                                                       'context',
-                                                                                       'm', 'k', 'n',
-                                                                                       't_sparse(ms)',
-                                                                                       't_dense(ms)',
-                                                                                       'speedup')
+        headline_pattern = '{:>15} {:>15} {:>10} {:>8} {:>8} {:>8} {:>13} {:>13} {:>8}'
+        headline = headline_pattern.format('lhs_density(%)',
+                                           'rhs_density(%)',
+                                           'context',
+                                           'm', 'k', 'n',
+                                           't_sparse(ms)',
+                                           't_dense(ms)',
+                                           'speedup')
         print(headline)
 
 
@@ -311,9 +320,12 @@ def test_dot_synthetic(data_dict):
         num_repeat = data_dict['num_repeat']
 
         for output_dim in output_dim_list:
-            bench_dot((batch_size_list[default_batch_size_index], feature_dim_list[default_feature_index]),
-                      (feature_dim_list[default_feature_index], output_dim), lhs_stype, rhs_stype,
-                      density_list[default_density_index], rhs_density, lhs_trans, ctx, num_repeat=num_repeat,
+            bench_dot((batch_size_list[default_batch_size_index],
+                       feature_dim_list[default_feature_index]),
+                      (feature_dim_list[default_feature_index], output_dim),
+                      lhs_stype, rhs_stype,
+                      density_list[default_density_index], rhs_density,
+                      lhs_trans, ctx, num_repeat=num_repeat,
                       fw=fw, distribution=distribution)
 
         for feature_dim in feature_dim_list:
@@ -324,14 +336,17 @@ def test_dot_synthetic(data_dict):
 
         for batch_size in batch_size_list:
             bench_dot((batch_size, feature_dim_list[default_feature_index]),
-                      (feature_dim_list[default_feature_index], output_dim_list[default_output_index]),
+                      (feature_dim_list[default_feature_index],
+                       output_dim_list[default_output_index]),
                       lhs_stype, rhs_stype, density_list[default_density_index],
                       rhs_density, lhs_trans, ctx, num_repeat=num_repeat,
                       fw=fw, distribution=distribution)
 
         for density in density_list:
-            bench_dot((batch_size_list[default_batch_size_index], feature_dim_list[default_feature_index]),
-                      (feature_dim_list[default_feature_index], output_dim_list[default_output_index]),
+            bench_dot((batch_size_list[default_batch_size_index],
+                       feature_dim_list[default_feature_index]),
+                      (feature_dim_list[default_feature_index],
+                       output_dim_list[default_output_index]),
                       lhs_stype, rhs_stype, density, rhs_density, lhs_trans, ctx,
                       num_repeat=num_repeat, fw=fw, distribution=distribution)
 
@@ -340,20 +355,35 @@ def test_dot_synthetic(data_dict):
     # TODO(anirudh): make the data dicts to config which can be passed at runtime
     distributions = ["uniform", "powerlaw"]
     for distribution in distributions:
-        run_benchmark(context, lhs="csr", rhs="default", lhs_trans=False, fw="mxnet", rhs_density=1, distribution=distribution)
-        run_benchmark(context, lhs="csr", rhs="default", lhs_trans=True, fw="mxnet", rhs_density=1, distribution=distribution)
-        run_benchmark(context, lhs="csr", rhs="rsp", lhs_trans=True, fw="mxnet", rhs_density=1, distribution=distribution)
+        run_benchmark(context, lhs="csr",
+                      rhs="default", lhs_trans=False,
+                      fw="mxnet", rhs_density=1,
+                      distribution=distribution)
+        run_benchmark(context, lhs="csr",
+                      rhs="default", lhs_trans=True,
+                      fw="mxnet", rhs_density=1,
+                      distribution=distribution)
+        run_benchmark(context, lhs="csr",
+                      rhs="rsp", lhs_trans=True,
+                      fw="mxnet", rhs_density=1,
+                      distribution=distribution)
         if not ARGS.gpu:
-            run_benchmark(context, lhs="csr", rhs="default", lhs_trans=False, fw="scipy", rhs_density=1, distribution=distribution)
-            run_benchmark(context, lhs="csr", rhs="default", lhs_trans=True, fw="scipy", rhs_density=1, distribution=distribution)
+            run_benchmark(context, lhs="csr",
+                          rhs="default", lhs_trans=False,
+                          fw="scipy", rhs_density=1,
+                          distribution=distribution)
+            run_benchmark(context, lhs="csr",
+                          rhs="default", lhs_trans=True,
+                          fw="scipy", rhs_density=1,
+                          distribution=distribution)
 
 
 if __name__ == "__main__":
-    start_time = time.time()
+    begin_time = time.time()
     test_dot_real(KDDA)
     test_dot_real(AVAZU)
     test_dot_real(CRITEO)
     test_dot_synthetic(SYNTHETIC1)
     test_dot_synthetic(SYNTHETIC2)
-    end_time = time.time() - start_time
-    print("total time is %f") % end_time
+    total_time = time.time() - begin_time
+    print("total time is %f") % total_time
