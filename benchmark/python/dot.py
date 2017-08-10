@@ -252,7 +252,7 @@ def test_dot_synthetic(data_dict):
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den, distribution=distribution)
         lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
         rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
-        # ONe warm up run, verify correctness
+        # One warm up run, verify correctness
         out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
         out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
         assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-2, atol=1e-3)
