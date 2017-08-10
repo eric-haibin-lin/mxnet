@@ -1109,6 +1109,8 @@ fixed-size items.
     def tostype(self, stype):
         """Return a copy of the array with chosen storage type.
 
+        see mxnet.ndarray.cast_storage
+
         Returns
         -------
         NDArray, CSRNDArray or RowSparseNDArray
