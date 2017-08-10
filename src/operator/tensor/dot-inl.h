@@ -205,11 +205,11 @@ inline bool DotForwardInferStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(out_attrs->size(), 1U);
   const DotParam& param = nnvm::get<DotParam>(attrs.parsed);
   // csr has many zero columns, so the result of dot(csr.T, matrix) should be rsp
-  // TODO(stefan/haibin): don't enforce kRowSparseStorage if out_attrs has already been set
+  // TODO(stefan/haibin/jun): check type_assign return value
   if (param.transpose_a && kCSRStorage == (*in_attrs)[0]) {
-    STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, 0, kRowSparseStorage);
+    type_assign(&((*out_attrs)[0]), kRowSparseStorage);
   } else {
-    STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, 0, kDefaultStorage);
+    type_assign(&((*out_attrs)[0]), kDefaultStorage);
   }
   return true;
 }
@@ -221,11 +221,11 @@ inline bool DotBackwardInferStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), 3U);
   CHECK_EQ(out_attrs->size(), 2U);
   const DotParam& param = nnvm::get<DotParam>(attrs.parsed);
-  STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, 0, kDefaultStorage);
+  type_assign(&((*out_attrs)[0]), kDefaultStorage);
   if (!param.transpose_a && kCSRStorage == (*in_attrs)[1]) {
-    STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, 1, kRowSparseStorage);
+    type_assign(&((*out_attrs)[1]), kRowSparseStorage);
   } else {
-    STORAGE_TYPE_ASSIGN_CHECK(*out_attrs, 1, kDefaultStorage);
+    type_assign(&((*out_attrs)[1]), kDefaultStorage);
   }
   return true;
 }
