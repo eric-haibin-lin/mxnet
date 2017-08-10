@@ -291,34 +291,6 @@ struct BMap {
   }
 };
 
-// TODO(haibin) this is a temporary function for debugging purpose. Remove later.
-#ifndef NDEBUG
-template <int dim, typename DType>
-void print_info(const mshadow::Tensor<cpu, dim, DType>& tensor, const std::string& name) {
-  std::cout << "Tensor " << name << " with shape (";
-  int len = 1;
-  for (int i = 0; i < dim; i++) {
-    len *= tensor.shape_[i];
-    std::cout << tensor.shape_[i] << ",";
-    if (i == dim - 1) std::cout << ")";
-  }
-  std::cout << std::endl;
-  for (int j = 0; j < len; j ++) std::cout << tensor.dptr_[j] << " ";
-  std::cout << std::endl;
-}
-#endif  // NDEBUG
-
-struct CloneGradient {
-  const char *op_name;
-  std::vector<nnvm::NodeEntry> operator()(const nnvm::NodePtr& n,
-                                          const std::vector<nnvm::NodeEntry>& ograds) {
-    std::vector<nnvm::NodeEntry> ret;
-    for (size_t i = 0; i < n->inputs.size(); ++i)
-      ret.emplace_back(ograds[0]);
-    return ret;
-  }
-};
-
 }  // namespace op
 }  // namespace mxnet
 
