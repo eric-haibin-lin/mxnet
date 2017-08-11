@@ -369,7 +369,7 @@ def test_dot_synthetic(data_dict):
 
         for density in density_list:
             if lhs_trans:
-                output_row_dim = batch_size_lis[default_batch_size_index]
+                output_row_dim = batch_size_list[default_batch_size_index]
             else:
                 output_row_dim = feature_dim_list[default_feature_index]
             bench_dot((batch_size_list[default_batch_size_index],
