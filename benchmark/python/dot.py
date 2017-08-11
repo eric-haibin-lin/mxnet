@@ -133,7 +133,8 @@ def _line_count(path):
 
 
 def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
-                          output_dim, density, batch_size, num_batches=3, num_repeat=5, transpose=False):
+                          output_dim, density, batch_size, num_batches=3, num_repeat=5, transpose=False,
+                          rsp=False):
 
     def create_mini_path(mini_path, path, num_batches):
         """Create mini path for sparse"""
@@ -152,13 +153,17 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         data_shape = (feature_dim, )
         train_iter = _get_iter(mini_path, data_shape, batch_size)
         weight_row_dim = batch_size if transpose else feature_dim
-        weight = mx.nd.random_uniform(low=0, high=1, shape=(weight_row_dim, output_dim))
+        weight_shape = (weight_row_dim, output_dim)
+        if not rsp:
+            weight = mx.nd.random_uniform(low=0, high=1, shape=weight_shape)
+        else:
+            weight = rand_ndarray(weight_shape, "row_sparse", density=0.05, distribution="uniform")
+            weight.wait_to_read()
         total_cost = {}
         average_cost = {}
         count = 0
         total_cost["sparse"] = 0.
         total_cost["dense"] = 0.
-        weight.wait_to_read()
         for _ in train_iter:
             csr_data = train_iter.getdata()
             dns_data = csr_data.tostype('default')
@@ -178,10 +183,10 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """Print result of comparison between sparse and dense
         """
         ratio = average_cost_dense / average_cost_sparse
-        fmt = '{:15.4f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f} {:10}'
+        fmt = '{:15.4f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f} {:10} {:10}'
         print(fmt.format(density * 100, batch_size, output_dim, feature_dim,
                          ratio, average_cost_dense*1000, average_cost_sparse*1000,
-                         transpose))
+                         transpose, rsp))
 
     mini_path = os.path.join(data_dir, mini_file_name)
     path = os.path.join(data_dir, file_name)
@@ -216,27 +221,29 @@ def test_dot_real(data_dict):
     assert default_batch_size_index < len(batch_size_list)
     assert default_output_index < len(m)
     if ARGS.verbose:
-        print("Running Benchmarking on %r data") % data_dict['data_mini']
-    print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15} {:>10}'.format('density(%)',
-                                                                          'n',
-                                                                          'm',
-                                                                          'k',
-                                                                          't_dense/t_sparse',
-                                                                          't_dense(ms)',
-                                                                          't_sparse(ms)',
-                                                                          'is_transpose'))
+        print("Running Benchmarking on %r data") % mini_file_name
+    print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15} {:>10} {:>10}'.format('density(%)',
+                                                                                 'n',
+                                                                                 'm',
+                                                                                 'k',
+                                                                                 't_dense/t_sparse',
+                                                                                 't_dense(ms)',
+                                                                                 't_sparse(ms)',
+                                                                                 'is_transpose',
+                                                                                 'rhs_rsp'))
 
 
     for output_dim in m:
-        """
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
                               k, output_dim, density,
                               batch_size_list[default_batch_size_index], num_batches)
-        """
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
                               k, output_dim, density,
                               batch_size_list[default_batch_size_index], num_batches,
                               transpose=True)
+        _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
+                              k, output_dim, density,
+                              batch_size_list[default_batch_size_index], num_batches, rsp=True)
 
     for batch_size in batch_size_list:
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
@@ -244,6 +251,9 @@ def test_dot_real(data_dict):
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
                               k, m[default_output_index], density, batch_size, num_batches,
                               transpose=True)
+        _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
+                              k, output_dim, density,
+                              batch_size_list[default_batch_size_index], num_batches, rsp=True)
 
 
 def test_dot_synthetic(data_dict):
@@ -394,7 +404,7 @@ def test_dot_synthetic(data_dict):
                       distribution=distribution)
         run_benchmark(context, lhs="csr",
                       rhs="rsp", lhs_trans=True,
-                      fw="mxnet", rhs_density=1,
+                      fw="mxnet", rhs_density=0.05,
                       distribution=distribution)
         if not ARGS.gpu:
             run_benchmark(context, lhs="csr",
