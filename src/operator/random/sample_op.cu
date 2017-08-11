@@ -66,15 +66,6 @@ void SampleUniform_<gpu>(const nnvm::NodeAttrs& attrs,
 }
 
 template<>
-void SampleUniformEx_<gpu>(const nnvm::NodeAttrs& attrs,
-                           const OpContext& ctx,
-                           const std::vector<NDArray>& inputs,
-                           const std::vector<OpReqType>& req,
-                           const std::vector<NDArray>& outputs) {
-  SampleComputeEx_<gpu>(attrs, ctx, inputs, req, outputs, SampleUniformDnsImpl<gpu>);
-}
-
-template<>
 void SampleNormalDnsImpl<gpu>(const nnvm::NodeAttrs& attrs,
                               const OpContext& ctx,
                               const OpReqType& req,
@@ -110,15 +101,6 @@ void SampleNormal_<gpu>(const nnvm::NodeAttrs& attrs,
                         const std::vector<TBlob>& outputs) {
   TBlob out = outputs[0];
   SampleNormalDnsImpl<gpu>(attrs, ctx, req[0], &out);
-}
-
-template<>
-void SampleNormalEx_<gpu>(const nnvm::NodeAttrs& attrs,
-                          const OpContext& ctx,
-                          const std::vector<NDArray>& inputs,
-                          const std::vector<OpReqType>& req,
-                          const std::vector<NDArray>& outputs) {
-  SampleComputeEx_<gpu>(attrs, ctx, inputs, req, outputs, SampleNormalDnsImpl<gpu>);
 }
 
 NNVM_REGISTER_OP(random_uniform)

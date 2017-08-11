@@ -352,10 +352,12 @@ def test_sparse_nd_output_fallback():
     assert(np.sum(out.asnumpy()) != 0)
 
 def test_sparse_nd_random():
+    """ test sparse random operator on cpu """
+    # gpu random operator doesn't use fixed seed
+    if default_context().device_type is 'gpu':
+        return
     shape = (100, 100)
-    fns = [mx.nd.random_uniform, mx.nd.random_normal]
-    if default_context().device_type is 'cpu':
-        fns += [mx.nd.random_gamma]
+    fns = [mx.nd.random_uniform, mx.nd.random_normal, mx.nd.random_gamma]
     for fn in fns:
         rsp_out = mx.nd.zeros(shape=shape, stype='row_sparse')
         dns_out = mx.nd.zeros(shape=shape, stype='default')
