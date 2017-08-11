@@ -133,7 +133,7 @@ def _line_count(path):
 
 
 def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
-                          output_dim, density, batch_size, num_batches=3, num_repeat=5):
+                          output_dim, density, batch_size, num_batches=3, num_repeat=5, transpose=False):
 
     def create_mini_path(mini_path, path, num_batches):
         """Create mini path for sparse"""
@@ -151,7 +151,8 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """
         data_shape = (feature_dim, )
         train_iter = _get_iter(mini_path, data_shape, batch_size)
-        weight = mx.nd.random_uniform(low=0, high=1, shape=(feature_dim, output_dim))
+        weight_row_dim = batch_size if transpose else feature_dim
+        weight = mx.nd.random_uniform(low=0, high=1, shape=(weight_row_dim, output_dim))
         total_cost = {}
         average_cost = {}
         count = 0
@@ -163,8 +164,8 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
             dns_data = csr_data.tostype('default')
             csr_data.wait_to_read()
             dns_data.wait_to_read()
-            cost_sparse = measure_cost(num_repeat, mx.nd.dot, csr_data, weight)
-            cost_dense = measure_cost(num_repeat, mx.nd.dot, dns_data, weight)
+            cost_sparse = measure_cost(num_repeat, mx.nd.dot, csr_data, weight, transpose_a=transpose)
+            cost_dense = measure_cost(num_repeat, mx.nd.dot, dns_data, weight, transpose_a=transpose)
             total_cost["sparse"] += cost_sparse
             total_cost["dense"] += cost_dense
             count = count + 1
@@ -177,9 +178,10 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """Print result of comparison between sparse and dense
         """
         ratio = average_cost_dense / average_cost_sparse
-        fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f}'
+        fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f} {:10}'
         print(fmt.format(density * 100, batch_size, output_dim, feature_dim,
-                         ratio, average_cost_dense, average_cost_sparse))
+                         ratio, average_cost_dense*1000, average_cost_sparse*1000,
+                         transpose))
 
     mini_path = os.path.join(data_dir, mini_file_name)
     path = os.path.join(data_dir, file_name)
@@ -215,23 +217,33 @@ def test_dot_real(data_dict):
     assert default_output_index < len(m)
     if ARGS.verbose:
         print("Running Benchmarking on %r data") % data_dict['data_mini']
-    print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15}'.format('density(%)',
-                                                                    'n',
-                                                                    'm',
-                                                                    'k',
-                                                                    't_dense/t_sparse',
-                                                                    't_dense',
-                                                                    't_sparse'))
+    print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15} {:>10}'.format('density(%)',
+                                                                          'n',
+                                                                          'm',
+                                                                          'k',
+                                                                          't_dense/t_sparse',
+                                                                          't_dense(ms)',
+                                                                          't_sparse(ms)',
+                                                                          'is_transpose'))
 
 
     for output_dim in m:
+        """
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
                               k, output_dim, density,
                               batch_size_list[default_batch_size_index], num_batches)
+        """
+        _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
+                              k, output_dim, density,
+                              batch_size_list[default_batch_size_index], num_batches,
+                              transpose=True)
 
     for batch_size in batch_size_list:
         _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
                               k, m[default_output_index], density, batch_size, num_batches)
+        _compare_sparse_dense(data_dir, data_dict['data_name'], data_dict['data_mini'],
+                              k, m[default_output_index], density, batch_size, num_batches,
+                              transpose=True)
 
 
 def test_dot_synthetic(data_dict):
@@ -249,13 +261,14 @@ def test_dot_synthetic(data_dict):
         dot_func_dense = mx.nd.dot if fw == "mxnet" else np.dot
         # Create matrix instances
         lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den, distribution=distribution)
-        rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den, distribution=distribution)
+        # only uniform distribution supported for rhs
+        rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den, distribution="uniform")
         lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
         rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
         # One warm up run, verify correctness
         out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
         out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
-        assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-2, atol=1e-3)
+        assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-1, atol=1e-1)
         # Start benchmarking
         lhs_nd.wait_to_read()
         rhs_nd.wait_to_read()
@@ -320,32 +333,48 @@ def test_dot_synthetic(data_dict):
         num_repeat = data_dict['num_repeat']
 
         for output_dim in output_dim_list:
+            if lhs_trans:
+                output_row_dim = batch_size_list[default_batch_size_index]
+            else:
+                output_row_dim = feature_dim_list[default_feature_index]
             bench_dot((batch_size_list[default_batch_size_index],
                        feature_dim_list[default_feature_index]),
-                      (feature_dim_list[default_feature_index], output_dim),
+                      (output_row_dim, output_dim),
                       lhs_stype, rhs_stype,
                       density_list[default_density_index], rhs_density,
                       lhs_trans, ctx, num_repeat=num_repeat,
                       fw=fw, distribution=distribution)
 
         for feature_dim in feature_dim_list:
+            if lhs_trans:
+                output_row_dim = batch_size_list[default_batch_size_index]
+            else:
+                output_row_dim = feature_dim
             bench_dot((batch_size_list[default_batch_size_index], feature_dim),
-                      (feature_dim, output_dim_list[default_output_index]),
+                      (output_row_dim, output_dim_list[default_output_index]),
                       lhs_stype, rhs_stype, density_list[default_density_index], rhs_density,
                       lhs_trans, ctx, num_repeat=num_repeat, fw=fw, distribution=distribution)
 
         for batch_size in batch_size_list:
+            if lhs_trans:
+                output_row_dim = batch_size
+            else:
+                output_row_dim = feature_dim_list[default_feature_index]
             bench_dot((batch_size, feature_dim_list[default_feature_index]),
-                      (feature_dim_list[default_feature_index],
+                      (output_row_dim,
                        output_dim_list[default_output_index]),
                       lhs_stype, rhs_stype, density_list[default_density_index],
                       rhs_density, lhs_trans, ctx, num_repeat=num_repeat,
                       fw=fw, distribution=distribution)
 
         for density in density_list:
+            if lhs_trans:
+                output_row_dim = batch_size_lis[default_batch_size_index]
+            else:
+                output_row_dim = feature_dim_list[default_feature_index]
             bench_dot((batch_size_list[default_batch_size_index],
                        feature_dim_list[default_feature_index]),
-                      (feature_dim_list[default_feature_index],
+                      (output_row_dim,
                        output_dim_list[default_output_index]),
                       lhs_stype, rhs_stype, density, rhs_density, lhs_trans, ctx,
                       num_repeat=num_repeat, fw=fw, distribution=distribution)
