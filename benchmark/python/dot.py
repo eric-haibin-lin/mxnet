@@ -221,7 +221,7 @@ def test_dot_real(data_dict):
     assert default_batch_size_index < len(batch_size_list)
     assert default_output_index < len(m)
     if ARGS.verbose:
-        print("Running Benchmarking on %r data") % mini_file_name
+        print("Running Benchmarking on %r data") % data_dict['data_mini']
     print('{:>15} {:>10} {:>10} {:>10} {:>20} {:>15} {:>15} {:>10} {:>10}'.format('density(%)',
                                                                                  'n',
                                                                                  'm',
