@@ -158,12 +158,12 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
             weight = mx.nd.random_uniform(low=0, high=1, shape=weight_shape)
         else:
             weight = rand_ndarray(weight_shape, "row_sparse", density=0.05, distribution="uniform")
-            weight.wait_to_read()
         total_cost = {}
         average_cost = {}
         count = 0
         total_cost["sparse"] = 0.
         total_cost["dense"] = 0.
+        weight.wait_to_read()
         for _ in train_iter:
             csr_data = train_iter.getdata()
             dns_data = csr_data.tostype('default')
