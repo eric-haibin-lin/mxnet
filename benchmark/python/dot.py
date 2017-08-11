@@ -178,7 +178,7 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         """Print result of comparison between sparse and dense
         """
         ratio = average_cost_dense / average_cost_sparse
-        fmt = '{:15.1f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f} {:10}'
+        fmt = '{:15.4f} {:10d} {:10d} {:10d} {:20.2f} {:15.2f} {:15.2f} {:10}'
         print(fmt.format(density * 100, batch_size, output_dim, feature_dim,
                          ratio, average_cost_dense*1000, average_cost_sparse*1000,
                          transpose))
