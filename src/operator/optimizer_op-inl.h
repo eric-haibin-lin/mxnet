@@ -700,6 +700,12 @@ inline void AdamUpdate(const nnvm::NodeAttrs& attrs,
   });
 }
 
+/*!
+ * Note: this kernel performs sparse adam update. For each row-slice in row_sparse
+ * gradient, it finds the corresponding elements in weight, mean and var and performs
+ * the update.
+ * The kernel assumes dense weight/mean/var, and row_sparse gradient
+ */
 template<int req>
 struct AdamDnsRspDnsKernel {
   template<typename DType, typename IType>
@@ -710,7 +716,9 @@ struct AdamDnsRspDnsKernel {
     using nnvm::dim_t;
     using namespace mshadow_op;
     for (dim_t j = 0; j < row_length; j++) {
+      // index in data/mean/var
       dim_t data_i = grad_idx[i] * row_length + j;
+      // index in grad
       dim_t grad_i = i * row_length + j;
       const DType grad_rescaled = grad_data[grad_i] * rescale_grad + weight_data[data_i] * wd;
       if (clip_gradient >= 0.0f) {
