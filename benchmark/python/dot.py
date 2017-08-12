@@ -273,17 +273,32 @@ def test_dot_synthetic(data_dict):
         lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den, distribution=distribution)
         # only uniform distribution supported for rhs
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den, distribution="uniform")
-        lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
-        rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
-        # One warm up run, verify correctness
-        out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
-        out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
-        assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-1, atol=1e-1)
-        # Start benchmarking
         lhs_nd.wait_to_read()
         rhs_nd.wait_to_read()
-        sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd, trans_lhs)
-        dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns, trans_lhs)
+        lhs_dns = None
+        rhs_dns = None
+        dense_cost = None
+        sparse_cost = None
+
+        if fw == "mxnet":
+            lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
+            rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
+            # One warm up run, verify correctness
+            out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
+            out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
+            assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-1, atol=1e-1)
+            sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd, trans_lhs)
+            dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns, trans_lhs)
+        else:
+            lhs_dns = np.transpose(lhs_nd.asnumpy()) if trans_lhs else lhs_nd.asnumpy()
+            rhs_dns = rhs_nd.asnumpy()
+            lhs_nd = sp.spmatrix.transpose(sp.csr_matrix(lhs_nd.asnumpy())) if trans_lhs else sp.csr_matrix(lhs_nd.asnumpy())
+            rhs_nd = rhs_nd.asnumpy()
+            # One warm up run, verify correctness
+            out = dot_func_sparse(lhs_nd, rhs_dns)
+            sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd)
+            dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns)
+
         speedup = dense_cost / sparse_cost
         # Print results
         m = lhs_shape[0]
