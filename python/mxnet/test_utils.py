@@ -808,7 +808,6 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
     proj = mx.sym.Variable("__random_proj")
     out = sym * proj
     out = mx.sym.MakeLoss(out)
-    #out = mx.sym.make_loss(out)
 
     location = dict(list(location.items()) +
                     [("__random_proj", mx.nd.array(random_projection(out_shape[0]), ctx=ctx))])
@@ -834,17 +833,10 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
                          "Got %d inputs and %d locations"%(len(inps), len(location)))
     assert len(executor.outputs) == 1
 
-    #print("calling forward()")
     executor.forward(is_train=True)
-    #print("Forward output: {}".format(executor.outputs[0].asnumpy()))
-    #print("calling backward()")
     executor.backward()
-    #print("returned from backward()")
     symbolic_grads = {k:executor.grad_dict[k].asnumpy() for k in grad_nodes}
-    # for k, v in symbolic_grads.items():
-    #     print("Backward input grads: [{}] = {}".format(k, v))
 
-    #print("getting numeric gradients")
     numeric_gradients = numeric_grad(executor, location_npy, aux_states_npy,
                                      eps=numeric_eps, use_forward_train=use_forward_train)
 
@@ -853,9 +845,6 @@ def check_numeric_gradient(sym, location, aux_states=None, numeric_eps=1e-3, rto
         orig_grad = args_grad_npy[name]
         sym_grad = symbolic_grads[name]
         if grad_req[name] == 'write':
-            # print(name + " orig_grad:", orig_grad)
-            # print(name + " fd_grad: ", fd_grad)
-            # print(name + " sym_grad:", sym_grad)
             assert_almost_equal(fd_grad, sym_grad, rtol, atol,
                                 ("NUMERICAL_%s"%name, "BACKWARD_%s"%name))
         elif grad_req[name] == 'add':
@@ -1002,15 +991,6 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
 
     args_grad_npy = {k:_rng.normal(size=v.shape) for k, v in expected.items()}
     # args_grad_data should be casted to storage type if hinted
-    # TODO(haibin) this is a temporary solution for testing. remove later
-    # attrs = sym.attr_dict()
-    # args_grad_data = {}
-    # for k, v in args_grad_npy.items():
-    #     attr = attrs.get(k, {})
-    #     input_grad_stype = attr.get('input_grad_stype_hint', None)
-    #     nd = mx.nd.array(v, ctx=ctx)
-    #     if input_grad_stype is not None and input_grad_stype != 'default':
-    #         args_grad_data[k] = create_sparse_array(v.shape, input_grad_stype, density=0.0)
     args_grad_data = {}
     for k, v in args_grad_npy.items():
         nd = mx.nd.array(v, ctx=ctx)
