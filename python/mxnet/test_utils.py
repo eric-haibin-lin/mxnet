@@ -268,6 +268,7 @@ def rand_sparse_ndarray(shape, stype, density=None, dtype=None, data_init=None,
     all following columns in all followings rows until we reach the required density.
     density = rnd.rand() if density is None else density
     """
+    density = rnd.rand() if density is None else density
     dtype = default_dtype() if dtype is None else dtype
     if stype == 'row_sparse':
         assert (distribution == "uniform"), \
