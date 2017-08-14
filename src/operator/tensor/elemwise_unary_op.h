@@ -74,14 +74,14 @@ class OpBase {
       CHECK(shape_assign(&sshape, ishape));
       dest->CheckAndAllocData(sshape);
       CHECK_EQ(dest->storage_type(), clone_from->storage_type());
-      for (size_t i = 0, n = clone_from->aux_shape_count(); i < n; ++i) {
+      for (size_t i = 0, n = clone_from->aux_shapes().size(); i < n; ++i) {
         TShape ashape = dest->aux_shape(i);
         CHECK(shape_assign(&ashape, clone_from->aux_shape(i)));
         dest->CheckAndAllocAuxData(i, ashape);
       }
-      DCHECK_EQ(dest->aux_shape_count(), clone_from->aux_shape_count());
+      DCHECK_EQ(dest->aux_shapes().size(), clone_from->aux_shapes().size());
     } else {
-      for (size_t i = 0, n = dest->aux_shape_count(); i < n; ++i) {
+      for (size_t i = 0, n = dest->aux_shapes().size(); i < n; ++i) {
         dest->CheckAndAllocAuxData(i, dest->aux_shape(i));
       }
       dest->CheckAndAllocData(dest->storage_shape());
@@ -94,11 +94,11 @@ class OpBase {
                                        const NDArray *dest,
                                        const OpReqType reqi,
                                        const NDArray &src) {
-    CHECK_EQ(src.aux_shape_count(), dest->aux_shape_count());
+    CHECK_EQ(src.aux_shapes().size(), dest->aux_shapes().size());
     // My assumption is that the geometry blobs are not large enough to justify an omp loop here,
     // since the thread synchronization calls for each fork will take longer
     // than copying a few floats
-    for (size_t i = 0, n = src.aux_shape_count(); i < n; ++i) {
+    for (size_t i = 0, n = src.aux_shapes().size(); i < n; ++i) {
       const TBlob src_blob = src.aux_data(i);
       const TBlob dest_blob = dest->aux_data(i);
       CopyBlob<xpu>(s, &dest_blob, reqi, src_blob);
@@ -177,9 +177,9 @@ class UnaryOp : public OpBase {
         }
         CHECK_EQ(output->shape(), inputs[i].shape());
         CHECK_EQ(output->storage_type(), input.storage_type());
-        CHECK_EQ(output->aux_shape_count(), input.aux_shape_count());
+        CHECK_EQ(output->aux_shapes().size(), input.aux_shapes().size());
         std::vector<TShape> aux_shapes;
-        const size_t aux_shape_count = input.aux_shape_count();
+        const size_t aux_shape_count = input.aux_shapes().size();
         aux_shapes.reserve(aux_shape_count);
         for (size_t j = 0; j < aux_shape_count; ++j) {
           aux_shapes.emplace_back(input.aux_shape(j));
