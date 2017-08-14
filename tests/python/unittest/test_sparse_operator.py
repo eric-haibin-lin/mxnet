@@ -1472,7 +1472,7 @@ def test_sparse_elementwise_sum():
         check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
 
 
-def manual_test_elemwise():
+def manual_elemwise_run_tests():
     test_sparse_elementwise_sum()
     test_sparse_mathematical_core()
     test_sparse_unary_with_numerics()
