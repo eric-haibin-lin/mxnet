@@ -97,6 +97,7 @@ class ElemwiseBinaryOp : public OpBase {
     });
   }
 
+  /*! \brief Fill contiguous dense output rows with value computed from 0 lhs and 0 rhs input */
   template<typename xpu, typename DType, typename OP>
   static inline size_t FillDense(mshadow::Stream<xpu> *s,
                                  const size_t idx_l,
