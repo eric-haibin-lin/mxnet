@@ -867,7 +867,6 @@ def test_batchnorm_training():
             rolling_mean = np.random.uniform(size=s)
             rolling_std = np.random.uniform(size=s)
 
-            stype = 'row_sparse'
             data = mx.symbol.Variable('data', stype=stype)
             in_location = [mx.nd.array(data_tmp).tostype(stype), mx.nd.array(gamma).tostype(stype),
                            mx.nd.array(beta).tostype(stype)]
@@ -935,7 +934,7 @@ def test_batchnorm_training():
                 test = mx.symbol.BatchNorm(data, fix_gamma=False, use_global_stats=True, axis=chaxis)
                 check_numeric_gradient(test, in_location, xmean_std, numeric_eps=1e-2, rtol=0.2, atol=0.01)
 
-    stypes = ['row_sparse', 'csr', 'default']
+    stypes = ['row_sparse', 'default']
     for stype in stypes:
         check_batchnorm_training(stype)
 
@@ -3439,15 +3438,8 @@ def test_deformable_psroipooling():
 
 
 def test_laop():
-    return
 
-    # Currently no support for GPU. Will be added soon
-    # so keep these tests here in this file and activate
-    # gpu-testing when it is ready.
-    dev = default_context()
-    if dev.device_type == 'gpu':
-       return
-
+    # enable numerical checking of gradients
     grad_check = 1
 
     data1 = mx.symbol.Variable('data1')
