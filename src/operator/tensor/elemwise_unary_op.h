@@ -51,17 +51,17 @@ class OpBase {
   /*! \brief Copy blob data */
   template<typename xpu>
   static void inline CopyBlob(mshadow::Stream<xpu> *s,
-                              const TBlob& dest_blob,
+                              const TBlob *dest_blob,
                               const OpReqType reqi,
                               const TBlob& src_blob) {
     using namespace mshadow;
     using namespace mshadow::expr;
-    CHECK_EQ(src_blob.type_flag_, dest_blob.type_flag_);
-    CHECK_EQ(src_blob.shape_, dest_blob.shape_);
+    CHECK_EQ(src_blob.type_flag_, dest_blob->type_flag_);
+    CHECK_EQ(src_blob.shape_, dest_blob->shape_);
     MSHADOW_TYPE_SWITCH(src_blob.type_flag_, DType, {
       // Check if the pointers are the same (in-place operation needs no copy)
-      if (src_blob.dptr<DType>() != dest_blob.dptr<DType>()) {
-        mshadow::Copy(dest_blob.FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s), s);
+      if (src_blob.dptr<DType>() != dest_blob->dptr<DType>()) {
+        mshadow::Copy(dest_blob->FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s), s);
       }
     });
   }
@@ -101,39 +101,21 @@ class OpBase {
     for (size_t i = 0, n = src.aux_shape_count(); i < n; ++i) {
       const TBlob src_blob = src.aux_data(i);
       const TBlob dest_blob = dest->aux_data(i);
-      CopyBlob<xpu>(s, dest_blob, reqi, src_blob);
+      CopyBlob<xpu>(s, &dest_blob, reqi, src_blob);
     }
   }
 
   /*! \brief Generic copy NDArray */
   template<typename xpu>
   static inline void CopyNDArray(mshadow::Stream<xpu> *s,
-                                 const NDArray& dest,
+                                 const NDArray *dest,
                                  const OpReqType reqi,
                                  const NDArray& src) {
-    DCHECK_NE(dest.storage_type(), kDefaultStorage);
-    DCHECK_EQ(dest.storage_type(), src.storage_type());
-    AllocateGeometry(&dest, &src);
-    CopyGeometryBlobs(s, &dest, reqi, src);
-    CopyBlob(s, dest.data(), reqi, src.data());
-  }
-
-  /*! \brief Get NDArray's data blob, possibly reshaped if necessary to reflect actual
-   *         number of stored items */
-  static inline TBlob GetReshapedBlob(const NDArray& arr) {
-    TBlob blob = arr.data();
-    switch (arr.storage_type()) {
-      case kDefaultStorage:  // most common first
-        break;
-      case kRowSparseStorage:
-      case kCSRStorage:
-        blob.shape_ = arr.storage_shape();
-        break;
-      default:
-        LOG(FATAL) << "Unrecognized storage type: " << arr.storage_type();
-        break;
-    }
-    return blob;
+    DCHECK_NE(dest->storage_type(), kDefaultStorage);
+    DCHECK_EQ(dest->storage_type(), src.storage_type());
+    AllocateGeometry(dest, &src);
+    CopyGeometryBlobs(s, dest, reqi, src);
+    CopyBlob(s, &dest->data(), reqi, src.data());
   }
 
   /*! \brief Map NDArray vectors to TBlob vectors and pass to compute function */
@@ -148,10 +130,10 @@ class OpBase {
     in_blobs.reserve(inputs.size());
     out_blobs.reserve(outputs.size());
     for (size_t i = 0, n = inputs.size(); i < n; ++i) {
-      in_blobs.emplace_back(std::move(GetReshapedBlob(inputs[i])));
+      in_blobs.emplace_back(std::move(inputs[i].data()));
     }
     for (size_t i = 0, n = outputs.size(); i < n; ++i) {
-      out_blobs.emplace_back(std::move(GetReshapedBlob(outputs[i])));
+      out_blobs.emplace_back(std::move(outputs[i].data()));
     }
     computer(attrs, ctx, in_blobs, req, out_blobs);
   }
@@ -413,7 +395,7 @@ class UnaryOp : public OpBase {
     using namespace mshadow::expr;
     CHECK_EQ(inputs.size(), 2);
     CHECK_EQ(outputs.size(), 1);
-    OpBase::CopyNDArray(ctx.get_stream<xpu>(), outputs[0], req[0], inputs[0]);
+    OpBase::CopyNDArray(ctx.get_stream<xpu>(), &outputs[0], req[0], inputs[0]);
   }
 };
 

@@ -24,6 +24,7 @@ def is_scalar(var):
 
 
 def get_result_type(call, dflt_stype):
+  """Try to infer result storage type for a sparse matrix and a given unary operation"""
     if call is not None and dflt_stype != 'default':
         zero = np.zeros(([1]))
         result = do_normalize(call(zero))
@@ -41,6 +42,7 @@ def get_result_type(call, dflt_stype):
 
 
 def get_result_type_with_scalar(call, dflt_stype):
+  """Try to infer result storage type when operating a sparse matrices and a scalar"""
     if call is not None and dflt_stype != 'default':
         zero = np.zeros(([1]))
         result = call(zero, 5)
@@ -59,6 +61,7 @@ def get_result_type_with_scalar(call, dflt_stype):
 
 
 def get_result_type_2(call, dflt_stype):
+  """Try to infer result storage type when operating on two sparse matrices"""
     if call is not None and dflt_stype != 'default':
         zero = np.zeros(([1]))
         need_default = False
@@ -82,6 +85,7 @@ def get_result_type_2(call, dflt_stype):
 
 
 def get_result_type_3(call, dflt_stype):
+  """Try to infer result storage type when operating on three sparse matrices"""
     if call is not None and dflt_stype != 'default':
         zero = np.zeros(([1]))
         need_default = False

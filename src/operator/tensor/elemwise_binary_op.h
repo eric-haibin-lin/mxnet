@@ -123,35 +123,9 @@ class ElemwiseBinaryOp : public OpBase {
 
   template<typename DType>
   static inline bool IsSameArray(const NDArray *a1, const NDArray *a2) {
-    if (a1 && a2) {
-      if (a1 == a2) {
-        return true;
-      }
-      if (a1->ctx().dev_type == a2->ctx().dev_type && a1->ctx().dev_id == a2->ctx().dev_id) {
-        const DType *pa1 = a1->data().dptr<DType>();
-        if (pa1 && pa1 == a2->data().dptr<DType>()) {
-          return true;
-        }
-      }
-    }
-    return false;
+    return a1 && a2 && a1->var() == a2->var();
   }
 
-  /*! \brief For some types or sparse, we can assume 100% density can be computer
-   * more quickly with the standard dense procedure
-   * @param arr the array to test
-   * @return bool, whether the array is effectively dense
-   */
-  static inline bool IsEffectivelyDense(const NDArray& arr) {
-    switch (arr.storage_type()) {
-      case kDefaultStorage:
-        return true;
-      case kRowSparseStorage:
-        return arr.shape().Size() == arr.aux_shape(rowsparse::kIdx).Size();
-      default:
-        return false;
-    }
-  }
 
   // TODO(cjolivier01) Optimize: change some bool parameters to template arguments
   //                   in order to remove runtime checks for these invariant vars
@@ -479,12 +453,6 @@ class ElemwiseBinaryOp : public OpBase {
   /*! \brief Maximum of three */
   static MSHADOW_XINLINE size_t maxthree(const size_t a, const size_t b, const size_t c) {
     return a > b ? (a > c ? a : c) : (b > c ? b : c);
-  }
-
-  template<typename DType>
-  static MSHADOW_XINLINE int LaunchSize(const size_t sz) {
-    return static_cast<int>((sz + mxnet_op::DataType<DType>::kLanes - 1)
-                     / mxnet_op::DataType<DType>::kLanes);
   }
 
   /*! \brief LaunchEx allowing dense lvalue and/or rvalue */
