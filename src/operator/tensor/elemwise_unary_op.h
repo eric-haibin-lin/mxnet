@@ -54,19 +54,20 @@ class OpBase {
                               const TBlob *dest_blob,
                               const OpReqType reqi,
                               const TBlob& src_blob) {
-    using namespace mshadow;
-    using namespace mshadow::expr;
     CHECK_EQ(src_blob.type_flag_, dest_blob->type_flag_);
     CHECK_EQ(src_blob.shape_, dest_blob->shape_);
     MSHADOW_TYPE_SWITCH(src_blob.type_flag_, DType, {
       // Check if the pointers are the same (in-place operation needs no copy)
-      if (src_blob.dptr<DType>() != dest_blob->dptr<DType>()) {
+      if (reqi != kNullOp && src_blob.dptr<DType>() != dest_blob->dptr<DType>()) {
         mshadow::Copy(dest_blob->FlatTo1D<xpu, DType>(s), src_blob.FlatTo1D<xpu, DType>(s), s);
       }
     });
   }
 
-  /*! \brief Allocate geometry-related blob data for sparse tensors */
+  /*! \brief Allocate geometry-related blob data for sparse tensors
+   * \param dest Destination sparse NDArray
+   * \param clone_from sparse NDArray from which to clone storage attributes
+   */
   static void AllocateGeometry(const NDArray *dest, const NDArray* clone_from = nullptr) {
     if (clone_from) {
       const TShape ishape = clone_from->storage_shape();
@@ -157,7 +158,9 @@ class OpBase {
 
 /*! \brief Unary operator class */
 class UnaryOp : public OpBase {
-  /*! \brief Infer the output storage geometry */
+  /*! \brief Infer the output storage geometry
+   * \return boolean signifying whether the proper storage geometry was initialized
+   */
   template<int n_in, int n_out>
   static bool InitStorageGeometry(const nnvm::NodeAttrs& attrs,
                                   const std::vector<NDArray>& inputs,
@@ -166,7 +169,7 @@ class UnaryOp : public OpBase {
       << " in operator " << attrs.name;
     CHECK_EQ(outputs.size(), static_cast<size_t>(n_out))
       << " in operator " << attrs.name;
-    CHECK(n_in > 0 && n_out > 0);
+    static_assert(n_in > 0 && n_out > 0, "Invalid input and/or output count values");
     const TShape& isshape = inputs[0].storage_shape();
     if (!shape_is_none(isshape)) {
       NDArray *output = nullptr;
