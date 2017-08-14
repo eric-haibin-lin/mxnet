@@ -709,17 +709,18 @@ inline void AdamUpdate(const nnvm::NodeAttrs& attrs,
 template<int req>
 struct AdamDnsRspDnsKernel {
   template<typename DType, typename IType>
-  MSHADOW_XINLINE static void Map(int i, nnvm::dim_t row_length, DType* out_data,
+  MSHADOW_XINLINE static void Map(int i, const nnvm::dim_t row_length, DType* out_data,
     DType* mean_data, DType* var_data, const DType* weight_data, const IType* grad_idx,
     const DType* grad_data, const DType clip_gradient, const DType beta1, const DType beta2,
     const DType lr, const DType wd, const DType epsilon, const DType rescale_grad) {
     using nnvm::dim_t;
     using namespace mshadow_op;
+    const dim_t row_offset = grad_idx[i] * row_length;
     for (dim_t j = 0; j < row_length; j++) {
       // index in data/mean/var
-      dim_t data_i = grad_idx[i] * row_length + j;
+      const dim_t data_i = row_offset + j;
       // index in grad
-      dim_t grad_i = i * row_length + j;
+      const dim_t grad_i = i * row_length + j;
       const DType grad_rescaled = grad_data[grad_i] * rescale_grad + weight_data[data_i] * wd;
       if (clip_gradient >= 0.0f) {
         mean_data[data_i] = beta1 * mean_data[data_i] + (1.f - beta1) *
@@ -759,14 +760,14 @@ inline void AdamUpdateDnsRspDnsImpl(const AdamParam& param,
   MSHADOW_REAL_TYPE_SWITCH(weight.type_flag_, DType, {
     MSHADOW_IDX_TYPE_SWITCH(grad.aux_type(kIdx), IType, {
       MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
-        DType* weight_data = weight.dptr<DType>();
-        IType* grad_idx = grad.aux_data(kIdx).dptr<IType>();
-        DType* grad_val = grad.data().dptr<DType>();
+        const DType* weight_data = weight.dptr<DType>();
+        const IType* grad_idx = grad.aux_data(kIdx).dptr<IType>();
+        const DType* grad_val = grad.data().dptr<DType>();
         DType* mean_data = mean.dptr<DType>();
         DType* var_data = var.dptr<DType>();
         DType* out_data = out->dptr<DType>();
-        index_t num_rows = grad.aux_shape(kIdx)[0];
-        auto row_length = weight.shape_.ProdShape(1, weight.ndim());
+        nnvm::dim_t num_rows = grad.aux_shape(kIdx)[0];
+        const auto row_length = weight.shape_.ProdShape(1, weight.ndim());
         Kernel<AdamDnsRspDnsKernel<req_type>, xpu>::Launch(s, num_rows, row_length,
           out_data, mean_data, var_data, weight_data, grad_idx, grad_val,
           static_cast<DType>(param.clip_gradient), static_cast<DType>(param.beta1),
