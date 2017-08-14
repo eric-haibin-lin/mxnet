@@ -137,8 +137,8 @@ def gen_rsp_random_indices(shape, density=.5, force_indices=None):
     assert density >= 0 and density <= 1
     indices = set()
     if force_indices is not None:
-      for val in force_indices:
-        indices.add(int(val))
+        for val in force_indices:
+            indices.add(int(val))
     if not np.isclose(density, .0, rtol=1.e-3, atol=1.e-3, equal_nan=True) and len(shape) > 0:
         row_count = shape[0]
         for i in range(row_count):
@@ -175,7 +175,7 @@ def test_elemwise_binary_ops():
                                 skip_gradient_check=False,
                                 verbose=False):
         if verbose is True:
-          print("testing:", name)
+            print("testing:", name)
 
         if lhs_grad_stype is None:
             lhs_grad_stype = lhs_stype
@@ -231,7 +231,7 @@ def test_elemwise_binary_ops():
                     shape,
                     density=rhs_density,
                     force_indices=[(shape[0]/2)] if force_lr_overlap is True else None
-                    ))
+                ))
 
         lhs_np = lhs_nd.asnumpy()
         rhs_np = rhs_nd.asnumpy()
@@ -433,11 +433,11 @@ def test_elemwise_binary_ops():
                                 lambda l, r: mx.sym.hypot(l, r),
                                 lambda l, r: np.hypot(l, r),
                                 lambda outg, l, r: (
-                                                outg * assign_each2(
-                                                  l, r, lambda a, b: a/np.sqrt(a * a + b * b)),
-                                                outg * assign_each2(
-                                                  l, r, lambda a, b: b/np.sqrt(a * a + b * b))
-                                            ),
+                                    outg * assign_each2(
+                                        l, r, lambda a, b: a/np.sqrt(a * a + b * b)),
+                                    outg * assign_each2(
+                                        l, r, lambda a, b: b/np.sqrt(a * a + b * b))
+                                ),
                                 lhs_grad_stype, rhs_grad_stype,
                                 force_lr_overlap=force_lr_overlap,
                                 force_grad_overlap=force_grad_overlap,
@@ -448,64 +448,64 @@ def test_elemwise_binary_ops():
 
     # Run basic tests
     for ii in range(1):
-      for lhs_density in [0.0, random.uniform(0, 1), 1.0]:
-        for rhs_density in [0.0, random.uniform(0, 1), 1.0]:
-          for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
-            for force_lr_overlap in [False, True]:
-              for force_grad_overlap in [False, True]:
-                shape = rand_shape_2d()
+        for lhs_density in [0.0, random.uniform(0, 1), 1.0]:
+            for rhs_density in [0.0, random.uniform(0, 1), 1.0]:
+                for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
+                    for force_lr_overlap in [False, True]:
+                        for force_grad_overlap in [False, True]:
+                            shape = rand_shape_2d()
 
-                print("{}, {}, {}, {}, {}, shape: {}".format(lhs_density, rhs_density,
-                                                             ograd_density, force_lr_overlap,
-                                                             force_grad_overlap, shape))
+                            print("{}, {}, {}, {}, {}, shape: {}".format(lhs_density, rhs_density,
+                                                                         ograd_density, force_lr_overlap,
+                                                                         force_grad_overlap, shape))
 
-                check_elemwise_binary_ops('default', 'default', shape,
-                                          lhs_density=lhs_density, rhs_density=rhs_density,
-                                          force_lr_overlap=force_lr_overlap,
-                                          force_grad_overlap=force_grad_overlap,
-                                          ograd_density=ograd_density)
-                check_elemwise_binary_ops('default', 'row_sparse', shape,
-                                          lhs_density=lhs_density, rhs_density=rhs_density,
-                                          force_lr_overlap=force_lr_overlap,
-                                          force_grad_overlap=force_grad_overlap,
-                                          ograd_density=ograd_density)
-                check_elemwise_binary_ops('row_sparse', 'default', shape,
-                                          lhs_density=lhs_density, rhs_density=rhs_density,
-                                          force_lr_overlap=force_lr_overlap,
-                                          force_grad_overlap=force_grad_overlap,
-                                          ograd_density=ograd_density)
-                check_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
-                                          lhs_grad_stype='row_sparse',
-                                          rhs_grad_stype='row_sparse',
-                                          lhs_density=lhs_density,
-                                          rhs_density=rhs_density,
-                                          force_lr_overlap=force_lr_overlap,
-                                          force_grad_overlap=force_grad_overlap,
-                                          ograd_density=ograd_density)
+                            check_elemwise_binary_ops('default', 'default', shape,
+                                                      lhs_density=lhs_density, rhs_density=rhs_density,
+                                                      force_lr_overlap=force_lr_overlap,
+                                                      force_grad_overlap=force_grad_overlap,
+                                                      ograd_density=ograd_density)
+                            check_elemwise_binary_ops('default', 'row_sparse', shape,
+                                                      lhs_density=lhs_density, rhs_density=rhs_density,
+                                                      force_lr_overlap=force_lr_overlap,
+                                                      force_grad_overlap=force_grad_overlap,
+                                                      ograd_density=ograd_density)
+                            check_elemwise_binary_ops('row_sparse', 'default', shape,
+                                                      lhs_density=lhs_density, rhs_density=rhs_density,
+                                                      force_lr_overlap=force_lr_overlap,
+                                                      force_grad_overlap=force_grad_overlap,
+                                                      ograd_density=ograd_density)
+                            check_elemwise_binary_ops('row_sparse', 'row_sparse', shape,
+                                                      lhs_grad_stype='row_sparse',
+                                                      rhs_grad_stype='row_sparse',
+                                                      lhs_density=lhs_density,
+                                                      rhs_density=rhs_density,
+                                                      force_lr_overlap=force_lr_overlap,
+                                                      force_grad_overlap=force_grad_overlap,
+                                                      ograd_density=ograd_density)
 
 def as_dense(arr):
-  if arr.stype != 'default':
-    return mx.nd.cast_storage(arr, stype='default')
-  else:
-    return arr;
+    if arr.stype != 'default':
+        return mx.nd.cast_storage(arr, stype='default')
+    else:
+        return arr;
 
 
 # Make sure that 0's look like 0's when we do a comparison
 def do_normalize(l):
-  it_l = np.nditer(l, flags=['f_index'])
+    it_l = np.nditer(l, flags=['f_index'])
 
-  output = np.zeros(l.shape)
-  it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
+    output = np.zeros(l.shape)
+    it_out = np.nditer(output, flags=['f_index'], op_flags=['writeonly'])
 
-  while not it_l.finished:
-    val_l = it_l[0]
-    if np.isclose(val_l, -0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
-      val_l = 0
-    it_out[0] = val_l
-    it_l.iternext()
-    it_out.iternext()
+    while not it_l.finished:
+        val_l = it_l[0]
+        if np.isclose(val_l, -0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
+            val_l = 0
+        it_out[0] = val_l
+        it_l.iternext()
+        it_out.iternext()
 
-  return output
+    return output
 
 
 def check_sparse_mathematical_core(name, stype,
@@ -513,534 +513,534 @@ def check_sparse_mathematical_core(name, stype,
                                    rhs_arg=None, data_init=9., grad_init=2., output_grad_stype=None,
                                    input_grad_stype=None, force_overlap=False, density=.5,
                                    ograd_density=.5, verbose=False):
-  if verbose is True:
-    print("TESTING: " + name)
-
-  data = mx.symbol.Variable('data', stype=stype)
-
-  temp_input_grad_stype = input_grad_stype
-
-  if temp_input_grad_stype is None:
-    temp_input_grad_stype = stype
-
-  if rhs_arg is not None:
-    if is_scalar(rhs_arg):
-      expected_result_type, expected_grad_result_type = \
-        get_fw_bw_result_types_with_scalar(forward_numpy_call, stype,
-                                           backward_numpy_call, temp_input_grad_stype)
-    else:
-      expected_result_type, expected_grad_result_type = \
-        get_fw_bw_result_types_2(forward_numpy_call, stype,
-                                 backward_numpy_call, temp_input_grad_stype)
-  else:
-    expected_result_type, expected_grad_result_type = \
-      get_fw_bw_result_types(forward_numpy_call, stype,
-                             backward_numpy_call, temp_input_grad_stype)
-
-  if input_grad_stype is not None and input_grad_stype != expected_grad_result_type:
-    print("{}: explicit override of deduced input grad type '{}' with '{}'".format(
-      name, expected_grad_result_type, input_grad_stype))
-    expected_grad_result_type = input_grad_stype
-
-  shape = rand_shape_2d()
-
-  if verbose is True:
-    print("Shape: ", shape, "density: ", density, "force_overlap", force_overlap)
-
-  if stype == 'default':
-    data_tmp = np.zeros(shape)
-    if abs(density) >= 1e-4:
-      data_tmp[:] = data_init
-    arr_data = mx.nd.array(data_tmp)
-  else:
-    arr_data = create_sparse_array_zd(
-      shape, stype, density=density,
-      data_init=data_init,
-      rsp_indices=gen_rsp_random_indices(
-        shape,
-        density=density,
-        force_indices=[(shape[0]/2)] if force_overlap is True else None
-      )
-    )
-    data_tmp = arr_data.asnumpy()
     if verbose is True:
-      print("arr_data indices", arr_data.indices.asnumpy())
+        print("TESTING: " + name)
 
-  if verbose is True:
-    print("input", data_tmp)
+    data = mx.symbol.Variable('data', stype=stype)
 
-  if backward_numpy_call is None:
-    arr_grad = None
-  elif expected_grad_result_type == 'default':
-    if abs(density) < 1e-4:
-      arr_grad = mx.nd.zeros(shape)
-    else:
-      arr_grad = mx.nd.ones(shape)
-  else:
-    arr_grad = create_sparse_array_zd(
-      shape,
-      expected_grad_result_type,
-      density=density,
-      data_init=1,
-      rsp_indices=gen_rsp_random_indices(
-        shape,
-        density=density,
-        force_indices=[(shape[0]/2)] if force_overlap is True else None
-      )
-    )
+    temp_input_grad_stype = input_grad_stype
 
-  if rhs_arg is not None:
-    test = forward_mxnet_call(data, rhs_arg)
-  else:
-    test = forward_mxnet_call(data)
-
-  args = list()
-  args.append(arr_data)
-
-  if arr_grad is not None:
-    exe_test = test.bind(default_context(), args=args, args_grad=[arr_grad])
-  else:
-    exe_test = test.bind(default_context(), args=args)
-
-  exe_test.forward(is_train=True)
-  assert exe_test.outputs[0].stype == expected_result_type
-  out = exe_test.outputs[0].asnumpy()
-
-  if rhs_arg is not None:
-    npout = forward_numpy_call(data_tmp, rhs_arg)
-  else:
-    npout = forward_numpy_call(data_tmp)
-
-  if verbose is True:
-    print("out", out)
-    print("npout", npout)
-
-  assert_almost_equal(out, npout, equal_nan=True)
-
-  if backward_numpy_call is not None:
-    if output_grad_stype == 'default' or output_grad_stype is None:
-      out_grad = mx.nd.empty(shape)
-      out_grad[:] = grad_init
-    else:
-      out_grad = create_sparse_array_zd(
-        shape, output_grad_stype,
-        density=density,
-        data_init=grad_init,
-        rsp_indices=gen_rsp_random_indices(
-          shape,
-          density=ograd_density,
-          force_indices=[(shape[0]/2)] if force_overlap is True else None))
-
-    npout_grad = out_grad.asnumpy()
-
-    if verbose is True:
-      print("npout_grad", npout_grad)
+    if temp_input_grad_stype is None:
+        temp_input_grad_stype = stype
 
     if rhs_arg is not None:
-      temp = backward_numpy_call(data_tmp, rhs_arg)
+        if is_scalar(rhs_arg):
+            expected_result_type, expected_grad_result_type = \
+                get_fw_bw_result_types_with_scalar(forward_numpy_call, stype,
+                                                   backward_numpy_call, temp_input_grad_stype)
+        else:
+            expected_result_type, expected_grad_result_type = \
+                get_fw_bw_result_types_2(forward_numpy_call, stype,
+                                         backward_numpy_call, temp_input_grad_stype)
     else:
-      temp = backward_numpy_call(data_tmp)
-    input_grad = npout_grad * temp
+        expected_result_type, expected_grad_result_type = \
+            get_fw_bw_result_types(forward_numpy_call, stype,
+                                   backward_numpy_call, temp_input_grad_stype)
+
+    if input_grad_stype is not None and input_grad_stype != expected_grad_result_type:
+        print("{}: explicit override of deduced input grad type '{}' with '{}'".format(
+            name, expected_grad_result_type, input_grad_stype))
+        expected_grad_result_type = input_grad_stype
+
+    shape = rand_shape_2d()
 
     if verbose is True:
-      print(arr_grad.asnumpy())
-    exe_test.backward(out_grad)
+        print("Shape: ", shape, "density: ", density, "force_overlap", force_overlap)
+
+    if stype == 'default':
+        data_tmp = np.zeros(shape)
+        if abs(density) >= 1e-4:
+            data_tmp[:] = data_init
+        arr_data = mx.nd.array(data_tmp)
+    else:
+        arr_data = create_sparse_array_zd(
+            shape, stype, density=density,
+            data_init=data_init,
+            rsp_indices=gen_rsp_random_indices(
+                shape,
+                density=density,
+                force_indices=[(shape[0]/2)] if force_overlap is True else None
+            )
+        )
+        data_tmp = arr_data.asnumpy()
+        if verbose is True:
+            print("arr_data indices", arr_data.indices.asnumpy())
+
     if verbose is True:
-      print(arr_grad.asnumpy())
+        print("input", data_tmp)
 
-    assert arr_grad.stype == expected_grad_result_type
+    if backward_numpy_call is None:
+        arr_grad = None
+    elif expected_grad_result_type == 'default':
+        if abs(density) < 1e-4:
+            arr_grad = mx.nd.zeros(shape)
+        else:
+            arr_grad = mx.nd.ones(shape)
+    else:
+        arr_grad = create_sparse_array_zd(
+            shape,
+            expected_grad_result_type,
+            density=density,
+            data_init=1,
+            rsp_indices=gen_rsp_random_indices(
+                shape,
+                density=density,
+                force_indices=[(shape[0]/2)] if force_overlap is True else None
+            )
+        )
 
-    arr_grad = arr_grad.asnumpy()
+    if rhs_arg is not None:
+        test = forward_mxnet_call(data, rhs_arg)
+    else:
+        test = forward_mxnet_call(data)
+
+    args = list()
+    args.append(arr_data)
+
+    if arr_grad is not None:
+        exe_test = test.bind(default_context(), args=args, args_grad=[arr_grad])
+    else:
+        exe_test = test.bind(default_context(), args=args)
+
+    exe_test.forward(is_train=True)
+    assert exe_test.outputs[0].stype == expected_result_type
+    out = exe_test.outputs[0].asnumpy()
+
+    if rhs_arg is not None:
+        npout = forward_numpy_call(data_tmp, rhs_arg)
+    else:
+        npout = forward_numpy_call(data_tmp)
 
     if verbose is True:
-      print(name)
-      print("arr_grad", arr_grad)
-      print("input_grad", input_grad)
+        print("out", out)
+        print("npout", npout)
 
-    assert_almost_equal(arr_grad, input_grad, equal_nan=True)
+    assert_almost_equal(out, npout, equal_nan=True)
+
+    if backward_numpy_call is not None:
+        if output_grad_stype == 'default' or output_grad_stype is None:
+            out_grad = mx.nd.empty(shape)
+            out_grad[:] = grad_init
+        else:
+            out_grad = create_sparse_array_zd(
+                shape, output_grad_stype,
+                density=density,
+                data_init=grad_init,
+                rsp_indices=gen_rsp_random_indices(
+                    shape,
+                    density=ograd_density,
+                    force_indices=[(shape[0]/2)] if force_overlap is True else None))
+
+        npout_grad = out_grad.asnumpy()
+
+        if verbose is True:
+            print("npout_grad", npout_grad)
+
+        if rhs_arg is not None:
+            temp = backward_numpy_call(data_tmp, rhs_arg)
+        else:
+            temp = backward_numpy_call(data_tmp)
+        input_grad = npout_grad * temp
+
+        if verbose is True:
+            print(arr_grad.asnumpy())
+        exe_test.backward(out_grad)
+        if verbose is True:
+            print(arr_grad.asnumpy())
+
+        assert arr_grad.stype == expected_grad_result_type
+
+        arr_grad = arr_grad.asnumpy()
+
+        if verbose is True:
+            print(name)
+            print("arr_grad", arr_grad)
+            print("input_grad", input_grad)
+
+        assert_almost_equal(arr_grad, input_grad, equal_nan=True)
 
 
 def test_sparse_mathematical_core():
-  def util_sign(a):
-    if np.isclose(a, -0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
-      return 0
-    elif np.isclose(a, 0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
-      return 0
-    elif a < 0.0:
-      return -1
-    else:  # a > 0.0:
-      return 1
+    def util_sign(a):
+        if np.isclose(a, -0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
+            return 0
+        elif np.isclose(a, 0, rtol=1.e-3, atol=1.e-3, equal_nan=True):
+            return 0
+        elif a < 0.0:
+            return -1
+        else:  # a > 0.0:
+            return 1
 
-  # Check scalar binary operators
-  def check_binary_op_with_scalar(stype,
-                                  output_grad_stype=None,
-                                  input_grad_stype=None,
-                                  density=.5, ograd_density=.5,
-                                  force_overlap=False,):
-    # mul_scalar
-    check_sparse_mathematical_core("mul_scalar", stype,
-                                   lambda x, y: x * y,
-                                   lambda x, y: x * y,
-                                   lambda input, rhs: rhs,
-                                   rhs_arg=5.0,
-                                   data_init=2, grad_init=3,
-                                   output_grad_stype=output_grad_stype,
-                                   input_grad_stype=input_grad_stype,
-                                   density=density, ograd_density=ograd_density,
-                                   force_overlap=force_overlap,
-                                   verbose=False)
+    # Check scalar binary operators
+    def check_binary_op_with_scalar(stype,
+                                    output_grad_stype=None,
+                                    input_grad_stype=None,
+                                    density=.5, ograd_density=.5,
+                                    force_overlap=False,):
+        # mul_scalar
+        check_sparse_mathematical_core("mul_scalar", stype,
+                                       lambda x, y: x * y,
+                                       lambda x, y: x * y,
+                                       lambda input, rhs: rhs,
+                                       rhs_arg=5.0,
+                                       data_init=2, grad_init=3,
+                                       output_grad_stype=output_grad_stype,
+                                       input_grad_stype=input_grad_stype,
+                                       density=density, ograd_density=ograd_density,
+                                       force_overlap=force_overlap,
+                                       verbose=False)
 
-  # Check many basic unary operators
-  def check_mathematical_core(stype, output_grad_stype=None,
-                              input_grad_stype=None, force_overlap=False,
-                              density=.5, ograd_density=.5):
+    # Check many basic unary operators
+    def check_mathematical_core(stype, output_grad_stype=None,
+                                input_grad_stype=None, force_overlap=False,
+                                density=.5, ograd_density=.5):
 
-    # negative
-    check_sparse_mathematical_core("negative", stype,
-                                   lambda x: mx.sym.negative(x),
-                                   lambda x: np.negative(x),
-                                   force_overlap=force_overlap,
-                                   density=density,
-                                   input_grad_stype=input_grad_stype,
-                                   ograd_density=ograd_density)
+        # negative
+        check_sparse_mathematical_core("negative", stype,
+                                       lambda x: mx.sym.negative(x),
+                                       lambda x: np.negative(x),
+                                       force_overlap=force_overlap,
+                                       density=density,
+                                       input_grad_stype=input_grad_stype,
+                                       ograd_density=ograd_density)
 
-    # square
-    check_sparse_mathematical_core("square", stype,
-                                   lambda x: mx.sym.square(x),
-                                   lambda x: np.square(x),
-                                   lambda x: 2 * x,
-                                   output_grad_stype=output_grad_stype,
-                                   input_grad_stype=input_grad_stype,
-                                   force_overlap=force_overlap,
-                                   density=density, ograd_density=ograd_density,
-                                   verbose=False)
-
-    if stype != "csr":
-      # sqrt
-      check_sparse_mathematical_core("sqrt", stype,
-                                     lambda x: mx.sym.sqrt(x),
-                                     lambda x: np.sqrt(x),
-                                     lambda x: 1.0/(2.0 * np.sqrt(x)),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density,
-                                     verbose=False)
-
-      # rsqrt
-      check_sparse_mathematical_core("rsqrt", stype,
-                                     lambda x: mx.sym.rsqrt(x),
-                                     lambda x: 1 / np.sqrt(x),
-                                     lambda x: -(1.0 / (2.0 * x * np.sqrt(x))),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # tan
-      check_sparse_mathematical_core("tan", stype,
-                                     lambda x: mx.sym.tan(x),
-                                     lambda x: np.tan(x),
-                                     lambda x: np.tan(x) ** 2 + 1,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     density=density,
-                                     ograd_density=ograd_density)
-
-      # abs
-      check_sparse_mathematical_core("abs", stype,
-                                     lambda x: mx.sym.abs(x),
-                                     lambda x: np.abs(x),
-                                     lambda x: assign_each(x, function=util_sign),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # floor
-      check_sparse_mathematical_core("floor", stype, lambda x: mx.sym.floor(x),
-                                     lambda x: np.floor(x),
-                                     force_overlap=force_overlap,
-                                     input_grad_stype=input_grad_stype,
-                                     density=density, ograd_density=ograd_density)
-
-      # ceil
-      check_sparse_mathematical_core("ceil", stype, lambda x: mx.sym.ceil(x),
-                                     lambda x: np.ceil(x),
-                                     force_overlap=force_overlap,
-                                     input_grad_stype=input_grad_stype,
-                                     density=density, ograd_density=ograd_density)
-
-      # sign
-      check_sparse_mathematical_core("sign", stype, lambda x: mx.sym.sign(x),
-                                     lambda x: np.sign(x), lambda x: np.zeros(x.shape),
-                                     output_grad_stype=output_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # cos
-      check_sparse_mathematical_core("cos", stype, lambda x: mx.sym.cos(x), lambda x: np.cos(x),
-                                     lambda x: -np.sin(x),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # sin
-      check_sparse_mathematical_core("sin", stype, lambda x: mx.sym.sin(x), lambda x: np.sin(x),
-                                     lambda x: np.cos(x),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # arcsin
-      check_sparse_mathematical_core("arcsin", stype,
-                                     lambda x: mx.sym.arcsin(x),
-                                     lambda x: np.arcsin(x),
-                                     lambda x: 1. / (1. - x ** 2) ** (1. / 2.),
-                                     data_init=0.5, grad_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # arccos
-      check_sparse_mathematical_core("arccos", stype, lambda x: mx.sym.arccos(x),
-                                     lambda x: np.arccos(x),
-                                     lambda x: -1. / (1. - x ** 2.) ** (1. / 2.),
-                                     data_init=0.5, grad_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # arctan
-      check_sparse_mathematical_core("arctan", stype, lambda x: mx.sym.arctan(x),
-                                     lambda x: np.arctan(x),
-                                     lambda x: 1. / (x ** 2. + 1.),
-                                     data_init=0.5, grad_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # degrees
-      check_sparse_mathematical_core("degrees", stype,
-                                     lambda x: mx.sym.degrees(x),
-                                     lambda x: np.degrees(x),
-                                     lambda x: assign_each(x, lambda a: 180./np.pi),
-                                     data_init=0.5, grad_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # radians
-      check_sparse_mathematical_core("radians", stype,
-                                     lambda x: mx.sym.radians(x),
-                                     lambda x: np.radians(x),
-                                     lambda x: assign_each(x, lambda a: np.pi / 180.),
-                                     data_init=0.6, grad_init=1,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # sinh
-      check_sparse_mathematical_core("sinh", stype, lambda x: mx.sym.sinh(x), lambda x: np.sinh(x),
-                                     lambda x: np.cosh(x),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # cosh
-      check_sparse_mathematical_core("cosh", stype, lambda x: mx.sym.cosh(x),
-                                     lambda x: np.cosh(x), lambda x: np.sinh(x),
-                                     data_init=5, grad_init=5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap,
-                                     density=density, ograd_density=ograd_density)
-
-      # tanh
-      check_sparse_mathematical_core("tanh", stype,
-                                     lambda x: mx.sym.tanh(x),
-                                     lambda x: np.tanh(x),
-                                     lambda x: 1. - np.tanh(x) ** 2,
-                                     data_init=0.5, grad_init=1,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # arcsinh
-      check_sparse_mathematical_core("arcsinh", stype, lambda x: mx.sym.arcsinh(x),
-                                     lambda x: np.arcsinh(x),
-                                     lambda x: 1./(x**2 + 1.)**(1./2.),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # arccosh
-      check_sparse_mathematical_core("arccosh", stype, lambda x: mx.sym.arccosh(x),
-                                     lambda x: np.arccosh(x),
-                                     lambda x: 1./(x**2 - 1.)**(1./2.),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # arctanh
-      check_sparse_mathematical_core("arctanh", stype, lambda x: mx.sym.arctanh(x),
-                                     lambda x: np.arctanh(x),
-                                     lambda x: -1./(x**2 - 1.),
-                                     data_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # log1p
-      check_sparse_mathematical_core("log1p", stype, lambda x: mx.sym.log1p(x),
-                                     lambda x: np.log1p(x),
-                                     lambda x: 1. / (1.0 + x),
-                                     data_init=0.5, grad_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # expm1
-      check_sparse_mathematical_core("expm1", stype, lambda x: mx.sym.expm1(x),
-                                     lambda x: np.expm1(x),
-                                     lambda x: np.exp(x),
-                                     data_init=0.5, grad_init=0.5,
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # log10
-      check_sparse_mathematical_core("log10", stype, lambda x: mx.sym.log10(x),
-                                     lambda x: np.log10(x),
-                                     lambda x: (1 / x),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # log2
-      check_sparse_mathematical_core("log2", stype, lambda x: mx.sym.log2(x),
-                                     lambda x: np.log2(x),
-                                     lambda x: (1 / x),
-                                     output_grad_stype=output_grad_stype,
-                                     input_grad_stype=input_grad_stype,
-                                     force_overlap=force_overlap, density=density,
-                                     ograd_density=ograd_density)
-
-      # rint
-      check_sparse_mathematical_core("rint", stype, lambda x: mx.sym.rint(x),
-                                     lambda x: np.rint(x),
-                                     force_overlap=force_overlap, density=density,
-                                     input_grad_stype=input_grad_stype,
-                                     ograd_density=ograd_density)
-
-      # fix
-      check_sparse_mathematical_core("fix", stype, lambda x: mx.sym.fix(x), lambda x: np.fix(x),
-                                     force_overlap=force_overlap, density=density,
-                                     input_grad_stype=input_grad_stype,
-                                     ograd_density=ograd_density)
-
-      try:
-        from scipy import special as scipy_special
-        import_succeeded = True
-        # gamma
-        check_sparse_mathematical_core("gamma", stype,
-                                       lambda x: mx.sym.gamma(x),
-                                       lambda x: scipy_special.gamma(x),
-                                       lambda x: scipy_special.gamma(x) * scipy_special.psi(x),
+        # square
+        check_sparse_mathematical_core("square", stype,
+                                       lambda x: mx.sym.square(x),
+                                       lambda x: np.square(x),
+                                       lambda x: 2 * x,
                                        output_grad_stype=output_grad_stype,
                                        input_grad_stype=input_grad_stype,
                                        force_overlap=force_overlap,
-                                       density=density, ograd_density=ograd_density)
-        # gammaln
-        check_sparse_mathematical_core("gammaln", stype,
-                                       lambda x: mx.sym.gammaln(x),
-                                       lambda x: scipy_special.gammaln(x),
-                                       lambda x: scipy_special.psi(x),
-                                       output_grad_stype=output_grad_stype,
-                                       input_grad_stype=input_grad_stype,
-                                       force_overlap=force_overlap,
-                                       density=density, ograd_density=ograd_density)
+                                       density=density, ograd_density=ograd_density,
+                                       verbose=False)
 
-      except:
-        if import_succeeded == False:
-          print("Could not import scipy. Skipping unit tests for special functions")
-        else:
-          raise
+        if stype != "csr":
+            # sqrt
+            check_sparse_mathematical_core("sqrt", stype,
+                                           lambda x: mx.sym.sqrt(x),
+                                           lambda x: np.sqrt(x),
+                                           lambda x: 1.0/(2.0 * np.sqrt(x)),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density,
+                                           verbose=False)
 
-  for i in range(1):
-    print("pass", i)
-    for density in [0.0, random.uniform(0, 1), 1.0]:
-      for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
-        for force_overlap in [False, True]:
-          print("{}, {}, {}".format(density, ograd_density, force_overlap))
+            # rsqrt
+            check_sparse_mathematical_core("rsqrt", stype,
+                                           lambda x: mx.sym.rsqrt(x),
+                                           lambda x: 1 / np.sqrt(x),
+                                           lambda x: -(1.0 / (2.0 * x * np.sqrt(x))),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
 
-          # Check unary ops (unary fwd, binary bwd)
-          check_mathematical_core('default', force_overlap=force_overlap,
-                                  density=density, ograd_density=ograd_density)
-          check_mathematical_core('row_sparse', force_overlap=force_overlap,
-                                  density=density, ograd_density=ograd_density)
-          check_mathematical_core('row_sparse', output_grad_stype='default',
-                                  force_overlap=force_overlap,
-                                  density=density, ograd_density=ograd_density)
-          check_mathematical_core('row_sparse', output_grad_stype='row_sparse',
-                                  force_overlap=force_overlap,
-                                  density=density, ograd_density=ograd_density)
-          check_mathematical_core('csr', output_grad_stype='default',
-                                  force_overlap=force_overlap,
-                                  density=density, ograd_density=ograd_density)
-          check_mathematical_core('csr', output_grad_stype='csr',
-                                  force_overlap=force_overlap,
-                                  density=density, ograd_density=ograd_density)
+            # tan
+            check_sparse_mathematical_core("tan", stype,
+                                           lambda x: mx.sym.tan(x),
+                                           lambda x: np.tan(x),
+                                           lambda x: np.tan(x) ** 2 + 1,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           density=density,
+                                           ograd_density=ograd_density)
 
-          # Check binary with scalar ops
-          check_binary_op_with_scalar('default',
-                                      density=density,
-                                      ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
-          check_binary_op_with_scalar('row_sparse',
-                                      density=density,
-                                      ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
-          check_binary_op_with_scalar('row_sparse', output_grad_stype='default',
-                                      density=density,
-                                      ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
-          check_binary_op_with_scalar('row_sparse',
-                                      output_grad_stype='row_sparse',
-                                      density=density, ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
-          check_binary_op_with_scalar('csr',
-                                      output_grad_stype='csr',
-                                      input_grad_stype='default',
-                                      density=density,
-                                      ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
-          check_binary_op_with_scalar('csr',
-                                      output_grad_stype='csr',
-                                      input_grad_stype='csr',
-                                      density=density,
-                                      ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
-          check_binary_op_with_scalar('csr',
-                                      output_grad_stype='default',
-                                      density=density,
-                                      ograd_density=ograd_density,
-                                      force_overlap=force_overlap)
+            # abs
+            check_sparse_mathematical_core("abs", stype,
+                                           lambda x: mx.sym.abs(x),
+                                           lambda x: np.abs(x),
+                                           lambda x: assign_each(x, function=util_sign),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # floor
+            check_sparse_mathematical_core("floor", stype, lambda x: mx.sym.floor(x),
+                                           lambda x: np.floor(x),
+                                           force_overlap=force_overlap,
+                                           input_grad_stype=input_grad_stype,
+                                           density=density, ograd_density=ograd_density)
+
+            # ceil
+            check_sparse_mathematical_core("ceil", stype, lambda x: mx.sym.ceil(x),
+                                           lambda x: np.ceil(x),
+                                           force_overlap=force_overlap,
+                                           input_grad_stype=input_grad_stype,
+                                           density=density, ograd_density=ograd_density)
+
+            # sign
+            check_sparse_mathematical_core("sign", stype, lambda x: mx.sym.sign(x),
+                                           lambda x: np.sign(x), lambda x: np.zeros(x.shape),
+                                           output_grad_stype=output_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # cos
+            check_sparse_mathematical_core("cos", stype, lambda x: mx.sym.cos(x), lambda x: np.cos(x),
+                                           lambda x: -np.sin(x),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # sin
+            check_sparse_mathematical_core("sin", stype, lambda x: mx.sym.sin(x), lambda x: np.sin(x),
+                                           lambda x: np.cos(x),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # arcsin
+            check_sparse_mathematical_core("arcsin", stype,
+                                           lambda x: mx.sym.arcsin(x),
+                                           lambda x: np.arcsin(x),
+                                           lambda x: 1. / (1. - x ** 2) ** (1. / 2.),
+                                           data_init=0.5, grad_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # arccos
+            check_sparse_mathematical_core("arccos", stype, lambda x: mx.sym.arccos(x),
+                                           lambda x: np.arccos(x),
+                                           lambda x: -1. / (1. - x ** 2.) ** (1. / 2.),
+                                           data_init=0.5, grad_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # arctan
+            check_sparse_mathematical_core("arctan", stype, lambda x: mx.sym.arctan(x),
+                                           lambda x: np.arctan(x),
+                                           lambda x: 1. / (x ** 2. + 1.),
+                                           data_init=0.5, grad_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # degrees
+            check_sparse_mathematical_core("degrees", stype,
+                                           lambda x: mx.sym.degrees(x),
+                                           lambda x: np.degrees(x),
+                                           lambda x: assign_each(x, lambda a: 180./np.pi),
+                                           data_init=0.5, grad_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # radians
+            check_sparse_mathematical_core("radians", stype,
+                                           lambda x: mx.sym.radians(x),
+                                           lambda x: np.radians(x),
+                                           lambda x: assign_each(x, lambda a: np.pi / 180.),
+                                           data_init=0.6, grad_init=1,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # sinh
+            check_sparse_mathematical_core("sinh", stype, lambda x: mx.sym.sinh(x), lambda x: np.sinh(x),
+                                           lambda x: np.cosh(x),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # cosh
+            check_sparse_mathematical_core("cosh", stype, lambda x: mx.sym.cosh(x),
+                                           lambda x: np.cosh(x), lambda x: np.sinh(x),
+                                           data_init=5, grad_init=5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap,
+                                           density=density, ograd_density=ograd_density)
+
+            # tanh
+            check_sparse_mathematical_core("tanh", stype,
+                                           lambda x: mx.sym.tanh(x),
+                                           lambda x: np.tanh(x),
+                                           lambda x: 1. - np.tanh(x) ** 2,
+                                           data_init=0.5, grad_init=1,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # arcsinh
+            check_sparse_mathematical_core("arcsinh", stype, lambda x: mx.sym.arcsinh(x),
+                                           lambda x: np.arcsinh(x),
+                                           lambda x: 1./(x**2 + 1.)**(1./2.),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # arccosh
+            check_sparse_mathematical_core("arccosh", stype, lambda x: mx.sym.arccosh(x),
+                                           lambda x: np.arccosh(x),
+                                           lambda x: 1./(x**2 - 1.)**(1./2.),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # arctanh
+            check_sparse_mathematical_core("arctanh", stype, lambda x: mx.sym.arctanh(x),
+                                           lambda x: np.arctanh(x),
+                                           lambda x: -1./(x**2 - 1.),
+                                           data_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # log1p
+            check_sparse_mathematical_core("log1p", stype, lambda x: mx.sym.log1p(x),
+                                           lambda x: np.log1p(x),
+                                           lambda x: 1. / (1.0 + x),
+                                           data_init=0.5, grad_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # expm1
+            check_sparse_mathematical_core("expm1", stype, lambda x: mx.sym.expm1(x),
+                                           lambda x: np.expm1(x),
+                                           lambda x: np.exp(x),
+                                           data_init=0.5, grad_init=0.5,
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # log10
+            check_sparse_mathematical_core("log10", stype, lambda x: mx.sym.log10(x),
+                                           lambda x: np.log10(x),
+                                           lambda x: (1 / x),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # log2
+            check_sparse_mathematical_core("log2", stype, lambda x: mx.sym.log2(x),
+                                           lambda x: np.log2(x),
+                                           lambda x: (1 / x),
+                                           output_grad_stype=output_grad_stype,
+                                           input_grad_stype=input_grad_stype,
+                                           force_overlap=force_overlap, density=density,
+                                           ograd_density=ograd_density)
+
+            # rint
+            check_sparse_mathematical_core("rint", stype, lambda x: mx.sym.rint(x),
+                                           lambda x: np.rint(x),
+                                           force_overlap=force_overlap, density=density,
+                                           input_grad_stype=input_grad_stype,
+                                           ograd_density=ograd_density)
+
+            # fix
+            check_sparse_mathematical_core("fix", stype, lambda x: mx.sym.fix(x), lambda x: np.fix(x),
+                                           force_overlap=force_overlap, density=density,
+                                           input_grad_stype=input_grad_stype,
+                                           ograd_density=ograd_density)
+
+            try:
+                from scipy import special as scipy_special
+                import_succeeded = True
+                # gamma
+                check_sparse_mathematical_core("gamma", stype,
+                                               lambda x: mx.sym.gamma(x),
+                                               lambda x: scipy_special.gamma(x),
+                                               lambda x: scipy_special.gamma(x) * scipy_special.psi(x),
+                                               output_grad_stype=output_grad_stype,
+                                               input_grad_stype=input_grad_stype,
+                                               force_overlap=force_overlap,
+                                               density=density, ograd_density=ograd_density)
+                # gammaln
+                check_sparse_mathematical_core("gammaln", stype,
+                                               lambda x: mx.sym.gammaln(x),
+                                               lambda x: scipy_special.gammaln(x),
+                                               lambda x: scipy_special.psi(x),
+                                               output_grad_stype=output_grad_stype,
+                                               input_grad_stype=input_grad_stype,
+                                               force_overlap=force_overlap,
+                                               density=density, ograd_density=ograd_density)
+
+            except:
+                if import_succeeded == False:
+                    print("Could not import scipy. Skipping unit tests for special functions")
+                else:
+                    raise
+
+    for i in range(1):
+        print("pass", i)
+        for density in [0.0, random.uniform(0, 1), 1.0]:
+            for ograd_density in [0.0, random.uniform(0, 1), 1.0]:
+                for force_overlap in [False, True]:
+                    print("{}, {}, {}".format(density, ograd_density, force_overlap))
+
+                    # Check unary ops (unary fwd, binary bwd)
+                    check_mathematical_core('default', force_overlap=force_overlap,
+                                            density=density, ograd_density=ograd_density)
+                    check_mathematical_core('row_sparse', force_overlap=force_overlap,
+                                            density=density, ograd_density=ograd_density)
+                    check_mathematical_core('row_sparse', output_grad_stype='default',
+                                            force_overlap=force_overlap,
+                                            density=density, ograd_density=ograd_density)
+                    check_mathematical_core('row_sparse', output_grad_stype='row_sparse',
+                                            force_overlap=force_overlap,
+                                            density=density, ograd_density=ograd_density)
+                    check_mathematical_core('csr', output_grad_stype='default',
+                                            force_overlap=force_overlap,
+                                            density=density, ograd_density=ograd_density)
+                    check_mathematical_core('csr', output_grad_stype='csr',
+                                            force_overlap=force_overlap,
+                                            density=density, ograd_density=ograd_density)
+
+                    # Check binary with scalar ops
+                    check_binary_op_with_scalar('default',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('row_sparse',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('row_sparse', output_grad_stype='default',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('row_sparse',
+                                                output_grad_stype='row_sparse',
+                                                density=density, ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('csr',
+                                                output_grad_stype='csr',
+                                                input_grad_stype='default',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('csr',
+                                                output_grad_stype='csr',
+                                                input_grad_stype='csr',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
+                    check_binary_op_with_scalar('csr',
+                                                output_grad_stype='default',
+                                                density=density,
+                                                ograd_density=ograd_density,
+                                                force_overlap=force_overlap)
 
 
 def check_elemwise_add_ex(lhs_stype, rhs_stype, shape, lhs_grad_stype=None, rhs_grad_stype=None):
@@ -1241,87 +1241,87 @@ def test_sparse_retain():
         check_sparse_retain(shape_3d, density)
 
 def do_cast(arr, stype):
-  if arr.stype != stype:
-    return mx.nd.cast_storage(arr, stype=stype)
-  return arr
+    if arr.stype != stype:
+        return mx.nd.cast_storage(arr, stype=stype)
+    return arr
 
 def check_is_type(arr, stype):
-  if stype is not None:
-    assert arr.stype == stype
-  else:
-    assert arr.stype == 'default'
+    if stype is not None:
+        assert arr.stype == stype
+    else:
+        assert arr.stype == 'default'
 
 
 def test_sparse_unary_with_numerics():
-  def check_sparse_simple(name, stype, mxnet_func, forward_numpy_call,
-                          backward_numpy_call, output_grad_stype=None,
-                          backward_is_use_output=False):
-    if output_grad_stype is None:
-      output_grad_stype = stype
-
-    expected_result_type, expected_grad_result_type = \
-      get_fw_bw_result_types_2(forward_numpy_call, stype, backward_numpy_call, output_grad_stype)
-
-    if backward_is_use_output is True:
-      expected_grad_result_type = expected_result_type
-
-    shape = (3, 4)
-    data = mx.symbol.Variable("data")
-
-    grad_stypes = list()
-    grad_stypes.append(expected_grad_result_type)
-
-    y = mxnet_func(data)
-    if stype == 'default':
-      xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
-      xa_np = xa
-    else:
-      xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
-                               modifier_func=lambda a: a - 0.5)
-      xa_np = xa.asnumpy()
-
-    if output_grad_stype != 'default':
-      out_grad = create_sparse_array(shape, output_grad_stype, data_init=None,
-                                     rsp_indices=[1, 2],
-                                     modifier_func=lambda a: a - 0.5)
-      out_grad_np = out_grad.asnumpy()
-    else:
-      out_grad_np = np.ones(xa.shape)
-      out_grad = mx.nd.array(out_grad_np)
-
-    output_np = forward_numpy_call(xa_np)
-    input_grad_np = backward_numpy_call(output_np, out_grad_np)
-
-    outputs = check_symbolic_forward(y, [xa], [output_np])
-    output = outputs[0]
-
-    assert output.stype == expected_result_type
-
-    input_grad_dict = check_symbolic_backward(y, location=[xa], out_grads=[out_grad],
-                                              expected=[input_grad_np],
-                                              grad_stypes=grad_stypes)
-    inp_grad = input_grad_dict["data"]
-
-    assert inp_grad.stype == expected_grad_result_type
-
-  def check_sparse_function(name, mxnet_func, forward_numpy_call, backward_numpy_call,
+    def check_sparse_simple(name, stype, mxnet_func, forward_numpy_call,
+                            backward_numpy_call, output_grad_stype=None,
                             backward_is_use_output=False):
-    check_sparse_simple(name, 'default', mxnet_func, forward_numpy_call, backward_numpy_call)
-    for output_grad_stype in [None, "row_sparse", "default"]:
-      check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_call, backward_numpy_call,
-                          output_grad_stype=output_grad_stype,
-                          backward_is_use_output=backward_is_use_output)
+        if output_grad_stype is None:
+            output_grad_stype = stype
 
-  check_sparse_function('relu',
-                        lambda x: mx.sym.relu(x),
-                        lambda x: np.maximum(x, 0.0),
-                        lambda input, outg: outg * assign_each(input, lambda x: x > 0.0))
+        expected_result_type, expected_grad_result_type = \
+            get_fw_bw_result_types_2(forward_numpy_call, stype, backward_numpy_call, output_grad_stype)
 
-  check_sparse_function('sigmoid',
-                        lambda x: mx.sym.sigmoid(x),
-                        lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
-                        lambda output, outg: outg * assign_each(output, lambda x: x * (1.0 - x)),
-                        backward_is_use_output=True)
+        if backward_is_use_output is True:
+            expected_grad_result_type = expected_result_type
+
+        shape = (3, 4)
+        data = mx.symbol.Variable("data")
+
+        grad_stypes = list()
+        grad_stypes.append(expected_grad_result_type)
+
+        y = mxnet_func(data)
+        if stype == 'default':
+            xa = np.random.uniform(low=-1.0, high=1.0, size=shape)
+            xa_np = xa
+        else:
+            xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
+                                     modifier_func=lambda a: a - 0.5)
+            xa_np = xa.asnumpy()
+
+        if output_grad_stype != 'default':
+            out_grad = create_sparse_array(shape, output_grad_stype, data_init=None,
+                                           rsp_indices=[1, 2],
+                                           modifier_func=lambda a: a - 0.5)
+            out_grad_np = out_grad.asnumpy()
+        else:
+            out_grad_np = np.ones(xa.shape)
+            out_grad = mx.nd.array(out_grad_np)
+
+        output_np = forward_numpy_call(xa_np)
+        input_grad_np = backward_numpy_call(output_np, out_grad_np)
+
+        outputs = check_symbolic_forward(y, [xa], [output_np])
+        output = outputs[0]
+
+        assert output.stype == expected_result_type
+
+        input_grad_dict = check_symbolic_backward(y, location=[xa], out_grads=[out_grad],
+                                                  expected=[input_grad_np],
+                                                  grad_stypes=grad_stypes)
+        inp_grad = input_grad_dict["data"]
+
+        assert inp_grad.stype == expected_grad_result_type
+
+    def check_sparse_function(name, mxnet_func, forward_numpy_call, backward_numpy_call,
+                              backward_is_use_output=False):
+        check_sparse_simple(name, 'default', mxnet_func, forward_numpy_call, backward_numpy_call)
+        for output_grad_stype in [None, "row_sparse", "default"]:
+            check_sparse_simple(name, 'row_sparse', mxnet_func, forward_numpy_call, backward_numpy_call,
+                                output_grad_stype=output_grad_stype,
+                                backward_is_use_output=backward_is_use_output)
+
+    check_sparse_function('relu',
+                          lambda x: mx.sym.relu(x),
+                          lambda x: np.maximum(x, 0.0),
+                          lambda input, outg: outg * assign_each(input, lambda x: x > 0.0))
+
+    check_sparse_function('sigmoid',
+                          lambda x: mx.sym.sigmoid(x),
+                          lambda x: np.divide(1.0, (1.0 + np.exp(-x))),
+                          lambda output, outg: outg * assign_each(output, lambda x: x * (1.0 - x)),
+                          backward_is_use_output=True)
 
 def test_sparse_nd_zeros():
     def check_sparse_nd_zeros(stype, shape):
@@ -1473,12 +1473,12 @@ def test_sparse_elementwise_sum():
 
 
 def manual_test_elemwise():
-  test_sparse_elementwise_sum()
-  test_sparse_mathematical_core()
-  test_sparse_unary_with_numerics()
-  test_elemwise_binary_ops()
+    test_sparse_elementwise_sum()
+    test_sparse_mathematical_core()
+    test_sparse_unary_with_numerics()
+    test_elemwise_binary_ops()
 
 
 if __name__ == '__main__':
-  import nose
-  nose.runmodule()
+    import nose
+    nose.runmodule()
