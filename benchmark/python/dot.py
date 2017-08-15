@@ -418,7 +418,7 @@ def test_dot_synthetic(data_dict):
                       fw="mxnet", rhs_density=1,
                       distribution=distribution)
         run_benchmark(context, lhs="csr",
-                      rhs="rsp", lhs_trans=True,
+                      rhs="rsp", lhs_trans=False,
                       fw="mxnet", rhs_density=0.05,
                       distribution=distribution)
         if not ARGS.gpu:
