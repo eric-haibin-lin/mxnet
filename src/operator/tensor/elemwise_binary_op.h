@@ -153,12 +153,12 @@ class ElemwiseBinaryOp : public OpBase {
     CHECK(!lhs_is_dense || !rhs_is_dense);
     if (rhs_is_dense) {
       // For right-side dense, lhs input zero should always output zero
-      CHECK(fabs(OP::Map(0, 99)) < 1e-4f);
+      CHECK(fabs(float(OP::Map(0, 99))) < 1e-4f);
       CHECK(!is_dense_result);  // Currently not handled
     }
     if (lhs_is_dense) {
       // For right-side dense, lhs input zero should always output zero
-      CHECK(fabs(OP::Map(99, 0)) < 1e-4f);
+      CHECK(fabs(float(OP::Map(99, 0))) < 1e-4f);
       CHECK(!is_dense_result);  // Currently not handled
     }
 
@@ -802,8 +802,8 @@ class ElemwiseBinaryOp : public OpBase {
       // If any input is dense, fallback to FCompute
       if (!common::ContainsDefaultStorage(inputs)) {
         CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-        DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
-        DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
+        DCHECK_LT(fabs(float(LOP::Map(0))), 1e-5f);  // op requires 0-input returns 0-output
+        DCHECK_LT(fabs(float(ROP::Map(0))), 1e-5f);  // op requires 0-input returns 0-output
         MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
           UnaryOp::LaunchEx<xpu, BinaryOpBackwardUseNone<LOP, Req>>(attrs, ctx, inputs,
                                                                     req, {outputs[0]});
@@ -836,8 +836,8 @@ class ElemwiseBinaryOp : public OpBase {
       // If any input is dense, fallback to FCompute
       if (!common::ContainsDefaultStorage(inputs)) {
         CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-        DCHECK_LT(fabs(LOP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
-        DCHECK_LT(fabs(ROP::Map(0)), 1e-5f);  // op requires 0-input returns 0-output
+        DCHECK_LT(fabs(float(LOP::Map(0))), 1e-5f);  // op requires 0-input returns 0-output
+        DCHECK_LT(fabs(float(ROP::Map(0))), 1e-5f);  // op requires 0-input returns 0-output
         MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
           UnaryOp::LaunchWithHalf2Ex<xpu, BinaryOpBackwardUseNone<LOP, Req>>(
             attrs, ctx, inputs, req, {outputs[0]});
