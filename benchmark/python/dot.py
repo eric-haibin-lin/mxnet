@@ -137,7 +137,8 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
                           rsp=False):
 
     def create_mini_path(mini_path, path, num_batches):
-        """Create mini path for sparse"""
+        """Samples batches of size: batch_size, total number: num_batches
+        from the dataset files for running benchmarks"""
         if not os.path.exists(mini_path):
             last = _line_count(path) - num_batches * batch_size
             last = last if last >= 1 else 1
@@ -163,12 +164,9 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         count = 0
         total_cost["sparse"] = 0.
         total_cost["dense"] = 0.
-        weight.wait_to_read()
         for _ in train_iter:
             csr_data = train_iter.getdata()
             dns_data = csr_data.tostype('default')
-            csr_data.wait_to_read()
-            dns_data.wait_to_read()
             cost_sparse = measure_cost(num_repeat, mx.nd.dot, csr_data, weight, transpose_a=transpose)
             cost_dense = measure_cost(num_repeat, mx.nd.dot, dns_data, weight, transpose_a=transpose)
             total_cost["sparse"] += cost_sparse
@@ -273,8 +271,6 @@ def test_dot_synthetic(data_dict):
         lhs_nd = rand_ndarray(lhs_shape, lhs_stype, density=lhs_den, distribution=distribution)
         # only uniform distribution supported for rhs
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_den, distribution="uniform")
-        lhs_nd.wait_to_read()
-        rhs_nd.wait_to_read()
         lhs_dns = None
         rhs_dns = None
         dense_cost = None
@@ -283,12 +279,15 @@ def test_dot_synthetic(data_dict):
         if fw == "mxnet":
             lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
             rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
+            if trans_lhs:
+                lhs_nd = lhs_nd.T
+                lhs_dns = lhs_dns.T
             # One warm up run, verify correctness
-            out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
-            out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
+            out = dot_func_sparse(lhs_nd, rhs_dns)
+            out_expected = dot_func_dense(lhs_dns, rhs_dns)
             assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-1, atol=1e-1)
-            sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd, trans_lhs)
-            dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns, trans_lhs)
+            sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd)
+            dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns)
         else:
             lhs_dns = np.transpose(lhs_nd.asnumpy()) if trans_lhs else lhs_nd.asnumpy()
             rhs_dns = rhs_nd.asnumpy()
