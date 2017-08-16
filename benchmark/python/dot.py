@@ -107,13 +107,19 @@ SYNTHETIC2 = {
     'num_repeat': 10
 }
 
-def measure_cost(repeat, func_name, *args, **kwargs):
+def measure_cost(repeat, scipy_trans_lhs, scipy_dns_lhs, func_name, *args, **kwargs):
     """Measure time cost of running a function
     """
     mx.nd.waitall()
+    lhs_nd = None
+    args_list = []
+    for arg in args:
+        args_list.append(arg)
     start = time.time()
+    if scipy_trans_lhs:
+        args_list[0] = np.transpose(args_list[0]) if scipy_dns_lhs else sp.spmatrix.transpose(args_list[0])
     for _ in range(repeat):
-        func_name(*args, **kwargs)
+        func_name(*args_list, **kwargs)
     mx.nd.waitall()
     end = time.time()
     diff = end - start
@@ -167,8 +173,8 @@ def _compare_sparse_dense(data_dir, file_name, mini_file_name, feature_dim,
         for _ in train_iter:
             csr_data = train_iter.getdata()
             dns_data = csr_data.tostype('default')
-            cost_sparse = measure_cost(num_repeat, mx.nd.dot, csr_data, weight, transpose_a=transpose)
-            cost_dense = measure_cost(num_repeat, mx.nd.dot, dns_data, weight, transpose_a=transpose)
+            cost_sparse = measure_cost(num_repeat, False, False, mx.nd.dot, csr_data, weight, transpose_a=transpose)
+            cost_dense = measure_cost(num_repeat, False, False, mx.nd.dot, dns_data, weight, transpose_a=transpose)
             total_cost["sparse"] += cost_sparse
             total_cost["dense"] += cost_dense
             count = count + 1
@@ -279,24 +285,22 @@ def test_dot_synthetic(data_dict):
         if fw == "mxnet":
             lhs_dns = lhs_nd if lhs_stype == 'default' else lhs_nd.tostype('default')
             rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
-            if trans_lhs:
-                lhs_nd = lhs_nd.T
-                lhs_dns = lhs_dns.T
             # One warm up run, verify correctness
-            out = dot_func_sparse(lhs_nd, rhs_dns)
-            out_expected = dot_func_dense(lhs_dns, rhs_dns)
+            out = dot_func_sparse(lhs_nd, rhs_dns, trans_lhs)
+            out_expected = dot_func_dense(lhs_dns, rhs_dns, trans_lhs)
             assert_almost_equal(out.asnumpy(), out_expected.asnumpy(), rtol=1e-1, atol=1e-1)
-            sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd)
-            dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns)
+            sparse_cost = measure_cost(num_repeat, False, False, dot_func_sparse, lhs_nd, rhs_nd, trans_lhs)
+            dense_cost = measure_cost(num_repeat, False, False, dot_func_dense, lhs_dns, rhs_dns, trans_lhs)
         else:
-            lhs_dns = np.transpose(lhs_nd.asnumpy()) if trans_lhs else lhs_nd.asnumpy()
+            lhs_dns = lhs_nd.asnumpy()
             rhs_dns = rhs_nd.asnumpy()
-            lhs_nd = sp.spmatrix.transpose(sp.csr_matrix(lhs_nd.asnumpy())) if trans_lhs else sp.csr_matrix(lhs_nd.asnumpy())
+            lhs_nd = sp.csr_matrix(lhs_nd.asnumpy())
             rhs_nd = rhs_nd.asnumpy()
             # One warm up run, verify correctness
-            out = dot_func_sparse(lhs_nd, rhs_dns)
-            sparse_cost = measure_cost(num_repeat, dot_func_sparse, lhs_nd, rhs_nd)
-            dense_cost = measure_cost(num_repeat, dot_func_dense, lhs_dns, rhs_dns)
+            lhs_nd_copy = sp.spmatrix.transpose(lhs_nd)
+            out = dot_func_sparse(lhs_nd_copy, rhs_dns)
+            sparse_cost = measure_cost(num_repeat, trans_lhs, False, dot_func_sparse, lhs_nd, rhs_nd)
+            dense_cost = measure_cost(num_repeat, trans_lhs, True, dot_func_dense, lhs_dns, rhs_dns)
 
         speedup = dense_cost / sparse_cost
         # Print results
