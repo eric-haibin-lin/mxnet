@@ -1158,7 +1158,7 @@ def test_cast_storage_ex():
 
 def test_sparse_dot():
     def test_dot_csr(lhs_shape, rhs_shape, rhs_stype, trans_lhs, lhs_density, rhs_density):
-        lhs_nd = rand_ndarray(lhs_shape, 'csr', density=lhs_density)
+        lhs_nd = rand_ndarray(lhs_shape, 'csr', density=lhs_density, shuffle_csr_indices=False)
         lhs_dns = lhs_nd.tostype('default')
         rhs_nd = rand_ndarray(rhs_shape, rhs_stype, density=rhs_density)
         rhs_dns = rhs_nd if rhs_stype == 'default' else rhs_nd.tostype('default')
@@ -1474,12 +1474,12 @@ def test_sparse_elementwise_sum():
         check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
 
 
-def manual_elemwise_run_tests():
-    test_sparse_elementwise_sum()
-    test_sparse_mathematical_core()
-    test_sparse_unary_with_numerics()
-    test_elemwise_binary_ops()
-
+# def manual_elemwise_run_tests():
+#     test_sparse_elementwise_sum()
+#     test_sparse_mathematical_core()
+#     test_sparse_unary_with_numerics()
+#     test_elemwise_binary_ops()
+#
 
 if __name__ == '__main__':
     import nose

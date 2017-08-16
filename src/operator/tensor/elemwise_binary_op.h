@@ -903,28 +903,6 @@ class ElemwiseBinaryOp : public OpBase {
         attrs, ctx, inputs, req, outputs, BinaryBackwardUseInWithHalf2<xpu, LOP, ROP>);
     });
   }
-
-  template<typename xpu, typename LOP, typename ROP>
-  static inline void BinaryBackwardUseInExDense(const nnvm::NodeAttrs &attrs,
-                                                const OpContext &ctx,
-                                                const std::vector<NDArray> &inputs,
-                                                const std::vector<OpReqType> &req,
-                                                const std::vector<NDArray> &outputs) {
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                         BinaryBackwardUseIn<xpu, LOP, ROP>,
-                         "BinaryBackwardUseInExDense");
-  }
-
-  template<typename xpu, typename LOP, typename ROP>
-  static inline void BinaryBackwardUseInWithHalf2ExDense(const nnvm::NodeAttrs &attrs,
-                                                const OpContext &ctx,
-                                                const std::vector<NDArray> &inputs,
-                                                const std::vector<OpReqType> &req,
-                                                const std::vector<NDArray> &outputs) {
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                         BinaryBackwardUseInWithHalf2<xpu, LOP, ROP>,
-                         "BinaryBackwardUseInWithHalf2ExDense");
-  }
 };  // class ElemwiseBinaryOp
 
 #define MXNET_OPERATOR_REGISTER_BINARY(name)                        \

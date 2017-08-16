@@ -107,8 +107,6 @@ NNVM_REGISTER_OP(_backward_div)
   })
 .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<3, 2>)
 .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::BinaryBackwardUseIn<
-  cpu, mshadow_op::div_grad, mshadow_op::div_rgrad>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", ElemwiseBinaryOp::BinaryBackwardUseInExDense<
   cpu, mshadow_op::div_grad, mshadow_op::div_rgrad>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_mod, mshadow_op::mod)

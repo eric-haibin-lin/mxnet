@@ -254,22 +254,6 @@ class UnaryOp : public OpBase {
     }
   }
 
-  /*! \brief Fall back to dense and compute */
-  template<typename xpu, typename OP>
-  static void ComputeAsDense(const nnvm::NodeAttrs& attrs,
-                            const OpContext& ctx,
-                            const std::vector<NDArray>& inputs,
-                            const std::vector<OpReqType>& req,
-                            const std::vector<NDArray>& outputs) {
-    CHECK_EQ(inputs.size(), 1U);
-    CHECK_EQ(outputs.size(), 1U);
-    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
-    CHECK_EQ(outputs[0].storage_type(), kDefaultStorage)
-      << "Operation requires a dense output storage type";
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                         Compute<xpu, OP>, "ComputeAsDense");
-  }
-
   template<typename xpu, typename op>
   static void Launch(const nnvm::NodeAttrs& attrs,
                      const OpContext& ctx,
@@ -336,21 +320,6 @@ class UnaryOp : public OpBase {
     if (inputs[0].storage_shape().Size()) {
       MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
     }
-  }
-
-  template<typename xpu, typename OP>
-  static void LaunchAsDense(const nnvm::NodeAttrs& attrs,
-                            const OpContext& ctx,
-                            const std::vector<NDArray>& inputs,
-                            const std::vector<OpReqType>& req,
-                            const std::vector<NDArray>& outputs) {
-    CHECK_EQ(inputs.size(), 1U);
-    CHECK_EQ(outputs.size(), 1U);
-    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
-    CHECK_EQ(outputs[0].storage_type(), kDefaultStorage)
-      << "Operation requires a dense output storage type";
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                         Launch<xpu, OP>, "LaunchAsDense");
   }
 
   template<typename xpu>
@@ -518,8 +487,7 @@ struct relu_grad {
 /*! \brief Unary launch, dense result */
 #define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(name, __xpu$, __kernel$)                \
   MXNET_OPERATOR_REGISTER_UNARY_DR(name)                                                \
-  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Launch<__xpu$, __kernel$>)      \
-  .set_attr<FComputeEx>("FComputeEx<" #__xpu$ ">", UnaryOp::LaunchAsDense<__xpu$, __kernel$>)
+  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Launch<__xpu$, __kernel$>)
 
 /*! \brief Unary compute */
 #define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(name, __xpu$, __kernel$)                  \
@@ -530,8 +498,7 @@ struct relu_grad {
 /*! \brief Unary compute, dense result */
 #define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(name, __xpu$, __kernel$)               \
   MXNET_OPERATOR_REGISTER_UNARY_DR(name)                                                \
-  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Compute<__xpu$, __kernel$>)     \
-  .set_attr<FComputeEx>("FComputeEx<" #__xpu$ ">", UnaryOp::ComputeAsDense<__xpu$, __kernel$>)
+  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Compute<__xpu$, __kernel$>)
 
 
 }  // namespace op
