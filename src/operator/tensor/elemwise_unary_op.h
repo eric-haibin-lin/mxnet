@@ -306,22 +306,6 @@ class UnaryOp : public OpBase {
     }
   }
 
-  template<typename xpu, typename OP>
-  static void LaunchWithHalf2Ex(const nnvm::NodeAttrs& attrs,
-                       const OpContext& ctx,
-                       const std::vector<NDArray>& inputs,
-                       const std::vector<OpReqType>& req,
-                       const std::vector<NDArray>& outputs) {
-    CHECK_EQ(inputs.size(), 1U);
-    CHECK_EQ(outputs.size(), 1U);
-    CHECK_NE(inputs[0].storage_type(), kDefaultStorage);
-    CHECK_NE(outputs[0].storage_type(), kDefaultStorage)
-      << "Operation requires a sparse output storage type";
-    if (inputs[0].storage_shape().Size()) {
-      MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
-    }
-  }
-
   template<typename xpu>
   static void IdentityCompute(const nnvm::NodeAttrs& attrs,
                        const OpContext& ctx,

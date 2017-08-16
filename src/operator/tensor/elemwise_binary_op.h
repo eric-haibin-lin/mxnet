@@ -713,33 +713,6 @@ class ElemwiseBinaryOp : public OpBase {
     }
   }
 
-  template<typename xpu, typename OP>
-  static void LaunchWithHalf2Ex(const nnvm::NodeAttrs &attrs,
-                                const OpContext &ctx,
-                                const std::vector<NDArray> &inputs,
-                                const std::vector<OpReqType> &req,
-                                const std::vector<NDArray> &outputs) {
-    using namespace mshadow;
-    using namespace mshadow::expr;
-    CHECK_EQ(inputs.size(), 2);
-    CHECK_EQ(outputs.size(), 1);
-    if (req[0] != kNullOp) {
-      if (!common::ContainsDefaultStorage(inputs)) {
-        MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
-          MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].dtype(), DType, {
-            RspRspElemwiseBinaryOp<xpu, DType, IType, OP>(
-              attrs, ctx, inputs[0], inputs[1],
-              req[0], outputs[0],
-              false, false, false);
-          });
-        });
-      } else {
-        FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                             LaunchWithHalf2<xpu, OP>, "LaunchWithHalf2Ex");
-      }
-    }
-  }
-
   /*! \brief LaunchEx allowing dense lvalue and/or rvalue */
   template<typename xpu, typename OP, bool lhs_may_be_dense, bool rhs_may_be_dense>
   static void LaunchExDenseLRValue(const nnvm::NodeAttrs &attrs,
@@ -750,19 +723,6 @@ class ElemwiseBinaryOp : public OpBase {
     MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
       LaunchExDenseLRValue_<xpu, OP, DType, lhs_may_be_dense, rhs_may_be_dense>(
         attrs, ctx, inputs, req, outputs, Launch<xpu, OP>);
-    });
-  }
-
-  /*! \brief LaunchEx allowing dense rvalue */
-  template<typename xpu, typename OP, bool lhs_may_be_dense, bool rhs_may_be_dense>
-  static void LaunchExDenseWithHalf2LRValue(const nnvm::NodeAttrs &attrs,
-                                            const OpContext &ctx,
-                                            const std::vector<NDArray> &inputs,
-                                            const std::vector<OpReqType> &req,
-                                            const std::vector<NDArray> &outputs) {
-    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].dtype(), DType, {
-      LaunchExDenseLRValue_<xpu, OP, DType, lhs_may_be_dense, rhs_may_be_dense>(
-        attrs, ctx, inputs, req, outputs, LaunchWithHalf2<xpu, OP>);
     });
   }
 
@@ -821,40 +781,6 @@ class ElemwiseBinaryOp : public OpBase {
   }
 
   template<typename xpu, typename LOP, typename ROP>
-  static inline void BinaryBackwardUseNoneWithHalf2Ex(const nnvm::NodeAttrs &attrs,
-                                                      const OpContext &ctx,
-                                                      const std::vector<NDArray> &inputs,
-                                                      const std::vector<OpReqType> &req,
-                                                      const std::vector<NDArray> &outputs) {
-    CHECK_EQ(inputs.size(), 1U);   // output grad,
-    CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
-    using namespace mshadow;
-    using namespace mshadow::expr;
-    auto stype = inputs[0].storage_type();
-    CHECK_EQ(stype, kRowSparseStorage) << "Not implemented yet";
-    if (req[0] != kNullOp) {
-      // If any input is dense, fallback to FCompute
-      if (!common::ContainsDefaultStorage(inputs)) {
-        CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage);
-        DCHECK_LT(fabs(float(LOP::Map(0))), 1e-5f);  // op requires 0-input returns 0-output
-        DCHECK_LT(fabs(float(ROP::Map(0))), 1e-5f);  // op requires 0-input returns 0-output
-        MXNET_ASSIGN_REQ_SWITCH(req[0], Req, {
-          UnaryOp::LaunchWithHalf2Ex<xpu, BinaryOpBackwardUseNone<LOP, Req>>(
-            attrs, ctx, inputs, req, {outputs[0]});
-        });
-        MXNET_ASSIGN_REQ_SWITCH(req[1], Req, {
-          UnaryOp::LaunchWithHalf2Ex<xpu, BinaryOpBackwardUseNone<ROP, Req>>(
-            attrs, ctx, inputs, req, {outputs[1]});
-        });
-      } else {
-        FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                             BinaryBackwardUseNoneWithHalf2<xpu, LOP, ROP>,
-                             "BinaryBackwardUseNoneWithHalf2Ex");
-      }
-    }
-  }
-
-  template<typename xpu, typename LOP, typename ROP>
   static inline void BinaryBackwardUseIn(const nnvm::NodeAttrs &attrs,
                                          const OpContext &ctx,
                                          const std::vector<TBlob> &inputs,
@@ -887,20 +813,6 @@ class ElemwiseBinaryOp : public OpBase {
     MSHADOW_TYPE_SWITCH(outputs[0].dtype(), DType, {
       BinaryBackwardUseInEx_<xpu, LOP, ROP, DType, in0_ok_dense, in1_ok_dense, in2_ok_dense>(
         attrs, ctx, inputs, req, outputs, BinaryBackwardUseIn<xpu, LOP, ROP>);
-    });
-  }
-
-  template<
-    typename xpu, typename LOP, typename ROP,
-    bool in0_ok_dense = false, bool in1_ok_dense = false, bool in2_ok_dense = false>
-  static inline void BinaryBackwardUseInWithHalf2Ex(const nnvm::NodeAttrs &attrs,
-                                                    const OpContext &ctx,
-                                                    const std::vector<NDArray> &inputs,
-                                                    const std::vector<OpReqType> &req,
-                                                    const std::vector<NDArray> &outputs) {
-    MSHADOW_TYPE_SWITCH_WITH_HALF2(outputs[0].dtype(), DType, {
-      BinaryBackwardUseInEx_<xpu, LOP, ROP, DType, in0_ok_dense, in1_ok_dense, in2_ok_dense>(
-        attrs, ctx, inputs, req, outputs, BinaryBackwardUseInWithHalf2<xpu, LOP, ROP>);
     });
   }
 };  // class ElemwiseBinaryOp
@@ -943,20 +855,6 @@ class ElemwiseBinaryOp : public OpBase {
   .set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Launch<cpu, __kernel$>)              \
   .set_attr<FComputeEx>("FComputeEx<cpu>",                                                    \
     ElemwiseBinaryOp::LaunchExDenseLRValue<cpu, __kernel$, true, true>)
-
-/*! \brief Binary CUDA launch */
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_WITH_HALF2(__name$, __kernel$)             \
-  NNVM_REGISTER_OP(__name$)                                                                   \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)
-
-/*! \brief Binary CUDA launch, dense result */
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_WITH_HALF2_CUDA_DR(__name$, __kernel$)            \
-  NNVM_REGISTER_OP(__name$)                                                                     \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)
-
-#define MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CUDA_WITH_HALF2_DENSE_LRVALUE(__name$, __kernel$) \
-  NNVM_REGISTER_OP(__name$)                                                                     \
-  .set_attr<FCompute>("FCompute<gpu>", ElemwiseBinaryOp::LaunchWithHalf2<gpu, __kernel$>)
 
 }  // namespace op
 }  // namespace mxnet
