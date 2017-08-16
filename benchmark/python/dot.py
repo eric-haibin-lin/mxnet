@@ -111,7 +111,6 @@ def measure_cost(repeat, scipy_trans_lhs, scipy_dns_lhs, func_name, *args, **kwa
     """Measure time cost of running a function
     """
     mx.nd.waitall()
-    lhs_nd = None
     args_list = []
     for arg in args:
         args_list.append(arg)
