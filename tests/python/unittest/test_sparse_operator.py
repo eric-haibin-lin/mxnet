@@ -344,7 +344,7 @@ def test_sparse_elementwise_sum():
         arr_grad = [mx.nd.empty(shape) for _ in range(n)]
         densities = [0, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5]
         for i in range(n):
-            arr.append(rand_ndarray(shape, stype, np.random.randint(0, len(densities))))
+            arr.append(rand_ndarray(shape, stype, densities[np.random.randint(0, len(densities))]))
 
         exec1 = out.bind(default_context(),
                          args=arr,
@@ -363,8 +363,9 @@ def test_sparse_elementwise_sum():
 
     maxdim = 5
     for dim in range(2, maxdim):
-        shape = tuple(np.random.randint(5, 10, size=dim))
-        check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
+        for i in range(3):
+            shape = tuple(np.random.randint(5, 10, size=dim))
+            check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
 
 
 if __name__ == '__main__':
