@@ -241,9 +241,8 @@ def assign_each2(input1, input2, function):
         return np.array(input)
 
 # TODO(haibin) also include types in arguments
-def rand_sparse_ndarray(shape, stype, density=None, dtype=None, data_init=None,
-                        rsp_indices=None, modifier_func=None,
-                        distribution="uniform",
+def rand_sparse_ndarray(shape, stype, density=None, dtype=None, distribution=None,
+                        data_init=None, rsp_indices=None, modifier_func=None,
                         shuffle_csr_indices=True):
     """Generate a random sparse ndarray. Returns the ndarray, value(np) and indices(np)
     Parameters
@@ -269,6 +268,7 @@ def rand_sparse_ndarray(shape, stype, density=None, dtype=None, data_init=None,
     """
     density = rnd.rand() if density is None else density
     dtype = default_dtype() if dtype is None else dtype
+    distribution = "uniform" if distribution is None else distribution
     if stype == 'row_sparse':
         assert (distribution == "uniform"), \
                "Distribution %s not supported for row_sparse" % (distribution)
