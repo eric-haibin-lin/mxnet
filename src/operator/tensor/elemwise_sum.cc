@@ -82,7 +82,7 @@ bool ElementWiseSumForwardInferStorageType(const nnvm::NodeAttrs& attrs,
 }
 
 void ElementWiseSumComputeExCPU(const nnvm::NodeAttrs& attrs,
-                                const OpContext& ctx,
+                                const OpContext& op_ctx,
                                 const std::vector<NDArray>& inputs,
                                 const std::vector<OpReqType>& req,
                                 const std::vector<NDArray>& outputs) {
@@ -92,11 +92,13 @@ void ElementWiseSumComputeExCPU(const nnvm::NodeAttrs& attrs,
   if (req[0] == kNullOp) return;
   CHECK_EQ(req[0], kWriteTo) << "ElementWiseSumComputeExCPU only supports req = kWriteTo";
   if (inputs[0].storage_type() == kRowSparseStorage) {
-    mshadow::Stream<cpu>* s = ctx.get_stream<cpu>();
+    mshadow::Stream<cpu>* s = op_ctx.get_stream<cpu>();
+    Resource rsc = ResourceManager::Get()->Request(op_ctx.run_ctx.get_ctx(),
+        ResourceRequest(ResourceRequest::kTempSpace));
     NDArray out_nd = outputs[0];
-    mxnet::ndarray::ElementwiseSum<cpu>(s, inputs, &out_nd);
+    mxnet::ndarray::ElementwiseSum<cpu>(s, rsc, inputs, &out_nd);
   } else {
-    FCompExFallback<cpu>(attrs, ctx, inputs, req, outputs,
+    FCompExFallback<cpu>(attrs, op_ctx, inputs, req, outputs,
                          ElementWiseSumCompute<cpu>, "ElementWiseSumCompute<cpu>");
   }
 }
@@ -137,6 +139,10 @@ The storage type of ``add_n`` output depends on storage types of inputs
     "FInplaceOption", [](const NodeAttrs& attrs) {
       return std::vector<std::pair<int, int> >{{0, 0}};
     })
+.set_attr<FResourceRequest>("FResourceRequest",
+  [](const NodeAttrs& attrs) {
+    return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
+  })
 .set_attr<nnvm::FInferShape>("FInferShape", ElementWiseSumShape)
 .set_attr<nnvm::FInferType>("FInferType", ElementWiseSumType)
 .set_attr<FInferStorageType>("FInferStorageType", ElementWiseSumForwardInferStorageType)

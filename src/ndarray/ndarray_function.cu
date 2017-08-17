@@ -99,8 +99,9 @@ void Copy<gpu, gpu>(const TBlob &from, TBlob *to,
  * \brief GPU impl of elemwise sum for rowsparse tensors.
  */
 void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
-                       const std::vector<NDArray>& nds,
-                       NDArray* out) {
+                           Resource rsc,
+                           const std::vector<NDArray>& nds,
+                           NDArray* out) {
   using namespace mxnet::op;
   using namespace rowsparse;
   using nnvm::dim_t;
@@ -110,6 +111,7 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
   for (const auto& nd : nds) {
     if (nd.storage_initialized()) {
       init++;
+      break;
     }
   }
   if (init == 0) {
@@ -188,11 +190,12 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
  */
 template<>
 void ElementwiseSum<gpu>(mshadow::Stream<gpu>* s,
+                         Resource rsc,
                          const std::vector<NDArray>& nds,
                          NDArray* out) {
   if (nds.empty()) return;
   if (nds[0].storage_type() == kRowSparseStorage) {
-    ElementwiseSumRspImpl(s, nds, out);
+    ElementwiseSumRspImpl(s, rsc, nds, out);
   } else {
     LOG(FATAL) << "ElementwiseSum<gpu> has not been implemented for storage_type = << "
         << nds[0].storage_type();

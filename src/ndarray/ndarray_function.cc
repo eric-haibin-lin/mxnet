@@ -143,6 +143,7 @@ void GetUniqueRspRowIdx(const std::vector<NDArray>& nds,
 }
 
 void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
+                       Resource rsc,
                        const std::vector<NDArray>& nds,
                        NDArray* out) {
   if (nds.empty()) return;
@@ -168,11 +169,12 @@ void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
  */
 template<>
 void ElementwiseSum<cpu>(mshadow::Stream<cpu>* s,
+                         Resource rsc,
                          const std::vector<NDArray>& nds,
                          NDArray* out) {
   if (nds.empty()) return;
   if (nds[0].storage_type() == kRowSparseStorage) {
-    ElementwiseSumRsp(s, nds, out);
+    ElementwiseSumRsp(s, rsc, nds, out);
   } else {
     LOG(FATAL) << "ElementwiseSum<cpu> has not been implemented for storage_type = << "
                << nds[0].storage_type();
