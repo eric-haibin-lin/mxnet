@@ -584,7 +584,7 @@ class ElemwiseBinaryOp : public OpBase {
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
     if (req[0] != kNullOp) {
       // If any input is dense, fallback to FCompute
-      if (!common::ContainsDefaultStorage(inputs)) {
+      if (common::ContainsOnlyStorage(inputs, kRowSparseStorage)) {
         mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
         // ComputeRspRsp can handle dense outputs so long as OP(0, 0) == 0
         MSHADOW_IDX_TYPE_SWITCH(inputs[0].aux_type(rowsparse::kIdx), IType, {
