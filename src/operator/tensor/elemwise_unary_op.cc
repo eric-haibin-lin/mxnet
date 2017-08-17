@@ -34,6 +34,11 @@ MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(relu, cpu, kernel_launch_op::relu)
 .. math::
    max(features, 0)
 
+The storage type of ``relu`` output depends upon the input storage type:
+
+  relu(default) = default
+  relu(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_relu"});
 
@@ -46,6 +51,8 @@ MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(sigmoid, cpu, kernel_launch_op::sigmoid)
 
 .. math::
    y = 1 / (1 + exp(-x))
+
+The storage type of ``sigmoid`` output is always denseThe storage type of ``sigmoid`` output is always dense
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_backward_sigmoid"});
@@ -119,6 +126,12 @@ Example::
 MXNET_OPERATOR_REGISTER_UNARY(make_loss)
 .describe(R"code(Stops gradient computation.
 .. note:: ``make_loss`` is deprecated, use ``MakeLoss``.
+
+The storage type of ``make_loss`` output depends upon the input storage type:
+
+  make_loss(default) = default
+  make_loss(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FListOutputNames>("FListOutputNames",
   [](const NodeAttrs& attrs) {
@@ -218,13 +231,21 @@ NNVM_REGISTER_OP(_backward_cast)
 
 // negative
 MXNET_OPERATOR_REGISTER_UNARY(negative)
-  .MXNET_DESCRIBE("Numerical negative of the argument, element-wise.")
+.describe(R"code(Numerical negative of the argument, element-wise.
+
+The storage type of ``negative`` output depends upon the input storage type:
+
+  negative(default) = default
+  negative(row_sparse) = row_sparse
+  negative(csr) = csr
+
+)code")
 .set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<cpu, mshadow_op::negation>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::ComputeEx<cpu, mshadow_op::negation>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"});
 
 // reciprocal
-MXNET_OPERATOR_REGISTER_UNARY(reciprocal)
+MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(reciprocal, cpu, mshadow_op::reciprocal)
 .describe(R"code(Returns the reciprocal of the argument, element-wise.
 
 Calculates 1/x.
@@ -233,8 +254,9 @@ Example::
 
     reciprocal([-2, 1, 3, 1.6, 0.2]) = [-0.5, 1.0, 0.33333334, 0.625, 5.0]
 
+The storage type of ``reciprocal`` output is always dense
+
 )code" ADD_FILELINE)
-.set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<cpu, mshadow_op::reciprocal>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_reciprocal"});
 
 MXNET_OPERATOR_REGISTER_BINARY(_backward_reciprocal)
@@ -249,6 +271,11 @@ Example::
 
    abs([-2, 0, 3]) = [2, 0, 3]
 
+The storage type of ``abs`` output depends upon the input storage type:
+
+  abs(default) = default
+  abs(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_abs"});
 
@@ -262,6 +289,11 @@ Example::
 
    sign([-2, 0, 3]) = [-1, 0, 1]
 
+The storage type of ``sign`` output depends upon the input storage type:
+
+  sign(default) = default
+  sign(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_sign"});
 
@@ -274,6 +306,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(round, cpu, mshadow_op::round)
 Example::
 
    round([-1.5, 1.5, -1.9, 1.9, 2.1]) = [-2.,  2., -2.,  2.,  2.]
+
+The storage type of ``round`` output depends upon the input storage type:
+
+  round(default) = default
+  round(row_sparse) = row_sparse
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", MakeZeroGradNodes);
@@ -290,6 +327,11 @@ Example::
 
    rint([-1.5, 1.5, -1.9, 1.9, 2.1]) = [-2.,  1., -2.,  2.,  2.]
 
+The storage type of ``rint`` output depends upon the input storage type:
+
+  rint(default) = default
+  rint(row_sparse) = row_sparse
+
 )code" ADD_FILELINE);
 
 // ceil
@@ -301,6 +343,11 @@ The ceil of the scalar x is the smallest integer i, such that i >= x.
 Example::
 
    ceil([-2.1, -1.9, 1.5, 1.9, 2.1]) = [-2., -1.,  2.,  2.,  3.]
+
+The storage type of ``ceil`` output depends upon the input storage type:
+
+  ceil(default) = default
+  ceil(row_sparse) = row_sparse
 
 )code" ADD_FILELINE);
 
@@ -314,10 +361,15 @@ Example::
 
    floor([-2.1, -1.9, 1.5, 1.9, 2.1]) = [-3., -2.,  1.,  1.,  2.]
 
+The storage type of ``floor`` output depends upon the input storage type:
+
+  floor(default) = default
+  floor(row_sparse) = row_sparse
+
 )code" ADD_FILELINE);
 
 // trunc
-MXNET_OPERATOR_REGISTER_UNARY(trunc)
+MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(trunc, cpu, mshadow_op::trunc)
 .describe(R"code(Return the element-wise truncated value of the input.
 
 The truncated value of the scalar x is the nearest integer i which is closer to
@@ -327,8 +379,12 @@ Example::
 
    trunc([-2.1, -1.9, 1.5, 1.9, 2.1]) = [-2., -1.,  1.,  1.,  2.]
 
-)code" ADD_FILELINE)
-.set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<cpu, mshadow_op::trunc>);
+The storage type of ``trunc`` output depends upon the input storage type:
+
+  trunc(default) = default
+  trunc(row_sparse) = row_sparse
+
+)code" ADD_FILELINE);
 
 // fix
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(fix, cpu, mshadow_op::fix)
@@ -337,6 +393,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(fix, cpu, mshadow_op::fix)
 Example::
 
    fix([-2.1, -1.9, 1.9, 2.1]) = [-2., -1.,  1., 2.]
+
+The storage type of ``fix`` output depends upon the input storage type:
+
+  fix(default) = default
+  fix(row_sparse) = row_sparse
 
 )code" ADD_FILELINE);
 
@@ -350,6 +411,12 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(square, cpu, mshadow_op::square)
 Example::
 
    square([2, 3, 4]) = [4, 9, 16]
+
+The storage type of ``square`` output depends upon the input storage type:
+
+  square(default) = default
+  square(row_sparse) = row_sparse
+  square(csr) = csr
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_square"});
@@ -366,6 +433,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sqrt, cpu, mshadow_op::square_root)
 Example::
 
    sqrt([4, 9, 16]) = [2, 3, 4]
+
+The storage type of ``sqrt`` output depends upon the input storage type:
+
+  sqrt(default) = default
+  sqrt(row_sparse) = row_sparse
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_backward_sqrt"});
@@ -384,6 +456,8 @@ Example::
 
    rsqrt([4,9,16]) = [0.5, 0.33333334, 0.25]
 
+The storage type of ``rsqrt`` output is always dense
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_rsqrt"});
 
@@ -401,6 +475,8 @@ Example::
 
    exp([0, 1, 2]) = [inf, 1, 0.707]
 
+The storage type of ``exp`` output is always dense
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{"_mul"});
 
@@ -409,6 +485,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(log, cpu, mshadow_op::log)
 .describe(R"code(Returns element-wise Natural logarithmic value of the input.
 
 The natural logarithm is logarithm in base *e*, so that ``log(exp(x)) = x``
+
+The storage type of ``log`` output is always dense
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_log"});
@@ -419,6 +497,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(log10, cpu, mshadow_op::log10)
 
 ``10**log10(x) = x``
 
+The storage type of ``log10`` output is always dense
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_log"});
 
@@ -427,6 +507,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(log2, cpu, mshadow_op::log2)
 .describe(R"code(Returns element-wise Base-2 logarithmic value of the input.
 
 ``2**log2(x) = x``
+
+The storage type of ``log2`` output is always dense
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_log"});
@@ -442,6 +524,11 @@ The input should be in radians (:math:`2\pi` rad equals 360 degrees).
 .. math::
    sin([0, \pi/4, \pi/2]) = [0, 0.707, 1]
 
+The storage type of ``sin`` output depends upon the input storage type:
+
+  sin(default) = default
+  sin(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_sin" });
 
@@ -454,6 +541,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(log1p, cpu, mshadow_op::log1p)
 This function is more accurate than ``log(1 + x)``  for small ``x`` so that
 :math:`1+x\approx 1`
 
+The storage type of ``log1p`` output depends upon the input storage type:
+
+  log1p(default) = default
+  log1p(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_log1p"});
 
@@ -464,6 +556,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(expm1, cpu, mshadow_op::expm1)
 .describe(R"code(Returns ``exp(x) - 1`` computed element-wise on the input.
 
 This function provides greater precision than ``exp(x) - 1`` for small values of ``x``.
+
+The storage type of ``expm1`` output depends upon the input storage type:
+
+  expm1(default) = default
+  expm1(row_sparse) = row_sparse
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_expm1"});
@@ -479,6 +576,8 @@ The input should be in radians (:math:`2\pi` rad equals 360 degrees).
 .. math::
    cos([0, \pi/4, \pi/2]) = [1, 0.707, 0]
 
+The storage type of ``cos`` output is always dense
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_cos"});
 
@@ -492,6 +591,11 @@ The input should be in radians (:math:`2\pi` rad equals 360 degrees).
 
 .. math::
    tan([0, \pi/4, \pi/2]) = [0, 1, -inf]
+
+The storage type of ``tan`` output depends upon the input storage type:
+
+  tan(default) = default
+  tan(row_sparse) = row_sparse
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{ "_backward_tan" });
@@ -508,6 +612,11 @@ The output is in the closed interval of [:math:`-\pi/2`, :math:`\pi/2`].
 .. math::
    arcsin([-1, -.707, 0, .707, 1]) = [-\pi/2, -\pi/4, 0, \pi/4, \pi/2]
 
+The storage type of ``arcsin`` output depends upon the input storage type:
+
+  arcsin(default) = default
+  arcsin(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arcsin" });
 
@@ -523,6 +632,8 @@ The output is in the closed interval :math:`[0, \pi]`
 .. math::
    arccos([-1, -.707, 0, .707, 1]) = [\pi, 3\pi/4, \pi/2, \pi/4, 0]
 
+The storage type of ``arccos`` output is always dense
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arccos" });
 
@@ -537,6 +648,11 @@ The output is in the closed interval :math:`[-\pi/2, \pi/2]`
 .. math::
    arctan([-1, 0, 1]) = [-\pi/4, 0, \pi/4]
 
+The storage type of ``arctan`` output depends upon the input storage type:
+
+  arctan(default) = default
+  arctan(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arctan" });
 
@@ -548,6 +664,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(degrees, cpu, mshadow_op::degrees)
 
 .. math::
    degrees([0, \pi/2, \pi, 3\pi/2, 2\pi]) = [0, 90, 180, 270, 360]
+
+The storage type of ``degrees`` output depends upon the input storage type:
+
+  degrees(default) = default
+  degrees(row_sparse) = row_sparse
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_degrees" });
@@ -562,6 +683,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(radians, cpu, mshadow_op::radians)
 .. math::
    radians([0, 90, 180, 270, 360]) = [0, \pi/2, \pi, 3\pi/2, 2\pi]
 
+The storage type of ``radians`` output depends upon the input storage type:
+
+  radians(default) = default
+  radians(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_radians" });
 
@@ -575,6 +701,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sinh, cpu, mshadow_op::sinh)
 .. math::
    sinh(x) = 0.5\times(exp(x) - exp(-x))
 
+The storage type of ``sinh`` output depends upon the input storage type:
+
+  sinh(default) = default
+  sinh(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_sinh" });
 
@@ -586,6 +717,8 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(cosh, cpu, mshadow_op::cosh)
 
 .. math::
    cosh(x) = 0.5\times(exp(x) + exp(-x))
+
+The storage type of ``cosh`` output is always dense
 
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_cosh" });
@@ -599,6 +732,11 @@ MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(tanh, cpu, mshadow_op::tanh)
 .. math::
    tanh(x) = sinh(x) / cosh(x)
 
+The storage type of ``tanh`` output depends upon the input storage type:
+
+  tanh(default) = default
+  tanh(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseOut{ "_backward_tanh" });
 
@@ -608,6 +746,12 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_tanh, unary_bwd<mshadow_o
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arcsinh, cpu, mshadow_op::arcsinh)
 .describe(R"code(Returns the element-wise inverse hyperbolic sine of the input array, \
 computed element-wise.
+
+The storage type of ``arcsinh`` output depends upon the input storage type:
+
+  arcsinh(default) = default
+  arcsinh(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arcsinh" });
 
@@ -618,6 +762,9 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arcsinh,
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccosh, cpu, mshadow_op::arccosh)
 .describe(R"code(Returns the element-wise inverse hyperbolic cosine of the input array, \
 computed element-wise.
+
+The storage type of ``arccosh`` output is always dense
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arccosh" });
 
@@ -628,6 +775,12 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccosh,
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctanh, cpu, mshadow_op::arctanh)
 .describe(R"code(Returns the element-wise inverse hyperbolic tangent of the input array, \
 computed element-wise.
+
+The storage type of ``arctanh`` output depends upon the input storage type:
+
+  arctanh(default) = default
+  arctanh(row_sparse) = row_sparse
+
 )code" ADD_FILELINE)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{ "_backward_arctanh" });
 
@@ -636,16 +789,24 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctanh,
 
 // gamma
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gamma, cpu, mshadow_op::gamma)
-.MXNET_DESCRIBE("Returns the gamma function (extension of the factorial function to the reals)"
-  " , computed element-wise on the input array.")
+.MXNET_DESCRIBE(R"code(Returns the gamma function (extension of the factorial function
+to the reals), computed element-wise on the input array.
+
+The storage type of ``gamma`` output is always dense
+
+)code")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_gamma"});
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gamma, unary_bwd<mshadow_op::gamma_grad>);
 
 // gammaln
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gammaln, cpu, mshadow_op::gammaln)
-.MXNET_DESCRIBE("Returns element-wise log of the absolute value of the gamma function"
-  " of the input.")
+.MXNET_DESCRIBE(R"code(Returns element-wise log of the absolute value of the gamma function
+of the input.
+
+The storage type of ``gammaln`` output is always dense
+
+)code")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_gammaln"});
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gammaln,
