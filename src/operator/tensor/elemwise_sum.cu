@@ -44,11 +44,9 @@ void ElementWiseSumComputeExGPU(const nnvm::NodeAttrs& attrs,
     NDArray out_nd = outputs[0];
     mxnet::ndarray::ElementwiseSum<gpu>(s, rsc, inputs, &out_nd);
   } else {
-    // TODO(stefan): add fallback
-    LOG(FATAL) << "TODO: fallback";
-    //FCompExFallback<gpu>(attrs, op_ctx, inputs, req, outputs,
-    //                     ElementWiseSumComputeWithHalf2<gpu>,
-    //                     "ElementWiseSumComputeWithHalf2<gpu>");
+    FCompExFallback<gpu>(attrs, op_ctx, inputs, req, outputs,
+                         ElementWiseSumComputeWithHalf2<gpu>,
+                         "ElementWiseSumComputeWithHalf2<gpu>");
   }
 }
 
