@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file ndarray_function_cpu.cc
+ * \file ndarray_function.cc
  * \brief CPU Implementation of ndarray function.
  */
 
@@ -142,7 +142,9 @@ void GetUniqueRspRowIdx(const std::vector<NDArray>& nds,
   uniq_row_idx->resize(it - uniq_row_idx->begin());
 }
 
-void ElementwiseSumRsp(mshadow::Stream<cpu>* s, const std::vector<NDArray>& nds, NDArray* out) {
+void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
+                       const std::vector<NDArray>& nds,
+                       NDArray* out) {
   if (nds.empty()) return;
   using namespace rowsparse;
   CHECK_EQ(out->storage_type(), kRowSparseStorage)
@@ -169,7 +171,6 @@ void ElementwiseSum<cpu>(mshadow::Stream<cpu>* s,
                          const std::vector<NDArray>& nds,
                          NDArray* out) {
   if (nds.empty()) return;
-
   if (nds[0].storage_type() == kRowSparseStorage) {
     ElementwiseSumRsp(s, nds, out);
   } else {

@@ -91,10 +91,9 @@ void ElementWiseSumComputeExCPU(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(req.size(), 1U);
   if (req[0] == kNullOp) return;
   CHECK_EQ(req[0], kWriteTo) << "ElementWiseSumComputeExCPU only supports req = kWriteTo";
-  using namespace mshadow;
-  Stream<cpu>* s = ctx.get_stream<cpu>();
-  NDArray out_nd = outputs[0];
   if (inputs[0].storage_type() == kRowSparseStorage) {
+    mshadow::Stream<cpu>* s = ctx.get_stream<cpu>();
+    NDArray out_nd = outputs[0];
     mxnet::ndarray::ElementwiseSum<cpu>(s, inputs, &out_nd);
   } else {
     FCompExFallback<cpu>(attrs, ctx, inputs, req, outputs,

@@ -18,14 +18,20 @@
  */
 
 /*!
- * \file ndarray_function_cpu.cc
+ * \file ndarray_function.cu
  * \brief GPU Implementation of ndarray function.
  */
 
 // this will be invoked by nvcc and compile GPU version
+#include <cub/cub.cuh>
 #include <dmlc/logging.h>
+#include "../operator/mxnet_op.h"
+#include "../operator/tensor/init_op.h"
+#include "../operator/tensor/util/tensor_util-inl.cuh"
+#include "../common/cuda_utils.h"
 #include "./ndarray_function.h"
 #include "./ndarray_function-inl.h"
+#include "./ndarray_function-inl.cuh"
 
 namespace mxnet {
 namespace ndarray {
@@ -88,5 +94,110 @@ void Copy<gpu, gpu>(const TBlob &from, TBlob *to,
                         s->stream_);
   }
 }
+
+/*!
+ * \brief GPU impl of elemwise sum for rowsparse tensors.
+ */
+void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
+                       const std::vector<NDArray>& nds,
+                       NDArray* out) {
+  using namespace mxnet::op;
+  using namespace rowsparse;
+  using nnvm::dim_t;
+  CHECK_EQ(out->storage_type(), kRowSparseStorage)
+    << "Expected rowsparse storage_type (" << out->storage_type() << " given)";
+  int init = 0;
+  for (const auto& nd : nds) {
+    if (nd.storage_initialized()) {
+      init++;
+    }
+  }
+  if (init == 0) {
+    FillZerosRspImpl<gpu>(s, out);
+    return;
+  }
+  const dim_t num_rows = out->shape()[0];
+  const dim_t row_length = out->shape().ProdShape(1, out->shape().ndim());
+  // TODO(stefan): use temporary workspace from OpContext instead of cudaMalloc
+  MSHADOW_TYPE_SWITCH(out->dtype(), DType, {  // data type
+    MSHADOW_IDX_TYPE_SWITCH(out->aux_type(kIdx), IType, {  // row_idx type
+      // Allocate temporary array row_flg
+      IType* row_flg = NULL;
+      CUDA_CALL(cudaMalloc(&row_flg, num_rows*sizeof(IType)));
+      dim_t num_threads = num_rows;
+      mxnet_op::Kernel<mxnet_op::set_zero, gpu>::Launch(s, num_threads, row_flg);
+      // Mark row_flg array with 1s for non-zero rows
+      for (const auto& nd : nds) {
+        if (nd.storage_initialized()) {
+          const IType* nd_row_idx = nd.aux_data(kIdx).dptr<IType>();
+          const dim_t nd_nnr = nd.storage_shape()[0];
+          num_threads = nd_nnr;
+          mxnet_op::Kernel<MarkRspRowFlgKernel, gpu>::Launch(s, num_threads,
+              row_flg, nd_row_idx, nd_nnr);
+        }
+      }
+      // Compute inclusive prefix sum over row_flg
+      void* d_temp_storage = NULL;
+      size_t temp_storage_bytes = 0;
+      cub::DeviceScan::InclusiveSum(d_temp_storage,
+                                    temp_storage_bytes,
+                                    row_flg,
+                                    row_flg,
+                                    num_rows,
+                                    mshadow::Stream<gpu>::GetStream(s));
+      CUDA_CALL(cudaMalloc(&d_temp_storage, temp_storage_bytes));
+      cub::DeviceScan::InclusiveSum(d_temp_storage,
+                                    temp_storage_bytes,
+                                    row_flg,
+                                    row_flg,
+                                    num_rows,
+                                    mshadow::Stream<gpu>::GetStream(s));
+      CUDA_CALL(cudaFree(d_temp_storage));
+      // Get total number of output non-zero rows from GPU and allocate out data and row_idx
+      dim_t nnr_out = 0;
+      CUDA_CALL(cudaMemcpy(&nnr_out, &row_flg[num_rows-1], sizeof(dim_t),
+                           cudaMemcpyDeviceToHost));
+      out->CheckAndAlloc({mshadow::Shape1(nnr_out)});
+      IType* out_row_idx = out->aux_data(kIdx).dptr<IType>();
+      DType* out_data = out->data().dptr<DType>();
+      // Fill row_idx array of output using row_flg
+      num_threads = num_rows;
+      mxnet_op::Kernel<FillRspRowIdxKernel, gpu>::Launch(s, num_threads,
+          out_row_idx, row_flg, num_rows);
+      // Perform elementwise addition, writing to output data
+      num_threads = nnr_out * row_length;
+      mxnet_op::Kernel<mxnet_op::set_zero, gpu>::Launch(s, num_threads, out_data);
+      for (const auto& nd : nds) {
+        if (nd.storage_initialized()) {
+          const IType* nd_row_idx = nd.aux_data(kIdx).dptr<IType>();
+          const DType* nd_data = nd.data().dptr<DType>();
+          const dim_t nd_nnr = nd.storage_shape()[0];
+          num_threads = nd_nnr * row_length;
+          mxnet_op::Kernel<ElementWiseRspAdditionKernel, gpu>::Launch(s, num_threads,
+              out_data, row_flg, nd_row_idx, nd_data, nd_nnr, row_length);
+        }
+      }
+      CUDA_CALL(cudaFree(row_flg));
+    });
+  });
+}
+
+/*!
+ * \brief Parallel gpu impl of elemwise sum for sparse tensors.
+ * Currently only support row sparse sum.
+ */
+template<>
+void ElementwiseSum<gpu>(mshadow::Stream<gpu>* s,
+                         const std::vector<NDArray>& nds,
+                         NDArray* out) {
+  if (nds.empty()) return;
+  if (nds[0].storage_type() == kRowSparseStorage) {
+    ElementwiseSumRspImpl(s, nds, out);
+  } else {
+    LOG(FATAL) << "ElementwiseSum<gpu> has not been implemented for storage_type = << "
+        << nds[0].storage_type();
+  }
+}
+
 }  // namespace ndarray
 }  // namespace mxnet

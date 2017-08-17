@@ -26,8 +26,31 @@
 namespace mxnet {
 namespace op {
 
+void ElementWiseSumComputeExGPU(const nnvm::NodeAttrs& attrs,
+                                const OpContext& ctx,
+                                const std::vector<NDArray>& inputs,
+                                const std::vector<OpReqType>& req,
+                                const std::vector<NDArray>& outputs) {
+  CHECK(!inputs.empty());
+  CHECK_EQ(outputs.size(), 1U);
+  CHECK_EQ(req.size(), 1U);
+  if (req[0] == kNullOp) return;
+  CHECK_EQ(req[0], kWriteTo) << "ElementWiseSumComputeExGPU only supports req = kWriteTo";
+  if (inputs[0].storage_type() == kRowSparseStorage) {
+    NDArray out_nd = outputs[0];
+    mxnet::ndarray::ElementwiseSum<gpu>(ctx.get_stream<gpu>(), inputs, &out_nd);
+  } else {
+    // TODO(stefan): add fallback
+    LOG(FATAL) << "TODO: fallback";
+    //FCompExFallback<gpu>(attrs, ctx, inputs, req, outputs,
+    //                     ElementWiseSumComputeWithHalf2<gpu>,
+    //                     "ElementWiseSumComputeWithHalf2<gpu>");
+  }
+}
+
 NNVM_REGISTER_OP(add_n)
-.set_attr<FCompute>("FCompute<gpu>", ElementWiseSumComputeWithHalf2<gpu>);
+.set_attr<FCompute>("FCompute<gpu>", ElementWiseSumComputeWithHalf2<gpu>)
+.set_attr<FComputeEx>("FComputeEx<gpu>", ElementWiseSumComputeExGPU);
 
 }  // namespace op
 }  // namespace mxnet
