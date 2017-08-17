@@ -135,7 +135,7 @@ inline bool ContainsDefaultStorage(const std::vector<NDArray>& ndarrays) {
 }
 
 inline bool ContainsNonDefaultStorage(const std::vector<NDArray>& ndarrays) {
-  for (auto &nd : ndarrays) {
+  for (const auto &nd : ndarrays) {
     if (nd.storage_type() != kUndefinedStorage && nd.storage_type() != kDefaultStorage) {
       return true;
     }
@@ -153,7 +153,7 @@ inline bool ContainsStorage(const std::vector<NDArray>& ndarrays, const NDArrayS
 }
 
 /*! \brief get string representation of storage_type */
-inline std::string stype_string(const int& x) {
+inline std::string stype_string(const int x) {
   switch (x) {
     case kDefaultStorage:
       return "default";

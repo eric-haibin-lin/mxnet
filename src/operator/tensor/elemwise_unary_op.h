@@ -39,11 +39,11 @@ namespace op {
 
 class OpBase {
  public:
-  template<int Req>
+  template<int req>
   struct MapSetToScalar {
     template<typename DType>
     MSHADOW_XINLINE static void Map(int i, DType *out, const DType value) {
-      KERNEL_ASSIGN(out[i], Req, value);
+      KERNEL_ASSIGN(out[i], req, value);
     }
   };
 

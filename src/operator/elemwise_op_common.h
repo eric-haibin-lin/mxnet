@@ -262,18 +262,18 @@ struct ElemwiseGradUseNone {
 };
 
 /*! \brief Generic conversion of F<OP> kernel mapping to Kernel::Launch mapping */
-template<typename OP, int Req>
+template<typename OP, int req>
 struct BMap {
   template<typename DType>
   MSHADOW_XINLINE static void Map(int i, DType *out,
                                   const DType *lhs,
                                   const DType *rhs) {
-    KERNEL_ASSIGN(out[i], Req, OP::Map(lhs[i], rhs[i]));
+    KERNEL_ASSIGN(out[i], req, OP::Map(lhs[i], rhs[i]));
   }
 
   template<typename DType>
   MSHADOW_XINLINE static void Map(int i, DType *out, const DType *in, const DType value) {
-    KERNEL_ASSIGN(out[i], Req, OP::Map(in[i], value));
+    KERNEL_ASSIGN(out[i], req, OP::Map(in[i], value));
   }
 };
 

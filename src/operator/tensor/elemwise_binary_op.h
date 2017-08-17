@@ -82,8 +82,6 @@ class ElemwiseBinaryOp : public OpBase {
   };
 
  private:
-  enum Resource { kTempSpace };
-
   /*! \brief Fill dense output block with a single scalar value */
   template<typename xpu, typename DType>
   static inline void Fill(mshadow::Stream<xpu> *s,
@@ -328,7 +326,7 @@ class ElemwiseBinaryOp : public OpBase {
     }
   }
 
-  /*! \brief CSR -op- CSR binary operator for non-canonical NDARray */
+  /*! \brief CSR -op- CSR binary operator for non-canonical NDArray */
   template<typename DType, typename IType, typename CType, typename OP>
   static inline void CsrCsrElemwiseBinaryOp(mshadow::Stream<cpu> *s,
                                             const nnvm::NodeAttrs &attrs,
@@ -750,10 +748,10 @@ class ElemwiseBinaryOp : public OpBase {
 
   template<typename xpu, typename LOP, typename ROP>
   static inline void BinaryBackwardUseNoneEx(const nnvm::NodeAttrs &attrs,
-                               const OpContext &ctx,
-                               const std::vector<NDArray> &inputs,
-                               const std::vector<OpReqType> &req,
-                               const std::vector<NDArray> &outputs) {
+                                             const OpContext &ctx,
+                                             const std::vector<NDArray> &inputs,
+                                             const std::vector<OpReqType> &req,
+                                             const std::vector<NDArray> &outputs) {
     CHECK_EQ(inputs.size(), 1U);   // output grad,
     CHECK_EQ(outputs.size(), 2U);  // lhs input grad, rhs input grad
     using namespace mshadow;
