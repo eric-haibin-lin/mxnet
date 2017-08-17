@@ -68,24 +68,26 @@ class OpBase {
    * \param dest Destination sparse NDArray
    * \param clone_from sparse NDArray from which to clone storage attributes
    */
-  static void AllocateGeometry(const NDArray *dest, const NDArray* clone_from = nullptr) {
-    if (clone_from) {
-      const TShape ishape = clone_from->storage_shape();
-      TShape sshape = dest->storage_shape();
-      CHECK(shape_assign(&sshape, ishape));
-      dest->CheckAndAllocData(sshape);
-      CHECK_EQ(dest->storage_type(), clone_from->storage_type());
-      for (size_t i = 0, n = clone_from->aux_shapes().size(); i < n; ++i) {
-        TShape ashape = dest->aux_shape(i);
-        CHECK(shape_assign(&ashape, clone_from->aux_shape(i)));
-        dest->CheckAndAllocAuxData(i, ashape);
+  static void AllocateGeometry(const NDArray *dest, const OpReqType req, const NDArray* clone_from = nullptr) {
+    if(req != kNullOp) {
+      if (clone_from) {
+        const TShape ishape = clone_from->storage_shape();
+        TShape sshape = dest->storage_shape();
+        CHECK(shape_assign(&sshape, ishape));
+        dest->CheckAndAllocData(sshape);
+        CHECK_EQ(dest->storage_type(), clone_from->storage_type());
+        for (size_t i = 0, n = clone_from->aux_shapes().size(); i < n; ++i) {
+          TShape ashape = dest->aux_shape(i);
+          CHECK(shape_assign(&ashape, clone_from->aux_shape(i)));
+          dest->CheckAndAllocAuxData(i, ashape);
+        }
+        DCHECK_EQ(dest->aux_shapes().size(), clone_from->aux_shapes().size());
+      } else {
+        for (size_t i = 0, n = dest->aux_shapes().size(); i < n; ++i) {
+          dest->CheckAndAllocAuxData(i, dest->aux_shape(i));
+        }
+        dest->CheckAndAllocData(dest->storage_shape());
       }
-      DCHECK_EQ(dest->aux_shapes().size(), clone_from->aux_shapes().size());
-    } else {
-      for (size_t i = 0, n = dest->aux_shapes().size(); i < n; ++i) {
-        dest->CheckAndAllocAuxData(i, dest->aux_shape(i));
-      }
-      dest->CheckAndAllocData(dest->storage_shape());
     }
   }
 
@@ -114,7 +116,7 @@ class OpBase {
                                  const NDArray& src) {
     DCHECK_NE(dest->storage_type(), kDefaultStorage);
     DCHECK_EQ(dest->storage_type(), src.storage_type());
-    AllocateGeometry(dest, &src);
+    AllocateGeometry(dest, reqi, &src);
     CopyGeometryBlobs(s, dest, reqi, src);
     CopyBlob(s, &dest->data(), reqi, src.data());
   }
@@ -216,7 +218,7 @@ class UnaryOp : public OpBase {
     CHECK_EQ(inputs.size(), outputs.size());  // need to figure out what to do for binary type
     CHECK_NE(outputs[0].storage_type(), kDefaultStorage);
     CHECK_EQ(inputs[0].storage_type(), outputs[0].storage_type());
-    AllocateGeometry(&outputs[0], &inputs[0]);
+    AllocateGeometry(&outputs[0], req[0], &inputs[0]);
     CopyGeometryBlobs<xpu>(ctx.get_stream<xpu>(), &outputs[0], req[0], inputs[0]);
     outputs[0].CheckAndAllocData(inputs[0].storage_shape());
     OpBase::MapToFCompute<xpu>(attrs, ctx, inputs, req, outputs, computer);
