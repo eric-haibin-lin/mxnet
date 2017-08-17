@@ -123,12 +123,24 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
   // TODO(stefan): use temporary workspace from OpContext instead of cudaMalloc
   MSHADOW_TYPE_SWITCH(out->dtype(), DType, {  // data type
     MSHADOW_IDX_TYPE_SWITCH(out->aux_type(kIdx), IType, {  // row_idx type
-      // Allocate temporary array row_flg
+      // Allocate temporary storage for row_flg array and cub's prefix sum operation
       IType* row_flg = NULL;
-      CUDA_CALL(cudaMalloc(&row_flg, num_rows*sizeof(IType)));
+      void* d_temp_storage = NULL;
+      size_t temp_storage_bytes = 0;
+      cub::DeviceScan::InclusiveSum(d_temp_storage,
+                                    temp_storage_bytes,
+                                    row_flg,
+                                    row_flg,
+                                    num_rows,
+                                    mshadow::Stream<gpu>::GetStream(s));
+      mshadow::Tensor<gpu, 1, char> workspace = rsc
+          .get_space_typed<gpu, 1, char>(mshadow::Shape1(num_rows * sizeof(IType) +
+                                                         temp_storage_bytes), s);
+      row_flg = reinterpret_cast<IType*>(workspace.dptr_);
+      d_temp_storage = workspace.dptr_ + num_rows*sizeof(IType);
+      // Mark row_flg array with 0 for zero rows and 1 for non-zero rows
       dim_t num_threads = num_rows;
       mxnet_op::Kernel<mxnet_op::set_zero, gpu>::Launch(s, num_threads, row_flg);
-      // Mark row_flg array with 1s for non-zero rows
       for (const auto& nd : nds) {
         if (nd.storage_initialized()) {
           const IType* nd_row_idx = nd.aux_data(kIdx).dptr<IType>();
@@ -139,22 +151,12 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
         }
       }
       // Compute inclusive prefix sum over row_flg
-      void* d_temp_storage = NULL;
-      size_t temp_storage_bytes = 0;
       cub::DeviceScan::InclusiveSum(d_temp_storage,
                                     temp_storage_bytes,
                                     row_flg,
                                     row_flg,
                                     num_rows,
                                     mshadow::Stream<gpu>::GetStream(s));
-      CUDA_CALL(cudaMalloc(&d_temp_storage, temp_storage_bytes));
-      cub::DeviceScan::InclusiveSum(d_temp_storage,
-                                    temp_storage_bytes,
-                                    row_flg,
-                                    row_flg,
-                                    num_rows,
-                                    mshadow::Stream<gpu>::GetStream(s));
-      CUDA_CALL(cudaFree(d_temp_storage));
       // Get total number of output non-zero rows from GPU and allocate out data and row_idx
       dim_t nnr_out = 0;
       CUDA_CALL(cudaMemcpy(&nnr_out, &row_flg[num_rows-1], sizeof(dim_t),
@@ -179,7 +181,6 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
               out_data, row_flg, nd_row_idx, nd_data, nd_nnr, row_length);
         }
       }
-      CUDA_CALL(cudaFree(row_flg));
     });
   });
 }
