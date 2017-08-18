@@ -235,7 +235,8 @@ class KVStoreDistServer {
             stored.CheckAndAlloc({mshadow::Shape1(recved.shape()[0])});
             mshadow::Stream<cpu> *s = ctx.get_stream<cpu>();
             op::PopulateFullIdxRspImpl(s, &rsp);
-            mshadow::Copy(recved.data().FlatTo1D<cpu, float>(), rsp.data().FlatTo1D<cpu, float>());
+            mshadow::Copy(recved.data().FlatTo1D<cpu, float>(),
+                          rsp.data().FlatTo1D<cpu, float>(), s);
           }, recved.ctx(), {recved.var()}, {stored.var()},
           FnProperty::kNormal, 0, PROFILER_MESSAGE_FUNCNAME);
         stored.WaitToRead();
