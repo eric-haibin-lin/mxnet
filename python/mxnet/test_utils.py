@@ -145,8 +145,8 @@ def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1, dtype=None,
         csr.data.fill(data_init)
     if shuffle_csr_indices is True:
         shuffle_csr_column_indices(csr)
-    result = mx.nd.csr_matrix(csr.data, csr.indptr, csr.indices,
-                              (num_rows, num_cols), dtype=dtype)
+    result = mx.nd.sparse.csr_matrix(csr.data, csr.indptr, csr.indices,
+                                    (num_rows, num_cols), dtype=dtype)
     return result
 
 
@@ -291,7 +291,7 @@ def rand_sparse_ndarray(shape, stype, density=None, dtype=None, distribution=Non
         if modifier_func is not None:
             val = assign_each(val, modifier_func)
 
-        arr = mx.nd.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
+        arr = mx.nd.sparse.row_sparse_array(val, indices, shape, indices_type=np.int64, dtype=dtype)
         return arr, (val, indices)
     elif stype == 'csr':
         assert len(shape) == 2
