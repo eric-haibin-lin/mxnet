@@ -247,8 +247,8 @@ class CSRNDArray(BaseSparseNDArray):
     row i are stored in indices[indptr[i]:indptr[i+1]] and their corresponding values are stored
     in values[indptr[i]:indptr[i+1]].
 
-    The indices are expected to be sorted per row in ascending order. Duplicate matrix entries are
-    not allowed.
+    The column indices for a given row are expected to be sorted in ascending order.
+    Duplicate column entries for the same row are not allowed.
 
     Example
     -------
