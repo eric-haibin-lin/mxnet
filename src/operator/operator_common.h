@@ -410,7 +410,6 @@ inline mshadow::Tensor<xpu, ndim, DType> AllocateTempDataForSparseHandling(
   return rsc.get_space_typed<xpu, ndim, DType>(shape, stream);
 }
 
-
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_OPERATOR_OPERATOR_COMMON_H_

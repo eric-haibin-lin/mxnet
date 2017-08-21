@@ -29,6 +29,7 @@ namespace op {
 
 // relu
 MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(relu, cpu, kernel_launch_op::relu)
+MXNET_ADD_SCALAR_OP_ALIAS(relu)
 .describe(R"code(Computes rectified linear.
 
 .. math::
@@ -47,6 +48,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_relu, kernel_launch_op::relu
 
 // sigmoid
 MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(sigmoid, cpu, kernel_launch_op::sigmoid)
+MXNET_ADD_SCALAR_OP_ALIAS(sigmoid)
 .describe(R"code(Computes sigmoid of x element-wise.
 
 .. math::
@@ -88,6 +90,7 @@ NNVM_REGISTER_OP(_backward_copy)
   });
 
 MXNET_OPERATOR_REGISTER_UNARY(BlockGrad)
+MXNET_ADD_SCALAR_OP_ALIAS(BlockGrad)
 .add_alias("stop_gradient")
 .describe(R"code(Stops gradient computation.
 
@@ -124,6 +127,7 @@ Example::
 .set_attr<nnvm::FGradient>("FGradient", MakeZeroGradNodes);
 
 MXNET_OPERATOR_REGISTER_UNARY(make_loss)
+MXNET_ADD_SCALAR_OP_ALIAS(make_loss)
 .describe(R"code(Stops gradient computation.
 .. note:: ``make_loss`` is deprecated, use ``MakeLoss``.
 
@@ -189,6 +193,7 @@ NNVM_REGISTER_OP(_identity_with_attr_like_rhs)
 
 DMLC_REGISTER_PARAMETER(CastParam);
 NNVM_REGISTER_OP(Cast)
+MXNET_ADD_SCALAR_OP_ALIAS(Cast)
 .add_alias("cast")
 .describe(R"code(Casts all elements of the input to a new type.
 
@@ -230,7 +235,8 @@ NNVM_REGISTER_OP(_backward_cast)
 .set_attr<FCompute>("FCompute<cpu>", CastCompute<cpu>);
 
 // negative
-MXNET_OPERATOR_REGISTER_UNARY(negative)
+MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(negative, cpu, mshadow_op::negation)
+MXNET_ADD_SCALAR_OP_ALIAS(negative)
 .describe(R"code(Numerical negative of the argument, element-wise.
 
 The storage type of ``negative`` output depends upon the input storage type:
@@ -240,12 +246,11 @@ The storage type of ``negative`` output depends upon the input storage type:
   negative(csr) = csr
 
 )code")
-.set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<cpu, mshadow_op::negation>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", UnaryOp::ComputeEx<cpu, mshadow_op::negation>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"negative"});
 
 // reciprocal
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(reciprocal, cpu, mshadow_op::reciprocal)
+MXNET_ADD_SCALAR_OP_ALIAS(reciprocal)
 .describe(R"code(Returns the reciprocal of the argument, element-wise.
 
 Calculates 1/x.
@@ -265,6 +270,7 @@ MXNET_OPERATOR_REGISTER_BINARY(_backward_reciprocal)
 
 // abs
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(abs, cpu, mshadow_op::abs)
+MXNET_ADD_SCALAR_OP_ALIAS(abs)
 .describe(R"code(Returns element-wise absolute value of the input.
 
 Example::
@@ -283,6 +289,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_abs, unary_bwd<mshadow_op::s
 
 // sign
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sign, cpu, mshadow_op::sign)
+MXNET_ADD_SCALAR_OP_ALIAS(sign)
 .describe(R"code(Returns element-wise sign of the input.
 
 Example::
@@ -301,6 +308,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_sign, unary_bwd<mshadow_op::
 
 // round
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(round, cpu, mshadow_op::round)
+MXNET_ADD_SCALAR_OP_ALIAS(round)
 .describe(R"code(Returns element-wise rounded value to the nearest integer of the input.
 
 Example::
@@ -317,6 +325,7 @@ The storage type of ``round`` output depends upon the input storage type:
 
 // rint
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(rint, cpu, mshadow_op::rint)
+MXNET_ADD_SCALAR_OP_ALIAS(rint)
 .describe(R"code(Returns element-wise rounded value to the nearest integer of the input.
 
 .. note::
@@ -336,6 +345,7 @@ The storage type of ``rint`` output depends upon the input storage type:
 
 // ceil
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(ceil, cpu, mshadow_op::ceil)
+MXNET_ADD_SCALAR_OP_ALIAS(ceil)
 .describe(R"code(Returns element-wise ceiling of the input.
 
 The ceil of the scalar x is the smallest integer i, such that i >= x.
@@ -353,6 +363,7 @@ The storage type of ``ceil`` output depends upon the input storage type:
 
 // floor
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(floor, cpu, mshadow_op::floor)
+MXNET_ADD_SCALAR_OP_ALIAS(floor)
 .describe(R"code(Returns element-wise floor of the input.
 
 The floor of the scalar x is the largest integer i, such that i <= x.
@@ -370,6 +381,7 @@ The storage type of ``floor`` output depends upon the input storage type:
 
 // trunc
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(trunc, cpu, mshadow_op::trunc)
+MXNET_ADD_SCALAR_OP_ALIAS(trunc)
 .describe(R"code(Return the element-wise truncated value of the input.
 
 The truncated value of the scalar x is the nearest integer i which is closer to
@@ -388,6 +400,7 @@ The storage type of ``trunc`` output depends upon the input storage type:
 
 // fix
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(fix, cpu, mshadow_op::fix)
+MXNET_ADD_SCALAR_OP_ALIAS(fix)
 .describe(R"code(Returns element-wise rounded value to the nearest integer towards zero of the input.
 
 Example::
@@ -403,6 +416,7 @@ The storage type of ``fix`` output depends upon the input storage type:
 
 // square
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(square, cpu, mshadow_op::square)
+MXNET_ADD_SCALAR_OP_ALIAS(square)
 .describe(R"code(Returns element-wise squared value of the input.
 
 .. math::
@@ -425,6 +439,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_square, unary_bwd<mshadow_op
 
 // sqrt
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sqrt, cpu, mshadow_op::square_root)
+MXNET_ADD_SCALAR_OP_ALIAS(sqrt)
 .describe(R"code(Returns element-wise square-root value of the input.
 
 .. math::
@@ -447,6 +462,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_sqrt,
 
 // rsqrt
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(rsqrt, cpu, mshadow_op::reciprocal_square_root)
+MXNET_ADD_SCALAR_OP_ALIAS(rsqrt)
 .describe(R"code(Returns element-wise inverse square-root value of the input.
 
 .. math::
@@ -466,6 +482,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_rsqrt,
 
 // exp
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(exp, cpu, mshadow_op::exp)
+MXNET_ADD_SCALAR_OP_ALIAS(exp)
 .describe(R"code(Returns element-wise exponential value of the input.
 
 .. math::
@@ -482,6 +499,7 @@ The storage type of ``exp`` output is always dense
 
 // log
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(log, cpu, mshadow_op::log)
+MXNET_ADD_SCALAR_OP_ALIAS(log)
 .describe(R"code(Returns element-wise Natural logarithmic value of the input.
 
 The natural logarithm is logarithm in base *e*, so that ``log(exp(x)) = x``
@@ -504,6 +522,7 @@ The storage type of ``log10`` output is always dense
 
 // log2
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(log2, cpu, mshadow_op::log2)
+MXNET_ADD_SCALAR_OP_ALIAS(log2)
 .describe(R"code(Returns element-wise Base-2 logarithmic value of the input.
 
 ``2**log2(x) = x``
@@ -517,6 +536,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_log, unary_bwd<mshadow_op
 
 // sin
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sin, cpu, mshadow_op::sin)
+MXNET_ADD_SCALAR_OP_ALIAS(sin)
 .describe(R"code(Computes the element-wise sine of the input array.
 
 The input should be in radians (:math:`2\pi` rad equals 360 degrees).
@@ -536,6 +556,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_sin, unary_bwd<mshadow_op
 
 // log1p
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(log1p, cpu, mshadow_op::log1p)
+MXNET_ADD_SCALAR_OP_ALIAS(log1p)
 .describe(R"code(Returns element-wise ``log(1 + x)`` value of the input.
 
 This function is more accurate than ``log(1 + x)``  for small ``x`` so that
@@ -553,6 +574,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_log1p, unary_bwd<mshadow_
 
 // expm1
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(expm1, cpu, mshadow_op::expm1)
+MXNET_ADD_SCALAR_OP_ALIAS(expm1)
 .describe(R"code(Returns ``exp(x) - 1`` computed element-wise on the input.
 
 This function provides greater precision than ``exp(x) - 1`` for small values of ``x``.
@@ -569,6 +591,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_expm1, unary_bwd<mshadow_
 
 // cos
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(cos, cpu, mshadow_op::cos)
+MXNET_ADD_SCALAR_OP_ALIAS(cos)
 .describe(R"code(Computes the element-wise cosine of the input array.
 
 The input should be in radians (:math:`2\pi` rad equals 360 degrees).
@@ -585,6 +608,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_cos, unary_bwd<mshadow_op::c
 
 // tan
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(tan, cpu, mshadow_op::tan)
+MXNET_ADD_SCALAR_OP_ALIAS(tan)
 .describe(R"code(Computes the element-wise tangent of the input array.
 
 The input should be in radians (:math:`2\pi` rad equals 360 degrees).
@@ -604,6 +628,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_tan, unary_bwd<mshadow_op
 
 // arcsin
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arcsin, cpu, mshadow_op::arcsin)
+MXNET_ADD_SCALAR_OP_ALIAS(arcsin)
 .describe(R"code(Returns element-wise inverse sine of the input array.
 
 The input should be in the range `[-1, 1]`.
@@ -624,6 +649,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arcsin, unary_bwd<mshadow
 
 // arccos
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccos, cpu, mshadow_op::arccos)
+MXNET_ADD_SCALAR_OP_ALIAS(arccos)
 .describe(R"code(Returns element-wise inverse cosine of the input array.
 
 The input should be in range `[-1, 1]`.
@@ -641,6 +667,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccos, unary_bwd<mshadow
 
 // arctan
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctan, cpu, mshadow_op::arctan)
+MXNET_ADD_SCALAR_OP_ALIAS(arctan)
 .describe(R"code(Returns element-wise inverse tangent of the input array.
 
 The output is in the closed interval :math:`[-\pi/2, \pi/2]`
@@ -660,6 +687,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctan, unary_bwd<mshadow
 
 // degrees
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(degrees, cpu, mshadow_op::degrees)
+MXNET_ADD_SCALAR_OP_ALIAS(degrees)
 .describe(R"code(Converts each element of the input array from radians to degrees.
 
 .. math::
@@ -678,6 +706,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_degrees,
 
 // radians
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(radians, cpu, mshadow_op::radians)
+MXNET_ADD_SCALAR_OP_ALIAS(radians)
 .describe(R"code(Converts each element of the input array from degrees to radians.
 
 .. math::
@@ -696,6 +725,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_radians,
 
 // sinh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(sinh, cpu, mshadow_op::sinh)
+MXNET_ADD_SCALAR_OP_ALIAS(sinh)
 .describe(R"code(Returns the hyperbolic sine of the input array, computed element-wise.
 
 .. math::
@@ -713,6 +743,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_sinh, unary_bwd<mshadow_o
 
 // cosh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(cosh, cpu, mshadow_op::cosh)
+MXNET_ADD_SCALAR_OP_ALIAS(cosh)
 .describe(R"code(Returns the hyperbolic cosine  of the input array, computed element-wise.
 
 .. math::
@@ -727,6 +758,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(_backward_cosh, unary_bwd<mshadow_op::
 
 // tanh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(tanh, cpu, mshadow_op::tanh)
+MXNET_ADD_SCALAR_OP_ALIAS(tanh)
 .describe(R"code(Returns the hyperbolic tangent of the input array, computed element-wise.
 
 .. math::
@@ -744,6 +776,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_tanh, unary_bwd<mshadow_o
 
 // arcsinh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arcsinh, cpu, mshadow_op::arcsinh)
+MXNET_ADD_SCALAR_OP_ALIAS(arcsinh)
 .describe(R"code(Returns the element-wise inverse hyperbolic sine of the input array, \
 computed element-wise.
 
@@ -760,6 +793,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arcsinh,
 
 // arccosh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(arccosh, cpu, mshadow_op::arccosh)
+MXNET_ADD_SCALAR_OP_ALIAS(arccosh)
 .describe(R"code(Returns the element-wise inverse hyperbolic cosine of the input array, \
 computed element-wise.
 
@@ -773,6 +807,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arccosh,
 
 // arctanh
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(arctanh, cpu, mshadow_op::arctanh)
+MXNET_ADD_SCALAR_OP_ALIAS(arctanh)
 .describe(R"code(Returns the element-wise inverse hyperbolic tangent of the input array, \
 computed element-wise.
 
@@ -789,6 +824,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_arctanh,
 
 // gamma
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gamma, cpu, mshadow_op::gamma)
+MXNET_ADD_SCALAR_OP_ALIAS(gamma)
 .MXNET_DESCRIBE(R"code(Returns the gamma function (extension of the factorial function
 to the reals), computed element-wise on the input array.
 
@@ -801,6 +837,7 @@ MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(_backward_gamma, unary_bwd<mshadow_
 
 // gammaln
 MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(gammaln, cpu, mshadow_op::gammaln)
+MXNET_ADD_SCALAR_OP_ALIAS(gammaln)
 .MXNET_DESCRIBE(R"code(Returns element-wise log of the absolute value of the gamma function
 of the input.
 

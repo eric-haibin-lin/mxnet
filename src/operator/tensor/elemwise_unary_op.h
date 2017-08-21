@@ -441,8 +441,8 @@ struct relu_grad {
 };
 }  // namespace kernel_launch_op
 
-#define MXNET_OPERATOR_REGISTER_UNARY(name)                         \
-  NNVM_REGISTER_OP(name)                                            \
+#define MXNET_OPERATOR_REGISTER_UNARY(__name$)                      \
+  NNVM_REGISTER_OP(__name$)                                         \
   .set_num_inputs(1)                                                \
   .set_num_outputs(1)                                               \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
@@ -454,8 +454,8 @@ struct relu_grad {
     })                                                              \
   .add_argument("data", "NDArray-or-Symbol", "The input array.")
 
-#define MXNET_OPERATOR_REGISTER_UNARY_DR(name)                      \
-  NNVM_REGISTER_OP(name)                                            \
+#define MXNET_OPERATOR_REGISTER_UNARY_DR(__name$)                   \
+  NNVM_REGISTER_OP(__name$)                                         \
   .set_num_inputs(1)                                                \
   .set_num_outputs(1)                                               \
   .set_attr<nnvm::FInferShape>("FInferShape", ElemwiseShape<1, 1>)  \
@@ -466,28 +466,31 @@ struct relu_grad {
     })                                                              \
   .add_argument("data", "NDArray-or-Symbol", "The input array.")
 
+/*! \brief Register scalar op name as an alias */
+#define MXNET_ADD_SCALAR_OP_ALIAS(__name$) \
+  .add_alias("_scalar_" #__name$)
+
 /*! \brief Unary launch */
-#define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(name, __xpu$, __kernel$)                   \
-  MXNET_OPERATOR_REGISTER_UNARY(name)                                                   \
-  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Launch<__xpu$, __kernel$>)      \
+#define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(__name$, __xpu$, __kernel$)                   \
+  MXNET_OPERATOR_REGISTER_UNARY(__name$)                                                   \
+  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Launch<__xpu$, __kernel$>)         \
   .set_attr<FComputeEx>("FComputeEx<" #__xpu$ ">", UnaryOp::LaunchEx<__xpu$, __kernel$>)
 
 /*! \brief Unary launch, dense result */
-#define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(name, __xpu$, __kernel$)                \
-  MXNET_OPERATOR_REGISTER_UNARY_DR(name)                                                \
+#define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH_DR(__name$, __xpu$, __kernel$)                \
+  MXNET_OPERATOR_REGISTER_UNARY_DR(__name$)                                                \
   .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Launch<__xpu$, __kernel$>)
 
 /*! \brief Unary compute */
-#define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(name, __xpu$, __kernel$)                  \
-  MXNET_OPERATOR_REGISTER_UNARY(name)                                                   \
-  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Compute<__xpu$, __kernel$>)     \
+#define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE(__name$, __xpu$, __kernel$)                  \
+  MXNET_OPERATOR_REGISTER_UNARY(__name$)                                                   \
+  .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Compute<__xpu$, __kernel$>)        \
   .set_attr<FComputeEx>("FComputeEx<" #__xpu$ ">", UnaryOp::ComputeEx<__xpu$, __kernel$>)
 
 /*! \brief Unary compute, dense result */
-#define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(name, __xpu$, __kernel$)               \
-  MXNET_OPERATOR_REGISTER_UNARY_DR(name)                                                \
+#define MXNET_OPERATOR_REGISTER_UNARY_COMPUTE_DR(__name$, __xpu$, __kernel$)               \
+  MXNET_OPERATOR_REGISTER_UNARY_DR(__name$)                                                \
   .set_attr<FCompute>("FCompute<" #__xpu$ ">", UnaryOp::Compute<__xpu$, __kernel$>)
-
 
 }  // namespace op
 }  // namespace mxnet
