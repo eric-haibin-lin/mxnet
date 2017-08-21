@@ -894,6 +894,9 @@ def check_symbolic_forward(sym, location, expected, rtol=1E-4, atol=None,
     ctx : Context, optional
         running context
 
+    equal_nan: Boolean
+        if True, `nan` is a valid value for checking equivalency (ie `nan` == `nan`)
+
     Example
     -------
     >>> shape = (2, 2)
@@ -967,6 +970,8 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
         Running context.
     grad_stypes: dict of str->str
         dictionary of mapping argument name to stype for the gradient
+    equal_nan: Boolean
+        if True, `nan` is a valid value for checking equivalency (ie `nan` == `nan`)
 
     Example
     -------

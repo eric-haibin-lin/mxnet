@@ -120,8 +120,8 @@ class ElemwiseBinaryOp : public OpBase {
   }
 
   template<typename DType>
-  static inline bool IsSameArray(const NDArray *a1, const NDArray *a2) {
-    return a1 && a2 && a1->var() == a2->var();
+  static inline bool IsSameArray(const NDArray& a1, const NDArray& a2) {
+    return a1.var() == a2.var();
   }
 
 
@@ -173,8 +173,8 @@ class ElemwiseBinaryOp : public OpBase {
       } else if (lhs_is_dense) {
         output.CheckAndAlloc({mshadow::Shape1(num_rows_r)});
       } else {
-        lhs_in_place = IsSameArray<DType>(&lhs, &output);
-        rhs_in_place = IsSameArray<DType>(&rhs, &output);
+        lhs_in_place = IsSameArray<DType>(lhs, output);
+        rhs_in_place = IsSameArray<DType>(rhs, output);
         if (!lhs_in_place && !rhs_in_place) {
           output.CheckAndAlloc({mshadow::Shape1(num_rows_l + num_rows_r)});
         } else {
@@ -676,7 +676,8 @@ class ElemwiseBinaryOp : public OpBase {
     CHECK_EQ(outputs.size(), 1);
     if (req[0] != kNullOp) {
       // If any input or output is dense, fallback to FCompute
-      if (!common::ContainsDefaultStorage(inputs)) {
+      if (!common::ContainsDefaultStorage(inputs)
+          && inputs[0].storage_type() == inputs[1].storage_type()) {
         mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
         switch (inputs[0].storage_type()) {
           case kRowSparseStorage:
