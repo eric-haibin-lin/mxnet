@@ -152,8 +152,9 @@ inline bool ContainsStorage(const std::vector<NDArray>& ndarrays, const NDArrayS
   return false;
 }
 
-inline bool ContainsOnlyStorage(const std::vector<NDArray>& ndarrays, const NDArrayStorageType stype) {
-  if(!ndarrays.empty()) {
+inline bool ContainsOnlyStorage(const std::vector<NDArray>& ndarrays,
+                                const NDArrayStorageType stype) {
+  if (!ndarrays.empty()) {
     for (const auto &nd : ndarrays) {
       if (nd.storage_type() != stype) {
         return false;

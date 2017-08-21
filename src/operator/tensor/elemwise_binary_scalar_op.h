@@ -170,7 +170,7 @@ class BinaryScalarOp : public UnaryOp {
           const DType *row_data_start = in + row_item_start_iter;
           DType *output_this_row = out[i].dptr_;
           // More overhead to use OMP for small loops, so don't
-          if(input_items_this_row > 1000) {
+          if (input_items_this_row > 1000) {
             #pragma omp parallel for
             for (CType j = 0; j < input_items_this_row; ++j) {
               const IType col = this_row_column_indexes[j];

@@ -68,8 +68,10 @@ class OpBase {
    * \param dest Destination sparse NDArray
    * \param clone_from sparse NDArray from which to clone storage attributes
    */
-  static void AllocateGeometry(const NDArray *dest, const OpReqType req, const NDArray* clone_from = nullptr) {
-    if(req != kNullOp) {
+  static void AllocateGeometry(const NDArray *dest,
+                               const OpReqType req,
+                               const NDArray* clone_from = nullptr) {
+    if (req != kNullOp) {
       if (clone_from) {
         const TShape ishape = clone_from->storage_shape();
         TShape sshape = dest->storage_shape();
