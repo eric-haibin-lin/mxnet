@@ -29,7 +29,6 @@ import os
 import errno
 import logging
 from contextlib import contextmanager
-import scipy.sparse as sp
 import numpy as np
 import numpy.testing as npt
 import numpy.random as rnd
@@ -140,6 +139,7 @@ def _get_uniform_dataset_csr(num_rows, num_cols, density=0.1, dtype=None,
     """
     _validate_csr_generation_inputs(num_rows, num_cols, density,
                                     distribution="uniform")
+    from scipy import sparse as sp
     csr = sp.rand(num_rows, num_cols, density, dtype=dtype, format="csr")
     if data_init is not None:
         csr.data.fill(data_init)

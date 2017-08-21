@@ -40,7 +40,7 @@ from ..base import mx_uint, NDArrayHandle, check_call
 from ..context import Context
 from . import _internal
 from .ndarray import _DTYPE_NP_TO_MX, _DTYPE_MX_TO_NP
-from .ndarray import _STORAGE_TYPE_STR_TO_ID, NDArrayBase
+from .ndarray import _STORAGE_TYPE_STR_TO_ID
 from .ndarray import NDArray, _storage_type
 from .ndarray import zeros as _zeros_ndarray
 from .ndarray import array as _array
@@ -61,13 +61,13 @@ except ImportError:
     if int(_os.environ.get("MXNET_ENFORCE_CYTHON", False)) != 0:
         raise ImportError("Cython Module cannot be loaded but MXNET_ENFORCE_CYTHON=1")
     from .._ctypes.ndarray import _set_ndarray_class
+# pylint: enable=unused-import
 
 
 __all__ = ["_ndarray_cls", "csr_matrix", "row_sparse_array",
            "BaseSparseNDArray", "CSRNDArray", "RowSparseNDArray"]
 
 
-# pylint: enable=unused-import
 _STORAGE_AUX_TYPES = {
     'row_sparse': [np.int64],
     'csr': [np.int64, np.int64]
@@ -246,6 +246,9 @@ class CSRNDArray(BaseSparseNDArray):
     `indptr` and `indices`. It uses the standard CSR representation where the column indices for
     row i are stored in indices[indptr[i]:indptr[i+1]] and their corresponding values are stored
     in values[indptr[i]:indptr[i+1]].
+
+    The column indices for a given row are expected to be sorted in ascending order.
+    Duplicate column entries for the same row are not allowed.
 
     Example
     -------
