@@ -200,7 +200,7 @@ class KVStoreLocal : public KVStore {
                         std::vector<int> *uniq_keys,
                         std::vector<std::vector<NDArray*>> *grouped_vals) {
     // check if the storage type of a value is valid
-    auto validator = [this](const int key, NDArray* nd) -> bool {
+    auto validator = [this](const int key, const NDArray* nd) -> bool {
       // valid
       if (nd->storage_type() == kDefaultStorage) return true;
       // invalid, print warning messages once
@@ -221,7 +221,7 @@ class KVStoreLocal : public KVStore {
                            std::vector<int> *uniq_keys,
                            std::vector<std::vector<std::pair<NDArray*, NDArray>>> *grouped_vals) {
     // check if the storage type of a value is valid
-    auto validator = [this](const int key, std::pair<NDArray*, NDArray> val_rowid) -> bool {
+    auto validator = [this](const int key, const std::pair<NDArray*, NDArray>& val_rowid) -> bool {
       auto val_stype = val_rowid.first->storage_type();
       auto rowid_stype = val_rowid.second.storage_type();
       // check storage types
