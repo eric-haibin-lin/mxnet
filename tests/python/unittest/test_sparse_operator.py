@@ -173,6 +173,7 @@ def test_elemwise_binary_ops():
                                 force_grad_overlap=False,
                                 ograd_density=0.0,
                                 skip_gradient_check=False,
+                                shuffle_csr_indices=True,
                                 verbose=False):
         if verbose is True:
             print("testing:", name)
@@ -210,6 +211,7 @@ def test_elemwise_binary_ops():
             lhs_nd = create_sparse_array_zd(
                 shape, lhs_stype, density=lhs_density,
                 modifier_func=modifier_func,
+                shuffle_csr_indices=shuffle_csr_indices,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
                     density=lhs_density,
@@ -227,6 +229,7 @@ def test_elemwise_binary_ops():
             rhs_nd = create_sparse_array_zd(
                 shape, rhs_stype, density=rhs_density,
                 modifier_func=modifier_func,
+                shuffle_csr_indices=shuffle_csr_indices,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
                     density=rhs_density,
@@ -264,6 +267,7 @@ def test_elemwise_binary_ops():
                 shape, outputs[0].stype, density=ograd_density,
                 data_init=1,
                 modifier_func=lambda x: 2,
+                shuffle_csr_indices=shuffle_csr_indices,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
                     density=ograd_density,
@@ -512,7 +516,7 @@ def check_sparse_mathematical_core(name, stype,
                                    forward_mxnet_call, forward_numpy_call, backward_numpy_call=None,
                                    rhs_arg=None, data_init=9., grad_init=2., output_grad_stype=None,
                                    input_grad_stype=None, force_overlap=False, density=.5,
-                                   ograd_density=.5, verbose=False):
+                                   ograd_density=.5, verbose=False, shuffle_csr_indices=True):
     if verbose is True:
         print("TESTING: " + name)
 
@@ -556,6 +560,7 @@ def check_sparse_mathematical_core(name, stype,
         arr_data = create_sparse_array_zd(
             shape, stype, density=density,
             data_init=data_init,
+            shuffle_csr_indices=shuffle_csr_indices,
             rsp_indices=gen_rsp_random_indices(
                 shape,
                 density=density,
@@ -582,6 +587,7 @@ def check_sparse_mathematical_core(name, stype,
             expected_grad_result_type,
             density=density,
             data_init=1,
+            shuffle_csr_indices=shuffle_csr_indices,
             rsp_indices=gen_rsp_random_indices(
                 shape,
                 density=density,
@@ -626,6 +632,7 @@ def check_sparse_mathematical_core(name, stype,
                 shape, output_grad_stype,
                 density=density,
                 data_init=grad_init,
+                shuffle_csr_indices=shuffle_csr_indices,
                 rsp_indices=gen_rsp_random_indices(
                     shape,
                     density=ograd_density,
@@ -1279,13 +1286,15 @@ def test_sparse_unary_with_numerics():
             xa_np = xa
         else:
             xa = create_sparse_array(shape, stype, data_init=None, rsp_indices=[1],
-                                     modifier_func=lambda a: a - 0.5)
+                                     modifier_func=lambda a: a - 0.5,
+                                     shuffle_csr_indices=True)
             xa_np = xa.asnumpy()
 
         if output_grad_stype != 'default':
             out_grad = create_sparse_array(shape, output_grad_stype, data_init=None,
                                            rsp_indices=[1, 2],
-                                           modifier_func=lambda a: a - 0.5)
+                                           modifier_func=lambda a: a - 0.5,
+                                           shuffle_csr_indices=True)
             out_grad_np = out_grad.asnumpy()
         else:
             out_grad_np = np.ones(xa.shape)
@@ -1473,13 +1482,6 @@ def test_sparse_elementwise_sum():
         shape = tuple(np.random.randint(5, 10, size=dim))
         check_sparse_elementwise_sum_with_shape('row_sparse', shape, np.random.randint(1, 9))
 
-
-# def manual_elemwise_run_tests():
-#     test_sparse_elementwise_sum()
-#     test_sparse_mathematical_core()
-#     test_sparse_unary_with_numerics()
-#     test_elemwise_binary_ops()
-#
 
 if __name__ == '__main__':
     import nose
