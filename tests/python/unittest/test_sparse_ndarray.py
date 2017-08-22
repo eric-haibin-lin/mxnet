@@ -39,12 +39,7 @@ def check_sparse_nd_elemwise_binary(shapes, stypes, f, g):
     # generate inputs
     nds = []
     for i, stype in enumerate(stypes):
-        if stype == 'row_sparse':
-            nd, _ = rand_sparse_ndarray(shapes[i], stype)
-        elif stype == 'default':
-            nd = mx.nd.array(random_arrays(shapes[i]), dtype = np.float32)
-        else:
-            assert(False)
+        nd = rand_ndarray(shapes[i], stype)
         nds.append(nd)
     # check result
     test = f(nds[0], nds[1])
@@ -59,8 +54,7 @@ def test_sparse_nd_elemwise_add():
         shape = [rand_shape_2d()] * 2
         assert_fcompex(check_sparse_nd_elemwise_binary,
                        shape, ['default'] * 2, op, g)
-        assert_fcompex(check_sparse_nd_elemwise_binary,
-                       shape, ['default', 'row_sparse'], op, g)
+        check_sparse_nd_elemwise_binary(shape, ['default', 'row_sparse'], op, g)
         assert_fcompex(check_sparse_nd_elemwise_binary,
                        shape, ['row_sparse', 'row_sparse'], op, g)
 

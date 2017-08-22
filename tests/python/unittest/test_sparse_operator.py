@@ -335,14 +335,13 @@ def test_sparse_storage_fallback():
             check_softmax_with_shape(lhs, rhs, shape, preserve_shape=False)
             check_softmax_with_shape(rhs, rhs, shape, preserve_shape=True)
 
-
 def test_sparse_elementwise_sum():
     def check_sparse_elementwise_sum_with_shape(stype, shape, n):
         # forward
         inputs = [mx.symbol.Variable('arg%d' % i) for i in range(n)]
         out = mx.symbol.sparse.add_n(*inputs, name='esum')
         arr = []
-        arr_grad = [mx.nd.empty(shape) for _ in range(n)]
+        arr_grad = [mx.nd.empty(shape, stype='row_sparse') for _ in range(n)]
         densities = [0, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5]
         for i in range(n):
             arr.append(rand_ndarray(shape, stype, np.random.randint(0, len(densities))))

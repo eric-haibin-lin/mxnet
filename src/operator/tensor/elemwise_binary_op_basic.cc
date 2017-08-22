@@ -39,7 +39,7 @@ The storage type of ``elemwise_add`` output depends on storage types of inputs
 .set_attr<FCompute>("FCompute<cpu>", BinaryCompute<cpu, mshadow::op::plus>)
 .set_attr<nnvm::FGradient>("FGradient", CloneGradient{"_backward_add"})
 .set_attr<FComputeEx>("FComputeEx<cpu>", BinaryComputeEx<cpu, mshadow::op::plus>)
-.set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<2, 1>);
+.set_attr<FInferStorageType>("FInferStorageType", ElemwiseBinaryAddStorageType);
 
 // specialized gradient add function to do add to optimization
 // this must differ from elemwise_add to prevent add to optimization in forward pass.

@@ -61,6 +61,7 @@ Example::
                                                  [ 0.54488319,  0.84725171]]
 
 )code" ADD_FILELINE)
+.set_attr<FInferStorageType>("FInferStorageType", SampleStorageType<SampleUniformParam>)
 .set_attr<FCompute>("FCompute<cpu>", SampleUniform_<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SampleUniformEx_<cpu>);
 
@@ -79,6 +80,7 @@ Example::
    random_normal(loc=0, scale=1, shape=(2,2)) = [[ 1.89171135, -1.16881478],
                                                  [-1.23474145,  1.55807114]]
 )code" ADD_FILELINE)
+.set_attr<FInferStorageType>("FInferStorageType", SampleStorageType<SampleNormalParam>)
 .set_attr<FCompute>("FCompute<cpu>", SampleNormal_<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SampleNormalEx_<cpu>);
 
@@ -93,6 +95,7 @@ Example::
    random_gamma(alpha=9, beta=0.5, shape=(2,2)) = [[ 7.10486984,  3.37695289],
                                                    [ 3.91697288,  3.65933681]]
 )code" ADD_FILELINE)
+.set_attr<FInferStorageType>("FInferStorageType", SampleStorageType<SampleGammaParam>)
 .set_attr<FCompute>("FCompute<cpu>", SampleGamma_<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", SampleGammaEx_<cpu>);
 

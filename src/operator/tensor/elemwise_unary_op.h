@@ -77,6 +77,33 @@ void UnaryCompute(const nnvm::NodeAttrs& attrs,
   });
 }
 
+inline bool CopyStorageType(const nnvm::NodeAttrs& attrs,
+                            const Context& ctx,
+                            int* dispatch_type,
+                            std::vector<int> *in_attrs,
+                            std::vector<int> *out_attrs) {
+  CHECK_EQ(in_attrs->size(), 1U);
+  CHECK_EQ(out_attrs->size(), 1U);
+  auto& in_stype = in_attrs->at(0);
+  auto& out_stype = out_attrs->at(0);
+  bool fallback = true;
+  CHECK_NE(in_stype, kUndefinedStorage);
+  type_assign(&out_stype, in_stype);
+  if (in_stype == kDefaultStorage && out_stype == kDefaultStorage) {
+    type_assign(dispatch_type, kDispatchFCompute);
+    fallback = false;
+  } else if ((in_stype == kRowSparseStorage || in_stype == kCSRStorage) &&
+             (in_stype == out_stype)) {
+    type_assign(dispatch_type, kDispatchFComputeEx);
+    fallback = false;
+  }
+  if (fallback) {
+    type_assign(&out_stype, kDefaultStorage);
+    type_assign(dispatch_type, kDispatchFComputeFallback);
+    FALLBACK_WARNING(attrs, ctx, in_attrs, out_attrs);
+  }
+  return true;
+}
 
 template<typename xpu>
 void IdentityCompute(const nnvm::NodeAttrs& attrs,
@@ -139,41 +166,53 @@ void IdentityComputeEx(const nnvm::NodeAttrs& attrs,
   const auto out_stype = outputs[0].storage_type();
   mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();
   if (req[0] == kNullOp) return;
-  if (in_stype == out_stype) {
-    if (in_stype == kDefaultStorage) {  // dense ndarray
-      IdentityCompute<xpu>(attrs, ctx, {inputs[0].data()}, req, {outputs[0].data()});
-    } else if (in_stype == kRowSparseStorage || in_stype == kCSRStorage) {  // sparse ndarray
-      if (!inputs[0].storage_initialized()) {
-        FillComputeZerosEx<xpu>(attrs, ctx, inputs, req, outputs);
-        return;
-      }
-      CHECK_NE(req[0], kAddTo) << "kAddTo is not supported for IdentityComputeEx";
-      const size_t n = mxnet::num_aux_data(out_stype);
-      outputs[0].CheckAndAlloc(inputs[0].aux_shapes());
-      IdentityCompute<xpu>(attrs, ctx, {inputs[0].data()}, req, {outputs[0].data()});
-      for (size_t i = 0; i < n; ++i) {
-        IdentityCompute<xpu>(attrs, ctx, {inputs[0].aux_data(i)}, req, {outputs[0].aux_data(i)});
-      }
-    } else {
-      LOG(FATAL) << "IdentityComputeEx does not support input stype = " << in_stype;
+  if (in_stype == out_stype && (in_stype == kRowSparseStorage || in_stype == kCSRStorage)) {
+    if (!inputs[0].storage_initialized()) {
+      FillComputeZerosEx<xpu>(attrs, ctx, inputs, req, outputs);
+      return;
+    }
+    CHECK_NE(req[0], kAddTo) << "kAddTo is not supported for IdentityComputeEx";
+    const size_t n = mxnet::num_aux_data(out_stype);
+    outputs[0].CheckAndAlloc(inputs[0].aux_shapes());
+    IdentityCompute<xpu>(attrs, ctx, {inputs[0].data()}, req, {outputs[0].data()});
+    for (size_t i = 0; i < n; ++i) {
+      IdentityCompute<xpu>(attrs, ctx, {inputs[0].aux_data(i)}, req, {outputs[0].aux_data(i)});
     }
   } else {
-    FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs, IdentityCompute<xpu>, "IdentityCompute");
+    LOG(FATAL) << "Not implemented: " << OperatorInfoEx(attrs, ctx, inputs, req, outputs);
   }
 }
 
 inline bool IdentityAttrLikeRhsStorageType(const nnvm::NodeAttrs& attrs,
                                            const Context& ctx,
+                                           int* dispatch_type,
                                            std::vector<int> *in_attrs,
                                            std::vector<int> *out_attrs) {
   // TODO(junwu): add ctx info into storage inference logic
-  CHECK_EQ(in_attrs->size(), static_cast<size_t>(2)) << " in operator " << attrs.name;
-  CHECK_EQ(out_attrs->size(), static_cast<size_t>(1)) << " in operator " << attrs.name;
-  auto &in = *in_attrs;
-  auto &out = *out_attrs;
-  CHECK_NE(in[1], kUndefinedStorage) << "rhs storage type must be known";
-  if (in[0] == kUndefinedStorage) STORAGE_TYPE_ASSIGN_CHECK(in, 0, in[1]);
-  if (out[0] == kUndefinedStorage) STORAGE_TYPE_ASSIGN_CHECK(out, 0, in[1]);
+  CHECK_EQ(in_attrs->size(), 2U);
+  CHECK_EQ(out_attrs->size(), 1U);
+  auto& lhs_stype = in_attrs->at(0);
+  auto& rhs_stype = in_attrs->at(1);
+  auto& out_stype = out_attrs->at(0);
+  bool fallback = true;
+  CHECK_NE(rhs_stype, kUndefinedStorage);
+  CHECK(type_assign(&out_stype, rhs_stype)) << "Failed to assign output stype like rhs";
+  type_assign(&lhs_stype, rhs_stype);
+  if (lhs_stype == kDefaultStorage && rhs_stype == kDefaultStorage &&
+      out_stype == kDefaultStorage) {
+    // dns, dns -> dns
+    type_assign(dispatch_type, kDispatchFCompute);
+    fallback = false;
+  } else if ((lhs_stype == kRowSparseStorage || lhs_stype == kCSRStorage) &&
+             (lhs_stype == out_stype)) {
+    type_assign(dispatch_type, kDispatchFComputeEx);
+    fallback = false;
+  }
+  if (fallback) {
+    type_assign(&out_stype, kDefaultStorage);
+    type_assign(dispatch_type, kDispatchFComputeFallback);
+    FALLBACK_WARNING(attrs, ctx, in_attrs, out_attrs);
+  }
   return true;
 }
 
@@ -194,8 +233,7 @@ void IdentityLikeRhsComputeEx(const nnvm::NodeAttrs& attrs,
     std::vector<NDArray> in{inputs[0]};
     IdentityComputeEx<xpu>(attrs, ctx, in, req, outputs);
   } else {
-    LOG(FATAL) << "IdentityLikeRhsComputeEx not implemented for in_stype = " << in_stype
-               << " out_stype = " << out_stype;
+    LOG(FATAL) << "Not implemented: " << OperatorInfoEx(attrs, ctx, inputs, req, outputs);
   }
 }
 

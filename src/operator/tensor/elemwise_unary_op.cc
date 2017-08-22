@@ -70,7 +70,7 @@ MXNET_OPERATOR_REGISTER_UNARY(_copy)
   [](const NodeAttrs& attrs){
     return std::vector<bool>{true};
   })
-.set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>)
+.set_attr<FInferStorageType>("FInferStorageType", CopyStorageType)
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", IdentityComputeEx<cpu>)
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_copy"});
@@ -87,7 +87,7 @@ NNVM_REGISTER_OP(_backward_copy)
   [](const NodeAttrs& attrs){
     return std::vector<bool>{true};
   })
-.set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 1>)
+.set_attr<FInferStorageType>("FInferStorageType", CopyStorageType)
 .set_attr<FCompute>("FCompute<cpu>", IdentityCompute<cpu>)
 .set_attr<FComputeEx>("FComputeEx<cpu>", IdentityComputeEx<cpu>);
 

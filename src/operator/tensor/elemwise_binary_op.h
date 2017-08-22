@@ -47,6 +47,39 @@ struct BinaryOp {
   }
 };
 
+
+inline bool ElemwiseBinaryAddStorageType(const nnvm::NodeAttrs& attrs,
+                                       const Context& ctx,
+                                       int *dispatch_type,
+                                       std::vector<int> *in_attrs,
+                                       std::vector<int> *out_attrs) {
+  CHECK_EQ(in_attrs->size(), 2U);
+  CHECK_EQ(out_attrs->size(), 1U);
+  auto& lhs_stype = in_attrs->at(0);
+  auto& rhs_stype = in_attrs->at(1);
+  auto& out_stype = out_attrs->at(0);
+  bool fallback = true;
+  if (lhs_stype == kDefaultStorage && rhs_stype == kDefaultStorage) {
+    // dns, dns -> dns
+    if (type_assign(&out_stype, kDefaultStorage)) {
+      TYPE_ASSIGN_CHECK(dispatch_type, 0, kDispatchFCompute);
+      fallback = false;
+    }
+  } else if (lhs_stype == kRowSparseStorage && rhs_stype == kRowSparseStorage) {
+    // rsp, rsp -> rsp
+    if (type_assign(&out_stype, kRowSparseStorage)) {
+      TYPE_ASSIGN_CHECK(dispatch_type, 0, kDispatchFComputeEx);
+      fallback = false;
+    }
+  }
+  if (fallback) {
+    type_assign(&out_stype, kDefaultStorage);
+    TYPE_ASSIGN_CHECK(dispatch_type, 0, kDispatchFComputeFallback);
+    FALLBACK_WARNING(attrs, ctx, in_attrs, out_attrs);
+  }
+  return true;
+}
+
 template<typename xpu, typename OP, typename DType>
 void BinaryCompute_(const nnvm::NodeAttrs& attrs,
                     const OpContext& ctx,
@@ -240,20 +273,14 @@ void BinaryComputeEx(const nnvm::NodeAttrs& attrs,
   Stream<xpu> *s = ctx.get_stream<xpu>();
   CHECK_EQ(inputs.size(), 2);
   CHECK_EQ(outputs.size(), 1);
-  if (typeid(OP) == typeid(mshadow::op::plus)) {
-    // If any input is dense, fallback to FCompute
-    // TODO(haibin) implement dns + rsp in a separate kernel
-    if (common::ContainsDefaultStorage(inputs)) {
-      FCompExFallback<xpu>(attrs, ctx, inputs, req, outputs,
-                           BinaryCompute<xpu, OP>, "BinaryCompute");
-      return;
-    }
-    CHECK_EQ(inputs[0].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
-    CHECK_EQ(inputs[1].storage_type(), kRowSparseStorage) << "Sparse type not supported yet";
+  auto lhs_stype = inputs[0].storage_type();
+  auto rhs_stype = inputs[1].storage_type();
+  auto out_stype = outputs[0].storage_type();
+  if (typeid(OP) == typeid(mshadow::op::plus) && lhs_stype == kRowSparseStorage &&
+     rhs_stype == kRowSparseStorage && out_stype == kRowSparseStorage) {
     BinaryComputeRspRspImpl<xpu, OP>(attrs, ctx, inputs, req, outputs);
-    return;
   } else {
-    LOG(FATAL) << "Not implemented";
+    LOG(FATAL) << "Not implemented: " << OperatorInfoEx(attrs, ctx, inputs, req, outputs);
   }
 }
 
