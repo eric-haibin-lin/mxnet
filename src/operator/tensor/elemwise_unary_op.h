@@ -467,8 +467,8 @@ struct relu_grad {
   .add_argument("data", "NDArray-or-Symbol", "The input array.")
 
 /*! \brief Register scalar op name as an alias */
-#define MXNET_ADD_SCALAR_OP_ALIAS(__name$) \
-  .add_alias("_scalar_" #__name$)
+#define MXNET_ADD_SPARSE_OP_ALIAS(__name$) \
+  .add_alias("_sparse_" #__name$)
 
 /*! \brief Unary launch */
 #define MXNET_OPERATOR_REGISTER_UNARY_LAUNCH(__name$, __xpu$, __kernel$)                   \

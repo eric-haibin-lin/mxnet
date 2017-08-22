@@ -27,7 +27,7 @@
 namespace mxnet {
 namespace op {
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(elemwise_add, mshadow::op::plus)
-MXNET_ADD_SCALAR_OP_ALIAS(elemwise_add)
+MXNET_ADD_SPARSE_OP_ALIAS(elemwise_add)
 .add_alias("_add").add_alias("_plus").add_alias("_Plus").add_alias("_sparse_elemwise_add")
 .describe(R"code(Adds arguments element-wise.
 
@@ -59,7 +59,7 @@ NNVM_REGISTER_OP(_backward_add)
 .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU(elemwise_sub, mshadow::op::minus)
-MXNET_ADD_SCALAR_OP_ALIAS(elemwise_sub)
+MXNET_ADD_SPARSE_OP_ALIAS(elemwise_sub)
 .add_alias("_sub").add_alias("_minus").add_alias("_Minus")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_backward_sub"});
 
@@ -78,7 +78,7 @@ NNVM_REGISTER_OP(_backward_sub)
 .set_attr<FInferStorageType>("FInferStorageType", ElemwiseStorageType<1, 2>);
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DENSE_LRVALUE(elemwise_mul, mshadow::op::mul)
-MXNET_ADD_SCALAR_OP_ALIAS(elemwise_mul)
+MXNET_ADD_SPARSE_OP_ALIAS(elemwise_mul)
 .add_alias("_mul").add_alias("_Mul")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_mul"});
 
@@ -97,7 +97,7 @@ NNVM_REGISTER_OP(_backward_mul)
   cpu, mshadow_op::right, mshadow_op::left>);;
 
 MXNET_OPERATOR_REGISTER_BINARY_LAUNCH_CPU_DR(elemwise_div, mshadow::op::div)
-MXNET_ADD_SCALAR_OP_ALIAS(elemwise_div)
+MXNET_ADD_SPARSE_OP_ALIAS(elemwise_div)
 .add_alias("_div").add_alias("_Div")
 .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_div"});
 
