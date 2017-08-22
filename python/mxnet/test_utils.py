@@ -1002,7 +1002,6 @@ def check_symbolic_backward(sym, location, out_grads, expected, rtol=1e-5, atol=
         expected = {k:v for k, v in zip(sym.list_arguments(), expected)}
 
     args_grad_npy = {k:_rng.normal(size=v.shape) for k, v in expected.items()}
-    # args_grad_data should be casted to storage type if hinted
     args_grad_data = {}
     for k, v in args_grad_npy.items():
         nd = mx.nd.array(v, ctx=ctx)
