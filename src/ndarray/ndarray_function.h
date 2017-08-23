@@ -174,7 +174,7 @@ void ElementwiseSum(const std::vector<TBlob> source,
  */
 template<typename xpu>
 void ElementwiseSum(mshadow::Stream<xpu>* s,
-                    Resource rsc,
+                    const Resource& rsc,
                     const std::vector<NDArray>& nds,
                     NDArray* out);
 

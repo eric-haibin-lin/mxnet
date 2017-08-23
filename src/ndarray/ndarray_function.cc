@@ -143,7 +143,7 @@ void GetUniqueRspRowIdx(const std::vector<NDArray>& nds,
 }
 
 void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
-                       Resource rsc,
+                       const Resource& rsc,
                        const std::vector<NDArray>& nds,
                        NDArray* out) {
   if (nds.empty()) return;
@@ -154,6 +154,8 @@ void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
 
   MSHADOW_TYPE_SWITCH(out->dtype(), DType, {
     MSHADOW_IDX_TYPE_SWITCH(out->aux_type(kIdx), IType, {
+      // TODO(Jun): Use resource rsc for temporary vector instead of
+      //            allocating it directly in GetUniqueRspRowIdx
       std::vector<IType> uniq_row_idx;
       GetUniqueRspRowIdx(nds, &uniq_row_idx);
       out->CheckAndAlloc({mshadow::Shape1(uniq_row_idx.size())});
@@ -169,7 +171,7 @@ void ElementwiseSumRsp(mshadow::Stream<cpu>* s,
  */
 template<>
 void ElementwiseSum<cpu>(mshadow::Stream<cpu>* s,
-                         Resource rsc,
+                         const Resource& rsc,
                          const std::vector<NDArray>& nds,
                          NDArray* out) {
   if (nds.empty()) return;

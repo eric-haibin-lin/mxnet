@@ -99,7 +99,7 @@ void Copy<gpu, gpu>(const TBlob &from, TBlob *to,
  * \brief GPU impl of elemwise sum for rowsparse tensors.
  */
 void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
-                           Resource rsc,
+                           const Resource& rsc,
                            const std::vector<NDArray>& nds,
                            NDArray* out) {
   using namespace mxnet::op;
@@ -120,7 +120,6 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
   }
   const dim_t num_rows = out->shape()[0];
   const dim_t row_length = out->shape().ProdShape(1, out->shape().ndim());
-  // TODO(stefan): use temporary workspace from OpContext instead of cudaMalloc
   MSHADOW_TYPE_SWITCH(out->dtype(), DType, {  // data type
     MSHADOW_IDX_TYPE_SWITCH(out->aux_type(kIdx), IType, {  // row_idx type
       // Allocate temporary storage for row_flg array and cub's prefix sum operation
@@ -191,7 +190,7 @@ void ElementwiseSumRspImpl(mshadow::Stream<gpu>* s,
  */
 template<>
 void ElementwiseSum<gpu>(mshadow::Stream<gpu>* s,
-                         Resource rsc,
+                         const Resource& rsc,
                          const std::vector<NDArray>& nds,
                          NDArray* out) {
   if (nds.empty()) return;
