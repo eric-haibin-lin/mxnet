@@ -28,3 +28,8 @@ def get_mnist():
     X = mnist.data[p].astype(np.float32)*0.02
     Y = mnist.target[p]
     return X, Y
+
+def get_amzn(filename):
+    data_path = os.path.dirname(os.path.abspath(os.path.expanduser(__file__)))
+    data = np.load(os.path.join(data_path, filename))
+    return data
