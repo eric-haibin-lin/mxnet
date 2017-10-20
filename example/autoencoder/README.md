@@ -1,0 +1,2 @@
+- Run get_matrix.py to generate data in numpy format
+- Run matrix_ae_main.py to train an auto-encoder (e.g. `python matrix_ae_main.py --matrix=matrix_30_40_0.8_20_25_0.85_10_15_0.9_250_350_0.06`)

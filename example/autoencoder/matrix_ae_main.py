@@ -19,38 +19,37 @@
 from __future__ import print_function
 import mxnet as mx
 import numpy as np
+import model
+import argparse
 import logging
 import data
 from autoencoder import AutoEncoderModel
-import model
+
+parser = argparse.ArgumentParser(description='Train an auto-encoder model dataset.')
+parser.add_argument('--matrix', type=str, default=None,
+                    help='the input matrix file.')
+
+logging.basicConfig(level=logging.DEBUG)
+opt = parser.parse_args()
+logging.info(opt)
+matrix = opt.matrix + ".npy"
 
 train = True
 predict = True
 
 if __name__ == '__main__':
-    data_file = "matrix_30_40_0.8_20_25_0.85_10_15_0.9_250_350_0.06.npy"
+    data_file = matrix
     X = data.get_amzn(data_file)
     train_X = X
     val_X = X
     num_sample, num_feature = X.shape
 
-    # set to INFO to see less information during training
-    logging.basicConfig(level=logging.INFO)
-    dims = [num_feature, 128, 4]
+    dims = [num_feature, 128, 3]
     post_fix = '_'.join(map(str, dims))
-    ae_model = AutoEncoderModel(mx.cpu(0), dims, #pt_dropout=0.2,
-        internal_act='relu', output_act='relu')
-    ae_model.loss.save("symbol" + post_fix + ".json")
-    #X, _ = data.get_mnist()
-    #train_X = X[:60000]
-    #val_X = X[60000:]
-
-    #np.set_printoptions(threshold=np.nan)
-    #print(X.shape)
-    #from matplotlib import pyplot as plt
-    #plt.imshow(X, interpolation='nearest')
-    #plt.show()
-    monitor_count = 100
+    ae_model = AutoEncoderModel(mx.gpu(0), dims, pt_dropout=0,
+                               internal_act='relu', output_act='relu')
+    ae_model.loss.save("symbol_" + post_fix + ".json")
+    monitor_count = 500
     if train:
         ae_model.layerwise_pretrain(train_X, num_sample, 5000, 'sgd', l_rate=0.1, decay=0.0,
                                     lr_scheduler=mx.misc.FactorScheduler(20000,0.1),
@@ -58,20 +57,16 @@ if __name__ == '__main__':
         ae_model.finetune(train_X, num_sample, 10000, 'sgd', l_rate=0.1, decay=0.0,
                           lr_scheduler=mx.misc.FactorScheduler(20000,0.1),
                           monitor_count=monitor_count)
-        ae_model.save('mnist_pt' + post_fix + '.arg')
+        ae_model.save('cpt_' + post_fix + '.arg')
 
     if predict:
-        #ae_model.load('mnist_pt.arg')
-        ae_model.load('mnist_pt' + post_fix + '.arg')
-        #print("Training error:", ae_model.eval(train_X))
-        #print("Validation error:", ae_model.eval(val_X))
+        ae_model.load('cpt_' + post_fix + '.arg')
         batch_size = num_sample / 10
-        #print(X.shape)
         data_iter = mx.io.NDArrayIter({'data': X}, batch_size=batch_size, shuffle=False,
                                       last_batch_handle='pad')
         Y = list(model.extract_feature(ae_model.decoder, ae_model.args, ae_model.auxs, data_iter,
                                  X.shape[0], ae_model.xpu).values())[0]
-        np.save('prediction' + post_fix + '.npy', Y)
+        np.save('prediction_' + post_fix + '.npy', Y)
         Z = list(model.extract_feature(ae_model.encoder, ae_model.args, ae_model.auxs, data_iter,
                                  X.shape[0], ae_model.xpu).values())[0]
-        np.save('encode' + post_fix + '.npy', Z)
+        np.save('encode_' + post_fix + '.npy', Z)

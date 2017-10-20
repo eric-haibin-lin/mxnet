@@ -60,7 +60,6 @@ def gen(block_dims):
 
 if __name__ == '__main__':
   block_dims = [ [30, 40, 0.8], [20, 25, 0.85], [10, 15, 0.9], [250, 350, 0.06]]
-  # block_dims = [ [5,8, 0.9], [3, 7, 0.5] ]
   dims = []
   for dim in block_dims:
       for d in dim:
@@ -68,7 +67,6 @@ if __name__ == '__main__':
   post_fix = '_'.join(map(str, dims))
   print(post_fix)
   result_matrix = gen(block_dims)
-
   if verbose > 2:
     print "working on block_dims = ", block_dims
     print result_matrix
