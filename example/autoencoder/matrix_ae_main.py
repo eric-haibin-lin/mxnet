@@ -44,7 +44,7 @@ if __name__ == '__main__':
     val_X = X
     num_sample, num_feature = X.shape
 
-    dims = [num_feature, 128, 3]
+    dims = [num_feature, 128, 4]
     post_fix = '_'.join(map(str, dims))
     ae_model = AutoEncoderModel(mx.gpu(0), dims, pt_dropout=0,
                                internal_act='relu', output_act='relu')
