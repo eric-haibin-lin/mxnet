@@ -1,94 +1,119 @@
+import time
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd, gluon
+import argparse
 
-mx.random.seed(0)
-np.random.seed(0)
-num_gpus = 2
-ctx_list = [mx.gpu(i) for i in range(num_gpus)]
+parser = argparse.ArgumentParser(description="Run auto-encoder with model parallel",
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--num-epoch', type=int, default=5,
+                    help='number of epochs to train')
+parser.add_argument('--batch-size', type=int, default=128,
+                    help='number of examples per batch')
+parser.add_argument('--num-gpus', type=int, default=2,
+                    help='number of gpus')
 
-num_inputs = 240
-num_hidden = 512
-num_outputs = 240
-num_examples = 320
-batch_size = 32
+if __name__ == '__main__':
+    import logging
+    head = '%(asctime)-15s %(message)s'
+    logging.basicConfig(level=logging.INFO, format=head)
 
-def real_fn(X):
-    return X
+    # arg parser
+    args = parser.parse_args()
+    logging.info(args)
+    num_gpus = args.num_gpus
+    epochs = args.num_epoch
+    batch_size = args.batch_size
 
-X = nd.random.normal(shape=(num_examples, num_inputs))
-y = X
+    ctx_list = [mx.gpu(i) for i in range(num_gpus)]
 
-train_data = mx.gluon.data.DataLoader(mx.gluon.data.ArrayDataset(X, y),
-                                      batch_size=batch_size, shuffle=True)
+    num_inputs = 24000
+    num_hidden = 512
+    num_outputs = 24000
+    num_examples = 10 * 128
 
-w1_cpu = nd.random.normal(shape=(num_inputs, num_hidden))
-b1_cpu = nd.random.normal(shape=num_hidden)
-w2_cpu = nd.random.normal(shape=(num_hidden, num_outputs))
-b2_cpu = nd.random.normal(shape=num_outputs)
+    def real_fn(X):
+        return X
 
-# shard w1 and w2
-w1 = gluon.utils.split_and_load(w1_cpu, ctx_list, batch_axis=1)
-w2 = gluon.utils.split_and_load(w2_cpu, ctx_list, batch_axis=1)
-b1 = gluon.utils.split_and_load(b1_cpu, ctx_list)
-b2 = gluon.utils.split_and_load(b2_cpu, ctx_list)
+    X = nd.random.normal(shape=(num_examples, num_inputs))
+    y = X
 
-params = w1 + w2 + b1 + b2
-for param in params:
-    param.attach_grad()
+    train_data = mx.gluon.data.DataLoader(mx.gluon.data.ArrayDataset(X, y),
+                                          batch_size=batch_size, shuffle=True)
 
-def net(Xs):
-    hiddens = [mx.nd.dot(Xs[i], w1[i]) + b1[i] for i in range(num_gpus)]
-    acts = [mx.nd.relu(hiddens[i]) for i in range(num_gpus)]
-    broadcasts = []
-    for i in range(num_gpus):
-        broadcast = []
-        for act in acts:
-            broadcast.append(act.copyto(mx.gpu(i)) if act.context.device_id != i else act)
-        broadcasts.append(broadcast)
-    concats = [mx.nd.concat(*broadcast) for broadcast in broadcasts]
-    outputs = [mx.nd.dot(concats[i], w2[i]) + b2[i] for i in range(num_gpus)]
-    return outputs
+    w1_cpu = nd.random.normal(shape=(num_inputs, num_hidden))
+    b1_cpu = nd.random.normal(shape=num_hidden)
+    w2_cpu = nd.random.normal(shape=(num_hidden, num_outputs))
+    b2_cpu = nd.random.normal(shape=num_outputs)
 
-def square_loss(yhat, y):
-    return nd.mean((yhat - y) ** 2)
+    # shard w1 and w2
+    w1 = gluon.utils.split_and_load(w1_cpu, ctx_list, batch_axis=1)
+    w2 = gluon.utils.split_and_load(w2_cpu, ctx_list, batch_axis=1)
+    b1 = gluon.utils.split_and_load(b1_cpu, ctx_list)
+    b2 = gluon.utils.split_and_load(b2_cpu, ctx_list)
 
-def SGD(params, lr):
+    params = w1 + w2 + b1 + b2
     for param in params:
-        param[:] = param - lr * param.grad
+        param.attach_grad()
 
-epochs = 5
-learning_rate = .001
-smoothing_constant = .01
-moving_loss = 0
-niter = 0
-losses = []
+    def net(Xs):
+        hiddens = [mx.nd.dot(Xs[i], w1[i]) + b1[i] for i in range(num_gpus)]
+        acts = [mx.nd.relu(hiddens[i]) for i in range(num_gpus)]
+        broadcasts = []
+        for i in range(num_gpus):
+            broadcast = [act.copyto(mx.gpu(i)) if act.context.device_id != i else act for act in acts]
+            broadcasts.append(broadcast)
+        concats = [mx.nd.concat(*broadcast) for broadcast in broadcasts]
+        outputs = [mx.nd.dot(concats[i], w2[i]) + b2[i] for i in range(num_gpus)]
+        return outputs
 
-for e in range(epochs):
-    for i, (data, label) in enumerate(train_data):
-        datas = [data.copyto(ctx) for ctx in ctx_list]
-        labels = gluon.utils.split_and_load(label, ctx_list, batch_axis=1)
-        with autograd.record():
-            outputs = net(datas)
-            losses = [square_loss(output, label) for output, label in zip(outputs, labels)]
-        for l in losses:
-            l.backward()
+    def square_loss(yhat, y):
+        return nd.mean((yhat - y) ** 2)
 
-        #print(nd.sum(b1[0].grad))
-        #print(nd.sum(b1[1].grad))
-        # perform update
-        SGD(params, learning_rate)
+    def SGD(params, lr):
+        for param in params:
+            param[:] = param - lr * param.grad
 
-        ##########################
-        #  Keep a moving average of the losses
-        ##########################
-        niter += 1
-        losses_cpu = [loss.copyto(mx.cpu()) for loss in losses]
-        curr_loss = mx.nd.mean(*losses_cpu).asscalar()
-        moving_loss = (1 - smoothing_constant) * moving_loss + (smoothing_constant) * curr_loss
+    learning_rate = .001
+    smoothing_constant = .01
+    moving_loss = 0
+    niter = 0
+    losses = []
 
-        # correct the bias from the moving averages
-        est_loss = moving_loss/(1-(1-smoothing_constant)**niter)
+    mx.nd.waitall()
+    start = time.time()
 
-        if (i + 1) % 10 == 0:
-            print("Epoch %s, batch %s. Moving avg of loss: %s" % (e, i, est_loss))
+    mx.profiler.profiler_set_config(mode='all', filename='mp_' + str(num_gpus) + '_profile_output.json')
+    mx.profiler.profiler_set_state('run')
+    for e in range(epochs):
+        for i, (data, label) in enumerate(train_data):
+            datas = [data.copyto(ctx) for ctx in ctx_list]
+            labels = gluon.utils.split_and_load(label, ctx_list, batch_axis=1)
+            with autograd.record():
+                outputs = net(datas)
+                losses = [square_loss(output, label) for output, label in zip(outputs, labels)]
+                total_loss = sum([l.copyto(mx.gpu(0)) for l in losses]) / num_gpus
+
+            # calculate gradients
+            total_loss.backward()
+
+            # perform update
+            SGD(params, learning_rate)
+
+            ##########################
+            #  Keep a moving average of the losses
+            ##########################
+            niter += 1
+            curr_loss = total_loss.asscalar()
+            moving_loss = (1 - smoothing_constant) * moving_loss + (smoothing_constant) * curr_loss
+
+            # correct the bias from the moving averages
+            est_loss = moving_loss/(1-(1-smoothing_constant)**niter)
+
+            if i % 10 == 0:
+                print("Epoch %s, batch %s. Moving avg of loss: %s" % (e, i, est_loss))
+
+    mx.nd.waitall()
+    mx.profiler.profiler_set_state('stop')
+    end = time.time()
+    print(num_gpus, end - start)
