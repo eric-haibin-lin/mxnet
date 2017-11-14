@@ -2,6 +2,8 @@ import time
 import mxnet as mx
 import numpy as np
 from mxnet import nd, autograd, gluon
+import scipy.sparse as spsp
+import scipy
 import argparse
 
 parser = argparse.ArgumentParser(description="Run auto-encoder with model parallel",
@@ -12,6 +14,8 @@ parser.add_argument('--batch-size', type=int, default=128,
                     help='number of examples per batch')
 parser.add_argument('--num-gpus', type=int, default=2,
                     help='number of gpus')
+parser.add_argument('--use-sparse', action='store_true',
+                    help='whether to use sparse ndarrays')
 
 if __name__ == '__main__':
     import logging
@@ -24,6 +28,7 @@ if __name__ == '__main__':
     num_gpus = args.num_gpus
     epochs = args.num_epoch
     batch_size = args.batch_size
+    use_sparse = args.use_sparse
 
     ctx_list = [mx.gpu(i) for i in range(num_gpus)]
 
@@ -35,11 +40,17 @@ if __name__ == '__main__':
     def real_fn(X):
         return X
 
-    X = nd.random.normal(shape=(num_examples, num_inputs))
-    y = X
+    scipy.random.seed(0)
+    if use_sparse:
+        X = nd.sparse.csr_matrix(spsp.rand(num_examples, num_inputs, dtype='float32',
+                                           format='csr', density=0.01))
+        y = X.tostype('default')
+    else:
+        X = nd.random.normal(shape=(num_examples, num_inputs))
+        y = X
 
-    train_data = mx.gluon.data.DataLoader(mx.gluon.data.ArrayDataset(X, y),
-                                          batch_size=batch_size, shuffle=True)
+    train_data = mx.io.NDArrayIter(data=X, label=y, batch_size=batch_size,
+                                   last_batch_handle='discard')
 
     w1_cpu = nd.random.normal(shape=(num_inputs, num_hidden))
     b1_cpu = nd.random.normal(shape=num_hidden)
@@ -52,7 +63,9 @@ if __name__ == '__main__':
     b1 = gluon.utils.split_and_load(b1_cpu, ctx_list)
     b2 = gluon.utils.split_and_load(b2_cpu, ctx_list)
 
-    params = w1 + w2 + b1 + b2
+    bs = b1 + b2
+    ws = [w.tostype('row_sparse') for w in w1 + w2] if use_sparse else w1 + w2
+    params = ws + bs
     for param in params:
         param.attach_grad()
 
@@ -91,8 +104,8 @@ if __name__ == '__main__':
         nbatch = 0
         data_iter = iter(train_data)
         next_batch = next(data_iter)
-        datas = [next_batch[0].copyto(ctx) for ctx in ctx_list]
-        labels = gluon.utils.split_and_load(next_batch[1], ctx_list,
+        datas = [next_batch.data[0].copyto(ctx) for ctx in ctx_list]
+        labels = gluon.utils.split_and_load(next_batch.label[0], ctx_list,
                                             batch_axis=1, even_split=False)
         end_of_batch = False
         while not end_of_batch:
@@ -108,8 +121,8 @@ if __name__ == '__main__':
             SGD(params, learning_rate)
             try:
                 next_batch = next(data_iter)
-                datas = [next_batch[0].copyto(ctx) for ctx in ctx_list]
-                labels = gluon.utils.split_and_load(next_batch[1], ctx_list,
+                datas = [next_batch.data[0].copyto(ctx) for ctx in ctx_list]
+                labels = gluon.utils.split_and_load(next_batch.label[0], ctx_list,
                                                     batch_axis=1, even_split=False)
             except StopIteration:
                 end_of_batch = True
@@ -117,6 +130,7 @@ if __name__ == '__main__':
             curr_loss = total_loss.asscalar()
             if nbatch % 10 == 0:
                 print("Epoch %s, batch %s. loss of current batch: %s" % (e, nbatch, curr_loss))
+        train_data.reset()
 
     mx.nd.waitall()
     mx.profiler.profiler_set_state('stop')
