@@ -72,7 +72,7 @@ if __name__ == '__main__':
 
     def SGD(params, lr):
         for param in params:
-            param[:] = param - lr * param.grad
+            mx.nd.sgd_update(weight=param, grad=param.grad, lr=lr, out=param)
 
     learning_rate = .001
     smoothing_constant = .01
@@ -82,36 +82,41 @@ if __name__ == '__main__':
 
     mx.nd.waitall()
     start = time.time()
-
-    mx.profiler.profiler_set_config(mode='all', filename='mp_' + str(num_gpus) + '_profile_output.json')
+    datas = None
+    labels = None
+    profiler_name = 'mp_' + str(num_gpus) + '_profile_output.json'
+    mx.profiler.profiler_set_config(mode='all', filename=profiler_name)
     mx.profiler.profiler_set_state('run')
     for e in range(epochs):
-        for i, (data, label) in enumerate(train_data):
-            datas = [data.copyto(ctx) for ctx in ctx_list]
-            labels = gluon.utils.split_and_load(label, ctx_list, batch_axis=1)
+        nbatch = 0
+        data_iter = iter(train_data)
+        next_batch = next(data_iter)
+        datas = [next_batch[0].copyto(ctx) for ctx in ctx_list]
+        labels = gluon.utils.split_and_load(next_batch[1], ctx_list,
+                                            batch_axis=1, even_split=False)
+        end_of_batch = False
+        while not end_of_batch:
+            nbatch += 1
+            # forward
             with autograd.record():
                 outputs = net(datas)
                 losses = [square_loss(output, label) for output, label in zip(outputs, labels)]
                 total_loss = sum([l.copyto(mx.gpu(0)) for l in losses]) / num_gpus
-
             # calculate gradients
             total_loss.backward()
-
             # perform update
             SGD(params, learning_rate)
-
-            ##########################
-            #  Keep a moving average of the losses
-            ##########################
+            try:
+                next_batch = next(data_iter)
+                datas = [next_batch[0].copyto(ctx) for ctx in ctx_list]
+                labels = gluon.utils.split_and_load(next_batch[1], ctx_list,
+                                                    batch_axis=1, even_split=False)
+            except StopIteration:
+                end_of_batch = True
             niter += 1
             curr_loss = total_loss.asscalar()
-            moving_loss = (1 - smoothing_constant) * moving_loss + (smoothing_constant) * curr_loss
-
-            # correct the bias from the moving averages
-            est_loss = moving_loss/(1-(1-smoothing_constant)**niter)
-
-            if i % 10 == 0:
-                print("Epoch %s, batch %s. Moving avg of loss: %s" % (e, i, est_loss))
+            if nbatch % 10 == 0:
+                print("Epoch %s, batch %s. loss of current batch: %s" % (e, nbatch, curr_loss))
 
     mx.nd.waitall()
     mx.profiler.profiler_set_state('stop')
