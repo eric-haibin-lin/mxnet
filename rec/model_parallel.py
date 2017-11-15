@@ -16,6 +16,10 @@ parser.add_argument('--num-gpus', type=int, default=2,
                     help='number of gpus')
 parser.add_argument('--use-sparse', action='store_true',
                     help='whether to use sparse ndarrays')
+parser.add_argument('--profiler', action='store_true',
+                    help='whether to use profiler')
+parser.add_argument('--dummy-data', action='store_true',
+                    help='whether to use the first batch of data all the time')
 
 if __name__ == '__main__':
     import logging
@@ -29,12 +33,14 @@ if __name__ == '__main__':
     epochs = args.num_epoch
     batch_size = args.batch_size
     use_sparse = args.use_sparse
+    profiler = args.profiler
+    dummy = args.dummy_data
 
     ctx_list = [mx.gpu(i) for i in range(num_gpus)]
 
-    num_inputs = 24000
+    num_inputs = 240000
     num_hidden = 512
-    num_outputs = 24000
+    num_outputs = 240000
     num_examples = 10 * 128
 
     def real_fn(X):
@@ -66,6 +72,9 @@ if __name__ == '__main__':
     bs = b1 + b2
     ws = [w.tostype('row_sparse') for w in w1 + w2] if use_sparse else w1 + w2
     params = ws + bs
+    states = [(mx.nd.zeros(p.shape, ctx=p.context, stype=p.stype), \
+               mx.nd.zeros(p.shape, ctx=p.context, stype=p.stype)) for p in params]
+    num_params = len(params)
     for param in params:
         param.attach_grad()
 
@@ -83,9 +92,12 @@ if __name__ == '__main__':
     def square_loss(yhat, y):
         return nd.mean((yhat - y) ** 2)
 
-    def SGD(params, lr):
-        for param in params:
-            mx.nd.sgd_update(weight=param, grad=param.grad, lr=lr, out=param)
+    def update(params, states, lr):
+        for i in range(num_params):
+            param = params[i]
+            mean, var = states[i]
+            mx.nd.adam_update(weight=param, grad=param.grad, mean=mean,
+                              var=var, lr=lr, out=params[i])
 
     learning_rate = .001
     smoothing_constant = .01
@@ -97,9 +109,10 @@ if __name__ == '__main__':
     start = time.time()
     datas = None
     labels = None
-    profiler_name = 'mp_' + str(num_gpus) + '_profile_output.json'
-    mx.profiler.profiler_set_config(mode='all', filename=profiler_name)
-    mx.profiler.profiler_set_state('run')
+    if profiler:
+        profiler_name = 'mp_' + str(num_gpus) + '_profile_output.json'
+        mx.profiler.profiler_set_config(mode='all', filename=profiler_name)
+        mx.profiler.profiler_set_state('run')
     for e in range(epochs):
         nbatch = 0
         data_iter = iter(train_data)
@@ -118,21 +131,23 @@ if __name__ == '__main__':
             # calculate gradients
             total_loss.backward()
             # perform update
-            SGD(params, learning_rate)
+            update(params, states, learning_rate)
             try:
                 next_batch = next(data_iter)
-                datas = [next_batch.data[0].copyto(ctx) for ctx in ctx_list]
-                labels = gluon.utils.split_and_load(next_batch.label[0], ctx_list,
-                                                    batch_axis=1, even_split=False)
+                if not dummy:
+                    datas = [next_batch.data[0].copyto(ctx) for ctx in ctx_list]
+                    labels = gluon.utils.split_and_load(next_batch.label[0], ctx_list,
+                                                        batch_axis=1, even_split=False)
             except StopIteration:
                 end_of_batch = True
             niter += 1
-            curr_loss = total_loss.asscalar()
-            if nbatch % 10 == 0:
+            curr_loss = (total_loss).asscalar()
+            if nbatch % 100 == 0:
                 print("Epoch %s, batch %s. loss of current batch: %s" % (e, nbatch, curr_loss))
         train_data.reset()
 
     mx.nd.waitall()
-    mx.profiler.profiler_set_state('stop')
+    if profiler:
+        mx.profiler.profiler_set_state('stop')
     end = time.time()
     print(num_gpus, end - start)
