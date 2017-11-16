@@ -5399,6 +5399,7 @@ def test_quadratic_function():
         check_numeric_gradient(quad_sym, [data_np], atol=0.001)
 
 
+@with_seed()
 def test_quadratic_function():
     def f(x, a, b, c):
         return a * x**2 + b * x + c
