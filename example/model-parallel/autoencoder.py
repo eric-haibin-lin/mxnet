@@ -40,7 +40,7 @@ num_epoch = args.num_epochs
 num_hidden = args.num_hidden
 batch_size = args.batch_size
 num_gpus = args.num_gpus
-num_batches = 100
+num_batches = 10
 num_input = 240000
 
 # model
@@ -51,11 +51,14 @@ group2ctx = {gpu_id(i) : mx.gpu(i) for i in range(num_gpus)}
 # dataset
 iters = []
 rand_data = mx.nd.ones((batch_size * num_batches, num_input))
+# split labels vertically, each GPU gets a subset of inputs
 rand_labels = rand_data.split(axis=1, num_outputs=num_gpus)
+rand_labels = rand_labels if isinstance(rand_labels, list) else [rand_labels]
 data_names = ['data_' + str(i) for i in range(num_gpus)]
 label_names = ['label_' + str(i) for i in range(num_gpus)]
 
 for i in range(num_gpus):
+    # each GPU gets a complete batch of data
     iter_i = mx.io.NDArrayIter({data_names[i]:rand_data},
                                {label_names[i]:rand_labels[i]},
                                batch_size=batch_size)
@@ -83,9 +86,6 @@ for epoch in range(num_epoch):
         mod.update()
         mod.update_metric(metric, batch.label)
         speedometer_param = mx.model.BatchEndParam(epoch=epoch, nbatch=nbatch,
-                                                   eval_metric=metric, locals=locals())
+                                                   eval_metric=None, locals=locals())
         speedometer(speedometer_param)
-    data_iter.reset()
-    score = mod.score(train_data, ['MSE'])
-    logging.info('epoch %d, eval metric = %s ' % (epoch, score[0][1]))
     data_iter.reset()
