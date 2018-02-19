@@ -239,7 +239,7 @@ class KVStoreLocal : public KVStore {
         Unique(indices, priority);
         target_val_rowids[j].second = indices;
       }
-      comm_->BroadcastRowSparse(key, local, grouped_val_rowids[i], false, priority);
+      comm_->BroadcastRowSparse(key, local, grouped_val_rowids[i], priority);
     }
   }
 
