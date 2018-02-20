@@ -226,16 +226,19 @@ class KVStoreLocal : public KVStore {
       const size_t num_vals = target_val_rowids.size();
       for (size_t j = 0; j < num_vals; j++) {
         auto &row_id = target_val_rowids[j].second;
-        //TODO handle dtype idx mismatch -> no need for fixed dtype int64
-        //NDArray indices(row_id.shape(), local.ctx(), false, mshadow::kInt64);
-        //CopyFromTo(row_id, &indices, 0);
         // idx with size
-        //CHECK_EQ(row_id.shape().ndim(), 1) << "PullRowSparse expects 1-D row_id";
         // TODO add a test for mismatched shape
-        const auto num_elements = row_id.shape().Size();
+        CHECK_EQ(row_id.shape().ndim(), 1) << "PullRowSparse expects 1-D row_id";
+        const size_t num_elements = row_id.shape().Size();
+        NDArray row_id_int64(row_id.shape(), row_id.ctx(), false, mshadow::kInt64);
+        if (row_id.dtype() != mshadow::kInt64) {
+          CopyFromTo(row_id, &row_id_int64, 0);
+        } else {
+          row_id_int64 = row_id;
+        }
         NDArray indices(mshadow::Shape1(num_elements + 1), local.ctx(), false, mshadow::kInt64);
         NDArray indices_data = indices.Slice(1, indices.shape()[0]);
-        CopyFromTo(row_id, &indices_data, 0);
+        CopyFromTo(row_id_int64, &indices_data, 0);
         Unique(indices, priority);
         target_val_rowids[j].second = indices;
       }

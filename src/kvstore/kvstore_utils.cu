@@ -60,9 +60,9 @@ void UniqueImplGPU(const Resource& rsc, mshadow::Stream<gpu> *s,
 #endif
   // estimate unique temp space
   size_t unique_temp_bytes = 0;
-  size_t *dummy_ptr = nullptr;
+  size_t *null_ptr = nullptr;
   cub::DeviceSelect::Unique(NULL, unique_temp_bytes, dptr, dptr,
-    dummy_ptr, size, mshadow::Stream<gpu>::GetStream(s));
+    null_ptr, size, mshadow::Stream<gpu>::GetStream(s));
   // execute unique kernel
   mshadow::Tensor<gpu, 1, char> unique_space = rsc
     .get_space_typed<gpu, 1, char>(mshadow::Shape1(unique_temp_bytes), s);
@@ -71,15 +71,12 @@ void UniqueImplGPU(const Resource& rsc, mshadow::Stream<gpu> *s,
     num_results, size, mshadow::Stream<gpu>::GetStream(s));
 }
 
-/*!
- * \brief sort and get unique values.
- */
 template<>
 void UniqueImpl<gpu>(const Resource& rsc, mshadow::Stream<gpu> *s,
-                     const NDArray& out) {
-  const size_t num_elements = out.shape().Size() - 1;
-  MSHADOW_IDX_TYPE_SWITCH(out.data().type_flag_, IType, {
-    IType *size_ptr = out.data().dptr<IType>();
+                     const NDArray& sized_array) {
+  const size_t num_elements = sized_array.shape().Size() - 1;
+  MSHADOW_IDX_TYPE_SWITCH(sized_array.data().type_flag_, IType, {
+    IType *size_ptr = sized_array.data().dptr<IType>();
     IType *data_ptr = size_ptr + 1;
     UniqueImplGPU(rsc, s, data_ptr, num_elements, size_ptr);
   });

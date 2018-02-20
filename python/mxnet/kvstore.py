@@ -22,6 +22,7 @@ from __future__ import absolute_import
 from array import array
 import ctypes
 import pickle
+import numpy as np
 from .ndarray import NDArray
 from .ndarray import _ndarray_cls
 from .base import _LIB, c_str_array, c_handle_array, c_array, c_array_buf, c_str
@@ -360,6 +361,7 @@ class KVStore(object):
         if len(row_ids) == 1 and isinstance(out, list):
             single_rowid = True
             first_out = [out[0]]
+        row_ids = [row_id.reshape((-1,)) for row_id in row_ids]
         ckeys, cvals, use_str_keys = _ctype_key_value(key, first_out)
         _, crow_ids, _ = _ctype_key_value(key, row_ids)
         assert(len(crow_ids) == len(cvals)), \
