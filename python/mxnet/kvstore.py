@@ -322,7 +322,7 @@ class KVStore(object):
             other pull actions.
 
         row_ids : NDArray or list of NDArray
-            The row_ids for which to pull for each value. Each row_id is an 1D NDArray \
+            The row_ids for which to pull for each value. Each row_id is an 1-D NDArray \
             whose values don't have to be unique nor sorted.
 
         Examples
@@ -361,7 +361,6 @@ class KVStore(object):
         if len(row_ids) == 1 and isinstance(out, list):
             single_rowid = True
             first_out = [out[0]]
-        row_ids = [row_id.reshape((-1,)) for row_id in row_ids]
         ckeys, cvals, use_str_keys = _ctype_key_value(key, first_out)
         _, crow_ids, _ = _ctype_key_value(key, row_ids)
         assert(len(crow_ids) == len(cvals)), \

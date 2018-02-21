@@ -586,10 +586,7 @@ class CommDevice : public Comm {
        LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
       }
-        LOG(INFO) << "idx_size = " << idx_size;
           const TBlob& indices = row_id.Slice(1, idx_size+1).data();
-
-
           NDArray temp = out_gpu;
           //const TBlob& indices = row_id.data();
           switch (temp.ctx().dev_mask()) {
