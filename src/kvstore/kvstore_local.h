@@ -226,8 +226,6 @@ class KVStoreLocal : public KVStore {
       const size_t num_vals = target_val_rowids.size();
       for (size_t j = 0; j < num_vals; j++) {
         auto &row_id = target_val_rowids[j].second;
-        // idx with size
-        // TODO add a test for mismatched shape
         CHECK_EQ(row_id.shape().ndim(), 1) << "PullRowSparse expects 1-D row_id";
         const size_t num_elements = row_id.shape().Size();
         NDArray row_id_int64(row_id.shape(), row_id.ctx(), false, mshadow::kInt64);
@@ -236,11 +234,12 @@ class KVStoreLocal : public KVStore {
         } else {
           row_id_int64 = row_id;
         }
-        NDArray indices(mshadow::Shape1(num_elements + 1), local.ctx(), false, mshadow::kInt64);
-        NDArray indices_data = indices.Slice(1, indices.shape()[0]);
+        // idx with size
+        NDArray sized_indices(mshadow::Shape1(num_elements + 1), local.ctx(), false, mshadow::kInt64);
+        NDArray indices_data = sized_indices.Slice(1, indices.shape()[0]);
         CopyFromTo(row_id_int64, &indices_data, 0);
-        Unique(indices, priority);
-        target_val_rowids[j].second = indices;
+        Unique(sized_indices, priority);
+        target_val_rowids[j].second = sized_indices;
       }
       comm_->BroadcastRowSparse(key, local, grouped_val_rowids[i], priority);
     }

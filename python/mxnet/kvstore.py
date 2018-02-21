@@ -22,7 +22,6 @@ from __future__ import absolute_import
 from array import array
 import ctypes
 import pickle
-import numpy as np
 from .ndarray import NDArray
 from .ndarray import _ndarray_cls
 from .base import _LIB, c_str_array, c_handle_array, c_array, c_array_buf, c_str

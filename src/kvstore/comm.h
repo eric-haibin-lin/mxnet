@@ -225,7 +225,7 @@ class CommCPU : public Comm {
           src.ctx(), true, src.dtype(), src.aux_types()) : *out;
       Engine::Get()->PushAsync(
         [=](RunContext rctx, Engine::CallbackOnComplete on_complete) {
-          // TODO handle dtype
+          CHECK_EQ(row_id.dtype(), mshadow::kInt64);
           const nnvm::dim_t idx_size = row_id.data().dptr<nnvm::dim_t>()[0];
           const TBlob& indices = row_id.Slice(1, idx_size+1).data();
           NDArray temp = retained_cpu;  // get rid of const qualifier
@@ -574,21 +574,20 @@ class CommDevice : public Comm {
               << "row_id and src are expected to be on the same context";
 
       Engine::Get()->PushAsync([=](RunContext rctx, Engine::CallbackOnComplete on_complete) {
-
-      nnvm::dim_t idx_size = 0;
-      if (row_id.ctx().dev_mask() == Context::kCPU) {
-        idx_size = row_id.data().dptr<nnvm::dim_t>()[0];
-      } else {
+          CHECK_EQ(row_id.dtype(), mshadow::kInt64);
+          nnvm::dim_t idx_size = 0;
+          if (row_id.ctx().dev_mask() == Context::kCPU) {
+            idx_size = row_id.data().dptr<nnvm::dim_t>()[0];
+          } else {
 #if MXNET_USE_CUDA
-       CUDA_CALL(cudaMemcpy(&idx_size, row_id.data().dptr<nnvm::dim_t>(), sizeof(size_t),
-          cudaMemcpyDeviceToHost));
+            CUDA_CALL(cudaMemcpy(&idx_size, row_id.data().dptr<nnvm::dim_t>(), sizeof(size_t),
+               cudaMemcpyDeviceToHost));
 #else
-       LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
+            LOG(FATAL) << MXNET_GPU_NOT_ENABLED_ERROR;
 #endif
-      }
+          }
           const TBlob& indices = row_id.Slice(1, idx_size+1).data();
           NDArray temp = out_gpu;
-          //const TBlob& indices = row_id.data();
           switch (temp.ctx().dev_mask()) {
             case cpu::kDevMask: {
               mxnet::common::SparseRetainOpForwardRspWrapper<cpu>(rctx.get_stream<cpu>(),
