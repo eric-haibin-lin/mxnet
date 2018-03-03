@@ -29,6 +29,7 @@ namespace op {
 DMLC_REGISTER_PARAMETER(QuadraticParam);
 
 NNVM_REGISTER_OP(quadratic)
+MXNET_ADD_SPARSE_OP_ALIAS(quadratic)
 .describe(R"code(This operators implements the quadratic function:
 .. math::
 
@@ -36,6 +37,10 @@ NNVM_REGISTER_OP(quadratic)
 
 where :math:`x` is an input tensor and all operations
 in the function are element-wise.
+
+The storage type of ``quadratic`` output depends on storage types of inputs
+  - quadratic(csr, a, b, 0) = csr
+  - quadratic(default, a, b, c) = default
 
 Example::
 

@@ -1932,7 +1932,7 @@ def test_sparse_quadratic_function():
     data = rand_ndarray(shape=shape, stype='csr')
     data_np = data.asnumpy()
     expected = f(data_np, a, b, c)
-    output = mx.nd.quadratic(data, a=a, b=b, c=c)
+    output = mx.nd.sparse.quadratic(data, a=a, b=b, c=c)
     assert_almost_equal(output.asnumpy(), expected)
 
 if __name__ == '__main__':
