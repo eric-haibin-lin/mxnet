@@ -1,44 +1,42 @@
 # A Guide to Implementing Sparse Operators in MXNet Backend
 
 ## Prerequisites
-- Knowledge of how to implement a dense operator in MXNet backend
-- Knowledge of sparse ndarray in MXNet
+- Basic knowledge of [how to implement a dense operator in MXNet backend](https://mxnet.incubator.apache.org/versions/master/how_to/add_op_in_backend.html)
+- Basic knowledge of [CSRNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/csr.html) and [RowSparseNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/row_sparse.html) in MXNet
 
 ## Introduction
 In the [previous tutorial](https://mxnet.incubator.apache.org/versions/master/how_to/add_op_in_backend.html),
 we went through the necessary steps to implement an operator using C++ in the MXNet backend.
 In this tutorial, we are going to cover how sparse operators are implemented
-in the backend. 
+in the backend. Specifically, we will practice adding CSRNDArray support to the forward function of `quadratic` operator.
 
 ## Implementation
-### The Sparse NDArray Data Structure in the Backend
-Two sparse formats are supported in MXNet, namely RowSparse NDArray and CSR NDArray.
-Note that RowSparse NDArray contains `indices` and `data`, while CSR NDArray contains 
-`indices`, `indptr` and `data`. 
-
-In the backend, auxliary array such as `indices` and 
-`indptr` are both considered as "aux_data" in via the NDArray interface. 
-The `storage_type()` method is used to query the type of NDArray. 
-
-```
+### The NDArray Interface in the Backend
+In the python frontend, MXNet has three types of NDArrays, namely `mx.nd.NDArray`, `mx.nd.sparse.RowSparseNDArray` and `mx.nd.sparse.CSRNDArray`. In the C++ backend, however, all of them are represented by the `mxnet::NDArray` class.
+The `NDArrayStorageType NDArray::storage_type() const` method indicates the storage type of the NDArray:
+```cpp
 enum NDArrayStorageType {
   kUndefinedStorage = -1,  // undefined storage
   kDefaultStorage,         // dense
   kRowSparseStorage,       // row sparse
   kCSRStorage,             // csr
 };
+```
 
-  inline NDArrayStorageType storage_type() const;
-  
-  /*!
-   * \return the data TBlob
-   */
-  inline const TBlob& data() const;
+On the other hand, from python one could inspect the auxiliary array of a sparse ndarray via
+`RowSparseNDArray.indices`, `CSRNDArray.indices` and `CSRNDArray.indptr`, and the actual data array
+via `RowSparseNDArray.data` and `CSRNDArray.data`.
 
-/*!
-   * \return the aux TBlob
-   */
+In the backend, auxliary arrays such as `indices` and `indptr` are retrieved by
+the `TBlob aux_data(size_t i) const` method, while the actual data array is retrived by the 
+`TBlob aux_data(size_t i) const` method.
+
+```cpp
+  // return the i-th aux data TBlob
   inline TBlob aux_data(size_t i) const;
+  
+  // return the data TBlob
+  inline const TBlob& data() const;
 ```
 
 ### The FComputeEx interface
