@@ -69,35 +69,33 @@ In the backend, the operator also need to tell MXNet execution engine whether a 
 supported so that the `FComputeEx` implementation can be dispatched for executoin. 
 This is done via the `FInferStorageType` interface. 
 
-```
-+inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
-+                                   const int dev_mask,
-+                                   DispatchMode* dispatch_mode,
-+                                   std::vector<int>* in_attrs,
-+                                   std::vector<int>* out_attrs) {
-+  CHECK_EQ(in_attrs->size(), 1U);
-+  CHECK_EQ(out_attrs->size(), 1U);
-+
-+  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
-+  const auto& in_stype = in_attrs->at(0);
-+  auto& out_stype = out_attrs->at(0);
-+  bool dispatched = false;
-+  if (!dispatched && in_stype == kDefaultStorage) {
-+    // dns -> dns
-+    dispatched = storage_type_assign(&out_stype, kDefaultStorage,
-+                                     dispatch_mode, DispatchMode::kFCompute);
-+  }
-+  if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {
-+    // csr -> rsp
-+    dispatched = storage_type_assign(&out_stype, kCSRStorage,
-+                                     dispatch_mode, DispatchMode::kFComputeEx);
-+  }
-+  if (!dispatched) {
-+    dispatch_fallback(out_attrs, dispatch_mode);
-+    LogStorageFallback(attrs, dev_mask, in_attrs, out_attrs);
-+  }
-+  return true;
-+}
+```cpp
+inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
+                                   const int dev_mask,
+                                   DispatchMode* dispatch_mode,
+                                   std::vector<int>* in_attrs,
+                                   std::vector<int>* out_attrs) {
+  CHECK_EQ(in_attrs->size(), 1U);
+  CHECK_EQ(out_attrs->size(), 1U);
+  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
+  const auto& in_stype = in_attrs->at(0);
+  auto& out_stype = out_attrs->at(0);
+  bool dispatched = false;
+  if (!dispatched && in_stype == kDefaultStorage) {
+    // dns -> dns
+    dispatched = storage_type_assign(&out_stype, kDefaultStorage,
+                                     dispatch_mode, DispatchMode::kFCompute);
+  }
+  if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {
+    // csr -> csr
+    dispatched = storage_type_assign(&out_stype, kCSRStorage,
+                                     dispatch_mode, DispatchMode::kFComputeEx);
+  }
+  if (!dispatched) {
+    dispatched = dispatch_fallback(out_attrs, dispatch_mode);
+  }
+  return dispatched;
+}
 ```
 
 
