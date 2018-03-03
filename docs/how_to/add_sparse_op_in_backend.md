@@ -13,7 +13,7 @@ in the backend. Specifically, we will practice adding CSRNDArray support to the 
 ## Implementation
 ### The NDArray Interface in the Backend
 In the python frontend, MXNet has three types of NDArrays, namely `mx.nd.NDArray`, `mx.nd.sparse.RowSparseNDArray` and `mx.nd.sparse.CSRNDArray`. In the C++ backend, however, all of them are represented by the `mxnet::NDArray` class.
-The `NDArrayStorageType NDArray::storage_type() const` method indicates the storage type of the NDArray:
+The `NDArray::storage_type()` method indicates the storage type of the NDArray:
 ```cpp
 enum NDArrayStorageType {
   kUndefinedStorage = -1,  // undefined storage
@@ -28,8 +28,8 @@ On the other hand, from python one could inspect the auxiliary array of a sparse
 via `RowSparseNDArray.data` and `CSRNDArray.data`.
 
 In the backend, auxliary arrays such as `indices` and `indptr` are retrieved by
-the `TBlob aux_data(size_t i) const` method, while the actual data array is retrived by the 
-`TBlob aux_data(size_t i) const` method.
+the `NDArray::aux_data(size_t i)` method, while the actual data array is retrived by the 
+`NDArray::data()` method.
 
 ```cpp
   // return the i-th aux data TBlob
