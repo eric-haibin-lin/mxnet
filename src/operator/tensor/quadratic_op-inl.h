@@ -98,7 +98,7 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
   if (!dispatched) {
     dispatched = dispatch_fallback(out_attrs, dispatch_mode);
   }
-  return true;
+  return dispatched;
 }
 
 template<int req>
