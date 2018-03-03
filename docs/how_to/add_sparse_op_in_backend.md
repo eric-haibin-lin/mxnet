@@ -1,28 +1,111 @@
-# A Beginner's Guide to Implementing Sparse Operators in MXNet Backend
+# A Guide to Implementing Sparse Operators in MXNet Backend
+
+## Prerequisites
+- Knowledge of how to implement a dense operator in MXNet backend
+- Knowledge of sparse ndarray in MXNet
 
 ## Introduction
-Operators are essential elements for constructing neural networks. They define mathematical formulas
-of transforming input data (tensors) to outputs. MXNet has a rich set of operators from simple ones,
-such as element-wise sum, to complicated ones, such as convolution, that is
-capable of constructing most of the popular neural networks. You may have noticed
-that many operators implemented in MXNet have their equivalent forms in Numpy, such as
-[repeat](https://docs.scipy.org/doc/numpy/reference/generated/numpy.repeat.html),
-[tile](https://docs.scipy.org/doc/numpy/reference/generated/numpy.tile.html),
-etc., and wonder why we could not simply use those Numpy operators in MXNet. One of the
-major reasons is that we need to support both CPU and GPU computing for the operators in MXNet,
-while Numpy operators do not possess GPU computing capability.
-In addition, we have performed plenty of
-optimizations for various components in MXNet, such as tensor data structure (`NDArray`),
-execution engine, computational graph and so on, for maximizing memory and runtime efficiency.
-An operator implemented under the MXNet operator framework would greatly
-leverage those optimizations for exhaustive performance enhancement.
-
-In this tutorial, we are going to practice implementing an operator using
-C++ in the MXNet backend. After finishing the implementation,
-we will add unit tests using Python for the operator we just implemented.
+In the [previous tutorial](https://mxnet.incubator.apache.org/versions/master/how_to/add_op_in_backend.html),
+we went through the necessary steps to implement an operator using C++ in the MXNet backend.
+In this tutorial, we are going to cover how sparse operators are implemented
+in the backend. 
 
 ## Implementation
-### An Operator Example
+### The Sparse NDArray Data Structure in the Backend
+Two sparse formats are supported in MXNet, namely RowSparse NDArray and CSR NDArray.
+Note that RowSparse NDArray contains `indices` and `data`, while CSR NDArray contains 
+`indices`, `indptr` and `data`. 
+
+In the backend, auxliary array such as `indices` and 
+`indptr` are both considered as "aux_data" in via the NDArray interface. 
+The `storage_type()` method is used to query the type of NDArray. 
+
+```
+enum NDArrayStorageType {
+  kUndefinedStorage = -1,  // undefined storage
+  kDefaultStorage,         // dense
+  kRowSparseStorage,       // row sparse
+  kCSRStorage,             // csr
+};
+
+  inline NDArrayStorageType storage_type() const;
+  
+  /*!
+   * \return the data TBlob
+   */
+  inline const TBlob& data() const;
+
+/*!
+   * \return the aux TBlob
+   */
+  inline TBlob aux_data(size_t i) const;
+```
+
+### The FComputeEx interface
+Let's review the `FCompute` interface introduced in the previous operator tutorial:
+```cpp
+void (const nnvm::NodeAttrs& attrs,
+      const OpContext& ctx,
+      const std::vector<TBlob>& inputs,
+      const std::vector<OpReqType>& req,
+      const std::vector<TBlob>& outputs);
+```
+Note that the vector of `TBlob`s doesn't contain sufficient information about the whether
+the NDArray is sparse, and the auxilary data of the NDArray. Therefore, sparse operators
+use the following `FComputeEx` interface:
+```cpp
+void (const nnvm::NodeAttrs& attrs,
+      const OpContext& ctx,
+      const std::vector<NDArray>& inputs,
+      const std::vector<OpReqType>& req,
+      const std::vector<NDArray>& outputs);
+```
+from which you can query storage type and aux data information from the NDArray object. 
+
+### Storage Fallback and Infer Storage Type interface 
+In the sparse ndarray tutorial, it talks about the storage fallback mechanism. 
+That is, if a dense operator doesn't support sparse inputs, it will convert the inputs into dense ndarrays
+and dispatch to the dense operator for execution.
+
+In the backend, the operator also need to tell MXNet execution engine whether a certain sparse format is
+supported so that the `FComputeEx` implementation can be dispatched for executoin. 
+This is done via the `FInferStorageType` interface. 
+
+```
++inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
++                                   const int dev_mask,
++                                   DispatchMode* dispatch_mode,
++                                   std::vector<int>* in_attrs,
++                                   std::vector<int>* out_attrs) {
++  CHECK_EQ(in_attrs->size(), 1U);
++  CHECK_EQ(out_attrs->size(), 1U);
++
++  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
++  const auto& in_stype = in_attrs->at(0);
++  auto& out_stype = out_attrs->at(0);
++  bool dispatched = false;
++  if (!dispatched && in_stype == kDefaultStorage) {
++    // dns -> dns
++    dispatched = storage_type_assign(&out_stype, kDefaultStorage,
++                                     dispatch_mode, DispatchMode::kFCompute);
++  }
++  if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {
++    // csr -> rsp
++    dispatched = storage_type_assign(&out_stype, kCSRStorage,
++                                     dispatch_mode, DispatchMode::kFComputeEx);
++  }
++  if (!dispatched) {
++    dispatch_fallback(out_attrs, dispatch_mode);
++    LogStorageFallback(attrs, dev_mask, in_attrs, out_attrs);
++  }
++  return true;
++}
+```
+
+
+
+
+
 Let's take the [quadratic function](https://en.wikipedia.org/wiki/Quadratic_function)
 as an example: `f(x) = ax^2+bx+c`. We want to implement an operator called `quadratic`
 taking `x`, which is a tensor, as an input and generating an output tensor `y`
@@ -61,41 +144,6 @@ CPU and GPU computing, respectively.
 
 Now let's walk through the process step by step.
 
-### Parameter Registration
-We first define `struct QuadraticParam` as a placeholder for the
-parameters `a`, `b`, and `c` in `quadratic_op-inl.h`.
-The struct inherits from a base template
-struct named `dmlc::Parameter`, where the template argument is the derived struct
-`QuadraticParam`. This technique, which is called [curiously recurring template
-pattern](https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern),
-achieves static polymorphism. It is similar to using a virtual function,
-but without the cost associated with dynamic polymorphism.
-
-```cpp
-struct QuadraticParam : public dmlc::Parameter<QuadraticParam> {
-  float a, b, c;
-  DMLC_DECLARE_PARAMETER(QuadraticParam) {
-    DMLC_DECLARE_FIELD(a)
-      .set_default(0.0)
-      .describe("Coefficient of the quadratic term in the quadratic function.");
-    DMLC_DECLARE_FIELD(b)
-      .set_default(0.0)
-      .describe("Coefficient of the linear term in the quadratic function.");
-    DMLC_DECLARE_FIELD(c)
-      .set_default(0.0)
-      .describe("Constant term in the quadratic function.");
-  }
-};
-```
-
-The function calls in the above parameter struct are self-explanatory by their names.
-Note that for each parameter, we set the default value to `0.0` such that users can
-skip passing 0-value parameters through the quadratic operator interface. You
-can choose not to define the default value for a parameter if it is required
-at runtime. Meanwhile, adding brief descriptions to the parameters enables
-the documentation engine to display them on
-[MXNet documentation web page](https://mxnet.incubator.apache.org/api/python/index.html).
-
 ### Attribute Inference
 Attribute inference is the process of deducing the properties of `NDArray`s
 in neural networks from user provided information. Two most common attributes
@@ -107,49 +155,6 @@ the `output` values, its shape and data type are inferred from the input
 `data`'s shape and type following
 the rules you defined in order to allocate memory space for the output tensor.
 
-One important thing to note that inference functions should be capable of
-performing **mutual inference**, i.e.
-inferring one argument's attribute from another argument's attribute if
-possible according to the definition of the operator.
-This is very useful for a computational graph to deduce unknown attributes
-for a neural network in symbolic programming. Users can view the computational
-graph as a symbol with every element initialized for running data
-throughout the neural network, including memory allocation for each tensor,
-device placement for each operator, etc. Users normally just need
-to provide minimum necessary information, such as input data shapes, etc.,
-to the computational graph, and the graph will fill up the unknown attributes
-using the attribute inference functions defined in the operators building up
-the neural network.
-
-Let's consider the following example.
-```python
->>> import mxnet as mx
->>> a = mx.sym.Variable('a', shape=(2, 0))
->>> b = mx.sym.Variable('b')
->>> c = mx.sym.Variable('c', shape=(0, 3))
->>> d = a * b + b * c
->>> print d.infer_shape()
-([(2L, 3L), (2L, 3L), (2L, 3L)], [(2L, 3L)], [])
-```
-The last line of the above code snippet is a tuple of three lists returned
-by `d.infer_shape()`. The first list contains all the argument shapes
-of `a`, `b`, and `c`. The second contains the output shape of `d`. The
-third one represents the shapes of auxiliary states, which is not used
-in this case, and thus is empty. 
-In this example, we only specified values for variable `a`'s first dimension
-and `c`'s second dimension. The `0` in shape `(2, 0)` indicates that the size
-of the second dimension is unknown, same meaning for shape `(0, 3)`.
-However, the symbol `d` still successfully inferred the shapes
-for all the variables and final output. This is a result of mutual
-inference. In MXNet, the whole process can be interpreted as this:
-1. `a` and `b` are combined via an element-wise multiplication operator,
-so the shapes of `a` and `b` are same and `b`'s first dimension size is `2`.
-2. `b` and `c` are combined via an element-wise multiplication operator too,
-so the shapes of `b` and `c` are same and `b`'s second dimension size is `3`.
-3. Now `b`'s shape is completely known, so `a` and `c` missing dimension sizes
-are known as well.
-4. `d` is a result from adding `a * b` and `b * c`, so d should also
-have the same shape as `b`.
 
 The above four steps illustrate how shape inference logic works in MXNet.
 It is actually implemented in the shape inference functions of the operators for
@@ -218,6 +223,11 @@ inline bool QuadraticOpType(const nnvm::NodeAttrs& attrs,
   return out_attrs->at(0) != -1;
 }
 ```
+Here are a few things to cover about the above function:
+... 
+
+### Forward Function
+
 
 Again, MXNet provides the following convenience function for mutual
 type inference of element-wise operators. Users can use that
