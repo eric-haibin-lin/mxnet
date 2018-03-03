@@ -71,7 +71,7 @@ the `NDArray::aux_data(size_t i)` method, while the actual data array is retrive
   inline const TBlob& data() const;
 ```
 
-### The FComputeEx interface
+### The FComputeEx and Infer Storage Type Interface
 Let's review the `FCompute` interface introduced in the previous operator tutorial:
 ```cpp
 void (const nnvm::NodeAttrs& attrs,
@@ -81,7 +81,7 @@ void (const nnvm::NodeAttrs& attrs,
       const std::vector<TBlob>& outputs);
 ```
 Note that the vector of `TBlob`s doesn't contain sufficient information about the whether
-the NDArray is sparse, and the auxilary data of the NDArray. Therefore, sparse operators
+the NDArray is sparse, nor the auxilary data of the NDArray. Therefore, sparse operators
 use the following `FComputeEx` interface:
 ```cpp
 void (const nnvm::NodeAttrs& attrs,
@@ -90,9 +90,9 @@ void (const nnvm::NodeAttrs& attrs,
       const std::vector<OpReqType>& req,
       const std::vector<NDArray>& outputs);
 ```
-from which you can query storage type and aux data information from the NDArray object. 
+from which the operator can query storage type and aux data information from the NDArray object. 
 
-### Storage Fallback and Infer Storage Type interface 
+???? 
 In the sparse ndarray tutorial, it talks about the storage fallback mechanism. 
 That is, if a dense operator doesn't support sparse inputs, it will convert the inputs into dense ndarrays
 and dispatch to the dense operator for execution.
@@ -129,48 +129,6 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
   return dispatched;
 }
 ```
-
-
-
-
-
-Let's take the [quadratic function](https://en.wikipedia.org/wiki/Quadratic_function)
-as an example: `f(x) = ax^2+bx+c`. We want to implement an operator called `quadratic`
-taking `x`, which is a tensor, as an input and generating an output tensor `y`
-satisfying `y.shape=x.shape` and each element of `y` is calculated by feeding the
-corresponding element of `x` into the quadratic function `f`.
-Here variables `a`, `b`, and `c` are user input parameters.
-In frontend, the operator works like this:
-```python
-x = [[1, 2], [3, 4]]
-y = quadratic(data=x, a=1, b=2, c=3)
-y = [[6, 11], [18, 27]]
-```
-To implement this, we first create three files: `quadratic_op-inl.h`,
-`quadratic_op.cc`, and `quadratic_op.cu`. The header file's name
-is prefixed by the operator name and followed by `op` and `-inl`
-indicating that this is an operator implementation with inline
-functions shared by CPU and GPU computing. The CPU and GPU
-specific implementations reside in their own `.cc` and `.cu` files,
-respectively. We normally put pure tensor related operators
-(e.g. `tile`, `repeat`, etc.) under
-the directory `src/operator/tensor`, and neural network operators
-(e.g. `Convolution`, `Pooling`, etc.) under `src/operator/nn`.
-You may have noticed that many neural network operators including
-`Convolution` and `Pooling` are currently saved under `src/operator`.
-We plan to move them to `src/operator/nn` for better file organization
-and clearer hierarchy in the future.
-
-Next, we are going to
-1. Define the parameter struct
-for registering `a`, `b`, and `c` in `quadratic_op-inl.h`.
-2. Define type and shape inference functions in `quadratic_op-inl.h`.
-3. Define forward and backward functions in `quadratic_op-inl.h`.
-4. Register the operator using [nnvm](https://github.com/dmlc/nnvm)
-in `quadratic_op.cc` and `quadratic_op.cu` for
-CPU and GPU computing, respectively.
-
-Now let's walk through the process step by step.
 
 ### Attribute Inference
 Attribute inference is the process of deducing the properties of `NDArray`s
