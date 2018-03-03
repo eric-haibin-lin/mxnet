@@ -12,22 +12,36 @@ in the backend. Specifically, we will practice adding CSRNDArray support to the 
 
 ## Implementation
 ### An Sparse Operator Example
-```
-Let's take the quadratic function as an example: f(x) = ax^2+bx+c. We want to implement an operator called quadratic taking x, which is a tensor, as an input and generating an output tensor y satisfying y.shape=x.shape and each element of y is calculated by feeding the corresponding element of x into the quadratic function f. Here variables a, b, and c are user input parameters. In frontend, the operator works like this:
 
-x = [[1, 2], [3, 4]]
-y = quadratic(data=x, a=1, b=2, c=3)
-y = [[6, 11], [18, 27]]
-To implement this, we first create three files: quadratic_op-inl.h, quadratic_op.cc, and quadratic_op.cu. The header file's name is prefixed by the operator name and followed by op and -inl indicating that this is an operator implementation with inline functions shared by CPU and GPU computing. The CPU and GPU specific implementations reside in their own .cc and .cu files, respectively. We normally put pure tensor related operators (e.g. tile, repeat, etc.) under the directory src/operator/tensor, and neural network operators (e.g. Convolution, Pooling, etc.) under src/operator/nn. You may have noticed that many neural network operators including Convolution and Pooling are currently saved under src/operator. We plan to move them to src/operator/nn for better file organization and clearer hierarchy in the future.
+Let's consider the quadratic function `f(x) = ax^2+bx+c` when x is a CSRNDArray. 
+Notice that for a sparse input x, when c is 0.0, the output is also sparse;
+when c is non-zero, the output is dense instead. In MXNet frontend, the operator works like this:
+
+```python
+>>> x = mx.nd.array([[0,1],[2,0]).tostype('csr')
+>>> x
+<CSRNDArray 2x2 @cpu(0)>
+>>> y = mx.nd.sparse.quadratic(x, a=1, b=2, c=0)
+>>> y
+<CSRNDArray 2x2 @cpu(0)>
+>>> z = mx.nd.quadratic(x, a=1, b=2, c=3)
+>>> z
+[[  3.   6.]
+ [ 11.   3.]]
+<NDArray 2x2 @cpu(0)>
+```
+
+To implement this, we first register the storage type property of the operator, from which the operator
+infers the output storage type based on operator arguments and inputs types. Then we implement the forward
+function for the case where c is 0.0 and x is a CSRNDArray.
 
 Next, we are going to
 
-Define the parameter struct for registering a, b, and c in quadratic_op-inl.h.
-Define type and shape inference functions in quadratic_op-inl.h.
-Define forward and backward functions in quadratic_op-inl.h.
-Register the operator using nnvm in quadratic_op.cc and quadratic_op.cu for CPU and GPU computing, respectively.
+Understand the related NDArray interface in backend.
+Define storage type inference functions in quadratic_op-inl.h.
+Define the forward function in quadratic_op-inl.h.
+Register the sparse operator using nnvm in quadratic_op.cc and quadratic_op.cu for CPU and GPU computing, respectively.
 Now let's walk through the process step by step.
-```
 
 ### The NDArray Interface in the Backend
 In the python frontend, MXNet has three types of NDArrays, namely `mx.nd.NDArray`, `mx.nd.sparse.RowSparseNDArray` and `mx.nd.sparse.CSRNDArray`. In the C++ backend, however, all of them are represented by the `mxnet::NDArray` class.
