@@ -81,7 +81,6 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
                                    std::vector<int>* out_attrs) {
   CHECK_EQ(in_attrs->size(), 1U);
   CHECK_EQ(out_attrs->size(), 1U);
-
   const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
   const auto& in_stype = in_attrs->at(0);
   auto& out_stype = out_attrs->at(0);
@@ -92,13 +91,12 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
                                      dispatch_mode, DispatchMode::kFCompute);
   }
   if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {
-    // csr -> rsp
+    // csr -> csr
     dispatched = storage_type_assign(&out_stype, kCSRStorage,
                                      dispatch_mode, DispatchMode::kFComputeEx);
   }
   if (!dispatched) {
-    dispatch_fallback(out_attrs, dispatch_mode);
-    LogStorageFallback(attrs, dev_mask, in_attrs, out_attrs);
+    dispatched = dispatch_fallback(out_attrs, dispatch_mode);
   }
   return true;
 }
@@ -195,7 +193,7 @@ void QuadraticOpForwardEx(const nnvm::NodeAttrs& attrs,
   if (in_stype == kCSRStorage && out_stype == kCSRStorage) {
     QuadraticOpForwardCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);
   } else {
-    LOG(FATAL) << "Not implemented: " << operator_string(attrs, ctx, inputs, req, outputs);
+    LogUnimplementedOp(attrs, ctx, inputs, req, outputs);
   }
 }
 
