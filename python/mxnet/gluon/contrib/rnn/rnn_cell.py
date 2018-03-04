@@ -214,7 +214,7 @@ class LSTMPCell(HybridRecurrentCell):
     h2h_weight_initializer : str or Initializer
         Initializer for the recurrent weights matrix, used for the linear
         transformation of the hidden state.
-    proj_weight_initializer : str or Initializer
+    h2r_weight_initializer : str or Initializer
         Initializer for the projection weights matrix, used for the linear
         transformation of the recurrent state.
     i2h_bias_initializer : str or Initializer, default 'lstmbias'
@@ -240,7 +240,7 @@ class LSTMPCell(HybridRecurrentCell):
     """
     def __init__(self, hidden_size, projection_size,
                  i2h_weight_initializer=None, h2h_weight_initializer=None,
-                 proj_weight_initializer=None,
+                 h2r_weight_initializer=None,
                  i2h_bias_initializer='zeros', h2h_bias_initializer='zeros',
                  input_size=0, prefix=None, params=None):
         super(LSTMPCell, self).__init__(prefix=prefix, params=params)
@@ -254,8 +254,8 @@ class LSTMPCell(HybridRecurrentCell):
         self.h2h_weight = self.params.get('h2h_weight', shape=(4*hidden_size, projection_size),
                                           init=h2h_weight_initializer,
                                           allow_deferred_init=True)
-        self.proj_weight = self.params.get('proj_weight', shape=(projection_size, hidden_size),
-                                           init=proj_weight_initializer,
+        self.h2r_weight = self.params.get('h2r_weight', shape=(projection_size, hidden_size),
+                                           init=h2r_weight_initializer,
                                            allow_deferred_init=True)
         self.i2h_bias = self.params.get('i2h_bias', shape=(4*hidden_size,),
                                         init=i2h_bias_initializer,
@@ -274,14 +274,14 @@ class LSTMPCell(HybridRecurrentCell):
     def __repr__(self):
         s = '{name}({mapping})'
         shape = self.i2h_weight.shape
-        proj_shape = self.proj_weight.shape
+        proj_shape = self.h2r_weight.shape
         mapping = '{0} -> {1} -> {2}'.format(shape[1] if shape[1] else None, shape[0], proj_shape[0])
         return s.format(name=self.__class__.__name__,
                         mapping=mapping,
                         **self.__dict__)
 
     def hybrid_forward(self, F, inputs, states, i2h_weight,
-                       h2h_weight, proj_weight, i2h_bias, h2h_bias):
+                       h2h_weight, h2r_weight, i2h_bias, h2h_bias):
         prefix = 't%d_'%self._counter
         i2h = F.FullyConnected(data=inputs, weight=i2h_weight, bias=i2h_bias,
                                num_hidden=self._hidden_size*4, name=prefix+'i2h')
@@ -298,6 +298,6 @@ class LSTMPCell(HybridRecurrentCell):
         hidden = F._internal._mul(out_gate, F.Activation(next_c, act_type="tanh"),
                                   name=prefix+'hidden')
         next_r = F.FullyConnected(data=hidden, num_hidden=self._projection_size,
-                                       weight=proj_weight, no_bias=True, name=prefix+'out')
+                                       weight=h2r_weight, no_bias=True, name=prefix+'out')
 
         return next_r, [next_r, next_c]
