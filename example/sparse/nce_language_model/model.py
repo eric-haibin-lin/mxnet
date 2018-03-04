@@ -53,7 +53,7 @@ class RNNModel():
         data = F.var('data')
         weight = F.var("encoder_weight", stype='row_sparse')
         embed = self.embed(data=data, weight=weight, input_dim=self.vocab_size,
-                           output_dim=self.num_embed, name='embed')
+                           output_dim=self.num_embed, name='embed', deterministic=True)
         states = []
         outputs = F.Dropout(embed, p=self.dropout)
         for i in range(self.num_layers):
@@ -98,7 +98,7 @@ class SampledModule():
         # lookup weights and biases
         # (num_samples+n, nhid)
         sample_target_w = self.embed(data=sample_label, weight=decoder_w,
-                                     input_dim=self.vocab_size, output_dim=self.dim)
+                                     input_dim=self.vocab_size, output_dim=self.dim, deterministic=True)
         # (num_samples+n, 1)
         sample_target_b = F.Embedding(data=sample_label, weight=decoder_b,
                                       input_dim=self.vocab_size, output_dim=1)
