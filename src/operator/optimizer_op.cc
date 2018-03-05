@@ -537,8 +537,7 @@ only the row slices whose indices appear in grad.indices are updated (for w, z a
 .add_argument("n", "NDArray-or-Symbol", "Square of grad")
 .add_arguments(FtrlParam::__FIELDS__());
 
-NNVM_REGISTER_OP(adagrad_update)
-MXNET_ADD_SPARSE_OP_ALIAS(adagrad_update)
+NNVM_REGISTER_OP(_sparse_adagrad_update)
 .describe(R"code(Adagrad update function.
 )code" ADD_FILELINE)
 .set_num_inputs(3)

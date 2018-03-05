@@ -23,12 +23,10 @@ import pickle
 import warnings
 import numpy
 from .base import py_str
-from .ndarray import (NDArray, zeros, ones, clip, sqrt, cast, maximum, abs as NDabs)
+from .ndarray import (NDArray, zeros, clip, sqrt, cast, maximum, abs as NDabs)
 from .ndarray import (sgd_update, sgd_mom_update, adam_update, rmsprop_update, rmspropalex_update,
                       mp_sgd_update, mp_sgd_mom_update, square, ftrl_update, ftml_update,
-                      signsgd_update, signum_update, adagrad_update)
-from .ndarray import _internal
-from .ndarray import op
+                      signsgd_update, signum_update)
 from .ndarray import sparse
 from .random import normal
 
@@ -1073,6 +1071,10 @@ class AdaGrad(Optimizer):
     This optimizer accepts the following parameters in addition to those accepted
     by :class:`.Optimizer`.
 
+    See Also
+    ----------
+    :meth:`mxnet.ndarray.sparse.adagrad_update`.
+
     Parameters
     ----------
     eps: float, optional
@@ -1084,8 +1086,7 @@ class AdaGrad(Optimizer):
         self.float_stable_eps = eps
 
     def create_state(self, index, weight):
-        s = zeros(weight.shape, weight.context, stype=weight.stype)
-        return s
+        return zeros(weight.shape, weight.context, stype=weight.stype)  # history
 
     def update(self, index, weight, grad, state):
         assert(isinstance(weight, NDArray))
@@ -1095,29 +1096,21 @@ class AdaGrad(Optimizer):
         wd = self._get_wd(index)
 
         is_sparse = weight.stype == 'row_sparse' and grad.stype == 'row_sparse'
+        history = state
+
         if is_sparse:
-            # TODO check wd
-            kwargs = {'eps': self.float_stable_eps, 'rescale_grad': self.rescale_grad}
+            kwargs = {'epsilon': self.float_stable_eps,
+                      'rescale_grad': self.rescale_grad}
             if self.clip_gradient:
                 kwargs['clip_gradient'] = self.clip_gradient
-            adagrad_update(weight, grad, state, out=weight, lr=lr, wd=wd, **kwargs)
-            return
-
-        grad = grad * self.rescale_grad
-        if wd > 0:
-            grad += weight * wd
-
-        if self.clip_gradient is not None:
-            grad = clip(grad, -self.clip_gradient, self.clip_gradient)
-        history = state
-        save_history_stype = history.stype
-
-        if is_sparse:
-            raise NotImplementedError()
+            sparse.adagrad_update(weight, grad, history, out=weight, lr=lr, wd=wd, **kwargs)
         else:
+            grad = grad * self.rescale_grad
+            if self.clip_gradient is not None:
+                grad = clip(grad, -self.clip_gradient, self.clip_gradient)
             history[:] += square(grad)
-            div = grad / (sqrt(history + self.float_stable_eps))
-            weight[:] += div * -lr
+            div = grad / sqrt(history + self.float_stable_eps)
+            weight[:] += (div + weight * wd) * -lr
 
 @register
 class RMSProp(Optimizer):

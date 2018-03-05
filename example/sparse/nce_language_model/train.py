@@ -21,7 +21,6 @@ import run_utils
 import evaluate
 from data import Corpus, CorpusIter, DummyIter, MultiSentenceIter, SampleIter
 from model import *
-from sampler import *
 from sparse_module import SparseModule
 import os, math, logging, time, pickle
 import data_utils

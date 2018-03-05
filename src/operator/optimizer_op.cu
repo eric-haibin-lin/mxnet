@@ -173,7 +173,7 @@ NNVM_REGISTER_OP(sgd_update)
 .set_attr<FCompute>("FCompute<gpu>", SGDUpdate<gpu>)
 .set_attr<FComputeEx>("FComputeEx<gpu>", SGDUpdateEx<gpu>);
 
-NNVM_REGISTER_OP(adagrad_update)
+NNVM_REGISTER_OP(_sparse_adagrad_update)
 .set_attr<FComputeEx>("FComputeEx<gpu>", AdagradUpdateEx<gpu>);
 
 NNVM_REGISTER_OP(sgd_mom_update)
