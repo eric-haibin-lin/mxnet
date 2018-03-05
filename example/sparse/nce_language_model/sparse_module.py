@@ -19,92 +19,6 @@ class SparseModule(Module):
                                            group2ctxs=group2ctxs, compression_params=compression_params)
         self._sparse_params = sparse_params
 
-    def init_optimizer(self, kvstore='local', optimizer='sgd',
-                       optimizer_params=(('learning_rate', 0.01),), force_init=False):
-        """Installs and initializes optimizers.
-
-        Parameters
-        ----------
-        kvstore : str or KVStore
-            Default `'local'`.
-        optimizer : str or Optimizer
-            Default `'sgd'`
-        optimizer_params : dict
-            Default `(('learning_rate', 0.01),)`. The default value is not a dictionary,
-            just to avoid pylint warning of dangerous default values.
-        force_init : bool
-            Default ``False``, indicating whether we should force re-initializing the
-            optimizer in the case an optimizer is already installed.
-        """
-        assert self.binded and self.params_initialized
-        import mxnet.optimizer as opt
-
-        if self.optimizer_initialized and not force_init:
-            self.logger.warning('optimizer already initialized, ignoring...')
-            return
-
-        if self._params_dirty:
-            self._sync_params_from_devices()
-
-        (kvstore, update_on_kvstore) = \
-                _create_kvstore(kvstore, len(self._context), self._arg_params)
-        #update_on_kvstore = False
-
-        batch_size = self._exec_group.batch_size
-        if kvstore and 'dist' in kvstore.type and '_sync' in kvstore.type:
-            batch_size *= kvstore.num_workers
-        rescale_grad = 1.0/batch_size
-
-        if isinstance(optimizer, str):
-            idx2name = {}
-            if update_on_kvstore:
-                idx2name.update(enumerate(self._exec_group.param_names))
-            else:
-                for k in range(len(self._context)):
-                    idx2name.update({i*len(self._context)+k: n
-                                     for i, n in enumerate(self._exec_group.param_names)})
-            optimizer_params = dict(optimizer_params)
-            if 'rescale_grad' not in optimizer_params:
-                optimizer_params['rescale_grad'] = rescale_grad
-            optimizer = opt.create(optimizer,
-                                   sym=self.symbol, param_idx2name=idx2name,
-                                   **optimizer_params)
-        else:
-            assert isinstance(optimizer, mx.optimizer.Optimizer)
-            if optimizer.rescale_grad != rescale_grad:
-                #pylint: disable=no-member
-                warnings.warn(
-                    "Optimizer created manually outside Module but rescale_grad " +
-                    "is not normalized to 1.0/batch_size/num_workers (%s vs. %s). "%(
-                        optimizer.rescale_grad, rescale_grad) +
-                    "Is this intended?", stacklevel=2)
-
-        self._optimizer = optimizer
-        self._kvstore = kvstore
-        self._update_on_kvstore = update_on_kvstore
-        self._updater = None
-
-        if kvstore:
-            if self._compression_params:
-                kvstore.set_gradient_compression(self._compression_params)
-            # copy initialized local parameters to kvstore
-            _initialize_kvstore(kvstore=kvstore,
-                                param_arrays=self._exec_group.param_arrays,
-                                arg_params=self._arg_params,
-                                param_names=self._param_names,
-                                update_on_kvstore=update_on_kvstore)
-        if update_on_kvstore:
-            kvstore.set_optimizer(self._optimizer)
-        else:
-            self._updater = opt.get_updater(optimizer)
-
-        self.optimizer_initialized = True
-
-        if self._preload_opt_states is not None:
-            self.load_optimizer_states(self._preload_opt_states)
-            self._preload_opt_states = None
-        # TODO(haibin) refactor init kvstore
-
     def sync_sparse_params(self, param_rowids):
         '''Prepares the module for processing a data batch.
         Usually involves switching bucket and reshaping.
@@ -120,27 +34,6 @@ class SparseModule(Module):
             self._kvstore.row_sparse_pull(param_name, param_val, row_ids=rowid,
                                           priority=-param_idx)
 
-    def update(self):
-        """Updates parameters according to the installed optimizer and the gradients computed
-        in the previous forward-backward batch.
-        See Also
-        ----------
-        :meth:`BaseModule.update`.
-        """
-        assert self.binded and self.params_initialized and self.optimizer_initialized
-
-        self._params_dirty = True
-        if self._update_on_kvstore:
-            _update_params_on_kvstore(self._exec_group.param_arrays,
-                                      self._exec_group.grad_arrays,
-                                      self._kvstore, self._exec_group.param_names)
-        else:
-            _update_params(self._exec_group.param_arrays,
-                           self._exec_group.grad_arrays,
-                           updater=self._updater,
-                           num_device=len(self._context),
-                           kvstore=self._kvstore,
-                           param_names=self._exec_group.param_names)
     @staticmethod
     def load(prefix, epoch, load_optimizer_states=False, **kwargs):
         """Creates a model from previously saved checkpoint.
@@ -212,18 +105,13 @@ class SparseModule(Module):
         for name, block in zip(self._exec_group.param_names, self._exec_group.param_arrays):
             assert(isinstance(block, list))
             if block[0].stype == 'row_sparse':
-                print(name)
                 row_ids = mx.nd.arange(start=0, stop=block[0].shape[0], dtype='int64')
-                import numpy as np
-                print(np.unique(row_ids.asnumpy()).shape)
                 self._kvstore.row_sparse_pull(name, arg_params[name], row_ids=row_ids)
-                print(arg_params[name].indices.shape, block[0].shape, arg_params[name].stype)
             elif block[0].stype == 'default':
                 self._kvstore.pull(name, out=arg_params[name], ignore_sparse=False)
             else:
                 raise NotImplementedError()
         # TODO handle aux names
-        print(self._exec_group.aux_names)
         #assert(self._exec_group.aux_names is None or self._exec_group.aux_arrays is None)
         #for name, block in zip(self._exec_group.aux_names, self._exec_group.aux_arrays):
         #    if block[0].stype == 'row_sparse':

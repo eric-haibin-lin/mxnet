@@ -46,6 +46,8 @@ def get_parser(is_train=True):
     parser = argparse.ArgumentParser(description='Language Model on GBW')
     parser.add_argument('--data', type=str, default='./data/ptb.train.txt',
                         help='location of the data corpus')
+    parser.add_argument('--test', type=str, default='./data/ptb.train.txt',
+                        help='such as /home/ubuntu/gbw-validation/heldout-monolingual.tokenized.shuffled/news.en.heldout-00000-of-00050')
     parser.add_argument('--vocab', type=str, default='./data/1b_word_vocab.txt',
                         help='location of the corpus vocab')
     parser.add_argument('--emsize', type=int, default=512,

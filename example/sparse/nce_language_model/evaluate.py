@@ -19,12 +19,10 @@ import numpy as np
 import mxnet as mx
 import argparse
 import run_utils
-from data import MultiSentenceIter
+from data import MultiSentenceIter, Vocabulary
 from model import *
 from sparse_module import SparseModule
 import os, math, logging, time
-import data_utils
-
 
 def evaluate(mod, data_iter, epoch, log_interval, early_stop=None):
     import time
@@ -63,7 +61,7 @@ if __name__ == '__main__':
     logging.info(args)
 
     # data
-    vocab = data_utils.Vocabulary.from_file(args.vocab)
+    vocab = data.Vocabulary.from_file(args.vocab)
     unigram = vocab.unigram()
     ntokens = unigram.size
 

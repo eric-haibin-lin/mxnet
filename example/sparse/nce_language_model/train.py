@@ -19,33 +19,25 @@ import numpy as np
 import mxnet as mx
 import run_utils
 import evaluate
-from data import MultiSentenceIter
+from data import MultiSentenceIter, Vocabulary
 from model import *
 from sparse_module import SparseModule
-import os, math, logging, time, pickle
-import data_utils
-
-DEBUG_FLG = False
-
-def DEBUG(s):
-    if DEBUG_FLG:
-        print(s)
+import os, math, logging, time, sys
 
 if __name__ == '__main__':
-    import sys
-    print(sys.argv)
     parser = run_utils.get_parser(is_train=True)
     args = parser.parse_args()
     mx.random.seed(args.seed)
     np.random.seed(args.seed)
     head = '%(asctime)-15s %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=head)
+    logging.basicConfig(level=logging.INFO, format=head)
     logging.info(args)
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.cpu()]
     ngpus = len(ctx)
+    logging.info(sys.argv)
 
     # data
-    vocab = data_utils.Vocabulary.from_file(args.vocab)
+    vocab = Vocabulary.from_file(args.vocab)
     ntokens = vocab.num_tokens
 
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
@@ -53,10 +45,10 @@ if __name__ == '__main__':
     # model
     rnn_module = RNNModel(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
                           args.dropout, args.num_proj)
-    nce_module = SampledModule(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
+    sampled_softmax = SampledModule(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
 
     rnn_out, last_states = rnn_module.forward(args.batch_size)
-    logits, new_targets = nce_module.forward(rnn_out, args.batch_size)
+    logits, new_targets = sampled_softmax.forward(rnn_out, args.batch_size)
     loss_scale = args.bptt
     model = CrossEntropyLoss().forward(logits, new_targets, loss_scale)
     
@@ -92,11 +84,10 @@ if __name__ == '__main__':
     for arg in trainable_args:
         if 'lstm' in arg:
             lstm_args.append(arg)
-    print(lstm_args)
+    logging.info(lstm_args)
 
     kvstore = None if args.kvstore is None else mx.kv.create(args.kvstore)
     require_rsp_pull = kvstore and not args.dense
-    # TODO support custom eps
     optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, rescale_grad=1.0/ngpus, eps=args.eps, wd=args.wd)
 
     module.init_optimizer(optimizer=optimizer, kvstore=kvstore)
@@ -184,8 +175,7 @@ if __name__ == '__main__':
             speedometer(speedometer_param)
             # update training metric
             # TODO (revert >=)
-            x = -1 if DEBUG_FLG else 0
-            if nbatch % args.log_interval == 0 and nbatch > x:
+            if nbatch % args.log_interval == 0 and nbatch > 0:
                 cur_L = total_L.asscalar() / args.log_interval / loss_scale
                 try:
                     ppl = math.exp(cur_L) if cur_L < 100 else -1.0
@@ -212,11 +202,11 @@ if __name__ == '__main__':
             ############### eval module ####################
             eval_module = SparseModule(symbol=mx.sym.Group(last_states + [eval_model]), context=mx.cpu(), data_names=data_names,
                                        label_names=label_names, state_names=state_names, sparse_params=sparse_params)
-            test_data_path = "/home/ubuntu/gbw-validation/heldout-monolingual.tokenized.shuffled/*"
+            test_data_path = args.test
             eval_data = mx.io.PrefetchingIter(MultiSentenceIter(test_data_path, vocab,
                                               args.batch_size, args.bptt))
             eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
-            val_L = evaluate.evaluate(eval_module, eval_data, epoch, 20, early_stop=None)
+            val_L = evaluate.evaluate(eval_module, eval_data, epoch, 1, early_stop=None)
         train_data.reset()
     logging.info("Training completed. ")
     if args.profile:
