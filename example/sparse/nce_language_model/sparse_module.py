@@ -92,8 +92,7 @@ class SparseModule(Module):
                                 param_arrays=self._exec_group.param_arrays,
                                 arg_params=self._arg_params,
                                 param_names=self._param_names,
-                                update_on_kvstore=update_on_kvstore,
-                                skip_pull=self._sparse_params)
+                                update_on_kvstore=update_on_kvstore)
         if update_on_kvstore:
             kvstore.set_optimizer(self._optimizer)
         else:
@@ -134,8 +133,7 @@ class SparseModule(Module):
         if self._update_on_kvstore:
             _update_params_on_kvstore(self._exec_group.param_arrays,
                                       self._exec_group.grad_arrays,
-                                      self._kvstore, self._exec_group.param_names,
-                                      skip_pull=self._sparse_params)
+                                      self._kvstore, self._exec_group.param_names)
         else:
             _update_params(self._exec_group.param_arrays,
                            self._exec_group.grad_arrays,

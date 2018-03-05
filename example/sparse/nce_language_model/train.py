@@ -19,7 +19,7 @@ import numpy as np
 import mxnet as mx
 import run_utils
 import evaluate
-from data import Corpus, CorpusIter, DummyIter, MultiSentenceIter, SampleIter
+from data import MultiSentenceIter
 from model import *
 from sparse_module import SparseModule
 import os, math, logging, time, pickle
@@ -46,9 +46,7 @@ if __name__ == '__main__':
 
     # data
     vocab = data_utils.Vocabulary.from_file(args.vocab)
-    unigram = vocab.unigram()
-    ntokens = unigram.size
-    os.environ["MXNET_MAGIC_DIM"] = str(ntokens * 513) if not args.dense else "-2"
+    ntokens = vocab.num_tokens
 
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))

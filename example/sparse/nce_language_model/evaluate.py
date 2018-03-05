@@ -19,10 +19,10 @@ import numpy as np
 import mxnet as mx
 import argparse
 import run_utils
-from data import Corpus, CorpusIter, DummyIter, MultiSentenceIter
+from data import MultiSentenceIter
 from model import *
 from sparse_module import SparseModule
-import os, math, logging, time, pickle
+import os, math, logging, time
 import data_utils
 
 

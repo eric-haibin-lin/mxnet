@@ -1,3 +1,20 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
 import codecs
 import glob
 import json
@@ -63,16 +80,6 @@ class Vocabulary(object):
                 vocab.add(word, int(count))
         vocab.finalize()
         return vocab
-
-    def unigram(self):
-        counts = [None] * self._num_tokens
-        for i in range(self._num_tokens):
-            tk = self._id_to_token[i]
-            count = self._token_to_count[tk]
-            if tk == self.s:
-                count /= 2
-            counts[i] = count
-        return mx.nd.array(counts) / self._total_count
 
 class Dataset(object):
 
@@ -148,16 +155,3 @@ class Dataset(object):
                     yield file_name
         for value in self._iterate(self._sentence_stream(file_stream()), batch_size, num_steps):
             yield value
-
-'''
-data_dir = '/home/ubuntu/gbw/statmt/1-billion-word-language-modeling-benchmark-r13output'
-vocab = Vocabulary.from_file("data/1b_word_vocab.txt")
-dataset = Dataset(vocab, data_dir + "/training-monolingual.tokenized.shuffled/*", deterministic=True)
-data_iterator = dataset.iterate_forever(2 * 1, 4)
-nb = 0
-while True:
-    n = data_iterator.next()
-    nb += 1
-    if nb % 10000 == 0:
-        print(nb)
-'''
