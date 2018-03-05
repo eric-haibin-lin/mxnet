@@ -206,11 +206,10 @@ class KVStoreDist : public KVStoreLocal {
 
   void PullImpl(const std::vector<int>& keys,
                 const std::vector<NDArray*>& values,
-                int priority, bool ignore_sparse) override {
-    CHECK_EQ(ignore_sparse, true) << "Distributed KVStore doesn't support Pull(RowSparseNDArray)";
+                int priority) override {
     std::vector<int> uniq_keys;
     std::vector<std::vector<NDArray*> > grouped_vals;
-    GroupKVPairsPull(keys, values, &uniq_keys, &grouped_vals, ignore_sparse);
+    GroupKVPairsPull(keys, values, &uniq_keys, &grouped_vals);
 
     for (size_t i = 0; i < uniq_keys.size(); ++i) {
       int key = uniq_keys[i];
