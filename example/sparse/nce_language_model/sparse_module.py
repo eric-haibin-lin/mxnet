@@ -6,6 +6,49 @@ from mxnet.module import Module
 from mxnet.model import _create_kvstore, _initialize_kvstore, _update_params, _update_params_on_kvstore
 from mxnet.model import load_checkpoint
 
+import mxnet.ndarray as nd
+
+def nd_global_norm(t_list):
+    """Computes the global norm of multiple tensors.
+    Given a tuple or list of tensors t_list, this operation returns the global norm of the elements
+     in all tensors in t_list. The global norm is computed as:
+    ``global_norm = sqrt(sum([l2norm(t)**2 for t in t_list]))``
+    Any entries in t_list that are of type None are ignored.
+    Parameters
+    ----------
+    t_list: list or tuple
+        The NDArray list
+    Returns
+    -------
+    ret: NDArray
+        The global norm. The shape of the NDArray will be (1,)
+    Examples
+    --------
+    >>> x = mx.nd.ones((2, 3))
+    >>> y = mx.nd.ones((5, 6))
+    >>> z = mx.nd.ones((4, 2, 3))
+    >>> print(nd_global_norm([x, y, z]).asscalar())
+    7.74597
+    >>> xnone = None
+    >>> ret = nd_global_norm([x, y, z, xnone])
+    >>> print(ret.asscalar())
+    7.74597
+    """
+    ret = None
+    for arr in t_list:
+        if arr is not None:
+            if arr.stype == 'row_sparse':
+                norm = nd._internal._square_sum(arr, axis=0).sum().as_in_context(mx.cpu())
+            else:
+                norm = nd.square(nd.norm(arr)).copyto(mx.cpu())
+            if ret is None:
+                ret = norm
+            else:
+                ret += norm
+    ret = nd.sqrt(ret)
+    return ret
+
+
 class SparseModule(Module):
 
     def __init__(self, symbol, data_names=('data',), label_names=('softmax_label',),
@@ -108,7 +151,7 @@ class SparseModule(Module):
                 row_ids = mx.nd.arange(start=0, stop=block[0].shape[0], dtype='int64')
                 self._kvstore.row_sparse_pull(name, arg_params[name], row_ids=row_ids)
             elif block[0].stype == 'default':
-                self._kvstore.pull(name, out=arg_params[name], ignore_sparse=False)
+                self._kvstore.pull(name, out=arg_params[name])
             else:
                 raise NotImplementedError()
         # TODO handle aux names
@@ -122,3 +165,86 @@ class SparseModule(Module):
         #    else:
         #        raise NotImplementedError()
         return arg_params, aux_params
+
+    def clip_by_global_norm(self, max_norm=1.0, param_names=None):
+        assert self.binded and self.params_initialized and self.optimizer_initialized
+        grad_array = []
+        if param_names is None:
+            for grads in self._exec_group.grad_arrays:
+                grad_array += grads
+        else:
+            for param_name in param_names:
+                param_idx = self._exec_group.param_names.index(param_name)
+                grad_val = self._exec_group.grad_arrays[param_idx]
+                grad_array += grad_val
+
+        norm_val = self.global_grad_norm(grad_array)
+        if norm_val > max_norm:
+            ratio = max_norm / float(norm_val)
+            for grad in grad_array:
+                grad *= ratio
+        return norm_val
+
+    def clip_by_global_norm_per_ctx(self, max_norm=1.0, param_names=None):
+        """Clips gradient norm.
+        The norm is computed over all gradients together, as if they were
+         concatenated into a single vector. Gradients are modified in-place.
+        The method is first used in
+         `[ICML2013] On the difficulty of training recurrent neural networks`
+        Parameters
+        ----------
+        max_norm : float or int
+            The maximum clipping threshold of the gradient norm.
+        Returns
+        -------
+        norm_val : float
+            The computed norm of the gradients.
+        Examples
+        --------
+        An example of using clip_grad_norm to clip the gradient before updating the parameters::
+            >>> #Get the gradient via back-propagation
+            >>> net.forward_backward(data_batch=data_batch)
+            >>> norm_val = net.clip_by_global_norm(max_norm=1.0)
+            >>> net.update()
+        """
+        assert self.binded and self.params_initialized and self.optimizer_initialized
+        num_ctx = len(self._exec_group.grad_arrays[0])
+        grad_array_per_ctx = [[] for i in range(num_ctx)]
+        assert(param_names is not None)
+        for param_name in param_names:
+            param_idx = self._exec_group.param_names.index(param_name)
+            grad_val = self._exec_group.grad_arrays[param_idx]
+            assert(len(grad_val) == num_ctx)
+            for i in range(num_ctx):
+                grad_array_per_ctx[i].append(grad_val[i])
+        norm_vals = []
+        for i in range(num_ctx):
+            norm_val = self.global_grad_norm(grad_array_per_ctx[i])
+            norm_vals.append(norm_val)
+            if norm_val > max_norm:
+                ratio = max_norm / float(norm_val)
+                for grad in grad_array_per_ctx[i]:
+                    grad *= ratio
+        return norm_vals
+
+    def global_grad_norm(self,arr):
+        """Calculate global gradient norm.
+        The L2 norm is computed over all gradients together, as if they were
+         concatenated into a single vector.
+        Could be used to debug the optimization process.
+         See http://videolectures.net/deeplearning2015_goodfellow_network_optimization/
+        Returns
+        -------
+        norm_val : float
+            The computed norm of the gradients.
+        Examples
+        --------
+        An example of using global_norm to calculate the gradient norm after back-propgation::
+            >>> #Get the gradient via back-propagation
+            >>> net.forward_backward(data_batch=data_batch)
+            >>> norm_val = net.global_grad_norm()
+            >>> print(norm_val)
+        """
+        norm_val = 0.0
+        norm_val += nd_global_norm(arr).asscalar()
+        return norm_val
