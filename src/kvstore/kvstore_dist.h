@@ -453,9 +453,9 @@ class KVStoreDist : public KVStoreLocal {
 
   // pull row sparse weight into `recv_buf` based on indices given by `indices`
   void PullRowSparse_(const int key, const NDArray& recv_buf,
-                      const NDArray& sized_indices, int priority) {
+                      const NDArray& indices, int priority) {
     using namespace rowsparse;
-    auto pull_from_servers = [this, key, recv_buf, sized_indices]
+    auto pull_from_servers = [this, key, recv_buf, indices]
       (RunContext rctx, Engine::CallbackOnComplete cb) {
       // allocate memory for the buffer
       CHECK_EQ(indices.dtype(), mshadow::kInt64);
@@ -486,7 +486,7 @@ class KVStoreDist : public KVStoreLocal {
     CHECK_NOTNULL(Engine::Get())->PushAsync(
       pull_from_servers,
       pinned_ctx_,
-      {sized_indices.var()},
+      {indices.var()},
       {recv_buf.var()},
       FnProperty::kNormal,
       priority,

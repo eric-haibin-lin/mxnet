@@ -174,7 +174,6 @@ class KVStoreLocal : public KVStore {
             local.ctx().dev_mask() == cpu::kDevMask) {
           local = local.Copy(merged.ctx());
         }
-
         // call the updater with string keys
         // if string keys are used and str_updater_ is available
         // otherwise fallback to updater_ which uses int key interface
