@@ -20,8 +20,6 @@ import argparse
 def _add_train_args(parser):
     parser.add_argument('--lr', type=float, default=0.1,
                         help='initial learning rate')
-    parser.add_argument('--wd', type=float, default=0.0,
-                        help='wd')
     parser.add_argument('--clip', type=float, default=0.2,
                         help='gradient clipping by global norm')
     parser.add_argument('--per-ctx-clip', action='store_true',

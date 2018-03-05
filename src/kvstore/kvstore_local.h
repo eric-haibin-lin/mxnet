@@ -60,7 +60,6 @@ class KVStoreLocal : public KVStore {
     } else {
       comm_ = new CommCPU();
     }
-    comm_cpu_ = new CommCPU();
     pinned_ctx_ = comm_->pinned_ctx();
     gradient_compression_ = std::make_shared<GradientCompression>();
   }
@@ -166,23 +165,14 @@ class KVStoreLocal : public KVStore {
     GroupKVPairsPush(keys, values, &uniq_keys, &grouped_vals);
     for (size_t i = 0; i < uniq_keys.size(); ++i) {
       int key = uniq_keys[i];
-      NDArray merged = comm_->Reduce(key, grouped_vals[i], priority);
+      const NDArray& merged = comm_->Reduce(key, grouped_vals[i], priority);
       NDArray& local = local_[key];
-      int64_t magic_dim = dmlc::GetEnv("MXNET_MAGIC_DIM", -1);
-      bool magic_weight = local.shape().Size() > magic_dim;
       if (updater_ != nullptr) {
         CHECK(!local.is_none()) << "key " << key << " has not been inited";
         // if merged is on gpu, we may need copy weight from cpu to gpu
-        if (!magic_weight) {
-          if (merged.ctx().dev_mask() != cpu::kDevMask &&
-              local.ctx().dev_mask() == cpu::kDevMask) {
-            local = local.Copy(merged.ctx());
-          }
-        } else {
-          if (merged.ctx().dev_mask() != cpu::kDevMask &&
-              local.ctx().dev_mask() == cpu::kDevMask) {
-            merged = merged.Copy(local.ctx());
-          }
+        if (merged.ctx().dev_mask() != cpu::kDevMask &&
+            local.ctx().dev_mask() == cpu::kDevMask) {
+          local = local.Copy(merged.ctx());
         }
 
         // call the updater with string keys
@@ -201,11 +191,7 @@ class KVStoreLocal : public KVStore {
         if (merged.storage_type() != local.storage_type()) {
           local = merged.Copy(local.ctx());
         } else {
-          if (!magic_weight) {
-            local = merged;
-          } else {
-            local = merged.Copy(local.ctx());
-          }
+          local = merged;
         }
       }
     }
@@ -425,7 +411,6 @@ class KVStoreLocal : public KVStore {
 
   /// reducer and broadcaster
   Comm* comm_;
-  Comm* comm_cpu_;
   /// pinned context
   Context pinned_ctx_;
   /// \brief buffer for storing local values

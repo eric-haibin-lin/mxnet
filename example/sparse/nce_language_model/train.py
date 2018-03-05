@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
     kvstore = None if args.kvstore is None else mx.kv.create(args.kvstore)
     require_rsp_pull = kvstore and not args.dense
-    optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, rescale_grad=1.0/ngpus, eps=args.eps, wd=args.wd)
+    optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, rescale_grad=1.0/ngpus, eps=args.eps)
 
     module.init_optimizer(optimizer=optimizer, kvstore=kvstore)
     speedometer = mx.callback.Speedometer(args.batch_size * ngpus * args.bptt, args.log_interval)

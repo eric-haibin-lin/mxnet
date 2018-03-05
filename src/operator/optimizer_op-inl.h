@@ -1345,7 +1345,9 @@ inline void FtrlUpdateEx(const nnvm::NodeAttrs& attrs,
   }
 }
 
+
 // Implementation for signSGD and Signum
+
 struct SignSGDParam : public dmlc::Parameter<SignSGDParam> {
   float lr;
   float wd;
@@ -1369,6 +1371,7 @@ struct SignSGDParam : public dmlc::Parameter<SignSGDParam> {
               "grad = max(min(grad, clip_gradient), -clip_gradient).");
   }
 };
+
 
 struct SignSGDKernel {
   template<typename DType>

@@ -80,6 +80,7 @@ struct where_csr {
   }
 };
 
+
 /*! \brief Choose elements from x or y depending on condition
  * The condition is a vector whose size is the same as the
  * x's first dim size.
@@ -266,6 +267,7 @@ inline bool WhereOpBackwardStorageType(const nnvm::NodeAttrs& attrs,
   }
   return dispatched;
 }
+
 
 
 template<typename xpu>
