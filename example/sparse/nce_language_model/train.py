@@ -206,7 +206,7 @@ if __name__ == '__main__':
             eval_data = mx.io.PrefetchingIter(MultiSentenceIter(test_data_path, vocab,
                                               args.batch_size, args.bptt))
             eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
-            val_L = evaluate.evaluate(eval_module, eval_data, epoch, 1, early_stop=None)
+            val_L = evaluate.evaluate(eval_module, eval_data, epoch, 20, early_stop=None)
         train_data.reset()
     logging.info("Training completed. ")
     if args.profile:
