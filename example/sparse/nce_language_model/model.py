@@ -19,17 +19,12 @@ import mxnet as mx
 import mxnet.symbol as S
 import numpy as np
 
-class CrossEntropyLoss():
-    def __init__(self, rescale_loss=1):
-        self.criterion = mx.gluon.loss.SoftmaxCrossEntropyLoss()
-        self.rescale_loss = rescale_loss
-
-    def __call__(self, inputs, labels):
-        loss = self.criterion.hybrid_forward(mx.symbol, inputs, labels)
-        S = mx.symbol
-        mask = S.var('mask')
-        loss = loss * S.reshape(mask, shape=(-1,))
-        return S.make_loss(loss.mean() * self.rescale_loss)
+def cross_entropy_loss(inputs, labels, rescale_loss=1):
+    criterion = mx.gluon.loss.SoftmaxCrossEntropyLoss()
+    loss = criterion.hybrid_forward(S, inputs, labels)
+    mask = S.var('mask')
+    loss = loss * S.reshape(mask, shape=(-1,))
+    return S.make_loss(loss.mean() * rescale_loss)
 
 def rnn(bptt, vocab_size, num_embed, nhid, num_layers, dropout, num_proj, batch_size):
     embed = mx.sym.contrib.SparseEmbedding

@@ -25,18 +25,23 @@ from sparse_module import CustomModule
 import os, math, logging, sys
 
 if __name__ == '__main__':
+    # parser
     parser = run_utils.get_parser()
     args = parser.parse_args()
-    mx.random.seed(args.seed)
-    np.random.seed(args.seed)
     head = '%(asctime)-15s %(message)s'
-    logging.basicConfig(level=logging.INFO, format=head)
-    logging.info(args)
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.gpu()]
     ngpus = len(ctx)
     nsamples = args.k
     rescale_loss = args.bptt
+
+    # logging
+    logging.basicConfig(level=logging.INFO, format=head)
+    logging.info(args)
     logging.debug(sys.argv)
+
+    # seeding
+    mx.random.seed(args.seed)
+    np.random.seed(args.seed)
 
     # data
     vocab = Vocabulary.from_file(args.vocab)
@@ -48,8 +53,8 @@ if __name__ == '__main__':
                                                        args.nhid, args.nlayers, args.dropout,
                                                        args.num_proj, args.batch_size)
     # decoder weight and bias
-    decoder_w = mx.sym.var("decoder_weight", stype='row_sparse')
-    decoder_b = mx.sym.var("decoder_bias", shape=(ntokens, 1))
+    decoder_w = S.var("decoder_weight", stype='row_sparse')
+    decoder_b = S.var("decoder_bias", shape=(ntokens, 1))
 
     # sampled softmax for training
     sample = S.var('sample', shape=(nsamples,))
@@ -58,19 +63,19 @@ if __name__ == '__main__':
     logits, new_targets = sampled_softmax(ntokens, args.k, args.num_proj,
                                           rnn_out, decoder_w, decoder_b,
                                           [sample, prob_sample, prob_target])
-    train_loss = CrossEntropyLoss(rescale_loss=rescale_loss)(logits, new_targets)
-    train_loss_and_states = mx.sym.Group(last_states + [train_loss])
+    train_loss = cross_entropy_loss(logits, new_targets, rescale_loss=rescale_loss)
+    train_loss_and_states = S.Group(last_states + [train_loss])
 
     # full softmax for testing
     #TODO same stype for decoder_b
     decoder_b = S.reshape(decoder_b, (-1,))
-    eval_logits = mx.sym.FullyConnected(data=rnn_out, weight=decoder_w,
+    eval_logits = S.FullyConnected(data=rnn_out, weight=decoder_w,
                                         num_hidden=ntokens, name='decode_fc', bias=decoder_b)
-    label = mx.sym.Variable('label')
-    label = mx.sym.reshape(label, shape=(-1,))
-    decoder_b = mx.sym.reshape(decoder_b, shape=(-1,))
-    eval_loss = CrossEntropyLoss()(eval_logits, label)
-    eval_loss_and_states = mx.sym.Group(last_states + [eval_loss])
+    label = S.Variable('label')
+    label = S.reshape(label, shape=(-1,))
+    decoder_b = S.reshape(decoder_b, shape=(-1,))
+    eval_loss = cross_entropy_loss(eval_logits, label)
+    eval_loss_and_states = S.Group(last_states + [eval_loss])
 
     # training module
     data_names, label_names = ['data', 'mask'], ['label']
@@ -147,10 +152,7 @@ if __name__ == '__main__':
             # update training metric
             if nbatch % args.log_interval == 0 and nbatch > 0:
                 cur_L = total_L.asscalar() / args.log_interval / rescale_loss
-                try:
-                    ppl = math.exp(cur_L)
-                except OverflowError:
-                    ppl = 1e36
+                ppl = math.exp(cur_L) if cur_L < 100 else 1e36
                 logging.info('Iter[%d] Batch [%d] \tloss %.7f, ppl %.7f'%(epoch, nbatch, cur_L, ppl))
                 total_L[:] = 0.0
             nbatch += 1
