@@ -1,7 +1,7 @@
-# Licensed to the Apache Software Foundation (ASF) under one
+# Licensed to the Apache Software Soundation (ASS) under one
 # or more contributor license agreements.  See the NOTICE file
 # distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
+# regarding copyright ownership.  The ASS licenses this file
 # to you under the Apache License, Version 2.0 (the
 # "License"); you may not use this file except in compliance
 # with the License.  You may obtain a copy of the License at
@@ -10,12 +10,13 @@
 #
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OS ANY
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
 
 import mxnet as mx
+import mxnet.symbol as S
 import numpy as np
 
 class CrossEntropyLoss():
@@ -25,121 +26,91 @@ class CrossEntropyLoss():
 
     def __call__(self, inputs, labels):
         loss = self.criterion.hybrid_forward(mx.symbol, inputs, labels)
-        F = mx.symbol
-        mask = F.var('mask')
-        loss = loss * F.reshape(mask, shape=(-1,))
-        return F.make_loss(loss.mean() * self.rescale_loss)
+        S = mx.symbol
+        mask = S.var('mask')
+        loss = loss * S.reshape(mask, shape=(-1,))
+        return S.make_loss(loss.mean() * self.rescale_loss)
 
-def FullSoftmaxCELoss(pred, vocab_size, dense):
-    stype = 'row_sparse' if not dense else 'default'
-    decoder_b = mx.sym.var("decoder_bias", shape=(vocab_size, 1))
-    decoder_b = mx.sym.reshape(decoder_b, shape=(vocab_size, ))
-    decoder_w = mx.sym.var('decoder_weight', stype=stype)
-    pred = mx.sym.FullyConnected(data=pred, weight=decoder_w, num_hidden=vocab_size, name='pred', bias=decoder_b)
-    label = mx.sym.Variable('label')
-    pred = mx.sym.reshape(pred, shape=(-1, vocab_size))
-    label = mx.sym.reshape(label, shape=(-1,))
-    return CrossEntropyLoss()(pred, label)
+def rnn(bptt, vocab_size, num_embed, nhid, num_layers, dropout, num_proj, batch_size):
+    embed = mx.sym.contrib.SparseEmbedding
+    state_names = []
+    data = S.var('data')
+    weight = S.var("encoder_weight", stype='row_sparse')
+    embed = embed(data=data, weight=weight, input_dim=vocab_size,
+                  output_dim=num_embed, name='embed', deterministic=True)
+    states = []
+    outputs = S.Dropout(embed, p=dropout)
+    for i in range(num_layers):
+        prefix = 'lstmp%d_' % i
+        init_h = S.var(prefix + 'init_h', shape=(batch_size, num_proj), init=mx.init.Zero())
+        init_c = S.var(prefix + 'init_c', shape=(batch_size, nhid), init=mx.init.Zero())
+        state_names += [prefix + 'init_h', prefix + 'init_c']
+        lstmp = mx.gluon.contrib.rnn.LSTMPCell(nhid, num_proj)
+        outputs, next_states = lstmp.unroll(bptt, outputs, begin_state=[init_h, init_c], \
+                                            layout='NTC', merge_outputs=True)
+        outputs = S.Dropout(outputs, p=dropout)
+        states += [S.stop_gradient(s) for s in next_states]
+    outputs = S.reshape(outputs, shape=(-1, num_proj))
 
-class RNN():
+    trainable_lstm_args = []
+    for arg in outputs.list_arguments():
+        if 'lstmp' in arg and 'init' not in arg:
+            trainable_lstm_args.append(arg)
+    return outputs, states, trainable_lstm_args, state_names
 
-    def __init__(self, bptt, vocab_size, num_embed, nhid, num_layers,
-                 dropout, num_proj):
-        self.bptt = bptt
-        self.vocab_size = vocab_size
-        self.num_embed = num_embed
-        self.nhid = nhid
-        self.num_layers = num_layers
-        self.dropout = dropout
-        self.num_proj = num_proj
-        self.state_names = []
-        self.embed = mx.sym.contrib.SparseEmbedding
-        self.dim = self.num_proj if self.num_proj > 0 else self.nhid
+def sampled_softmax(num_classes, num_samples, in_dim, inputs, weight, bias,
+                    sampled_values, remove_accidental_hits=True):
 
-    def __call__(self, batch_size):
-        F = mx.symbol
-        data = F.var('data')
-        weight = F.var("encoder_weight", stype='row_sparse')
-        embed = self.embed(data=data, weight=weight, input_dim=self.vocab_size,
-                           output_dim=self.num_embed, name='embed', deterministic=True)
-        states = []
-        outputs = F.Dropout(embed, p=self.dropout)
-        for i in range(self.num_layers):
-            prefix = 'lstmp%d_' % i
-            init_h = F.var(prefix + 'init_h', shape=(batch_size, self.dim), init=mx.init.Zero())
-            init_c = F.var(prefix + 'init_c', shape=(batch_size, self.nhid), init=mx.init.Zero())
-            self.state_names += [prefix + 'init_h', prefix + 'init_c']
-            lstmp = mx.gluon.contrib.rnn.LSTMPCell(self.nhid, self.num_proj)
-            ## TODO(haibin) better layout?
-            outputs, next_states = lstmp.unroll(self.bptt, outputs, begin_state=[init_h, init_c], layout='NTC', merge_outputs=True)
-            outputs = F.Dropout(outputs, p=self.dropout)
-            states += [F.stop_gradient(s) for s in next_states]
-        outputs = F.reshape(outputs, shape=(-1, self.dim))
-        return outputs, states
+        embed = mx.sym.contrib.SparseEmbedding
+        sample, prob_sample, prob_target = sampled_values
 
-class SampledSoftmax():
-
-    def __init__(self, vocab_size, nhid, num_samples, bptt, num_proj, remove_hits=True):
-        self.vocab_size = vocab_size
-        self.num_samples = num_samples
-        self.bptt = bptt
-        self.num_proj = num_proj
-        self.dim = num_proj if num_proj > 0 else nhid
-        self.embed = mx.sym.contrib.SparseEmbedding
-        self.remove_hits = remove_hits
-
-    def __call__(self, inputs, batch_size):
-        # inputs = (n, nhid)
-        n = batch_size * self.bptt
-        F = mx.symbol
+        # inputs = (n, in_dim)
+        S = mx.symbol
         # (num_samples, )
-        sample = F.var('sample', shape=(self.num_samples,), dtype='float32')
+        sample = S.var('sample', shape=(num_samples,), dtype='float32')
         # (n, )
-        label = F.var('label')
-        label = F.reshape(label, shape=(-1,), name="label_reshape")
+        label = S.var('label')
+        label = S.reshape(label, shape=(-1,), name="label_reshape")
         # (num_samples+n, )
-        sample_label = F.concat(sample, label, dim=0)
-        # define weight and bias
-        decoder_w = F.var("decoder_weight", stype='row_sparse')
-        decoder_b = F.var("decoder_bias", shape=(self.vocab_size, 1))
+        sample_label = S.concat(sample, label, dim=0)
         # lookup weights and biases
-        # (num_samples+n, nhid)
-        sample_target_w = self.embed(data=sample_label, weight=decoder_w,
-                                     input_dim=self.vocab_size, output_dim=self.dim, deterministic=True)
+        # (num_samples+n, dim)
+        sample_target_w = embed(data=sample_label, weight=weight,
+                                     input_dim=num_classes, output_dim=in_dim,
+                                     deterministic=True)
         # (num_samples+n, 1)
-        sample_target_b = F.Embedding(data=sample_label, weight=decoder_b,
-                                      input_dim=self.vocab_size, output_dim=1)
-        # (num_samples, nhid)
-        sample_w = F.slice(sample_target_w, begin=(0, 0), end=(self.num_samples, self.dim))
-        target_w = F.slice(sample_target_w, begin=(self.num_samples, 0), end=(self.num_samples+n, self.dim))
-        sample_b = F.slice(sample_target_b, begin=(0, 0), end=(self.num_samples, 1))
-        target_b = F.slice(sample_target_b, begin=(self.num_samples, 0), end=(self.num_samples+n, 1))
+        sample_target_b = S.Embedding(data=sample_label, weight=bias,
+                                      input_dim=num_classes, output_dim=1)
+        # (num_samples, dim)
+        sample_w = S.slice(sample_target_w, begin=(0, 0), end=(num_samples, None))
+        target_w = S.slice(sample_target_w, begin=(num_samples, 0), end=(None, None))
+        sample_b = S.slice(sample_target_b, begin=(0, 0), end=(num_samples, None))
+        target_b = S.slice(sample_target_b, begin=(num_samples, 0), end=(None, None))
     
         # target
         # (n, 1)
-        true_pred = F.sum(target_w * inputs, axis=1, keepdims=True) + target_b
+        true_pred = S.sum(target_w * inputs, axis=1, keepdims=True) + target_b
         # samples
         # (n, num_samples)
-        sample_b = F.reshape(sample_b, (-1,))
-        sample_pred = F.FullyConnected(inputs, weight=sample_w, bias=sample_b, num_hidden=self.num_samples)
+        sample_b = S.reshape(sample_b, (-1,))
+        sample_pred = S.FullyConnected(inputs, weight=sample_w, bias=sample_b,
+                                       num_hidden=num_samples)
 
         # remove accidental hits
-        if self.remove_hits:
-            label_v = F.reshape(label, (-1, 1))
-            sample_v = F.reshape(sample, (1, -1))
-            neg = F.broadcast_equal(label_v, sample_v) * -1e37
+        if remove_accidental_hits:
+            label_v = S.reshape(label, (-1, 1))
+            sample_v = S.reshape(sample, (1, -1))
+            neg = S.broadcast_equal(label_v, sample_v) * -1e37
             sample_pred = sample_pred + neg
 
-        prob_sample = F.var("prob_sample", shape=(self.num_samples, ))
-        prob_sample = F.reshape(prob_sample, shape=(1, self.num_samples))
-        prob_target = F.var("prob_target", shape=(n, 1))
-        p_target = true_pred - F.log(prob_target)
-        p_sample = F.broadcast_sub(sample_pred, F.log(prob_sample))
+        prob_sample = S.reshape(prob_sample, shape=(1, num_samples))
+        p_target = true_pred - S.log(prob_target)
+        p_sample = S.broadcast_sub(sample_pred, S.log(prob_sample))
 
         # return logits and new_labels
         # (n, 1+num_samples)
-        logits = F.concat(p_target, p_sample, dim=1)
-        new_targets = F.zeros(shape=(n))
+        logits = S.concat(p_target, p_sample, dim=1)
+        new_targets = S.zeros_like(label)
         return logits, new_targets
 
 def generate_samples(label, num_splits, num_samples, num_classes):

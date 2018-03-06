@@ -84,13 +84,10 @@ def evaluate(mod, data_iter, epoch, log_interval):
         mod.set_states(states=states)
         nbatch += 1
         if (nbatch + 1) % log_interval == 0:
-            logging.info("eval batch %d : %.7f" % (nbatch, total_L / nbatch))
+            logging.info("Eval batch %d loss : %.7f" % (nbatch, total_L / nbatch))
     data_iter.reset()
     loss = total_L / nbatch
-    try:
-        ppl = math.exp(loss)
-    except Exception:
-        ppl = 1e37
+    ppl = math.exp(loss) if loss < 100 else 1e37
     end = time.time()
     logging.info('Iter[%d]\t\t CE loss %.7f, ppl %.7f. Eval duration = %.2f seconds'%(epoch, loss, ppl, end - start))
     return loss

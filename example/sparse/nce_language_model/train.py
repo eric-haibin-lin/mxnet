@@ -17,6 +17,7 @@
 
 import numpy as np
 import mxnet as mx
+import mxnet.symbol as S
 import run_utils
 from data import MultiSentenceIter, Vocabulary
 from model import *
@@ -33,6 +34,8 @@ if __name__ == '__main__':
     logging.info(args)
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.gpu()]
     ngpus = len(ctx)
+    nsamples = args.k
+    rescale_loss = args.bptt
     logging.debug(sys.argv)
 
     # data
@@ -40,39 +43,47 @@ if __name__ == '__main__':
     ntokens = vocab.num_tokens
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))
-    # training model
-    rnn = RNN(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
-              args.dropout, args.num_proj)
-    sampled_softmax = SampledSoftmax(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
+    # rnn model
+    rnn_out, last_states, lstm_args, state_names = rnn(args.bptt, ntokens, args.emsize,
+                                                       args.nhid, args.nlayers, args.dropout,
+                                                       args.num_proj, args.batch_size)
+    # decoder weight and bias
+    decoder_w = mx.sym.var("decoder_weight", stype='row_sparse')
+    decoder_b = mx.sym.var("decoder_bias", shape=(ntokens, 1))
 
-    rnn_output, last_states = rnn(args.batch_size)
-    logits, new_targets = sampled_softmax(rnn_output, args.batch_size)
-    rescale_loss = args.bptt
+    # sampled softmax for training
+    sample = S.var('sample', shape=(nsamples,))
+    prob_sample = S.var("prob_sample", shape=(nsamples,))
+    prob_target = S.var("prob_target")
+    logits, new_targets = sampled_softmax(ntokens, args.k, args.num_proj,
+                                          rnn_out, decoder_w, decoder_b,
+                                          [sample, prob_sample, prob_target])
     train_loss = CrossEntropyLoss(rescale_loss=rescale_loss)(logits, new_targets)
     train_loss_and_states = mx.sym.Group(last_states + [train_loss])
-    
+
+    # full softmax for testing
+    #TODO same stype for decoder_b
+    decoder_b = S.reshape(decoder_b, (-1,))
+    eval_logits = mx.sym.FullyConnected(data=rnn_out, weight=decoder_w,
+                                        num_hidden=ntokens, name='decode_fc', bias=decoder_b)
+    label = mx.sym.Variable('label')
+    label = mx.sym.reshape(label, shape=(-1,))
+    decoder_b = mx.sym.reshape(decoder_b, shape=(-1,))
+    eval_loss = CrossEntropyLoss()(eval_logits, label)
+    eval_loss_and_states = mx.sym.Group(last_states + [eval_loss])
 
     # training module
     data_names, label_names = ['data', 'mask'], ['label']
-    eval_state_names = rnn.state_names
+    eval_state_names = state_names
     extra_states_names = ['sample', 'prob_sample', 'prob_target']
     num_extra_states = len(extra_states_names)
-    train_state_names = rnn.state_names + extra_states_names
+    train_state_names = state_names + extra_states_names
 
     module = CustomModule(symbol=train_loss_and_states, context=ctx,
                           state_names=train_state_names,
                           data_names=data_names, label_names=label_names)
     module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
     module.init_params(initializer=mx.init.Xavier(factor_type='out'))
-
-    # parameters
-    trainable_args = set(train_loss.list_arguments()) - set(train_state_names) - \
-                     set(data_names) - set(label_names)
-    lstm_args = []
-    for arg in trainable_args:
-        if 'lstm' in arg:
-            lstm_args.append(arg)
-    logging.debug(lstm_args)
 
     kvstore = None if args.kvstore is None else mx.kv.create(args.kvstore)
     require_rsp_pull = kvstore and not args.dense
@@ -153,9 +164,6 @@ if __name__ == '__main__':
                                           args.batch_size, args.bptt))
         cpu_train_mod.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label)
 
-        # eval model
-        eval_loss = FullSoftmaxCELoss(rnn_output, ntokens, args.dense)
-        eval_loss_and_states = mx.sym.Group(last_states + [eval_loss])
         # eval module
         eval_module = CustomModule(symbol=eval_loss_and_states, context=mx.cpu(), data_names=data_names,
                                    label_names=label_names, state_names=eval_state_names)
