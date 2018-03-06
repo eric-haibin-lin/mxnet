@@ -6,18 +6,17 @@ from mxnet.module import Module
 from mxnet.model import _create_kvstore, _initialize_kvstore, _update_params, _update_params_on_kvstore
 from mxnet.model import load_checkpoint
 
-class SparseModule(Module):
+class CustomModule(Module):
 
     def __init__(self, symbol, data_names=('data',), label_names=('softmax_label',),
                  logger=logging, context=mx.cpu(), work_load_list=None,
                  fixed_param_names=None, state_names=None, group2ctxs=None,
-                 compression_params=None, sparse_params=None):
+                 compression_params=None):
 
-        super(SparseModule, self).__init__(symbol, data_names=data_names, label_names=label_names,
+        super(CustomModule, self).__init__(symbol, data_names=data_names, label_names=label_names,
                                            logger=logger, context=context, work_load_list=work_load_list,
                                            fixed_param_names=fixed_param_names, state_names=state_names,
                                            group2ctxs=group2ctxs, compression_params=compression_params)
-        self._sparse_params = sparse_params
 
     def sync_sparse_params(self, param_rowids):
         '''Prepares the module for processing a data batch.
@@ -65,7 +64,7 @@ class SparseModule(Module):
             Default ``None``, indicating no network parameters are fixed.
         """
         sym, args, auxs = load_checkpoint(prefix, epoch)
-        mod = SparseModule(symbol=sym, **kwargs)
+        mod = CustomModule(symbol=sym, **kwargs)
         mod._arg_params = args
         mod._aux_params = auxs
         mod.params_initialized = True
@@ -158,3 +157,11 @@ class SparseModule(Module):
         norm_vals = []
         for i in range(num_ctx):
             mx.gluon.utils.clip_global_norm(grad_array_per_ctx[i], max_norm)
+
+    def rescale_grad(self, scale=None, param_name=None):
+        if scale is None or param_name is None:
+            return
+        param_idx = self._exec_group.param_names.index(param_name)
+        grad_vals = self._exec_group.grad_arrays[param_idx]
+        for grad in grad_vals:
+            grad[:] *= scale

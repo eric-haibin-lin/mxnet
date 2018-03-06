@@ -18,16 +18,16 @@
 import mxnet as mx
 
 class CrossEntropyLoss():
-
-    def __init__(self):
+    def __init__(self, rescale_loss=1):
         self.criterion = mx.gluon.loss.SoftmaxCrossEntropyLoss()
+        self.rescale_loss = rescale_loss
 
-    def forward(self, inputs, labels, scale):
+    def __call__(self, inputs, labels):
         loss = self.criterion.hybrid_forward(mx.symbol, inputs, labels)
         F = mx.symbol
         mask = F.var('mask')
         loss = loss * F.reshape(mask, shape=(-1,))
-        return F.make_loss(loss.mean() * scale)
+        return F.make_loss(loss.mean() * self.rescale_loss)
 
 def FullSoftmaxCELoss(pred, vocab_size, dense):
     stype = 'row_sparse' if not dense else 'default'
@@ -38,9 +38,9 @@ def FullSoftmaxCELoss(pred, vocab_size, dense):
     label = mx.sym.Variable('label')
     pred = mx.sym.reshape(pred, shape=(-1, vocab_size))
     label = mx.sym.reshape(label, shape=(-1,))
-    return CrossEntropyLoss().forward(pred, label, 1)
+    return CrossEntropyLoss()(pred, label)
 
-class RNNModel():
+class RNN():
 
     def __init__(self, bptt, vocab_size, num_embed, nhid, num_layers,
                  dropout, num_proj):
@@ -55,7 +55,7 @@ class RNNModel():
         self.embed = mx.sym.contrib.SparseEmbedding
         self.dim = self.num_proj if self.num_proj > 0 else self.nhid
 
-    def forward(self, batch_size):
+    def __call__(self, batch_size):
         F = mx.symbol
         data = F.var('data')
         weight = F.var("encoder_weight", stype='row_sparse')
@@ -80,7 +80,6 @@ class SampledSoftmax():
 
     def __init__(self, vocab_size, nhid, num_samples, bptt, num_proj, remove_hits=True):
         self.vocab_size = vocab_size
-        self.nhid = nhid
         self.num_samples = num_samples
         self.bptt = bptt
         self.num_proj = num_proj
@@ -88,7 +87,7 @@ class SampledSoftmax():
         self.embed = mx.sym.contrib.SparseEmbedding
         self.remove_hits = remove_hits
 
-    def forward(self, inputs, batch_size):
+    def __call__(self, inputs, batch_size):
         # inputs = (n, nhid)
         n = batch_size * self.bptt
         F = mx.symbol
@@ -99,7 +98,7 @@ class SampledSoftmax():
         label = F.reshape(label, shape=(-1,), name="label_reshape")
         # (num_samples+n, )
         sample_label = F.concat(sample, label, dim=0)
-        # weight and bias
+        # define weight and bias
         decoder_w = F.var("decoder_weight", stype='row_sparse')
         decoder_b = F.var("decoder_bias", shape=(self.vocab_size, 1))
         # lookup weights and biases
@@ -130,11 +129,11 @@ class SampledSoftmax():
             neg = F.broadcast_equal(label_v, sample_v) * -1e37
             sample_pred = sample_pred + neg
 
-        p_noise_sample = F.var("p_noise_sample", shape=(self.num_samples, ))
-        p_noise_sample = F.reshape(p_noise_sample, shape=(1, self.num_samples))
-        p_noise_target = F.var("p_noise_target", shape=(n, 1))
-        p_target = true_pred - F.log(p_noise_target)
-        p_sample = F.broadcast_sub(sample_pred, F.log(p_noise_sample))
+        prob_sample = F.var("prob_sample", shape=(self.num_samples, ))
+        prob_sample = F.reshape(prob_sample, shape=(1, self.num_samples))
+        prob_target = F.var("prob_target", shape=(n, 1))
+        p_target = true_pred - F.log(prob_target)
+        p_sample = F.broadcast_sub(sample_pred, F.log(prob_sample))
 
         # return logits and new_labels
         # (n, 1+num_samples)

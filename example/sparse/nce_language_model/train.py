@@ -18,10 +18,9 @@
 import numpy as np
 import mxnet as mx
 import run_utils
-import evaluate
 from data import MultiSentenceIter, Vocabulary
 from model import *
-from sparse_module import SparseModule
+from sparse_module import CustomModule
 import os, math, logging, time, sys
 
 def evaluate(mod, data_iter, epoch, log_interval, early_stop=None):
@@ -69,37 +68,27 @@ if __name__ == '__main__':
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))
     # model
-    rnn_module = RNNModel(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
-                          args.dropout, args.num_proj)
+    rnn = RNN(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
+              args.dropout, args.num_proj)
     sampled_softmax = SampledSoftmax(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
 
-    rnn_out, last_states = rnn_module.forward(args.batch_size)
-    logits, new_targets = sampled_softmax.forward(rnn_out, args.batch_size)
+    rnn_out, last_states = rnn(args.batch_size)
+    logits, new_targets = sampled_softmax(rnn_out, args.batch_size)
     loss_scale = args.bptt
-    model = CrossEntropyLoss().forward(logits, new_targets, loss_scale)
+    model = CrossEntropyLoss(rescale_loss=loss_scale)(logits, new_targets)
     
-    state_names = rnn_module.state_names
-
-    sparse_params=['encoder_weight', 'decoder_weight']
+    state_names = rnn.state_names
     data_names = ['data', 'mask']
     label_names = ['label']
 
     # module
-    extra_states = ['sample', 'p_noise_sample', 'p_noise_target']
+    extra_states = ['sample', 'prob_sample', 'prob_target']
 
-    # TODO load optimizer state
-    if args.load_epoch < 0:
-        module = SparseModule(symbol=mx.sym.Group(last_states + [model]), context=ctx,
-                              state_names=(state_names + extra_states),
-                              data_names=data_names, label_names=label_names, sparse_params=sparse_params)
-        module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
-        # currently params are initialized explicitly, choice of init has no impact
-        arg_params = {}
-        module.init_params(initializer=mx.init.Xavier(factor_type='out'))
-    else:
-        module = SparseModule.load(args.checkpoint_dir, 0, context=ctx, state_names=(state_names + extra_states),
-                                   data_names=data_names, label_names=label_names, sparse_params=sparse_params)
-        module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
+    module = CustomModule(symbol=mx.sym.Group(last_states + [model]), context=ctx,
+                          state_names=(state_names + extra_states),
+                          data_names=data_names, label_names=label_names)
+    module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
+    module.init_params(initializer=mx.init.Xavier(factor_type='out'))
 
     # parameters
     all_args = model.list_arguments()
@@ -119,29 +108,28 @@ if __name__ == '__main__':
     ############### eval module ####################
 
     if args.profile:
-        config = ['nhid', args.nhid, 'k', args.k, 'nlayers', args.nlayers,
-                  'dense', args.dense, 'ngpus', ngpus]
+        config = ['dense', args.dense, 'ngpus', ngpus]
         config_str = map(lambda x: str(x), config)
         filename = '-'.join(config_str) + '.json'
         mx.profiler.profiler_set_config(mode='all', filename=filename)
         mx.profiler.profiler_set_state('run')
 
     # train
-    def listify(x):
-        return x if isinstance(x, list) else [x]
-
     def prep_samples(label):
+        def listify(x):
+            return x if isinstance(x, list) else [x]
+
         label_list = listify(label.split(ngpus, axis=0))
-        p_noise_sample_list = []
-        p_noise_target_list = []
+        prob_sample_list = []
+        prob_target_list = []
         sample_list = []
         for label in label_list:
-            sampled_classes, expected_count_true, expected_count_sampled = mx.nd.contrib.rand_zipfian(label.reshape((-1,1)), args.k, ntokens)
+            sampled_classes, exp_cnt_true, exp_cnt_sampled = mx.nd.contrib.rand_zipfian(label.reshape((-1,1)), args.k, ntokens)
             sample_list.append(sampled_classes.astype(np.float32))
-            p_noise_target_list.append(expected_count_true.astype(np.float32))
-            p_noise_sample_list.append(expected_count_sampled.astype(np.float32))
+            prob_target_list.append(exp_cnt_true.astype(np.float32))
+            prob_sample_list.append(exp_cnt_sampled.astype(np.float32))
         sample = mx.nd.concat(*sample_list, dim=0)
-        return (sample_list, p_noise_sample_list, p_noise_target_list), sample
+        return (sample_list, prob_sample_list, prob_target_list), sample
 
     logging.info("Training started ... ")
     for epoch in range(args.epochs):
@@ -181,11 +169,7 @@ if __name__ == '__main__':
                 total_L += outputs[-1][g].copyto(mx.cpu()) / ngpus
 
             # update all parameters (including the weight parameter)
-            if args.rescale_embed:
-                param_idx = module._exec_group.param_names.index('encoder_weight')
-                grad_val = module._exec_group.grad_arrays[param_idx]
-                for g in grad_val:
-                    g[:] *= 128
+            module.rescale_grad(args.rescale_embed, 'encoder_weight')
             norm = module.clip_by_global_norm_per_ctx(max_norm=args.clip, param_names=lstm_args)
             module.update()
             speedometer_param = mx.model.BatchEndParam(epoch=epoch, nbatch=nbatch,
@@ -199,29 +183,27 @@ if __name__ == '__main__':
                     ppl = math.exp(cur_L)
                 except OverflowError:
                     ppl = 1e36
-                logging.info('Iter[%d] Batch [%d] \tloss %.7f, ppl %.7f'%(
-                    epoch, nbatch, cur_L, ppl))
+                logging.info('Iter[%d] Batch [%d] \tloss %.7f, ppl %.7f'%(epoch, nbatch, cur_L, ppl))
                 total_L[:] = 0.0
             nbatch += 1
 
-        if (epoch + 1) % args.checkpoint_interval == 0:
-            module.save_checkpoint(args.checkpoint_dir, epoch % 1, save_optimizer_states=False)
-            nce_mod = SparseModule.load(args.checkpoint_dir, 0, context=mx.cpu(), state_names=(state_names + extra_states),
-                                        data_names=data_names, label_names=label_names, sparse_params=sparse_params)
-            checkpoint_iter = MultiSentenceIter(args.data, vocab,
-                                                args.batch_size, args.bptt)
-            nce_mod.bind(data_shapes=checkpoint_iter.provide_data, label_shapes=checkpoint_iter.provide_label)
+        # run evaluation with full softmax on cpu
+        module.save_checkpoint(args.checkpoint_dir, epoch % 1, save_optimizer_states=False)
+        nce_mod = CustomModule.load(args.checkpoint_dir, 0, context=mx.cpu(), state_names=(state_names + extra_states),
+                                    data_names=data_names, label_names=label_names)
+        checkpoint_iter = MultiSentenceIter(args.data, vocab,
+                                            args.batch_size, args.bptt)
+        nce_mod.bind(data_shapes=checkpoint_iter.provide_data, label_shapes=checkpoint_iter.provide_label)
 
-            ############### eval model ####################
-            eval_model = FullSoftmaxCELoss(rnn_out, ntokens, args.dense)
-            ############### eval module ####################
-            eval_module = SparseModule(symbol=mx.sym.Group(last_states + [eval_model]), context=mx.cpu(), data_names=data_names,
-                                       label_names=label_names, state_names=state_names, sparse_params=sparse_params)
-            test_data_path = args.test
-            eval_data = mx.io.PrefetchingIter(MultiSentenceIter(test_data_path, vocab,
-                                              args.batch_size, args.bptt))
-            eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
-            val_L = evaluate(eval_module, eval_data, epoch, 2, early_stop=None)
+        ############### eval model ####################
+        eval_model = FullSoftmaxCELoss(rnn_out, ntokens, args.dense)
+        ############### eval module ####################
+        eval_module = CustomModule(symbol=mx.sym.Group(last_states + [eval_model]), context=mx.cpu(), data_names=data_names,
+                                   label_names=label_names, state_names=state_names)
+        eval_data = mx.io.PrefetchingIter(MultiSentenceIter(args.test, vocab,
+                                          args.batch_size, args.bptt))
+        eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
+        val_L = evaluate(eval_module, eval_data, epoch, 2, early_stop=None)
         train_data.reset()
     logging.info("Training completed. ")
     if args.profile:
