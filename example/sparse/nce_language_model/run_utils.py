@@ -15,8 +15,9 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import argparse
-def get_parser(is_train=True):
+import argparse, time, logging
+
+def get_parser():
     parser = argparse.ArgumentParser(description='Language Model on GBW')
     parser.add_argument('--data', type=str, default='./data/ptb.train.txt',
                         help='location of the data corpus')
@@ -68,3 +69,29 @@ def get_parser(is_train=True):
     parser.add_argument('--eval-batch-size', type=int, default=32,
                         help='batch size for eval')
     return parser
+
+def evaluate(mod, data_iter, epoch, log_interval):
+    """ Run evaluation on cpu"""
+    start = time.time()
+    total_L = 0.0
+    nbatch = 0
+    mod.set_states(value=0)
+    for batch in data_iter:
+        mod.forward(batch, is_train=False)
+        outputs = mod.get_outputs(merge_multi_context=False)
+        states = outputs[:-1]
+        total_L += outputs[-1][0].asscalar()
+        mod.set_states(states=states)
+        nbatch += 1
+        if (nbatch + 1) % log_interval == 0:
+            logging.info("eval batch %d : %.7f" % (nbatch, total_L / nbatch))
+    data_iter.reset()
+    loss = total_L / nbatch
+    try:
+        ppl = math.exp(loss)
+    except Exception:
+        ppl = 1e37
+    end = time.time()
+    logging.info('Iter[%d]\t\t CE loss %.7f, ppl %.7f. Eval duration = %.2f seconds'%(epoch, loss, ppl, end - start))
+    return loss
+

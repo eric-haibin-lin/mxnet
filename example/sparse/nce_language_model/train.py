@@ -21,37 +21,10 @@ import run_utils
 from data import MultiSentenceIter, Vocabulary
 from model import *
 from sparse_module import CustomModule
-import os, math, logging, time, sys
-
-def evaluate(mod, data_iter, epoch, log_interval, early_stop=None):
-    import time
-    start = time.time()
-    total_L = 0.0
-    nbatch = 0
-    mod.set_states(value=0)
-    for batch in data_iter:
-        mod.forward(batch, is_train=False)
-        outputs = mod.get_outputs(merge_multi_context=False)
-        states = outputs[:-1]
-        total_L += outputs[-1][0].asscalar()
-        mod.set_states(states=states)
-        nbatch += 1
-        if (nbatch + 1) % log_interval == 0:
-            logging.info("eval batch %d : %.7f" % (nbatch, total_L / nbatch))
-        if (nbatch + 1) == early_stop:
-            break
-    data_iter.reset()
-    loss = total_L / nbatch
-    try:
-        ppl = math.exp(loss) if loss < 100 else -1
-    except Exception:
-        ppl = 1e37
-    end = time.time()
-    logging.info('Iter[%d]\t\t CE loss %.7f, ppl %.7f. Time cost = %.2f seconds'%(epoch, loss, ppl, end - start))
-    return loss
+import os, math, logging, sys
 
 if __name__ == '__main__':
-    parser = run_utils.get_parser(is_train=True)
+    parser = run_utils.get_parser()
     args = parser.parse_args()
     mx.random.seed(args.seed)
     np.random.seed(args.seed)
@@ -67,37 +40,38 @@ if __name__ == '__main__':
     ntokens = vocab.num_tokens
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))
-    # model
+    # training model
     rnn = RNN(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
               args.dropout, args.num_proj)
     sampled_softmax = SampledSoftmax(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
 
-    rnn_out, last_states = rnn(args.batch_size)
-    logits, new_targets = sampled_softmax(rnn_out, args.batch_size)
-    loss_scale = args.bptt
-    model = CrossEntropyLoss(rescale_loss=loss_scale)(logits, new_targets)
+    rnn_output, last_states = rnn(args.batch_size)
+    logits, new_targets = sampled_softmax(rnn_output, args.batch_size)
+    rescale_loss = args.bptt
+    train_loss = CrossEntropyLoss(rescale_loss=rescale_loss)(logits, new_targets)
+    train_loss_and_states = mx.sym.Group(last_states + [train_loss])
     
-    state_names = rnn.state_names
-    data_names = ['data', 'mask']
-    label_names = ['label']
 
-    # module
-    extra_states = ['sample', 'prob_sample', 'prob_target']
+    # training module
+    data_names, label_names = ['data', 'mask'], ['label']
+    eval_state_names = rnn.state_names
+    extra_states_names = ['sample', 'prob_sample', 'prob_target']
+    num_extra_states = len(extra_states_names)
+    train_state_names = rnn.state_names + extra_states_names
 
-    module = CustomModule(symbol=mx.sym.Group(last_states + [model]), context=ctx,
-                          state_names=(state_names + extra_states),
+    module = CustomModule(symbol=train_loss_and_states, context=ctx,
+                          state_names=train_state_names,
                           data_names=data_names, label_names=label_names)
     module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
     module.init_params(initializer=mx.init.Xavier(factor_type='out'))
 
     # parameters
-    all_args = model.list_arguments()
-    trainable_args = set(all_args) - set(state_names) - set(extra_states) - set(data_names) - set(label_names)
+    trainable_args = set(train_loss.list_arguments()) - set(train_state_names) - set(data_names) - set(label_names)
     lstm_args = []
     for arg in trainable_args:
         if 'lstm' in arg:
             lstm_args.append(arg)
-    logging.info(lstm_args)
+    logging.debug(lstm_args)
 
     kvstore = None if args.kvstore is None else mx.kv.create(args.kvstore)
     require_rsp_pull = kvstore and not args.dense
@@ -136,7 +110,7 @@ if __name__ == '__main__':
         total_L = mx.nd.array([0.0])
         nbatch = 0
         module.set_states(value=0)
-        state_cache = module.get_states(merge_multi_context=False)[:-len(extra_states)]
+        state_cache = module.get_states(merge_multi_context=False)[:-num_extra_states]
         next_batch = train_data.next()
         next_lists, next_sample = prep_samples(next_batch.label[0])
         stop_iter = False
@@ -178,7 +152,7 @@ if __name__ == '__main__':
             speedometer(speedometer_param)
             # update training metric
             if nbatch % args.log_interval == 0 and nbatch > 0:
-                cur_L = total_L.asscalar() / args.log_interval / loss_scale
+                cur_L = total_L.asscalar() / args.log_interval / rescale_loss
                 try:
                     ppl = math.exp(cur_L)
                 except OverflowError:
@@ -188,22 +162,22 @@ if __name__ == '__main__':
             nbatch += 1
 
         # run evaluation with full softmax on cpu
-        module.save_checkpoint(args.checkpoint_dir, epoch % 1, save_optimizer_states=False)
-        nce_mod = CustomModule.load(args.checkpoint_dir, 0, context=mx.cpu(), state_names=(state_names + extra_states),
+        module.save_checkpoint(args.checkpoint_dir, epoch, save_optimizer_states=False)
+        nce_mod = CustomModule.load(args.checkpoint_dir, epoch, context=mx.cpu(), state_names=train_state_names,
                                     data_names=data_names, label_names=label_names)
-        checkpoint_iter = MultiSentenceIter(args.data, vocab,
-                                            args.batch_size, args.bptt)
+        checkpoint_iter = MultiSentenceIter(args.data, vocab, args.batch_size, args.bptt)
         nce_mod.bind(data_shapes=checkpoint_iter.provide_data, label_shapes=checkpoint_iter.provide_label)
 
-        ############### eval model ####################
-        eval_model = FullSoftmaxCELoss(rnn_out, ntokens, args.dense)
-        ############### eval module ####################
-        eval_module = CustomModule(symbol=mx.sym.Group(last_states + [eval_model]), context=mx.cpu(), data_names=data_names,
-                                   label_names=label_names, state_names=state_names)
+        # eval model
+        eval_loss = FullSoftmaxCELoss(rnn_output, ntokens, args.dense)
+        eval_loss_and_states = mx.sym.Group(last_states + [eval_loss])
+        # eval module
+        eval_module = CustomModule(symbol=eval_loss_and_states, context=mx.cpu(), data_names=data_names,
+                                   label_names=label_names, state_names=eval_state_names)
         eval_data = mx.io.PrefetchingIter(MultiSentenceIter(args.test, vocab,
                                           args.batch_size, args.bptt))
         eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
-        val_L = evaluate(eval_module, eval_data, epoch, 2, early_stop=None)
+        val_L = run_utils.evaluate(eval_module, eval_data, epoch, 2)
         train_data.reset()
     logging.info("Training completed. ")
     if args.profile:
