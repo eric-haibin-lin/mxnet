@@ -17,7 +17,19 @@
 
 import mxnet as mx
 
-def ce_loss(pred, vocab_size, dense):
+class CrossEntropyLoss():
+
+    def __init__(self):
+        self.criterion = mx.gluon.loss.SoftmaxCrossEntropyLoss()
+
+    def forward(self, inputs, labels, scale):
+        loss = self.criterion.hybrid_forward(mx.symbol, inputs, labels)
+        F = mx.symbol
+        mask = F.var('mask')
+        loss = loss * F.reshape(mask, shape=(-1,))
+        return F.make_loss(loss.mean() * scale)
+
+def FullSoftmaxCELoss(pred, vocab_size, dense):
     stype = 'row_sparse' if not dense else 'default'
     decoder_b = mx.sym.var("decoder_bias", shape=(vocab_size, 1))
     decoder_b = mx.sym.reshape(decoder_b, shape=(vocab_size, ))
@@ -26,13 +38,7 @@ def ce_loss(pred, vocab_size, dense):
     label = mx.sym.Variable('label')
     pred = mx.sym.reshape(pred, shape=(-1, vocab_size))
     label = mx.sym.reshape(label, shape=(-1,))
-    pred = mx.sym.log_softmax(pred, axis=-1)
-    loss = -mx.sym.pick(pred, label, axis=-1, keepdims=True)
-    mask = mx.sym.var("mask")
-    mask = mx.sym.reshape(mask, shape=(-1, 1))
-    loss = loss * mask
-    loss = mx.sym.make_loss(mx.sym.mean(loss), name="nll")
-    return loss
+    return CrossEntropyLoss().forward(pred, label, 1)
 
 class RNNModel():
 
@@ -70,7 +76,7 @@ class RNNModel():
         outputs = F.reshape(outputs, shape=(-1, self.dim))
         return outputs, states
 
-class SampledModule():
+class SampledSoftmax():
 
     def __init__(self, vocab_size, nhid, num_samples, bptt, num_proj, remove_hits=True):
         self.vocab_size = vocab_size
@@ -135,15 +141,3 @@ class SampledModule():
         logits = F.concat(p_target, p_sample, dim=1)
         new_targets = F.zeros(shape=(n))
         return logits, new_targets
-
-class CrossEntropyLoss():
-
-    def __init__(self):
-        self.criterion = mx.gluon.loss.SoftmaxCrossEntropyLoss()
-
-    def forward(self, inputs, labels, scale):
-        loss = self.criterion.hybrid_forward(mx.symbol, inputs, labels)
-        F = mx.symbol
-        mask = F.var('mask')
-        loss = loss * F.reshape(mask, shape=(-1,))
-        return F.make_loss(loss.mean() * scale)

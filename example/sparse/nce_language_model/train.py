@@ -24,6 +24,33 @@ from model import *
 from sparse_module import SparseModule
 import os, math, logging, time, sys
 
+def evaluate(mod, data_iter, epoch, log_interval, early_stop=None):
+    import time
+    start = time.time()
+    total_L = 0.0
+    nbatch = 0
+    mod.set_states(value=0)
+    for batch in data_iter:
+        mod.forward(batch, is_train=False)
+        outputs = mod.get_outputs(merge_multi_context=False)
+        states = outputs[:-1]
+        total_L += outputs[-1][0].asscalar()
+        mod.set_states(states=states)
+        nbatch += 1
+        if (nbatch + 1) % log_interval == 0:
+            logging.info("eval batch %d : %.7f" % (nbatch, total_L / nbatch))
+        if (nbatch + 1) == early_stop:
+            break
+    data_iter.reset()
+    loss = total_L / nbatch
+    try:
+        ppl = math.exp(loss) if loss < 100 else -1
+    except Exception:
+        ppl = 1e37
+    end = time.time()
+    logging.info('Iter[%d]\t\t CE loss %.7f, ppl %.7f. Time cost = %.2f seconds'%(epoch, loss, ppl, end - start))
+    return loss
+
 if __name__ == '__main__':
     parser = run_utils.get_parser(is_train=True)
     args = parser.parse_args()
@@ -34,18 +61,17 @@ if __name__ == '__main__':
     logging.info(args)
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.cpu()]
     ngpus = len(ctx)
-    logging.info(sys.argv)
+    logging.debug(sys.argv)
 
     # data
     vocab = Vocabulary.from_file(args.vocab)
     ntokens = vocab.num_tokens
-
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))
     # model
     rnn_module = RNNModel(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
                           args.dropout, args.num_proj)
-    sampled_softmax = SampledModule(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
+    sampled_softmax = SampledSoftmax(ntokens, args.nhid, args.k, args.bptt, args.num_proj)
 
     rnn_out, last_states = rnn_module.forward(args.batch_size)
     logits, new_targets = sampled_softmax.forward(rnn_out, args.batch_size)
@@ -61,7 +87,6 @@ if __name__ == '__main__':
     # module
     extra_states = ['sample', 'p_noise_sample', 'p_noise_target']
 
-    import numpy as np
     # TODO load optimizer state
     if args.load_epoch < 0:
         module = SparseModule(symbol=mx.sym.Group(last_states + [model]), context=ctx,
@@ -71,7 +96,6 @@ if __name__ == '__main__':
         # currently params are initialized explicitly, choice of init has no impact
         arg_params = {}
         module.init_params(initializer=mx.init.Xavier(factor_type='out'))
-
     else:
         module = SparseModule.load(args.checkpoint_dir, 0, context=ctx, state_names=(state_names + extra_states),
                                    data_names=data_names, label_names=label_names, sparse_params=sparse_params)
@@ -162,33 +186,24 @@ if __name__ == '__main__':
                 grad_val = module._exec_group.grad_arrays[param_idx]
                 for g in grad_val:
                     g[:] *= 128
-            if args.per_ctx_clip:
-                norm = module.clip_by_global_norm_per_ctx(max_norm=args.clip, param_names=lstm_args)
-            else:
-                norm = module.clip_by_global_norm(max_norm=args.clip, param_names=lstm_args)
-            #if nbatch % (args.log_interval / 10) == 0:
-                #print(norm)
+            norm = module.clip_by_global_norm_per_ctx(max_norm=args.clip, param_names=lstm_args)
             module.update()
             speedometer_param = mx.model.BatchEndParam(epoch=epoch, nbatch=nbatch,
                                                        eval_metric=None, locals=locals())
 
             speedometer(speedometer_param)
             # update training metric
-            # TODO (revert >=)
             if nbatch % args.log_interval == 0 and nbatch > 0:
                 cur_L = total_L.asscalar() / args.log_interval / loss_scale
                 try:
-                    ppl = math.exp(cur_L) if cur_L < 100 else -1.0
+                    ppl = math.exp(cur_L)
                 except OverflowError:
-                    ppl = -1.0
+                    ppl = 1e36
                 logging.info('Iter[%d] Batch [%d] \tloss %.7f, ppl %.7f'%(
                     epoch, nbatch, cur_L, ppl))
-                #print('Batch [%d] \tloss %.7f, ppl %.7f \n'%(nbatch, cur_L, ppl))
                 total_L[:] = 0.0
             nbatch += 1
-            if nbatch == args.checkpoint_interval:
-                #exit()
-                pass
+
         if (epoch + 1) % args.checkpoint_interval == 0:
             module.save_checkpoint(args.checkpoint_dir, epoch % 1, save_optimizer_states=False)
             nce_mod = SparseModule.load(args.checkpoint_dir, 0, context=mx.cpu(), state_names=(state_names + extra_states),
@@ -198,7 +213,7 @@ if __name__ == '__main__':
             nce_mod.bind(data_shapes=checkpoint_iter.provide_data, label_shapes=checkpoint_iter.provide_label)
 
             ############### eval model ####################
-            eval_model = ce_loss(rnn_out, ntokens, args.dense)
+            eval_model = FullSoftmaxCELoss(rnn_out, ntokens, args.dense)
             ############### eval module ####################
             eval_module = SparseModule(symbol=mx.sym.Group(last_states + [eval_model]), context=mx.cpu(), data_names=data_names,
                                        label_names=label_names, state_names=state_names, sparse_params=sparse_params)
@@ -206,7 +221,7 @@ if __name__ == '__main__':
             eval_data = mx.io.PrefetchingIter(MultiSentenceIter(test_data_path, vocab,
                                               args.batch_size, args.bptt))
             eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
-            val_L = evaluate.evaluate(eval_module, eval_data, epoch, 2, early_stop=None)
+            val_L = evaluate(eval_module, eval_data, epoch, 2, early_stop=None)
         train_data.reset()
     logging.info("Training completed. ")
     if args.profile:

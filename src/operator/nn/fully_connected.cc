@@ -148,12 +148,11 @@ inline static bool FCStorageType(const nnvm::NodeAttrs& attrs,
   }
   CHECK_EQ(in_attrs->size(), in_expected);
   CHECK_EQ(out_attrs->size(), 1);
-
-  DispatchMode wanted_mode = DispatchMode::kFComputeEx;
+  // dispatch to kFComputeEx is fine even if all inputs are dense and no MKL is present
   bool dispatched = false;
   if (!dispatched && valid_data && valid_weight && valid_bias) {
     dispatched = storage_type_assign(out_attrs, mxnet::kDefaultStorage,
-                                     dispatch_mode, wanted_mode);
+                                     dispatch_mode, DispatchMode::kFComputeEx);
   }
   if (!dispatched) {
     dispatched = dispatch_fallback(out_attrs, dispatch_mode);

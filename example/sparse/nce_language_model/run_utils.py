@@ -21,9 +21,7 @@ def _add_train_args(parser):
     parser.add_argument('--lr', type=float, default=0.1,
                         help='initial learning rate')
     parser.add_argument('--clip', type=float, default=0.2,
-                        help='gradient clipping by global norm')
-    parser.add_argument('--per-ctx-clip', action='store_true',
-                        help='clip per ctx')
+                        help='gradient clipping by global norm. Done per context.')
     parser.add_argument('--checkpoint-interval', type=int, default=1,
                         help='checkpoint every x epochs')
     # TODO change default value
