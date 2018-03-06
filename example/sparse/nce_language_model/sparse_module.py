@@ -2,8 +2,8 @@ import logging
 import warnings
 
 import mxnet as mx
+import numpy as np
 from mxnet.module import Module
-from mxnet.model import _create_kvstore, _initialize_kvstore, _update_params, _update_params_on_kvstore
 from mxnet.model import load_checkpoint
 
 class CustomModule(Module):
@@ -18,7 +18,7 @@ class CustomModule(Module):
                                            fixed_param_names=fixed_param_names, state_names=state_names,
                                            group2ctxs=group2ctxs, compression_params=compression_params)
 
-    def sync_sparse_params(self, param_rowids):
+    def prepare_sparse_params(self, param_rowids):
         '''Prepares the module for processing a data batch.
         Usually involves switching bucket and reshaping.
         Parameters
@@ -27,7 +27,14 @@ class CustomModule(Module):
         if not self._kvstore:
             return
         assert(isinstance(param_rowids, dict))
-        for param_name, rowid in param_rowids.items():
+        for param_name, rowids in param_rowids.items():
+            if isinstance(rowids, (tuple, list)):
+                rowids_1d = []
+                for r in rowids:
+                    rowids_1d.append(r.reshape((-1,)).astype(np.int64))
+                rowid = mx.nd.concat(*rowids_1d, dim=0)
+            else:
+                rowid = rowids
             param_idx = self._exec_group.param_names.index(param_name)
             param_val = self._exec_group.param_arrays[param_idx]
             self._kvstore.row_sparse_pull(param_name, param_val, row_ids=rowid,

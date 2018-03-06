@@ -31,7 +31,7 @@ if __name__ == '__main__':
     head = '%(asctime)-15s %(message)s'
     logging.basicConfig(level=logging.INFO, format=head)
     logging.info(args)
-    ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.cpu()]
+    ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.gpu()]
     ngpus = len(ctx)
     logging.debug(sys.argv)
 
@@ -66,7 +66,8 @@ if __name__ == '__main__':
     module.init_params(initializer=mx.init.Xavier(factor_type='out'))
 
     # parameters
-    trainable_args = set(train_loss.list_arguments()) - set(train_state_names) - set(data_names) - set(label_names)
+    trainable_args = set(train_loss.list_arguments()) - set(train_state_names) - \
+                     set(data_names) - set(label_names)
     lstm_args = []
     for arg in trainable_args:
         if 'lstm' in arg:
@@ -75,11 +76,12 @@ if __name__ == '__main__':
 
     kvstore = None if args.kvstore is None else mx.kv.create(args.kvstore)
     require_rsp_pull = kvstore and not args.dense
-    optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, rescale_grad=1.0/ngpus, eps=args.eps)
+    optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, \
+                                    rescale_grad=1.0/ngpus, eps=args.eps)
 
     module.init_optimizer(optimizer=optimizer, kvstore=kvstore)
-    speedometer = mx.callback.Speedometer(args.batch_size * ngpus * args.bptt, args.log_interval)
-    ############### eval module ####################
+    num_words_per_batch = args.batch_size * ngpus * args.bptt
+    speedometer = mx.callback.Speedometer(num_words_per_batch, args.log_interval)
 
     if args.profile:
         config = ['dense', args.dense, 'ngpus', ngpus]
@@ -89,21 +91,6 @@ if __name__ == '__main__':
         mx.profiler.profiler_set_state('run')
 
     # train
-    def prep_samples(label):
-        def listify(x):
-            return x if isinstance(x, list) else [x]
-
-        label_list = listify(label.split(ngpus, axis=0))
-        prob_sample_list = []
-        prob_target_list = []
-        sample_list = []
-        for label in label_list:
-            sampled_classes, exp_cnt_true, exp_cnt_sampled = mx.nd.contrib.rand_zipfian(label.reshape((-1,1)), args.k, ntokens)
-            sample_list.append(sampled_classes.astype(np.float32))
-            prob_target_list.append(exp_cnt_true.astype(np.float32))
-            prob_sample_list.append(exp_cnt_sampled.astype(np.float32))
-        sample = mx.nd.concat(*sample_list, dim=0)
-        return (sample_list, prob_sample_list, prob_target_list), sample
 
     logging.info("Training started ... ")
     for epoch in range(args.epochs):
@@ -112,33 +99,29 @@ if __name__ == '__main__':
         module.set_states(value=0)
         state_cache = module.get_states(merge_multi_context=False)[:-num_extra_states]
         next_batch = train_data.next()
-        next_lists, next_sample = prep_samples(next_batch.label[0])
+        next_sampled_values = generate_samples(next_batch.label[0], ngpus, args.k, ntokens)
         stop_iter = False
         while not stop_iter:
             batch = next_batch
-            label = batch.label[0]
-            lists, sample = next_lists, next_sample
+            lists = next_sampled_values
             state_cache += lists
             module.set_states(states=state_cache)
             if require_rsp_pull:
-                data_1d = batch.data[0].reshape((-1,)).astype(np.float32)
-                label_1d = label.reshape((-1,))
-                sample_1d = sample.reshape((-1,)).astype(np.float32)
-                row_ids = mx.nd.concat(label_1d, sample_1d, dim=0)
-                param_rowids = {'encoder_weight': data_1d.astype(np.int64), 'decoder_weight': row_ids.astype(np.int64)}
-                # sync_sparse_params should be part of forward API
-                module.sync_sparse_params(param_rowids)
-
+                data = batch.data[0]
+                target_ids = [batch.label[0]]
+                sampled_ids = lists[0]
+                param_rowids = {'encoder_weight': data,
+                                'decoder_weight': sampled_ids + target_ids}
+                module.prepare_sparse_params(param_rowids)
             module.forward(batch)
             try:
                 next_batch = train_data.next()
-                next_lists, next_sample = prep_samples(next_batch.label[0])
+                next_sampled_values = generate_samples(next_batch.label[0], ngpus, args.k, ntokens)
             except StopIteration:
                 stop_iter = True
             outputs = module.get_outputs(merge_multi_context=False)
             state_cache = outputs[:-1]
             module.backward()
-            # TODO haibin add_n
             for g in range(ngpus):
                 total_L += outputs[-1][g].copyto(mx.cpu()) / ngpus
 
@@ -163,10 +146,12 @@ if __name__ == '__main__':
 
         # run evaluation with full softmax on cpu
         module.save_checkpoint(args.checkpoint_dir, epoch, save_optimizer_states=False)
-        nce_mod = CustomModule.load(args.checkpoint_dir, epoch, context=mx.cpu(), state_names=train_state_names,
-                                    data_names=data_names, label_names=label_names)
-        checkpoint_iter = MultiSentenceIter(args.data, vocab, args.batch_size, args.bptt)
-        nce_mod.bind(data_shapes=checkpoint_iter.provide_data, label_shapes=checkpoint_iter.provide_label)
+        cpu_train_mod = CustomModule.load(args.checkpoint_dir, epoch, context=mx.cpu(),
+                                          state_names=train_state_names,
+                                          data_names=data_names, label_names=label_names)
+        eval_data = mx.io.PrefetchingIter(MultiSentenceIter(args.test, vocab,
+                                          args.batch_size, args.bptt))
+        cpu_train_mod.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label)
 
         # eval model
         eval_loss = FullSoftmaxCELoss(rnn_output, ntokens, args.dense)
@@ -174,9 +159,8 @@ if __name__ == '__main__':
         # eval module
         eval_module = CustomModule(symbol=eval_loss_and_states, context=mx.cpu(), data_names=data_names,
                                    label_names=label_names, state_names=eval_state_names)
-        eval_data = mx.io.PrefetchingIter(MultiSentenceIter(args.test, vocab,
-                                          args.batch_size, args.bptt))
-        eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label, shared_module=nce_mod, for_training=False)
+        eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label,
+                         shared_module=cpu_train_mod, for_training=False)
         val_L = run_utils.evaluate(eval_module, eval_data, epoch, 2)
         train_data.reset()
     logging.info("Training completed. ")

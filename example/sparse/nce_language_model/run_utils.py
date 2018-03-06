@@ -46,7 +46,7 @@ def get_parser():
     parser.add_argument('--k', type=int, default=8192,
                         help='number of noise samples to estimate')
     parser.add_argument('--gpus', type=str,
-                        help='list of gpus to run, e.g. 0 or 0,2,5. empty means using cpu.')
+                        help='list of gpus to run, e.g. 0 or 0,2,5. empty means using gpu(0).')
     parser.add_argument('--dense', action='store_true',
                         help='use dense embedding instead of sparse embedding')
     parser.add_argument('--log-interval', type=int, default=200,

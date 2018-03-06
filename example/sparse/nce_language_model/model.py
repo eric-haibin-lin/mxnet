@@ -16,6 +16,7 @@
 # under the License.
 
 import mxnet as mx
+import numpy as np
 
 class CrossEntropyLoss():
     def __init__(self, rescale_loss=1):
@@ -140,3 +141,19 @@ class SampledSoftmax():
         logits = F.concat(p_target, p_sample, dim=1)
         new_targets = F.zeros(shape=(n))
         return logits, new_targets
+
+def generate_samples(label, num_splits, num_samples, num_classes):
+    def listify(x):
+        return x if isinstance(x, list) else [x]
+    label_splits = listify(label.split(num_splits, axis=0))
+    prob_samples = []
+    prob_targets = []
+    samples = []
+    for label_split in label_splits:
+        label_split_2d = label_split.reshape((-1,1))
+        sampled_value = mx.nd.contrib.rand_zipfian(label_split_2d, num_samples, num_classes)
+        sampled_classes, exp_cnt_true, exp_cnt_sampled = sampled_value
+        samples.append(sampled_classes.astype(np.float32))
+        prob_targets.append(exp_cnt_true.astype(np.float32))
+        prob_samples.append(exp_cnt_sampled.astype(np.float32))
+    return samples, prob_samples, prob_targets
