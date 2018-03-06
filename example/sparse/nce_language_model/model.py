@@ -20,6 +20,7 @@ import mxnet as mx
 def ce_loss(pred, vocab_size, dense):
     stype = 'row_sparse' if not dense else 'default'
     decoder_b = mx.sym.var("decoder_bias", shape=(vocab_size, 1))
+    decoder_b = mx.sym.reshape(decoder_b, shape=(vocab_size, ))
     decoder_w = mx.sym.var('decoder_weight', stype=stype)
     pred = mx.sym.FullyConnected(data=pred, weight=decoder_w, num_hidden=vocab_size, name='pred', bias=decoder_b)
     label = mx.sym.Variable('label')

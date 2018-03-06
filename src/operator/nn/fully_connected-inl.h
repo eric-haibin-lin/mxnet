@@ -95,12 +95,13 @@ void FCForward(const OpContext &ctx, const FullyConnectedParam &param,
         Shape2(oshape[0], oshape.ProdShape(1, oshape.ndim())), s);
   }
 
+  CHECK_EQ(data.shape_[1], wmat.shape_[1])
+    << "weight.data().shape[1] != data.data().shape[1]. Not supported by FCForward";
   // Legacy approach shown here for comparison:
   //   out = dot(data, wmat.T());
   linalg_gemm(data, wmat, out, false, true, s);
   if (!param.no_bias) {
-    Tensor<xpu, 1, DType> bias = in_data[fullc::kBias].reshape(Shape1(in_data[fullc::kBias].shape_[0])).get<xpu, 1, DType>(s);
-    //Tensor<xpu, 1, DType> bias = in_data[fullc::kBias].get<xpu, 1, DType>(s);
+    Tensor<xpu, 1, DType> bias = in_data[fullc::kBias].get<xpu, 1, DType>(s);
     out += repmat(bias, data.size(0));
   }
 }
@@ -148,8 +149,7 @@ void FCBackward(const OpContext &ctx, const FullyConnectedParam &param,
   linalg_gemm(grad, data, gwmat, true, false, s, req[fullc::kWeight]);
   // gradient of bias
   if (!param.no_bias) {
-    Tensor<xpu, 1, DType> gbias = in_grad[fullc::kBias].reshape(Shape1(in_grad[fullc::kBias].shape_[0])).get<xpu, 1, DType>(s);
-    //Tensor<xpu, 1, DType> gbias = in_grad[fullc::kBias].get<xpu, 1, DType>(s);
+    Tensor<xpu, 1, DType> gbias = in_grad[fullc::kBias].get<xpu, 1, DType>(s);
     Assign(gbias, req[fullc::kBias], sum_rows(grad));
   }
   // gradient of data
