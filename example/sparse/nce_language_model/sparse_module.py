@@ -19,10 +19,12 @@ class CustomModule(Module):
                                            group2ctxs=group2ctxs, compression_params=compression_params)
 
     def prepare_sparse_params(self, param_rowids):
-        '''Prepares the module for processing a data batch.
-        Usually involves switching bucket and reshaping.
+        '''Prepares the module for processing a data batch by pulling row_sparse
+        parameters from kvstore to all devices based on rowids.
+
         Parameters
         ----------
+        param_rowids : dict of str to NDArray of list of NDArrays
         '''
         if not self._kvstore:
             return
@@ -96,7 +98,7 @@ class CustomModule(Module):
         mx.nd.save(fname, save_dict)
 
     def get_params_from_kv(self, arg_params, aux_params):
-        """ Copy data from each executor to `arg_params` and `aux_params`.
+        """ Copy data from kvstore to `arg_params` and `aux_params`.
         Parameters
         ----------
         arg_params : list of NDArray
@@ -113,42 +115,30 @@ class CustomModule(Module):
             if block[0].stype == 'row_sparse':
                 row_ids = mx.nd.arange(start=0, stop=block[0].shape[0], dtype='int64')
                 self._kvstore.row_sparse_pull(name, arg_params[name], row_ids=row_ids)
-            elif block[0].stype == 'default':
-                self._kvstore.pull(name, out=arg_params[name])
             else:
-                raise NotImplementedError()
-        # TODO handle aux names
-        #assert(self._exec_group.aux_names is None or self._exec_group.aux_arrays is None)
-        #for name, block in zip(self._exec_group.aux_names, self._exec_group.aux_arrays):
-        #    if block[0].stype == 'row_sparse':
-        #        row_ids = mx.nd.arange(start=0, stop=block[0].shape[0])
-        #        self._kvstore.row_sparse_pull(name, aux_params[name], row_ids=row_ids)
-        #    elif block[0].stype == 'default':
-        #        self._kvstore.pull(name, out=aux_params[name])
-        #    else:
-        #        raise NotImplementedError()
+                assert(block[0].stype == 'default')
+                self._kvstore.pull(name, out=arg_params[name])
+        if len(aux_params) > 0:
+            raise NotImplementedError()
         return arg_params, aux_params
 
     def clip_by_global_norm_per_ctx(self, max_norm=1.0, param_names=None):
         """Clips gradient norm.
+
         The norm is computed over all gradients together, as if they were
          concatenated into a single vector. Gradients are modified in-place.
+
         The method is first used in
          `[ICML2013] On the difficulty of training recurrent neural networks`
-        Parameters
-        ----------
-        max_norm : float or int
-            The maximum clipping threshold of the gradient norm.
-        Returns
-        -------
-        norm_val : float
-            The computed norm of the gradients.
+
+        Note that the gradients are concatenated per context in this implementation.
+
         Examples
         --------
         An example of using clip_grad_norm to clip the gradient before updating the parameters::
             >>> #Get the gradient via back-propagation
             >>> net.forward_backward(data_batch=data_batch)
-            >>> norm_val = net.clip_by_global_norm(max_norm=1.0)
+            >>> norm_val = net.clip_by_global_norm(max_norm=2.0, param_names='w0')
             >>> net.update()
         """
         assert self.binded and self.params_initialized and self.optimizer_initialized
@@ -166,6 +156,7 @@ class CustomModule(Module):
             mx.gluon.utils.clip_global_norm(grad_array_per_ctx[i], max_norm)
 
     def rescale_grad(self, scale=None, param_name=None):
+        """ Rescale the gradient of provided parameters by a certain scale """
         if scale is None or param_name is None:
             return
         param_idx = self._exec_group.param_names.index(param_name)

@@ -47,7 +47,7 @@ if __name__ == '__main__':
     ntokens = vocab.num_tokens
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))
-    # rnn model
+    # model
     model = Model(args, ntokens, rescale_loss)
     train_loss_and_states = model.train()
     eval_loss_and_states = model.eval()
@@ -64,19 +64,22 @@ if __name__ == '__main__':
     module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
     module.init_params(initializer=mx.init.Xavier(factor_type='out'))
 
+    # create kvstore and sparse optimizer
     kvstore = mx.kv.create('device')
     optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, \
                                     rescale_grad=1.0/ngpus, eps=args.eps)
-
     module.init_optimizer(optimizer=optimizer, kvstore=kvstore)
+
+    # speedometer
     num_words_per_batch = args.batch_size * ngpus * args.bptt
     speedometer = mx.callback.Speedometer(num_words_per_batch, args.log_interval)
 
-    # train
+    # training loop
     logging.info("Training started ... ")
     for epoch in range(args.epochs):
         total_L = mx.nd.array([0.0])
         nbatch = 0
+        # reset initial LSTMP states
         module.set_states(value=0)
         state_cache = module.get_states(merge_multi_context=False)[:-num_sample_names]
         next_batch = train_data.next()
@@ -84,35 +87,41 @@ if __name__ == '__main__':
         stop_iter = False
         while not stop_iter:
             batch = next_batch
-            lists = next_sampled_values
-            state_cache += lists
+            state_cache += next_sampled_values
+            # propagate LSTMP states from the previous batch
             module.set_states(states=state_cache)
+            # selectively pull row_sparse weight to multiple devices based on the data batch
             target_ids = [batch.label[0]]
-            sampled_ids = lists[0]
+            sampled_ids = next_sampled_values[0]
             param_rowids = {'encoder_weight': batch.data[0],
                             'decoder_weight': sampled_ids + target_ids,
                             'decoder_bias': sampled_ids + target_ids}
             module.prepare_sparse_params(param_rowids)
+            # forward
             module.forward(batch)
             try:
+                # prefetch the next batch of data and samples
                 next_batch = train_data.next()
                 next_sampled_values = generate_samples(next_batch.label[0], ngpus,
                                                        args.k, ntokens)
             except StopIteration:
                 stop_iter = True
+            # cache LSTMP states of the current batch
             outputs = module.get_outputs(merge_multi_context=False)
             state_cache = outputs[:-1]
+            # backward
             module.backward()
             for g in range(ngpus):
                 total_L += outputs[-1][g].copyto(mx.cpu()) / ngpus
 
-            # update all parameters (including the weight parameter)
+            # rescaling the gradient for embedding layer emperically leads to faster convergence
             module.rescale_grad(args.rescale_embed, 'encoder_weight')
+            # clip lstm params on each device based on norm
             norm = module.clip_by_global_norm_per_ctx(max_norm=args.clip, param_names=model.lstm_args)
+            # update parameters
             module.update()
             speedometer_param = mx.model.BatchEndParam(epoch=epoch, nbatch=nbatch,
                                                        eval_metric=None, locals=locals())
-
             speedometer(speedometer_param)
             # update training metric
             if nbatch % args.log_interval == 0 and nbatch > 0:
@@ -127,6 +136,7 @@ if __name__ == '__main__':
         cpu_train_mod = CustomModule.load(args.checkpoint_dir, epoch, context=mx.cpu(),
                                           state_names=train_state_names,
                                           data_names=data_names, label_names=label_names)
+        # eval data iter
         eval_data = mx.io.PrefetchingIter(MultiSentenceIter(args.test, vocab,
                                           args.batch_size, args.bptt))
         cpu_train_mod.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label)
@@ -134,8 +144,9 @@ if __name__ == '__main__':
         # eval module
         eval_module = CustomModule(symbol=eval_loss_and_states, context=mx.cpu(), data_names=data_names,
                                    label_names=label_names, state_names=eval_state_names)
+        # use `shared_module` to share parameter with the training module
         eval_module.bind(data_shapes=eval_data.provide_data, label_shapes=eval_data.provide_label,
                          shared_module=cpu_train_mod, for_training=False)
-        val_L = run_utils.evaluate(eval_module, eval_data, epoch, 2)
+        val_L = run_utils.evaluate(eval_module, eval_data, epoch, 20)
         train_data.reset()
     logging.info("Training completed. ")

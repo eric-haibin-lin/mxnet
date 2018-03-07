@@ -18,9 +18,9 @@
 # under the License.
 
 echo ""
-echo "NOTE: Please review the licensing of the datasets in this script before proceeding"
-echo "See https://catalog.ldc.upenn.edu/ldc99t42 for the licensing"
-echo "Once that is done, please uncomment the wget commands in this script"
+echo "NOTE: This script only downloads the pre-processed vocabulary file. "
+echo "For the full training and testing dataset, please download from "
+echo "http://www.statmt.org/lm-benchmark/1-billion-word-language-modeling-benchmark-r13output.tar.gz"
 echo ""
 
 RNN_DIR=$(cd `dirname $0`; pwd)
@@ -31,7 +31,4 @@ if [[ ! -d "${DATA_DIR}" ]]; then
   mkdir -p ${DATA_DIR}
 fi
 
-wget -P ${DATA_DIR} https://raw.githubusercontent.com/dmlc/web-data/master/mxnet/ptb/ptb.train.txt;
-wget -P ${DATA_DIR} https://raw.githubusercontent.com/dmlc/web-data/master/mxnet/ptb/ptb.valid.txt;
-wget -P ${DATA_DIR} https://raw.githubusercontent.com/dmlc/web-data/master/mxnet/ptb/ptb.test.txt;
-wget -P ${DATA_DIR} https://raw.githubusercontent.com/dmlc/web-data/master/mxnet/tinyshakespeare/input.txt;
+wget -P ${DATA_DIR} wget https://s3-us-west-2.amazonaws.com/sparse-dataset/gbw/1b_word_vocab.txt;

@@ -20,7 +20,9 @@ import numpy as np
 import codecs, glob, random, logging
 
 class Vocabulary(object):
-
+    """ A dictionary for words.
+        Adapeted from @rafaljozefowicz's implementation.
+    """
     def __init__(self):
         self._token_to_id = {}
         self._token_to_count = {}
@@ -62,6 +64,7 @@ class Vocabulary(object):
         self._unk_id = self.get_id(self.unk)
 
     def get_id(self, token):
+        # Unseen token are mapped to UNK
         return self._token_to_id.get(token, self.unk_id)
 
     def get_token(self, id_):
@@ -78,7 +81,9 @@ class Vocabulary(object):
         return vocab
 
 class Dataset(object):
-
+    """ A dataset for truncated bptt with multiple sentences.
+        Adapeted from @rafaljozefowicz's implementation.
+     """
     def __init__(self, vocab, file_pattern, deterministic=False):
         self._vocab = vocab
         self._file_pattern = file_pattern
@@ -153,7 +158,10 @@ class Dataset(object):
             yield value
 
 class MultiSentenceIter(mx.io.DataIter):
-    "An iterator that returns the a batch of sequence each time"
+    """ An MXNet iterator that returns the a batch of sequence data and label each time.
+        It also returns a mask which indicates padded/missing data at the end of the dataset.
+        The iterator re-shuffles the data when reset is called.
+    """
     def __init__(self, data_file, vocab, batch_size, bptt):
         super(MultiSentenceIter, self).__init__()
         self.batch_size = batch_size

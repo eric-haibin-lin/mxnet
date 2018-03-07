@@ -20,6 +20,7 @@ import mxnet.symbol as S
 import numpy as np
 
 def cross_entropy_loss(inputs, labels, rescale_loss=1):
+    """ cross entropy loss """
     criterion = mx.gluon.loss.SoftmaxCrossEntropyLoss()
     loss = criterion.hybrid_forward(S, inputs, labels)
     mask = S.var('mask')
@@ -27,6 +28,7 @@ def cross_entropy_loss(inputs, labels, rescale_loss=1):
     return S.make_loss(loss.mean() * rescale_loss)
 
 def rnn(bptt, vocab_size, num_embed, nhid, num_layers, dropout, num_proj, batch_size):
+    """ word embedding + LSTM Projected """
     embed = mx.sym.contrib.SparseEmbedding
     state_names = []
     data = S.var('data')
@@ -55,12 +57,13 @@ def rnn(bptt, vocab_size, num_embed, nhid, num_layers, dropout, num_proj, batch_
 
 def sampled_softmax(num_classes, num_samples, in_dim, inputs, weight, bias,
                     sampled_values, remove_accidental_hits=True):
-
+        """ Sampled softmax via importance sampling.
+            This under-estimates the full softmax and is only used for training.
+        """
+        # inputs = (n, in_dim)
         embed = mx.sym.contrib.SparseEmbedding
         sample, prob_sample, prob_target = sampled_values
 
-        # inputs = (n, in_dim)
-        S = mx.symbol
         # (num_samples, )
         sample = S.var('sample', shape=(num_samples,), dtype='float32')
         # (n, )
@@ -109,6 +112,9 @@ def sampled_softmax(num_classes, num_samples, in_dim, inputs, weight, bias,
         return logits, new_targets
 
 def generate_samples(label, num_splits, num_samples, num_classes):
+    """ Split labels into `num_splits` and
+        generate candidates based on log-uniform distribution.
+    """
     def listify(x):
         return x if isinstance(x, list) else [x]
     label_splits = listify(label.split(num_splits, axis=0))
@@ -125,6 +131,7 @@ def generate_samples(label, num_splits, num_samples, num_classes):
     return samples, prob_samples, prob_targets
 
 class Model():
+    """ LSTMP with Importance Sampling """
     def __init__(self, args, ntokens, rescale_loss):
         out = rnn(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
                   args.dropout, args.num_proj, args.batch_size)
