@@ -56,7 +56,10 @@ static bool FullyConnectedShape(const nnvm::NodeAttrs& attrs,
   }
   SHAPE_ASSIGN_CHECK(*in_shape, fullc::kWeight, Shape2(param.num_hidden, num_input));
   if (!param.no_bias) {
-    SHAPE_ASSIGN_CHECK(*in_shape, fullc::kBias, Shape1(param.num_hidden));
+    if (!shape_assign(&(*in_shape)[fullc::kBias], Shape1(param.num_hidden)) &&
+        !shape_assign(&(*in_shape)[fullc::kBias], Shape2(param.num_hidden, 1))) {
+      LOG(FATAL) << "Unexpected shape for bias " << (*in_shape)[fullc::kBias];
+    }
   }
 
   if (!param.flatten) {
@@ -144,7 +147,7 @@ inline static bool FCStorageType(const nnvm::NodeAttrs& attrs,
   uint32_t in_expected = 2;
   if (!param.no_bias) {
     in_expected = 3;
-    valid_bias = in_attrs->at(2) == kDefaultStorage;
+    valid_bias = in_attrs->at(2) == kDefaultStorage || in_attrs->at(2) == kRowSparseStorage;
   }
   CHECK_EQ(in_attrs->size(), in_expected);
   CHECK_EQ(out_attrs->size(), 1);
@@ -207,9 +210,9 @@ The learnable parameters include both ``weight`` and ``bias``.
 
 If ``no_bias`` is set to be true, then the ``bias`` term is ignored.
 
-Note that the operator also supports forward computation with `row_sparse` weight,
-where the length of `weight.indices` must be equal to `num_hidden`. This could be
-used for model inference with `row_sparse` weight trained with `SparseEmbedding`.
+Note that the operator also supports forward computation with `row_sparse` weight and bias,
+where the length of `weight.indices` and `bias.indices` must be equal to `num_hidden`.
+This could be used for model inference with `row_sparse` weights trained with `SparseEmbedding`.
 
 )code" ADD_FILELINE)
 .set_num_inputs([](const NodeAttrs& attrs) {

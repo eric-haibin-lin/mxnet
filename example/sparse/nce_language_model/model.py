@@ -74,8 +74,8 @@ def sampled_softmax(num_classes, num_samples, in_dim, inputs, weight, bias,
                                      input_dim=num_classes, output_dim=in_dim,
                                      deterministic=True)
         # (num_samples+n, 1)
-        sample_target_b = S.Embedding(data=sample_label, weight=bias,
-                                      input_dim=num_classes, output_dim=1)
+        sample_target_b = embed(data=sample_label, weight=bias,
+                                input_dim=num_classes, output_dim=1, deterministic=True)
         # (num_samples, dim)
         sample_w = S.slice(sample_target_w, begin=(0, 0), end=(num_samples, None))
         target_w = S.slice(sample_target_w, begin=(num_samples, 0), end=(None, None))
@@ -123,3 +123,35 @@ def generate_samples(label, num_splits, num_samples, num_classes):
         prob_targets.append(exp_cnt_true.astype(np.float32))
         prob_samples.append(exp_cnt_sampled.astype(np.float32))
     return samples, prob_samples, prob_targets
+
+class Model():
+    def __init__(self, args, ntokens, rescale_loss):
+        out = rnn(args.bptt, ntokens, args.emsize, args.nhid, args.nlayers,
+                  args.dropout, args.num_proj, args.batch_size)
+        rnn_out, self.last_states, self.lstm_args, self.state_names = out
+        # decoder weight and bias
+        decoder_w = S.var("decoder_weight", stype='row_sparse')
+        decoder_b = S.var("decoder_bias", shape=(ntokens, 1), stype='row_sparse')
+
+        # sampled softmax for training
+        sample = S.var('sample', shape=(args.k,))
+        prob_sample = S.var("prob_sample", shape=(args.k,))
+        prob_target = S.var("prob_target")
+        self.sample_names = ['sample', 'prob_sample', 'prob_target']
+        logits, new_targets = sampled_softmax(ntokens, args.k, args.num_proj,
+                                              rnn_out, decoder_w, decoder_b,
+                                              [sample, prob_sample, prob_target])
+        self.train_loss = cross_entropy_loss(logits, new_targets, rescale_loss=rescale_loss)
+
+        # full softmax for testing
+        eval_logits = S.FullyConnected(data=rnn_out, weight=decoder_w,
+                                       num_hidden=ntokens, name='decode_fc', bias=decoder_b)
+        label = S.Variable('label')
+        label = S.reshape(label, shape=(-1,))
+        self.eval_loss = cross_entropy_loss(eval_logits, label)
+
+    def eval(self):
+        return S.Group(self.last_states + [self.eval_loss])
+
+    def train(self):
+        return S.Group(self.last_states + [self.train_loss])

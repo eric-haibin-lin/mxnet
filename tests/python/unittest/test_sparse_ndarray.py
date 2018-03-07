@@ -892,10 +892,11 @@ def test_sparse_fc():
     def check_sparse_fc(batch_size, dim_in, dim_out, stype):
         data = rand_ndarray((batch_size, dim_in), stype, density=0.5)
         weight = rand_ndarray((dim_out, dim_in), 'row_sparse', density=1)
-        out = mx.nd.sparse.FullyConnected(data, weight, num_hidden=dim_out, no_bias=True)
+        bias = rand_ndarray((dim_out, 1), 'row_sparse', density=1)
+        out = mx.nd.sparse.FullyConnected(data, weight, num_hidden=dim_out, bias=bias)
         data_dns = data.tostype('default')
         weight_dns = weight.tostype('default')
-        out_dns = mx.nd.FullyConnected(data_dns, weight_dns, num_hidden=dim_out, no_bias=True)
+        out_dns = mx.nd.FullyConnected(data_dns, weight_dns, num_hidden=dim_out, bias=bias)
         assert_almost_equal(out.asnumpy(), out_dns.asnumpy())
 
     # test FC with row_sparse weight w/ density=1, dense data

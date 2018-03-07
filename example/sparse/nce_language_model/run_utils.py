@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-import argparse, time, logging
+import argparse, time, logging, math
 
 def get_parser():
     parser = argparse.ArgumentParser(description='Language Model on GBW')
@@ -47,17 +47,11 @@ def get_parser():
                         help='number of noise samples to estimate')
     parser.add_argument('--gpus', type=str,
                         help='list of gpus to run, e.g. 0 or 0,2,5. empty means using gpu(0).')
-    parser.add_argument('--dense', action='store_true',
-                        help='use dense embedding instead of sparse embedding')
     parser.add_argument('--log-interval', type=int, default=200,
                         help='report interval')
     parser.add_argument('--seed', type=int, default=1,
                         help='random seed')
-    parser.add_argument('--profile', action='store_true',
-                        help='whether to use profiler')
-    parser.add_argument('--kvstore', type=str, default='device',
-                        help='type of kv-store to use')
-    parser.add_argument('--checkpoint-dir', type=str, default='./checkpoint/',
+    parser.add_argument('--checkpoint-dir', type=str, default='./checkpoint/cp',
                         help='dir for checkpoint')
     parser.add_argument('--lr', type=float, default=0.1,
                         help='initial learning rate')
@@ -65,9 +59,6 @@ def get_parser():
                         help='gradient clipping by global norm. Done per context.')
     parser.add_argument('--rescale-embed', type=float, default=None,
                         help='rescale-embedding-grad')
-    # TODO mod.reshapet diff
-    parser.add_argument('--eval-batch-size', type=int, default=32,
-                        help='batch size for eval')
     return parser
 
 def evaluate(mod, data_iter, epoch, log_interval):

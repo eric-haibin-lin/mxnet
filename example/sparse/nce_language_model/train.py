@@ -31,7 +31,6 @@ if __name__ == '__main__':
     head = '%(asctime)-15s %(message)s'
     ctx = [mx.gpu(int(i)) for i in args.gpus.split(',')] if args.gpus else [mx.gpu()]
     ngpus = len(ctx)
-    nsamples = args.k
     rescale_loss = args.bptt
 
     # logging
@@ -49,40 +48,15 @@ if __name__ == '__main__':
     train_data = mx.io.PrefetchingIter(MultiSentenceIter(args.data, vocab,
                                        args.batch_size * ngpus, args.bptt))
     # rnn model
-    rnn_out, last_states, lstm_args, state_names = rnn(args.bptt, ntokens, args.emsize,
-                                                       args.nhid, args.nlayers, args.dropout,
-                                                       args.num_proj, args.batch_size)
-    # decoder weight and bias
-    decoder_w = S.var("decoder_weight", stype='row_sparse')
-    decoder_b = S.var("decoder_bias", shape=(ntokens, 1))
-
-    # sampled softmax for training
-    sample = S.var('sample', shape=(nsamples,))
-    prob_sample = S.var("prob_sample", shape=(nsamples,))
-    prob_target = S.var("prob_target")
-    logits, new_targets = sampled_softmax(ntokens, args.k, args.num_proj,
-                                          rnn_out, decoder_w, decoder_b,
-                                          [sample, prob_sample, prob_target])
-    train_loss = cross_entropy_loss(logits, new_targets, rescale_loss=rescale_loss)
-    train_loss_and_states = S.Group(last_states + [train_loss])
-
-    # full softmax for testing
-    #TODO same stype for decoder_b
-    decoder_b = S.reshape(decoder_b, (-1,))
-    eval_logits = S.FullyConnected(data=rnn_out, weight=decoder_w,
-                                        num_hidden=ntokens, name='decode_fc', bias=decoder_b)
-    label = S.Variable('label')
-    label = S.reshape(label, shape=(-1,))
-    decoder_b = S.reshape(decoder_b, shape=(-1,))
-    eval_loss = cross_entropy_loss(eval_logits, label)
-    eval_loss_and_states = S.Group(last_states + [eval_loss])
+    model = Model(args, ntokens, rescale_loss)
+    train_loss_and_states = model.train()
+    eval_loss_and_states = model.eval()
 
     # training module
     data_names, label_names = ['data', 'mask'], ['label']
-    eval_state_names = state_names
-    extra_states_names = ['sample', 'prob_sample', 'prob_target']
-    num_extra_states = len(extra_states_names)
-    train_state_names = state_names + extra_states_names
+    eval_state_names = model.state_names
+    num_sample_names = len(model.sample_names)
+    train_state_names = model.state_names + model.sample_names
 
     module = CustomModule(symbol=train_loss_and_states, context=ctx,
                           state_names=train_state_names,
@@ -90,8 +64,7 @@ if __name__ == '__main__':
     module.bind(data_shapes=train_data.provide_data, label_shapes=train_data.provide_label)
     module.init_params(initializer=mx.init.Xavier(factor_type='out'))
 
-    kvstore = None if args.kvstore is None else mx.kv.create(args.kvstore)
-    require_rsp_pull = kvstore and not args.dense
+    kvstore = mx.kv.create('device')
     optimizer = mx.optimizer.create('adagrad', learning_rate=args.lr, \
                                     rescale_grad=1.0/ngpus, eps=args.eps)
 
@@ -99,21 +72,13 @@ if __name__ == '__main__':
     num_words_per_batch = args.batch_size * ngpus * args.bptt
     speedometer = mx.callback.Speedometer(num_words_per_batch, args.log_interval)
 
-    if args.profile:
-        config = ['dense', args.dense, 'ngpus', ngpus]
-        config_str = map(lambda x: str(x), config)
-        filename = '-'.join(config_str) + '.json'
-        mx.profiler.profiler_set_config(mode='all', filename=filename)
-        mx.profiler.profiler_set_state('run')
-
     # train
-
     logging.info("Training started ... ")
     for epoch in range(args.epochs):
         total_L = mx.nd.array([0.0])
         nbatch = 0
         module.set_states(value=0)
-        state_cache = module.get_states(merge_multi_context=False)[:-num_extra_states]
+        state_cache = module.get_states(merge_multi_context=False)[:-num_sample_names]
         next_batch = train_data.next()
         next_sampled_values = generate_samples(next_batch.label[0], ngpus, args.k, ntokens)
         stop_iter = False
@@ -122,17 +87,17 @@ if __name__ == '__main__':
             lists = next_sampled_values
             state_cache += lists
             module.set_states(states=state_cache)
-            if require_rsp_pull:
-                data = batch.data[0]
-                target_ids = [batch.label[0]]
-                sampled_ids = lists[0]
-                param_rowids = {'encoder_weight': data,
-                                'decoder_weight': sampled_ids + target_ids}
-                module.prepare_sparse_params(param_rowids)
+            target_ids = [batch.label[0]]
+            sampled_ids = lists[0]
+            param_rowids = {'encoder_weight': batch.data[0],
+                            'decoder_weight': sampled_ids + target_ids,
+                            'decoder_bias': sampled_ids + target_ids}
+            module.prepare_sparse_params(param_rowids)
             module.forward(batch)
             try:
                 next_batch = train_data.next()
-                next_sampled_values = generate_samples(next_batch.label[0], ngpus, args.k, ntokens)
+                next_sampled_values = generate_samples(next_batch.label[0], ngpus,
+                                                       args.k, ntokens)
             except StopIteration:
                 stop_iter = True
             outputs = module.get_outputs(merge_multi_context=False)
@@ -143,7 +108,7 @@ if __name__ == '__main__':
 
             # update all parameters (including the weight parameter)
             module.rescale_grad(args.rescale_embed, 'encoder_weight')
-            norm = module.clip_by_global_norm_per_ctx(max_norm=args.clip, param_names=lstm_args)
+            norm = module.clip_by_global_norm_per_ctx(max_norm=args.clip, param_names=model.lstm_args)
             module.update()
             speedometer_param = mx.model.BatchEndParam(epoch=epoch, nbatch=nbatch,
                                                        eval_metric=None, locals=locals())
@@ -174,5 +139,3 @@ if __name__ == '__main__':
         val_L = run_utils.evaluate(eval_module, eval_data, epoch, 2)
         train_data.reset()
     logging.info("Training completed. ")
-    if args.profile:
-        mx.profiler.profiler_set_state('stop')
