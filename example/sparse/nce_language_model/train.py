@@ -21,7 +21,7 @@ import mxnet.symbol as S
 import run_utils
 from data import MultiSentenceIter, Vocabulary
 from model import *
-from sparse_module import CustomModule
+from custom_module import CustomModule
 import os, math, logging, sys
 
 if __name__ == '__main__':
