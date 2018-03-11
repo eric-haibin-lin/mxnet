@@ -1,3 +1,4 @@
+# TODO param c == 0.0
 # A Guide to Implementing Sparse Operators in MXNet Backend
 
 ## Prerequisites
@@ -186,15 +187,15 @@ enum class DispatchMode {
   kVariable,
 };
 ```
-- Line 4-5: `in_attrs` is a vector containing all input storage types.
+- Lines 4-5: `in_attrs` is a vector containing all input storage types.
 `out_attrs` is a vector containing all output storage types.
-- Line 6-7: We check the number of inputs and that of outputs. Both should be equal to 1.
+- Lines 6-7: We check the number of inputs and that of outputs. Both should be equal to 1.
 - Line 8: We get `QuadraticParam` from `attrs`. It contains the argument `c`, whose
 value is used later to decide if the output is sparse.
-- Line 9-10: The storage type of the input is stored in the local varible `in_stype`.
+- Lines 9-10: The storage type of the input is stored in the local varible `in_stype`.
 The reference to output storage type is stored in the local varible `out_stype`.
 - Line 11: The initialize the return value `dispatched` to `false`. 
-- Line 12-15: If the input is dense, try to assign dense storage to the output storage
+- Lines 12-15: If the input is dense, try to assign dense storage to the output storage
 type and assign `kFCompute` to `dispatch_mode`. 
 The function `storage_type_assign()` first **attempts** to assign `kDefaultStorageType`
 to `out_stype`. If the assignment to `out_stype` is successful
@@ -202,7 +203,7 @@ to `out_stype`. If the assignment to `out_stype` is successful
 `kDefaultStorageType` previously), `storage_type_assign()` assigns `dispatch_mode`
 to `kFCompute` and returns true; If the assignment to `out_stype` is not successful,
 `dispatch_mode` keeps its old value and false is returned.
-- Line 16-19: If `dispatch_mode` is not defined, the input storage type is "csr"
+- Lines 16-19: If `dispatch_mode` is not defined, the input storage type is "csr"
 and `c` is 0.0, try to assign csr storage to the output storage type and
 assign `kFComputeEx` to `dispatch_mode`.
 - Line 20-22: If `dispatch_mode` is still not defined, infer dense storage for the output
@@ -228,7 +229,7 @@ void QuadraticOpForwardEx(const nnvm::NodeAttrs& attrs,                         
   const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);        // 10
   const auto in_stype = inputs[0].storage_type();                               // 11
   const auto out_stype = outputs[0].storage_type();                             // 12
-  if (in_stype == kCSRStorage && out_stype == kCSRStorage) {                    // 13
+  if (in_stype == kCSRStorage && out_stype == kCSRStorage && param.c == 0.0) {  // 13
     QuadraticOpForwardCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);  // 14
   } else {                                                                      // 15
     LogUnimplementedOp(attrs, ctx, inputs, req, outputs);                       // 16
@@ -251,8 +252,8 @@ void QuadraticOpForwardCsrImpl(const QuadraticParam& param,                     
     FillZerosCsrImpl(s, output);                                                // 33
     return;                                                                     // 34
   }                                                                             // 35
-  nnvm::dim_t nnz = input.storage_shape()[0];                                   // 36
-  nnvm::dim_t num_rows = output.shape()[0];                                     // 37
+  const nnvm::dim_t nnz = input.storage_shape()[0];                             // 36
+  const nnvm::dim_t num_rows = output.shape()[0];                               // 37
   output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});                    // 38
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {                                  // 39
     MSHADOW_TYPE_SWITCH(output.aux_type(kIdx), CType, {                         // 40
@@ -273,115 +274,54 @@ void QuadraticOpForwardCsrImpl(const QuadraticParam& param,                     
 
 ```
 
-- Line 1: `xpu` stands for a generic device type so that the function can be instantiated
-for both CPU and GPU computing using concrete types `cpu` and `gpu`. The instantiation happens
-at the time when the operator is registered in `.cc` and `.cu` files.
-- Line 2: `attrs` is a node attribute containing the user input parameters `a`, `b`, and `c`.
-Here the node represents a placeholder for the operator in the whole computational graph for
-the neural network.
-- Line 3: `ctx` holds something called `stream` for
-serializing asynchronous executions. Let's consider
-this example for understanding the functionality of `stream`.
-We want to launch several GPU kernels with the same `stream` from CPU.
-Even though the launching operation is non-blocking, the `stream` guarantees
-that the kernels execute in the same order on GPU as they are launched from CPU.
-- Line 4: `inputs` is a vector of input tensors (only one input tensor
-for the `quadratic` operator).
-- Line 5: `req` is a vector of `OpReqType` values. Each value defines
-the way of writing calculated values to the output tensors.
-Therefore, the number of `req`s must be the same as the number of output tensors.
-MXNet currently supports three types of `req` in frontend: `null`, `write`, and `add`.
-`null` means skipping calculating the corresponding output tensor,
-`write` means overwriting the values in the output tensor with the ones
-calculated by this operator, and `add` means adding the calculated values
-to the existing ones in the output tensor. Note that `null` and `add` are usually
-seen in backward passes. The former is for skipping calculating
-the gradients of un-learnable parameters (such as index arrays),
-and the latter is for accumulating gradients throughout networks.
-- Line 6: `outputs` is a vector of output tensors (only one
-output tensor for the `quadratic` operator).
+- Line 1-6: `inputs` is a vector of input NDArrays (only one input tensor
+for the `quadratic` operator). `outputs` is a vector of output NDArrays
+(only one for the `quadratic` operator). `xpu`, `attrs`, `ctx` and `req`
+each holds the same thing introduced in the dense operator tutorial.
 - Lines 7-9: Verify that the size of each vector is expected.
 Otherwise, stop moving forward and print error message.
-- Line 10: Get the `stream` from the `ctx` for launching kernels.
-- Lines 11-12: Define the references of the input and output tensors
-for later coding convenience. Note that `TBlob` can be understood
-as a uniform data structure for tensors of various dimensions, such
-that tensors of different dimensions can be put in a homogeneous container,
-such as `std::vector` and `std::list`. You can still
-get tensors of desired dimensions from a `TBlob` object through
-the interface `get_with_shape`.
-- Line 13: Get user input parameters from the node attribute.
-- Lines 15-21: This is the place where the mathematical formula of the operator
-is implemented. The macros `MSHADOW_TYPE_SWITCH` and `MXNET_ASSIGN_REQ_SWITCH` enable
+- Line 10: Get operator parameters, the input storage type and the output
+storage type respectively. 
+- Lines 13-18: If both the input storage type and the output storage type
+are "csr" and c is 0.0, invoke the "csr" implementation. Otherwise,
+an exception will be thrown with detailed information about the unimplemented
+operator arguments.
+- Lines 20-25: Function definition for the "csr" implementation of the `quadratic`
+operator.
+- Lines 26-28: Declare a few namespaces used in the current function scope.
+Note that the `csr::kIdx` is for the access to the `indices` array of
+all auxiliary arrays, while `csr::kIndPtr` is for the access to the `indptr`
+array. 
+- Line 29-30: Check the provided `req` of the operator. If `req` is `kNullOp`,
+no work is required. Since the output of this operator is a "csr" NDArray,
+whose memory has to be allocated at runtime, only `kWriteTo` is allowed.
+Both `kAddTo` and `kWriteInplace` usually are not supported when the
+output is sparse.
+- Line 31: Get the `stream` of the context for serializing asynchronous executions.
+- Lines 32-35: Before we access the `data`, `indices` and `indptr` arrays
+to compute the result, we first check if these arrays are empty. If so,
+we set the output to be zeros.
+The `storage_initialized()` method returns true if a sparse NDArray
+contains at least one element in its data and indices array; it returns false
+otherwise.
+- Line 36: Get the number of elements stored in the input and store
+it in variable `nnz`. The `storage_shape()` method returns the shape of the
+`data` array of a sparse NDArray.
+- Line 37: Get the number of rows of the output and store it in variable `num_rows`.
+- Line 38: Allocate memory for the data array and auxiliary arrays. For a CSRNDArray
+of shape (M, N) storing K elements, it has a `data` array of length K, an `indices` array 
+of length K and an `indptr` array of length (M + 1).
+The `CheckAndAlloc` method takes the shape of auxiliary arrays as the input, and allocates
+the memory for the data array and auxiliary arrays. It is not necessary to provie
+the shape of the data array, as it can be inferred from shapes of auxilary arrays.
+- Line 39-54: This is the place where the values of output data array and auxiliary arrays
+are computed. 
+The macros `MSHADOW_TYPE_SWITCH` and `MXNET_ASSIGN_REQ_SWITCH` enable
 the code block to work for all the supported data types and `req` types in MXNet.
-Inside the inner-most macro, we launch the kernel for calculating
-the output tensor such that each thread takes an element from
-the input tensor, feeds it into the quadratic function, and assigns
-the output element to the output tensor based on `req` type. Note that
-`Kernel::Launch` serves as a universal interface for launching
-parallel computation on both CPU and GPU. This allows most of
-the simple operators to share the same piece of code for CPU and GPU as
-parallelization approaches are often identical on both types of devices.
-The kernel function is defined as the following, where the function
-`Map` is executed by each thread for each input element. To explain a little
-bit more on the two macros used in the kernel struct: (1) `MSHADOW_XINLINE` is
-a consolidated macro for inlining functions compiled by both CPU and GPU
-compilers. It enables CPU and GPU computing to share the same piece of code.
-(2) `KERNEL_ASSIGN` is a macro for unifying the statements of different `req`s
-into the same line of code. It's named `KERNEL_ASSIGN` because we call
-the code blocks running parallel computation kernels.
-On CPUs, the kernels are normally wrapped by the OpenMP `parallel` directive;
-while on GPUs, they are the kernel functions launched by CUDA library.
-
-### Backward Function
-Backward functions play the role of propagating derivatives of loss function
-with respect to the outputs of the last layer throughout the network to the first
-layer. The whole process is often known as backward propagation. We are not
-going to delineate the principle of backward propagation here since users can find
-great details covered in other resources, such as
-[CS231n](http://cs231n.github.io/optimization-2/) and
-[How the backgropagation algorithm works](http://neuralnetworksanddeeplearning.com/chap2.html).
-The problem we are going to solve here for the `quadratic` operator is that
-given a tensor representing the gradient of the loss function with respect
-to the output of the operator, calculate the gradient with respect to
-the input of the operator. There is no need to calculate the derivatives
-of loss function with respect to user input parameters `a`, `b`, and `c`
-since they are not learnable parameters in the network. To formulate the problem:
-given `dL/dy` and `y = a*x^2 + b*x + c`, where `L` represents the loss function and
-`y` stands for the output of the quadratic tensor, we need to solve for
-`dL/dx`. Using the chain-rule, it is obvious to find that
-```
-dL/dx = dL/dy * dy/dx = dL/dy * (2*a*x + b).
-```
-The above equation indicates that `dL/dx` depends on the gradient
-of the output tensor and value of the input tensor.
-The backward function's signature is the same as the forward function's.
-With the aforementioned information in mind,
-let's breakdown the following backward function line by line.
-
-- Lines 1-6: Backward function has the same signature as forward function.
-- Lines 7-9: Check the sizes of the function arguments. One thing to note
-that since the gradient of the input depends on both the gradient of the output and
-the input tensor itself, `inputs` must contain two `TBlob` objects.
-- Line 10: Get the `stream` of the context for serializing asynchronous executions.
-- Lines 11-13: Convenience reference variables for later use. We name `out_grad`
-as the gradient of the operator output, `in_data` as the input of the operator,
-and `in_grad` as the gradient of the operator input.
-- Line 14: Get the parameter object of `QuadraticParam`.
-- Lines 16-22: Same as in the forward function, this is where parallel
-computation for `in_grad` happens. The struct `quadratic_backward` implements
-the formula of calculating each element of `in_grad` by one thread as the following.
-
-```cpp
-template<int req>
-struct quadratic_backward {
-  template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType* in_grad, const DType* out_grad,
-                                  const DType* in_data, const float a, const float b) {
-    KERNEL_ASSIGN(in_grad[i], req, out_grad[i] * (2 * a * in_data[i] + b));
-  }
-};
-```
+For this operator, since the transformation only happens on the data array,
+we simply invoke the quadratic operator kernel via `Kernel::Launch`.
+For the `indices` and `indptr` arrays, we just copy the values from the inputs.
+This way, a complete output CSRNDArray is computed. 
 
 ### Operator Registration
 So far, we have implemented necessary data structure and functions for the operator `quadratic`.
@@ -500,6 +440,58 @@ NNVM_REGISTER_OP(_backward_quadratic)
 .set_attr<FCompute>("FCompute<gpu>", QuadraticOpBackward<gpu>);
 ```
 
+
+
+### Backward Function
+Backward functions play the role of propagating derivatives of loss function
+with respect to the outputs of the last layer throughout the network to the first
+layer. The whole process is often known as backward propagation. We are not
+going to delineate the principle of backward propagation here since users can find
+great details covered in other resources, such as
+[CS231n](http://cs231n.github.io/optimization-2/) and
+[How the backgropagation algorithm works](http://neuralnetworksanddeeplearning.com/chap2.html).
+The problem we are going to solve here for the `quadratic` operator is that
+given a tensor representing the gradient of the loss function with respect
+to the output of the operator, calculate the gradient with respect to
+the input of the operator. There is no need to calculate the derivatives
+of loss function with respect to user input parameters `a`, `b`, and `c`
+since they are not learnable parameters in the network. To formulate the problem:
+given `dL/dy` and `y = a*x^2 + b*x + c`, where `L` represents the loss function and
+`y` stands for the output of the quadratic tensor, we need to solve for
+`dL/dx`. Using the chain-rule, it is obvious to find that
+```
+dL/dx = dL/dy * dy/dx = dL/dy * (2*a*x + b).
+```
+The above equation indicates that `dL/dx` depends on the gradient
+of the output tensor and value of the input tensor.
+The backward function's signature is the same as the forward function's.
+With the aforementioned information in mind,
+let's breakdown the following backward function line by line.
+
+- Lines 1-6: Backward function has the same signature as forward function.
+- Lines 7-9: Check the sizes of the function arguments. One thing to note
+that since the gradient of the input depends on both the gradient of the output and
+the input tensor itself, `inputs` must contain two `TBlob` objects.
+- Line 10: Get the `stream` of the context for serializing asynchronous executions.
+- Lines 11-13: Convenience reference variables for later use. We name `out_grad`
+as the gradient of the operator output, `in_data` as the input of the operator,
+and `in_grad` as the gradient of the operator input.
+- Line 14: Get the parameter object of `QuadraticParam`.
+- Lines 16-22: Same as in the forward function, this is where parallel
+computation for `in_grad` happens. The struct `quadratic_backward` implements
+the formula of calculating each element of `in_grad` by one thread as the following.
+
+```cpp
+template<int req>
+struct quadratic_backward {
+  template<typename DType>
+  MSHADOW_XINLINE static void Map(int i, DType* in_grad, const DType* out_grad,
+                                  const DType* in_data, const float a, const float b) {
+    KERNEL_ASSIGN(in_grad[i], req, out_grad[i] * (2 * a * in_data[i] + b));
+  }
+};
+```
+
 ### Unit Test
 Now we have finished implementing the operator `quadratic` in MXNet backend.
 If you use python, when you type `import mxnet as mx`, two python
@@ -569,3 +561,4 @@ We welcome your contributions to MXNet.
 [quadratic_op.cu](https://github.com/reminisce/mxnet/blob/add_op_example_for_tutorial/src/operator/tensor/quadratic_op.cu),
 and
 [test_operator.py](https://github.com/reminisce/mxnet/blob/add_op_example_for_tutorial/tests/python/unittest/test_operator.py#L4008).
+
