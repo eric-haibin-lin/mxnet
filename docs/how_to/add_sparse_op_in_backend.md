@@ -123,7 +123,7 @@ inline const TBlob& data() const;
 
 Finally, the `CheckAndAlloc` method comes in handy when memory allocations for
 the data and auxiliary arrays are needed for sparse NDArrays at run time.
-```
+```cpp
 // allocate memory for non-default storage ndarrays based on auxliary array shapes
 inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes)
 ```
@@ -141,7 +141,6 @@ the storage type inference rules you defined.
 
 For our `quadratic` operator, the storage type inference function is the following.
 Let's go through it line by line.
-# TODO remove ref
 ```cpp
 inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,                // 1
                                    const int dev_mask,                          // 2
@@ -168,13 +167,13 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,                
   return dispatched;                                                            // 23
 }                                                                               // 24
 ```
-Here are a few things to note about the above function:
-1. `attrs` contains the parameters of the operator `a`, `b` and `c`.
-2. `dev_mask` is the enum of device information of the operator such as `Context::kCPU`
-and `Context::kGPU`. It's not used here since both contexts are supported.
-3. `dispatch_mode` is the output dispatch mode for the operator. 
+- Line 1: `attrs` contains the parameters of the operator `a`, `b` and `c`.
+- Line 2: `dev_mask` is the enum of device information of the operator such as
+`Context::kCPU` and `Context::kGPU`. It is not used here since both contexts are supported.
+- Line 3: `dispatch_mode` is the output dispatch mode for the operator. 
+The initial value of `dispatch_mode` is `kUndefined`.
 The types of dispatch mode include the following: 
-```
+```cpp
 enum class DispatchMode {
   kUndefined = -1,
   // dispatch on FCompute interface
@@ -187,65 +186,31 @@ enum class DispatchMode {
   kVariable,
 };
 ```
-4. `in_attrs` is a vector containing all input storage types.
-5. `out_attrs` is a vector containing all output storage types.
-6. We check the number of inputs, which should be equal to 1.
-7. We check the number of outputs, which should be equal to 1.
-8. We get `QuadraticParam` from `attrs`. It contains the argument `c`, whose value
-is used later to decide if the output is sparse.
-9. The storage type of the input is stored in the local varible `in_stype`.
-10. The reference to output storage type is stored in the local varible `out_stype`.
-
-
-is completely known by testing whether the shape is not empty and
-the shape's size is greater than `0`. Note that in MXNet, an empty shape
-means that the shape is unknown, and
-a `0` in a shape means that the size of that dimension is unknown. In both
-situations, the missing shape information must
-be inferred from other shapes. If it cannot be inferred,
-the function should return `false` to notify the caller about shape inference failure.
-6. MXNet provides a convenience function implementing the logic of mutual inference
-for general element-wise operators with the following interface. Users can
-instantiate this function with `n_in=1` and `n_out=1` to replace the above
-function `QuadraticOpShape` in operator registration (explained later).
-The function `QuadraticOpShape` posted here is for the purpose of illustration only.
-```cpp
-template<int n_in, int n_out>
-inline bool ElemwiseShape(const nnvm::NodeAttrs& attrs,
-                          std::vector<TShape> *in_attrs,
-                          std::vector<TShape> *out_attrs);
-```
-
-The same logic goes for data type inference. We will leave the analysis of
-the following code sample to users. Note that `-1` means the data type
-is unknown and must be inferred from other input or output data types.
-```cpp
-inline bool QuadraticOpType(const nnvm::NodeAttrs& attrs,
-                            std::vector<int>* in_attrs,
-                            std::vector<int>* out_attrs) {
-  CHECK_EQ(in_attrs->size(), 1U);
-  CHECK_EQ(out_attrs->size(), 1U);
-
-  TYPE_ASSIGN_CHECK(*out_attrs, 0, in_attrs->at(0));
-  TYPE_ASSIGN_CHECK(*in_attrs, 0, out_attrs->at(0));
-  return out_attrs->at(0) != -1;
-}
-```
-Here are a few things to cover about the above function:
-... 
-
-### Forward Function
-
-
-Again, MXNet provides the following convenience function for mutual
-type inference of element-wise operators. Users can use that
-in operator registration (explained later).
-```cpp
-template<int n_in, int n_out>
-inline bool ElemwiseType(const nnvm::NodeAttrs& attrs,
-                         std::vector<int>* in_attrs,
-                         std::vector<int>* out_attrs);
-```
+- Line 4-5: `in_attrs` is a vector containing all input storage types.
+`out_attrs` is a vector containing all output storage types.
+- Line 6-7: We check the number of inputs and that of outputs. Both should be equal to 1.
+- Line 8: We get `QuadraticParam` from `attrs`. It contains the argument `c`, whose
+value is used later to decide if the output is sparse.
+- Line 9-10: The storage type of the input is stored in the local varible `in_stype`.
+The reference to output storage type is stored in the local varible `out_stype`.
+- Line 11: The initialize the return value `dispatched` to `false`. 
+- Line 12-15: If the input is dense, try to assign dense storage to the output storage
+type and assign `kFCompute` to `dispatch_mode`. 
+The function `storage_type_assign()` first **attempts** to assign `kDefaultStorageType`
+to `out_stype`. If the assignment to `out_stype` is successful
+(i.e. `out_stype` was either not defined, or was already assigned with 
+`kDefaultStorageType` previously), `storage_type_assign()` assigns `dispatch_mode`
+to `kFCompute` and returns true; If the assignment to `out_stype` is not successful,
+`dispatch_mode` keeps its old value and false is returned.
+- Line 16-19: If `dispatch_mode` is not defined, the input storage type is "csr"
+and `c` is 0.0, try to assign csr storage to the output storage type and
+assign `kFComputeEx` to `dispatch_mode`.
+- Line 20-22: If `dispatch_mode` is still not defined, infer dense storage for the output
+and dispatch to storage fallback mode. The `dispatch_fallback()` functions first attempts to
+assign `kDefaultStorage` to all `out_attrs`. If the assignment is successful, return true;
+otherwise, return false.
+- Line 23: return the value of `dispatched`. If `dispatched` is false,
+an exception will be thrown by MXNet.
 
 ### Forward Function
 Forward function defines the operator's behavior in the forward pass
