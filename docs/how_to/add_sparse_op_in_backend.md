@@ -213,76 +213,66 @@ otherwise, return false.
 an exception will be thrown by MXNet.
 
 ### Forward Function
-Forward function defines the operator's behavior in the forward pass
-of neural networks. For our `quadratic` operator, it simply implements
-the logic of running a tensor through the quadratic function by performing
-a few element-wise operations. The forward function's signature is fixed
-in MXNet as follows:
-```cpp
-void (const nnvm::NodeAttrs& attrs,
-      const OpContext& ctx,
-      const std::vector<TBlob>& inputs,
-      const std::vector<OpReqType>& req,
-      const std::vector<TBlob>& outputs);
-```
-We first paste the whole forward function code here
-and then go through it line by line.
-```cpp
-template<typename xpu>
-void QuadraticOpForwardCsrImpl(const QuadraticParam& param,
-                               const OpContext& ctx,
-                               const NDArray& input,
-                               const OpReqType req,
-                               const NDArray& output) {
-  using namespace mshadow;
-  using namespace mxnet_op;
-  using namespace csr;
-  if (req == kNullOp) return;
-  CHECK_EQ(req, kWriteTo) << "QuadraticOp with CSR only supports kWriteTo";
-  Stream<xpu> *s = ctx.get_stream<xpu>();
-  if (!input.storage_initialized()) {
-    FillZerosCsrImpl(s, output);
-    return;
-  }
-  nnvm::dim_t nnz = input.storage_shape()[0];
-  nnvm::dim_t num_rows = output.shape()[0];
-  output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});
-  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(output.aux_type(kIdx), CType, {
-      MSHADOW_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {
-        MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
-          Kernel<quadratic_forward<req_type>, xpu>::Launch(
-              s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),
-              param.a, param.b, param.c);
-          Copy(output.aux_data(kIdx).FlatTo1D<xpu, CType>(),
-               input.aux_data(kIdx).FlatTo1D<xpu, CType>());
-          Copy(output.aux_data(kIndPtr).FlatTo1D<xpu, RType>(),
-               input.aux_data(kIndPtr).FlatTo1D<xpu, RType>());
-        });
-      });
-    });
-  });
-}
+Let's go through the Forward function implementation line by line.
 
-template<typename xpu>
-void QuadraticOpForwardEx(const nnvm::NodeAttrs& attrs,
-                          const OpContext& ctx,
-                          const std::vector<NDArray>& inputs,
-                          const std::vector<OpReqType>& req,
-                          const std::vector<NDArray>& outputs) {
-  CHECK_EQ(inputs.size(), 1U);
-  CHECK_EQ(outputs.size(), 1U);
-  CHECK_EQ(req.size(), 1U);
-  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
-  const auto in_stype = inputs[0].storage_type();
-  const auto out_stype = outputs[0].storage_type();
-  if (in_stype == kCSRStorage && out_stype == kCSRStorage) {
-    QuadraticOpForwardCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);
-  } else {
-    LogUnimplementedOp(attrs, ctx, inputs, req, outputs);
-  }
-}
+```cpp
+template<typename xpu>                                                          // 1
+void QuadraticOpForwardEx(const nnvm::NodeAttrs& attrs,                         // 2
+                          const OpContext& ctx,                                 // 3
+                          const std::vector<NDArray>& inputs,                   // 4
+                          const std::vector<OpReqType>& req,                    // 5
+                          const std::vector<NDArray>& outputs) {                // 6
+  CHECK_EQ(inputs.size(), 1U);                                                  // 7
+  CHECK_EQ(outputs.size(), 1U);                                                 // 8
+  CHECK_EQ(req.size(), 1U);                                                     // 9
+  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);        // 10
+  const auto in_stype = inputs[0].storage_type();                               // 11
+  const auto out_stype = outputs[0].storage_type();                             // 12
+  if (in_stype == kCSRStorage && out_stype == kCSRStorage) {                    // 13
+    QuadraticOpForwardCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);  // 14
+  } else {                                                                      // 15
+    LogUnimplementedOp(attrs, ctx, inputs, req, outputs);                       // 16
+  }                                                                             // 17
+}                                                                               // 18
+                                                                                // 19
+template<typename xpu>                                                          // 20
+void QuadraticOpForwardCsrImpl(const QuadraticParam& param,                     // 21
+                               const OpContext& ctx,                            // 22
+                               const NDArray& input,                            // 23
+                               const OpReqType req,                             // 24
+                               const NDArray& output) {                         // 25
+  using namespace mshadow;                                                      // 26
+  using namespace mxnet_op;                                                     // 27
+  using namespace csr;                                                          // 28
+  if (req == kNullOp) return;                                                   // 29
+  CHECK_EQ(req, kWriteTo) << "QuadraticOp with CSR only supports kWriteTo";     // 30
+  Stream<xpu> *s = ctx.get_stream<xpu>();                                       // 31
+  if (!input.storage_initialized()) {                                           // 32
+    FillZerosCsrImpl(s, output);                                                // 33
+    return;                                                                     // 34
+  }                                                                             // 35
+  nnvm::dim_t nnz = input.storage_shape()[0];                                   // 36
+  nnvm::dim_t num_rows = output.shape()[0];                                     // 37
+  output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});                    // 38
+  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {                                  // 39
+    MSHADOW_TYPE_SWITCH(output.aux_type(kIdx), CType, {                         // 40
+      MSHADOW_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {                    // 41
+        MXNET_ASSIGN_REQ_SWITCH(req, req_type, {                                // 42
+          Kernel<quadratic_forward<req_type>, xpu>::Launch(                     // 43
+              s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),  // 44
+              param.a, param.b, param.c);                                       // 45
+          Copy(output.aux_data(kIdx).FlatTo1D<xpu, CType>(),                    // 46
+               input.aux_data(kIdx).FlatTo1D<xpu, CType>());                    // 47
+          Copy(output.aux_data(kIndPtr).FlatTo1D<xpu, RType>(),                 // 48
+               input.aux_data(kIndPtr).FlatTo1D<xpu, RType>());                 // 49
+        });                                                                     // 50
+      });                                                                       // 51
+    });                                                                         // 52
+  });                                                                           // 53
+}                                                                               // 54
+
 ```
+
 - Line 1: `xpu` stands for a generic device type so that the function can be instantiated
 for both CPU and GPU computing using concrete types `cpu` and `gpu`. The instantiation happens
 at the time when the operator is registered in `.cc` and `.cu` files.
