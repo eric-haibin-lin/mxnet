@@ -47,43 +47,23 @@ function for the case where c is 0.0 and x is a CSRNDArray.
 
 Next, we are going to
 
-- Understand the related NDArray interface in backend.
+- Understand the FComputeEx and relevant NDArray interfaces in backend.
 - Define storage type inference functions in quadratic_op-inl.h.
 - Define the forward function in quadratic_op-inl.h.
 - Register the sparse operator using nnvm in quadratic_op.cc and quadratic_op.cu for CPU and GPU computing, respectively.
 
 Now let's walk through the process step by step.
 
-### The NDArray Interface in the Backend
-In the python frontend, MXNet has three types of NDArrays, namely `mx.nd.NDArray`, `mx.nd.sparse.RowSparseNDArray` and `mx.nd.sparse.CSRNDArray`. In the C++ backend, however, all of them are represented by the `mxnet::NDArray` class.
-The `NDArray::storage_type()` method indicates the storage type of the NDArray:
-```cpp
-enum NDArrayStorageType {
-  kUndefinedStorage = -1,  // undefined storage
-  kDefaultStorage,         // dense
-  kRowSparseStorage,       // row sparse
-  kCSRStorage,             // csr
-};
-```
+### The FComputeEx and Relevant NDArray Interfaces in Backend
 
-On the other hand, from python one could inspect the auxiliary array of a sparse ndarray via
-`RowSparseNDArray.indices`, `CSRNDArray.indices` and `CSRNDArray.indptr`, and the actual data array
-via `RowSparseNDArray.data` and `CSRNDArray.data`.
+Before we dive into the details of relevant interfaces, here are two differences between
+dense and sparse operators:
+- Dense operators only handle dense inputs and outputs. Sparse operators support various combinations of
+storage types.
+- Memories of inputs and outputs are pre-allocated based their shapes for dense operators. However, with sparse representations, memories for sparse inputs and outputs depend on the number of non-zero elements they have,
+which is only known at runtime.
 
-In the backend, auxliary arrays such as `indices` and `indptr` are retrieved by
-the `NDArray::aux_data(size_t i)` method, while the actual data array is retrived by the 
-`NDArray::data()` method.
-
-```cpp
-  // return the i-th aux data TBlob
-  inline TBlob aux_data(size_t i) const;
-  
-  // return the data TBlob
-  inline const TBlob& data() const;
-```
-
-### The FComputeEx and Infer Storage Type Interface
-Let's review the `FCompute` interface introduced in the previous operator tutorial:
+With these differences in mind, let's review the `FCompute` interface introduced in the previous operator tutorial:
 ```cpp
 void (const nnvm::NodeAttrs& attrs,
       const OpContext& ctx,
@@ -91,9 +71,9 @@ void (const nnvm::NodeAttrs& attrs,
       const std::vector<OpReqType>& req,
       const std::vector<TBlob>& outputs);
 ```
-Note that the vector of `TBlob`s doesn't contain sufficient information about the whether
-the NDArray is sparse, nor the auxilary data of the NDArray. Therefore, sparse operators
-use the following `FComputeEx` interface:
+Notice the `FCompute` interface doesn't include data structures that could be used to query storage
+types of inputs, nor manipulate auxiliary arrays like `indices` and `indptr`. 
+Therefore, instead of the `FCompute` interface, sparse operators are registered with the following `FComputeEx` interface:
 ```cpp
 void (const nnvm::NodeAttrs& attrs,
       const OpContext& ctx,
@@ -101,7 +81,54 @@ void (const nnvm::NodeAttrs& attrs,
       const std::vector<OpReqType>& req,
       const std::vector<NDArray>& outputs);
 ```
-from which the operator can query storage type and aux data information from the NDArray object. 
+where the vectors of TBlobs are replaced with vectors of NDArrays. Now, let's go through a few important methods in the NDArray class.
+
+In the python frontend, there are three types of NDArrays, namely `mx.nd.NDArray`, `mx.nd.sparse.RowSparseNDArray` and `mx.nd.sparse.CSRNDArray`. In the C++ backend, however, all of them are represented by the `mxnet::NDArray` class.
+The `storage_type()` method indicates the storage type of the NDArray:
+```cpp
+enum NDArrayStorageType {
+  kUndefinedStorage = -1,  // undefined storage
+  kDefaultStorage,         // dense
+  kRowSparseStorage,       // row sparse
+  kCSRStorage,             // csr
+};
+
+// return the type of storage format
+NDArrayStorageType storage_type() const;
+```
+
+On the other hand, from python one could inspect the auxiliary array of a sparse ndarray via
+`RowSparseNDArray.indices`, `CSRNDArray.indices` and `CSRNDArray.indptr`, and the actual data array
+via `RowSparseNDArray.data` and `CSRNDArray.data`.
+
+In the backend, auxliary arrays such as `indices` and `indptr` are retrieved by
+the `aux_data` method, while the actual data array is retrived by the 
+`data` method.
+
+```cpp
+namespace csr {
+enum CSRAuxType {kIndPtr, kIdx};
+}
+
+namespace rowsparse {
+enum RowSparseAuxType {kIdx};
+}
+  
+// return the i-th aux data TBlob
+inline TBlob aux_data(size_t i) const;
+  
+// return the data TBlob
+inline const TBlob& data() const;
+```
+
+Finally, the `CheckAndAlloc` method comes in handy when memory allocations for
+the data and auxiliary arrays are needed for sparse NDArrays at run time.
+```
+// allocate memory for non-default storage ndarrays based on auxliary array shapes
+void CheckAndAlloc(const std::vector<TShape> &aux_shapes)
+```
+
+### Storage Type Inference
 
 ???? 
 In the sparse ndarray tutorial, it talks about the storage fallback mechanism. 
