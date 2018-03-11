@@ -6,16 +6,16 @@
 
 ## Introduction
 In the [previous tutorial](https://mxnet.incubator.apache.org/versions/master/how_to/add_op_in_backend.html),
-we went through the necessary steps to implement an operator using C++ in the MXNet backend.
-In this tutorial, we are going to cover how sparse operators are implemented
-in the backend. Specifically, we will practice adding CSRNDArray support to the forward function of `quadratic` operator.
+we went through the steps to implementing an operator using C++ in the MXNet backend.
+In this tutorial, we will cover how sparse operators are implemented
+in the backend. Specifically, we will practice adding CSRNDArray support to the forward function of the `quadratic` operator.
 
 ## Implementation
-### An Sparse Operator Example
+### A Sparse Operator Example
 
 Let's consider the quadratic function `f(x) = ax^2+bx+c` when x is a CSRNDArray. 
-Notice that for a sparse input x, when c is 0.0, the output is also sparse;
-when c is non-zero, the output is dense instead. In MXNet frontend, the operator works like this:
+Notice that if the input x is sparse and c is 0.0, the output is also sparse.
+If c is non-zero, the output is dense. In MXNet frontend, the operator works like this:
 
 ```python
 >>> x = mx.nd.array([[0,1],[2,0]).tostype('csr')
@@ -31,16 +31,27 @@ when c is non-zero, the output is dense instead. In MXNet frontend, the operator
 <NDArray 2x2 @cpu(0)>
 ```
 
-To implement this, we first register the storage type property of the operator, from which the operator
+The statement `z = mx.nd.quadratic(x, a=1, b=2, c=3)` generates a warning message which says
+the sparse input is converted to dense storage, and the dense operator is used to compute the dense output.
+This is the "storage fallback" mechanism in MXNet, where a dense operator is automatically used for
+inputs that a sparse operator doesn't have special kernels for.
+
+In this tutorial, we will implement the forward function of the sparse quadratic operator.
+The storage type of the output depends on the inputs:
+- quadratic('csr', a, b, 0.0) outputs 'csr'
+- otherwise, outputs 'default'
+
+To implement this, we first register the storage type inference property of the operator, from which the operator
 infers the output storage type based on operator arguments and inputs types. Then we implement the forward
 function for the case where c is 0.0 and x is a CSRNDArray.
 
 Next, we are going to
 
-Understand the related NDArray interface in backend.
-Define storage type inference functions in quadratic_op-inl.h.
-Define the forward function in quadratic_op-inl.h.
-Register the sparse operator using nnvm in quadratic_op.cc and quadratic_op.cu for CPU and GPU computing, respectively.
+- Understand the related NDArray interface in backend.
+- Define storage type inference functions in quadratic_op-inl.h.
+- Define the forward function in quadratic_op-inl.h.
+- Register the sparse operator using nnvm in quadratic_op.cc and quadratic_op.cu for CPU and GPU computing, respectively.
+
 Now let's walk through the process step by step.
 
 ### The NDArray Interface in the Backend
