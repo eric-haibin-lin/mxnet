@@ -129,21 +129,6 @@ void CheckAndAlloc(const std::vector<TShape> &aux_shapes)
 ```
 
 ### Storage Type Inference
-
-???? 
-In the sparse ndarray tutorial, it talks about the storage fallback mechanism. 
-That is, if a dense operator doesn't support sparse inputs, it will convert the inputs into dense ndarrays
-and dispatch to the dense operator for execution.
-
-In the backend, the operator also need to tell MXNet execution engine whether a certain sparse format is
-supported so that the `FComputeEx` implementation can be dispatched for executoin. 
-This is done via the `FInferStorageType` interface. 
-
-```cpp
-}
-```
-
-### Storage Type Inference
 Storage type inference is the process of deducing storage types of `NDArray`s
 in neural networks from operator arguments, and deciding whether to dispatch to
 the `FCompute` or `FComputeEx` interface.
@@ -183,13 +168,26 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
 ```
 Here are a few things to note about the above function:
 
-1. `attrs` contains parameters `a`, `b`, and `c` from user input.
-It's not used here since we don't rely on that information for shape inference.
-2. `in_attrs` is a vector containing all input shapes. Since there is
-only one input argument for operator `quadratic`, we used macro `CHECK_EQ`
-to assert when the vector's size is wrong.
-3. `out_attrs` is a vector containing all output shapes. We also used
-`CHECK_EQ` to verify the size of the vector since there is only one output.
+1. `dev_mask` is the enum of device information of the operator such as `Context::kCPU`
+and `Context::kGPU`. It's not used here since both contexts are supported.
+2. `dispatch_mode` is the output dispatch mode for the operator. 
+The types of dispatch mode include the following: 
+```
+enum class DispatchMode {
+  kUndefined = -1,
+  // dispatch on FCompute interface
+  kFCompute,
+  // dispatch on FComputeEx interface
+  kFComputeEx,
+  // dispatch on FCompute interface with inputs / outputs converted to dense NDArrays
+  kFComputeFallback,
+  // special dispatch mode reserved for variables
+  kVariable,
+};
+```
+3. `in_attrs` is a vector containing all input storage types.
+4. `out_attrs` is a vector containing all output storage types.
+
 4. We called macro `SHAPE_ASSIGN_CHECK` twice for mutual inference. One for
 inferring the output shape from the input shape, the other one is for inferring
 the input shape from the output shape.
