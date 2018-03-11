@@ -94,7 +94,7 @@ enum NDArrayStorageType {
 };
 
 // return the type of storage format
-NDArrayStorageType storage_type() const;
+inline NDArrayStorageType storage_type() const;
 ```
 
 On the other hand, from python one could inspect the auxiliary array of a sparse ndarray via
@@ -125,7 +125,7 @@ Finally, the `CheckAndAlloc` method comes in handy when memory allocations for
 the data and auxiliary arrays are needed for sparse NDArrays at run time.
 ```
 // allocate memory for non-default storage ndarrays based on auxliary array shapes
-void CheckAndAlloc(const std::vector<TShape> &aux_shapes)
+inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes)
 ```
 
 ### Storage Type Inference
@@ -139,38 +139,40 @@ the `output` values, MXNet infers the storage type of `output` to be `default`(d
 and dispatch to `FComputeEx` operator implementation following the
 the storage type inference rules you defined.
 
-For our `quadratic` operator, the storage type inference function is the following:
+For our `quadratic` operator, the storage type inference function is the following.
+Let's go through it line by line.
+# TODO remove ref
 ```cpp
-inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
-                                   const int dev_mask,
-                                   DispatchMode* dispatch_mode,
-                                   std::vector<int>* in_attrs,
-                                   std::vector<int>* out_attrs) {
-  CHECK_EQ(in_attrs->size(), 1U);
-  CHECK_EQ(out_attrs->size(), 1U);
-  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
-  const int& in_stype = in_attrs->at(0);
-  int& out_stype = out_attrs->at(0);
-  bool dispatched = false;
-  if (!dispatched && in_stype == kDefaultStorage) {
-    dispatched = storage_type_assign(&out_stype, kDefaultStorage,
-                                     dispatch_mode, DispatchMode::kFCompute);
-  }
-  if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {
-    dispatched = storage_type_assign(&out_stype, kCSRStorage,
-                                     dispatch_mode, DispatchMode::kFComputeEx);
-  }
-  if (!dispatched) {
-    dispatched = dispatch_fallback(out_attrs, dispatch_mode);
-  }
-  return dispatched;
-}
+inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,                // 1
+                                   const int dev_mask,                          // 2
+                                   DispatchMode* dispatch_mode,                 // 3
+                                   std::vector<int>* in_attrs,                  // 4
+                                   std::vector<int>* out_attrs) {               // 5
+  CHECK_EQ(in_attrs->size(), 1U);                                               // 6
+  CHECK_EQ(out_attrs->size(), 1U);                                              // 7
+  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);        // 8
+  const int in_stype = in_attrs->at(0);                                         // 9
+  int& out_stype = out_attrs->at(0);                                            // 10
+  bool dispatched = false;                                                      // 11
+  if (!dispatched && in_stype == kDefaultStorage) {                             // 12
+    dispatched = storage_type_assign(&out_stype, kDefaultStorage,               // 13
+                                     dispatch_mode, DispatchMode::kFCompute);   // 14
+  }                                                                             // 15
+  if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {               // 16
+    dispatched = storage_type_assign(&out_stype, kCSRStorage,                   // 17
+                                     dispatch_mode, DispatchMode::kFComputeEx); // 18
+  }                                                                             // 19
+  if (!dispatched) {                                                            // 20
+    dispatched = dispatch_fallback(out_attrs, dispatch_mode);                   // 21
+  }                                                                             // 22
+  return dispatched;                                                            // 23
+}                                                                               // 24
 ```
 Here are a few things to note about the above function:
-
-1. `dev_mask` is the enum of device information of the operator such as `Context::kCPU`
+1. `attrs` contains the parameters of the operator `a`, `b` and `c`.
+2. `dev_mask` is the enum of device information of the operator such as `Context::kCPU`
 and `Context::kGPU`. It's not used here since both contexts are supported.
-2. `dispatch_mode` is the output dispatch mode for the operator. 
+3. `dispatch_mode` is the output dispatch mode for the operator. 
 The types of dispatch mode include the following: 
 ```
 enum class DispatchMode {
@@ -185,16 +187,16 @@ enum class DispatchMode {
   kVariable,
 };
 ```
-3. `in_attrs` is a vector containing all input storage types.
-4. `out_attrs` is a vector containing all output storage types.
+4. `in_attrs` is a vector containing all input storage types.
+5. `out_attrs` is a vector containing all output storage types.
+6. We check the number of inputs, which should be equal to 1.
+7. We check the number of outputs, which should be equal to 1.
+8. We get `QuadraticParam` from `attrs`. It contains the argument `c`, whose value
+is used later to decide if the output is sparse.
+9. The storage type of the input is stored in the local varible `in_stype`.
+10. The reference to output storage type is stored in the local varible `out_stype`.
 
-4. We called macro `SHAPE_ASSIGN_CHECK` twice for mutual inference. One for
-inferring the output shape from the input shape, the other one is for inferring
-the input shape from the output shape.
-If there are any unequal non-zero values in the same
-dimension of two shapes, such as `(2, 3)` and `(3, 3)`, the macro would throw an
-exception with an error message for shape inference.
-5. At the end of the function body, we checked whether the output shape
+
 is completely known by testing whether the shape is not empty and
 the shape's size is greater than `0`. Note that in MXNet, an empty shape
 means that the shape is unknown, and
