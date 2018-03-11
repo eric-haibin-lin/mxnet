@@ -324,14 +324,8 @@ For the `indices` and `indptr` arrays, we just copy the values from the inputs.
 This way, a complete output CSRNDArray is computed. 
 
 ### Operator Registration
-So far, we have implemented necessary data structure and functions for the operator `quadratic`.
-Now let's register them using `nnvm` to expose the operator `quadratic`
-to frontend. Users can consider the registration process as creating the operator object
-instance, saving it in the operator manager (a singleton),
-and setting attributes for the operator instance.
-
-The following code is from `quadratic_op.cc`, which is responsible
-for registering the operator working on CPU.
+Finally let's extend the operator registration logic to expose `sparse.quadratic`
+to frontend. Below is the extended registration code in `quadratic_op.cc`:
 ```cpp
 NNVM_REGISTER_OP(quadratic)
 MXNET_ADD_SPARSE_OP_ALIAS(quadratic)
@@ -369,127 +363,23 @@ Example::
 .add_arguments(QuadraticParam::__FIELDS__());
 ```
 
-- Line 1: Register the parameter struct.
-- Line 2: Register an operator named `quadratic` by creating an instance
-of `Op` type and save it in the operator manager and return a reference
-of the just created operator object.
-- Lines 3-4: Add description as an operator attribute
-including examples of the operator. The documentation engine would extract
-this description and display it on the documentation web page.
-- Line 5: Set parameter struct parser for the operator. It is used for parsing
-the parameters `a`, `b`, and `c` input from frontend.
-- Line 6: Set the number of inputs for the operator.
-- Line 7: Set the number of outputs for the operator.
-- Lines 8-11: Defines a function generating a vector of names of
-the operator input arguments. This function is used to add missing
-arguments that users did not specify when creating a symbolic operator.
-For example, `quad_func=mx.sym.quadratic()` is still a valid symbol
-since we have added the attribute `FListInputNames` to the operator node
-in the computational graph. MXNet would
-add the missing argument with name `quadratic0_data`, where the prefix
-`quadratic0` is the operator name appended with an index and the postfix
-`data` comes from the return value of the user defined `FListInputName` function.
-Users still can generate an executor for the `quand_func` like the following:
-```python
-quand_exe = quand_func.simple_bind(ctx=mx.cpu(), quandratic0_data=(1,))
-```
-- Line 12: Register shape inference function.
-- Line 13: Register type inference function.
-- Line 14: Register forward function.
-- Line 15: Register the function for creating the node of the operator in
-a backward pass. Note that we used a convenience functor struct `ElemwiseGradUseIn`.
-As you can tell from the name, the registered functor creates the node for gradient computation
-with dependencies on the output gradient node and input node. Similarly, there are
-other three functors defined as `ElemwiseGradUseOut`, `ElemwiseGradUseInOut`,
-and `ElemwiseGradUseNone` for developers' convenience. In order to add
-this attribute, we also need to register a backward operator for `quadratic` with
-several basic attributes, as it can share attribute inference
-functions with the forward operator and is not exposed to frontend.
-- Lines 16-19: This registered function implies that which output tensor can reuse
-which input tensor's memory space instead of allocating a new memory space for the output.
-In the operator `quadratic`, there is only one input and output, and the output can reuse
-the input memory space, so we store a pair of zeros in the function return vector
-indicating that `inputs[0]`'s memory space can be reused by `outputs[0]`.
-Note that this function just provides a hint to the computational graph initializer.
-If there are other nodes depending on the input tensor, the memory space
-of the input tensor will not be overwritten by the output.
-- Line 20: Define the input argument name as `data` for the operator.
-- Line 21: Add user input parameters `a`, `b`, and `c` as the attributes of the operator.
-- Line 22: Register an operator named `_backward_quadratic` for backward pass
-of the operator `quadratic`. The underscore prefix in the operator name indicates
-that this is an operator not exposed to users. The convention
-of naming an internally used backward operator is prepending the prefix `_backward_`
-to the corresponding forward operator name.
-- Line 23: Set the parameter parser for the operator `_backward_quadratic`.
-- Line 24: Set the number of inputs.
-- Line 25: Set the number of outputs.
-- Line 26: Add `TIsBackward` attribute for the operator. The shape and type
-inference passes use this attribute to determine whether a node in the graph is a
-forward or backward node.
-- Line 27: Register backward function.
+If you compare it with the original registration code,
+only three lines of code are added to the above code block:
+- MXNET_ADD_SPARSE_OP_ALIAS(quadratic)
+This line adds an alias for the quadratic function in
+python frontend so that `quadratic` is accessible from both `mx.symbol.sparse`
+and `mx.ndarray.sparse`.
+- .set_attr<FInferStorageType>("FInferStorageType", QuadraticOpStorageType)
+This line register the storage type inference attribute of the operator.
+- .set_attr<FComputeEx>("FComputeEx<cpu>", QuadraticOpForwardEx<cpu>)
+This line register the `FComputeEx` attribute of the operator.
 
-So far, we have acquired an operator working on CPU in frontend.
-In order to register the operator working on GPUs, we just need to add the following
-code to `quadratic_op.cu`. Note that forward and backward functions
-are registered with attribute key `FCompute<gpu>`, rather than `FCompute<cpu>`.
+To register this sparse operator on GPU, `quadratic_op.cu` is extended
+as below:
 ```cpp
 NNVM_REGISTER_OP(quadratic)
-.set_attr<FCompute>("FCompute<gpu>", QuadraticOpForward<gpu>);
-
-NNVM_REGISTER_OP(_backward_quadratic)
-.set_attr<FCompute>("FCompute<gpu>", QuadraticOpBackward<gpu>);
-```
-
-
-
-### Backward Function
-Backward functions play the role of propagating derivatives of loss function
-with respect to the outputs of the last layer throughout the network to the first
-layer. The whole process is often known as backward propagation. We are not
-going to delineate the principle of backward propagation here since users can find
-great details covered in other resources, such as
-[CS231n](http://cs231n.github.io/optimization-2/) and
-[How the backgropagation algorithm works](http://neuralnetworksanddeeplearning.com/chap2.html).
-The problem we are going to solve here for the `quadratic` operator is that
-given a tensor representing the gradient of the loss function with respect
-to the output of the operator, calculate the gradient with respect to
-the input of the operator. There is no need to calculate the derivatives
-of loss function with respect to user input parameters `a`, `b`, and `c`
-since they are not learnable parameters in the network. To formulate the problem:
-given `dL/dy` and `y = a*x^2 + b*x + c`, where `L` represents the loss function and
-`y` stands for the output of the quadratic tensor, we need to solve for
-`dL/dx`. Using the chain-rule, it is obvious to find that
-```
-dL/dx = dL/dy * dy/dx = dL/dy * (2*a*x + b).
-```
-The above equation indicates that `dL/dx` depends on the gradient
-of the output tensor and value of the input tensor.
-The backward function's signature is the same as the forward function's.
-With the aforementioned information in mind,
-let's breakdown the following backward function line by line.
-
-- Lines 1-6: Backward function has the same signature as forward function.
-- Lines 7-9: Check the sizes of the function arguments. One thing to note
-that since the gradient of the input depends on both the gradient of the output and
-the input tensor itself, `inputs` must contain two `TBlob` objects.
-- Line 10: Get the `stream` of the context for serializing asynchronous executions.
-- Lines 11-13: Convenience reference variables for later use. We name `out_grad`
-as the gradient of the operator output, `in_data` as the input of the operator,
-and `in_grad` as the gradient of the operator input.
-- Line 14: Get the parameter object of `QuadraticParam`.
-- Lines 16-22: Same as in the forward function, this is where parallel
-computation for `in_grad` happens. The struct `quadratic_backward` implements
-the formula of calculating each element of `in_grad` by one thread as the following.
-
-```cpp
-template<int req>
-struct quadratic_backward {
-  template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType* in_grad, const DType* out_grad,
-                                  const DType* in_data, const float a, const float b) {
-    KERNEL_ASSIGN(in_grad[i], req, out_grad[i] * (2 * a * in_data[i] + b));
-  }
-};
+.set_attr<FCompute>("FCompute<gpu>", QuadraticOpForward<gpu>)
+.set_attr<FComputeEx>("FComputeEx<gpu>", QuadraticOpForwardEx<gpu>);
 ```
 
 ### Unit Test
@@ -545,6 +435,9 @@ for comparison. Please also note that
 we highly recommend adding `check_numeric_gradient` test for every operator
 with backward function implemented as it eliminates the possibility
 of passing incorrect expected results into `check_symbolic_backward`.
+
+## Backward Function
+
 
 
 ## Summary
