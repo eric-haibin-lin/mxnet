@@ -228,28 +228,60 @@ void (const nnvm::NodeAttrs& attrs,
 We first paste the whole forward function code here
 and then go through it line by line.
 ```cpp
-template<typename xpu>                                                        // 1
-void QuadraticOpForward(const nnvm::NodeAttrs& attrs,                         // 2
-                        const OpContext& ctx,                                 // 3
-                        const std::vector<TBlob>& inputs,                     // 4
-                        const std::vector<OpReqType>& req,                    // 5
-                        const std::vector<TBlob>& outputs) {                  // 6
-  CHECK_EQ(inputs.size(), 1U);                                                // 7
-  CHECK_EQ(outputs.size(), 1U);                                               // 8
-  CHECK_EQ(req.size(), 1U);                                                   // 9
-  mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();                            // 10
-  const TBlob& in_data = inputs[0];                                           // 11
-  const TBlob& out_data = outputs[0];                                         // 12
-  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);      // 13
-  using namespace mxnet_op;                                                   // 14
-  MSHADOW_TYPE_SWITCH(out_data.type_flag_, DType, {                           // 15
-    MXNET_ASSIGN_REQ_SWITCH(req[0], req_type, {                               // 16
-      Kernel<quadratic_forward<req_type>, xpu>::Launch(                       // 17
-          s, out_data.Size(), out_data.dptr<DType>(), in_data.dptr<DType>(),  // 18
-          param.a, param.b, param.c);                                         // 19
-    });                                                                       // 20
-  });                                                                         // 21
-}                                                                             // 22
+template<typename xpu>
+void QuadraticOpForwardCsrImpl(const QuadraticParam& param,
+                               const OpContext& ctx,
+                               const NDArray& input,
+                               const OpReqType req,
+                               const NDArray& output) {
+  using namespace mshadow;
+  using namespace mxnet_op;
+  using namespace csr;
+  if (req == kNullOp) return;
+  CHECK_EQ(req, kWriteTo) << "QuadraticOp with CSR only supports kWriteTo";
+  Stream<xpu> *s = ctx.get_stream<xpu>();
+  if (!input.storage_initialized()) {
+    FillZerosCsrImpl(s, output);
+    return;
+  }
+  nnvm::dim_t nnz = input.storage_shape()[0];
+  nnvm::dim_t num_rows = output.shape()[0];
+  output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});
+  MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
+    MSHADOW_TYPE_SWITCH(output.aux_type(kIdx), CType, {
+      MSHADOW_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {
+        MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
+          Kernel<quadratic_forward<req_type>, xpu>::Launch(
+              s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),
+              param.a, param.b, param.c);
+          Copy(output.aux_data(kIdx).FlatTo1D<xpu, CType>(),
+               input.aux_data(kIdx).FlatTo1D<xpu, CType>());
+          Copy(output.aux_data(kIndPtr).FlatTo1D<xpu, RType>(),
+               input.aux_data(kIndPtr).FlatTo1D<xpu, RType>());
+        });
+      });
+    });
+  });
+}
+
+template<typename xpu>
+void QuadraticOpForwardEx(const nnvm::NodeAttrs& attrs,
+                          const OpContext& ctx,
+                          const std::vector<NDArray>& inputs,
+                          const std::vector<OpReqType>& req,
+                          const std::vector<NDArray>& outputs) {
+  CHECK_EQ(inputs.size(), 1U);
+  CHECK_EQ(outputs.size(), 1U);
+  CHECK_EQ(req.size(), 1U);
+  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
+  const auto in_stype = inputs[0].storage_type();
+  const auto out_stype = outputs[0].storage_type();
+  if (in_stype == kCSRStorage && out_stype == kCSRStorage) {
+    QuadraticOpForwardCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);
+  } else {
+    LogUnimplementedOp(attrs, ctx, inputs, req, outputs);
+  }
+}
 ```
 - Line 1: `xpu` stands for a generic device type so that the function can be instantiated
 for both CPU and GPU computing using concrete types `cpu` and `gpu`. The instantiation happens
@@ -311,17 +343,6 @@ the code blocks running parallel computation kernels.
 On CPUs, the kernels are normally wrapped by the OpenMP `parallel` directive;
 while on GPUs, they are the kernel functions launched by CUDA library.
 
-```cpp
-template<int req>
-struct quadratic_forward {
-  template<typename DType>
-  MSHADOW_XINLINE static void Map(int i, DType* out_data, const DType* in_data,
-                                  const float a, const float b, const float c) {
-    KERNEL_ASSIGN(out_data[i], req, in_data[i] * (a * in_data[i] + b) + c);
-  }
-};
-```
-
 ### Backward Function
 Backward functions play the role of propagating derivatives of loss function
 with respect to the outputs of the last layer throughout the network to the first
@@ -347,31 +368,7 @@ of the output tensor and value of the input tensor.
 The backward function's signature is the same as the forward function's.
 With the aforementioned information in mind,
 let's breakdown the following backward function line by line.
-```cpp
-template<typename xpu>                                                       // 1
-void QuadraticOpBackward(const nnvm::NodeAttrs& attrs,                       // 2
-                         const OpContext& ctx,                               // 3
-                         const std::vector<TBlob>& inputs,                   // 4
-                         const std::vector<OpReqType>& req,                  // 5
-                         const std::vector<TBlob>& outputs) {                // 6
-  CHECK_EQ(inputs.size(), 2U);                                               // 7
-  CHECK_EQ(outputs.size(), 1U);                                              // 8
-  CHECK_EQ(req.size(), 1U);                                                  // 9
-  mshadow::Stream<xpu> *s = ctx.get_stream<xpu>();                           // 10
-  const TBlob& out_grad = inputs[0];                                         // 11
-  const TBlob& in_data = inputs[1];                                          // 12
-  const TBlob& in_grad = outputs[0];                                         // 13
-  const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);     // 14
-  using namespace mxnet_op;                                                  // 15
-  MSHADOW_TYPE_SWITCH(out_grad.type_flag_, DType, {                          // 16
-    MXNET_ASSIGN_REQ_SWITCH(req[0], req_type, {                              // 17
-      Kernel<quadratic_backward<req_type>, xpu>::Launch(                     // 18
-          s, in_grad.Size(), in_grad.dptr<DType>(), out_grad.dptr<DType>(),  // 19
-          in_data.dptr<DType>(), param.a, param.b);                          // 20
-    });                                                                      // 21
-  });                                                                        // 22
-}                                                                            // 23
-```
+
 - Lines 1-6: Backward function has the same signature as forward function.
 - Lines 7-9: Check the sizes of the function arguments. One thing to note
 that since the gradient of the input depends on both the gradient of the output and
@@ -406,47 +403,40 @@ and setting attributes for the operator instance.
 The following code is from `quadratic_op.cc`, which is responsible
 for registering the operator working on CPU.
 ```cpp
-DMLC_REGISTER_PARAMETER(QuadraticParam);                                           // 1
-
-NNVM_REGISTER_OP(quadratic)                                                        // 2
-.describe(R"code(This operators implements the quadratic function:                 // 3
+NNVM_REGISTER_OP(quadratic)
+MXNET_ADD_SPARSE_OP_ALIAS(quadratic)
+.describe(R"code(This operators implements the quadratic function:
 .. math::
-
     f(x) = ax^2+bx+c
-
 where :math:`x` is an input tensor and all operations
 in the function are element-wise.
-
+The storage type of ``quadratic`` output depends on storage types of inputs
+  - quadratic(csr, a, b, 0) = csr
+  - quadratic(default, a, b, c) = default
 Example::
   x = [[1, 2], [3, 4]]
   y = quadratic(data=x, a=1, b=2, c=3)
   y = [[6, 11], [18, 27]]
-
-)code" ADD_FILELINE)                                                               // 4
-.set_attr_parser(ParamParser<QuadraticParam>)                                      // 5
-.set_num_inputs(1)                                                                 // 6
-.set_num_outputs(1)                                                                // 7
-.set_attr<nnvm::FListInputNames>("FListInputNames",                                // 8
-  [](const NodeAttrs& attrs) {                                                     // 9
-    return std::vector<std::string>{"data"};                                       // 10
-  })                                                                               // 11
-.set_attr<nnvm::FInferShape>("FInferShape", QuadraticOpShape)                      // 12
-.set_attr<nnvm::FInferType>("FInferType", QuadraticOpType)                         // 13
-.set_attr<FCompute>("FCompute<cpu>", QuadraticOpForward<cpu>)                      // 14
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_quadratic"})  // 15
-.set_attr<nnvm::FInplaceOption>("FInplaceOption",                                  // 16
-  [](const NodeAttrs& attrs) {                                                     // 17
-    return std::vector<std::pair<int, int> >{{0, 0}};                              // 18
-  })                                                                               // 19
-.add_argument("data", "NDArray-or-Symbol", "Input ndarray")                        // 20
-.add_arguments(QuadraticParam::__FIELDS__());                                      // 21
-
-NNVM_REGISTER_OP(_backward_quadratic)                                              // 22
-.set_attr_parser(ParamParser<QuadraticParam>)                                      // 23
-.set_num_inputs(2)                                                                 // 24
-.set_num_outputs(1)                                                                // 25
-.set_attr<nnvm::TIsBackward>("TIsBackward", true)                                  // 26
-.set_attr<FCompute>("FCompute<cpu>", QuadraticOpBackward<cpu>);                    // 27
+)code" ADD_FILELINE)
+.set_attr_parser(ParamParser<QuadraticParam>)
+.set_num_inputs(1)
+.set_num_outputs(1)
+.set_attr<nnvm::FListInputNames>("FListInputNames",
+  [](const NodeAttrs& attrs) {
+    return std::vector<std::string>{"data"};
+  })
+.set_attr<nnvm::FInferShape>("FInferShape", QuadraticOpShape)
+.set_attr<nnvm::FInferType>("FInferType", QuadraticOpType)
+.set_attr<FInferStorageType>("FInferStorageType", QuadraticOpStorageType)
+.set_attr<FCompute>("FCompute<cpu>", QuadraticOpForward<cpu>)
+.set_attr<FComputeEx>("FComputeEx<cpu>", QuadraticOpForwardEx<cpu>)
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_quadratic"})
+.set_attr<nnvm::FInplaceOption>("FInplaceOption",
+  [](const NodeAttrs& attrs) {
+    return std::vector<std::pair<int, int> >{{0, 0}};
+  })
+.add_argument("data", "NDArray-or-Symbol", "Input ndarray")
+.add_arguments(QuadraticParam::__FIELDS__());
 ```
 
 - Line 1: Register the parameter struct.
