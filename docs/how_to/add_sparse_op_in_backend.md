@@ -140,6 +140,22 @@ supported so that the `FComputeEx` implementation can be dispatched for executoi
 This is done via the `FInferStorageType` interface. 
 
 ```cpp
+}
+```
+
+### Storage Type Inference
+Storage type inference is the process of deducing storage types of `NDArray`s
+in neural networks from operator arguments, and deciding whether to dispatch to
+the `FCompute` or `FComputeEx` interface.
+Let's take a look at the following example.
+Given an input `CSRNDArray` called `x`, you invoke the `quadratic` operator
+like this: `output = mx.nd.sparse.quadratic(x, a=1, b=2, c=0)`. Before calculating
+the `output` values, MXNet infers the storage type of `output` to be `default`(dense),
+and dispatch to `FComputeEx` operator implementation following the
+the storage type inference rules you defined.
+
+For our `quadratic` operator, the storage type inference function is the following:
+```cpp
 inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
                                    const int dev_mask,
                                    DispatchMode* dispatch_mode,
@@ -148,16 +164,14 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), 1U);
   CHECK_EQ(out_attrs->size(), 1U);
   const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
-  const auto& in_stype = in_attrs->at(0);
-  auto& out_stype = out_attrs->at(0);
+  const int& in_stype = in_attrs->at(0);
+  int& out_stype = out_attrs->at(0);
   bool dispatched = false;
   if (!dispatched && in_stype == kDefaultStorage) {
-    // dns -> dns
     dispatched = storage_type_assign(&out_stype, kDefaultStorage,
                                      dispatch_mode, DispatchMode::kFCompute);
   }
   if (!dispatched && in_stype == kCSRStorage && param.c == 0.0) {
-    // csr -> csr
     dispatched = storage_type_assign(&out_stype, kCSRStorage,
                                      dispatch_mode, DispatchMode::kFComputeEx);
   }
@@ -165,36 +179,6 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
     dispatched = dispatch_fallback(out_attrs, dispatch_mode);
   }
   return dispatched;
-}
-```
-
-### Attribute Inference
-Attribute inference is the process of deducing the properties of `NDArray`s
-in neural networks from user provided information. Two most common attributes
-of an `NDArray` are data shape and data type.
-Let's take a look at the following example.
-Given an input `NDArray` called `data`, you invoke the `quadratic` operator
-like this: `output = mx.nd.quadratic(data, a=1, b=2, c=3)`. Before calculating
-the `output` values, its shape and data type are inferred from the input
-`data`'s shape and type following
-the rules you defined in order to allocate memory space for the output tensor.
-
-
-The above four steps illustrate how shape inference logic works in MXNet.
-It is actually implemented in the shape inference functions of the operators for
-element-wise multiplication and addition.
-
-For our `quadratic` operator, shape inference possesses quite similar logic.
-```cpp
-inline bool QuadraticOpShape(const nnvm::NodeAttrs& attrs,
-                             std::vector<TShape>* in_attrs,
-                             std::vector<TShape>* out_attrs) {
-  CHECK_EQ(in_attrs->size(), 1U);
-  CHECK_EQ(out_attrs->size(), 1U);
-
-  SHAPE_ASSIGN_CHECK(*out_attrs, 0, in_attrs->at(0));
-  SHAPE_ASSIGN_CHECK(*in_attrs, 0, out_attrs->at(0));
-  return out_attrs->at(0).ndim() != 0U && out_attrs->at(0).Size() != 0U;
 }
 ```
 Here are a few things to note about the above function:
