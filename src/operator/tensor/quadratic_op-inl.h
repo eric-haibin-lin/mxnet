@@ -82,8 +82,8 @@ inline bool QuadraticOpStorageType(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(in_attrs->size(), 1U);
   CHECK_EQ(out_attrs->size(), 1U);
   const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
-  const auto& in_stype = in_attrs->at(0);
-  auto& out_stype = out_attrs->at(0);
+  const int in_stype = in_attrs->at(0);
+  int& out_stype = out_attrs->at(0);
   bool dispatched = false;
   if (!dispatched && in_stype == kDefaultStorage) {
     // dns -> dns
