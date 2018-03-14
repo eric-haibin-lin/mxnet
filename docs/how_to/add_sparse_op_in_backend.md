@@ -1,4 +1,5 @@
-# TODO param c == 0.0
+# TODO param c == 0.0, const, test case.. 
+
 # A Guide to Implementing Sparse Operators in MXNet Backend
 
 ## Prerequisites
@@ -383,75 +384,48 @@ NNVM_REGISTER_OP(quadratic)
 ```
 
 ### Unit Test
-Now we have finished implementing the operator `quadratic` in MXNet backend.
-If you use python, when you type `import mxnet as mx`, two python
-functions for invoking your backend implementation are
-generated on the fly: one is for imperative programming
-registered as `mxnet.ndarray.quadratic` or `mx.nd.quadratic` for short;
-the other one is for symbolic
-programming registered under module `mxnet.symbol.quadratic`
-or `mx.sym.quadratic` for short.
-
-In order to unit test it in frontend, we need to add the following code
-to the python file `test_operator.py`. Note that while testing the
-forward pass is straightforward using `mx.nd.quadratic`, testing
-the backward involves a bit of more efforts. We create a
-`quadratic` symbol and feed it into the utility function `check_numeric_gradient`.
-The utility function will perform a perturbation on the input
-and calculate the response rate of the output using the
-[finite difference method](https://en.wikipedia.org/wiki/Finite_difference_method).
-Then it will compare the gradient from the backward pass with
-the values from the finite difference method. The test
-will be successful once the comparison satisfies user specified
-relative and absolute thresholds.
+To unit test the sparse operator in frontend, we need to add the following code
+to the python file `test_sparse_ndarray.py`. 
 ```python
-def test_quadratic_function():
+@with_seed()
+def test_sparse_quadratic_function():
     def f(x, a, b, c):
         return a * x**2 + b * x + c
 
+    def check_sparse_quadratic_function(c):
+      # check forward and compare the result with dense op
+      ndim = 2
+      shape = rand_shape_nd(ndim, 5)
+      data = rand_ndarray(shape=shape, stype='csr')
+      data_np = data.asnumpy()
+      expected = f(data_np, a, b, c)
+      output = mx.nd.sparse.quadratic(data, a=a, b=b, c=c)
+      assert(output.stype == expected_stype)
+      assert_almost_equal(output.asnumpy(), expected)
+
     a = np.random.random_sample()
     b = np.random.random_sample()
-    c = np.random.random_sample()
-    for ndim in range(1, 6):
-        # check forward
-        shape = rand_shape_nd(ndim, 5)
-        data = rand_ndarray(shape=shape, stype='default')
-        data_np = data.asnumpy()
-        expected = f(data_np, a, b, c)
-        output = mx.nd.quadratic(data, a=a, b=b, c=c)
-        assert_almost_equal(output.asnumpy(), expected)
+    check_sparse_quadratic_function(0.0, 'csr')
+    check_sparse_quadratic_function(1.0, 'default')
 
-        # check backward using finite difference
-        data = mx.sym.Variable('data')
-        quad_sym = mx.sym.quadratic(data=data, a=a, b=b, c=c)
-        check_numeric_gradient(quad_sym, [data_np])
 ```
-Note that here we used `mx.nd.quadratic` to test the forward function
-and `check_numeric_gradient` to test the backward function. In MXNet,
-two other utility functions are also commonly used: `check_symbolic_forward`
-and `check_symbolic_backward`. By using them in unit tests,
-users need to pass in the operator symbols and expected results
-for comparison. Please also note that
-we highly recommend adding `check_numeric_gradient` test for every operator
-with backward function implemented as it eliminates the possibility
-of passing incorrect expected results into `check_symbolic_backward`.
+
+In this test, we are testing the result of the `sparse.quadratic` operator
+on two cases:
+- CSRNDArray input with c = 0.0, which outputs a CSRNDArray
+- CSRNDArray input with c = 1.0, which outputs a NDArray
 
 ## Backward Function
-
-
+So far, only the forward operator supports sparse inputs. To add sparse support to the
+backward operator, you also need to register these two attributes to `_backward_quadratic`:
+- `FComputeEx` for sparse operator implementation
+- `FInferStorage` for storage tyep inference in backward
+Due to length constraint, this is left as an exercise for readers.
 
 ## Summary
-In this tutorial, we practiced implementing the operator `quadratic` in MXNet backend
-and unit testing the implementation in frontend. More specifically, we added parameter
-struct for user-input parameters, walked through shape and type inference workflow,
-implemented forward and backward functions, and registered the operator
-using nnvm. Congratulations! You now know how to add operators.
+In this tutorial, we practiced adding sparse support to the operator `quadratic` in MXNet backend
+and unit testing the implementation in frontend. More specifically, we went through a few
+important interfaces, added the storage type inference function,
+implemented the forward function, and registered the sparse operator
+using nnvm. Congratulations! You now know how to add sparse operators.
 We welcome your contributions to MXNet.
-
-**Note**: Source code in the tutorial can be found in
-[quadratic_op-inl.h](https://github.com/reminisce/mxnet/blob/add_op_example_for_tutorial/src/operator/tensor/quadratic_op-inl.h),
-[quadratic_op.cc](https://github.com/reminisce/mxnet/blob/add_op_example_for_tutorial/src/operator/tensor/quadratic_op.cc),
-[quadratic_op.cu](https://github.com/reminisce/mxnet/blob/add_op_example_for_tutorial/src/operator/tensor/quadratic_op.cu),
-and
-[test_operator.py](https://github.com/reminisce/mxnet/blob/add_op_example_for_tutorial/tests/python/unittest/test_operator.py#L4008).
-
