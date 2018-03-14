@@ -161,18 +161,18 @@ void QuadraticOpForwardCsrImpl(const QuadraticParam& param,
   const nnvm::dim_t nnz = input.storage_shape()[0];
   const nnvm::dim_t num_rows = output.shape()[0];
   output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});
+  CHECK_EQ(output.aux_type(kIdx), output.aux_type(kIndPtr))
+    << "The dtypes of indices and indptr don't match";
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIdx), CType, {
-      MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {
-        MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
-          Kernel<quadratic_forward<req_type>, xpu>::Launch(
-              s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),
-              param.a, param.b, param.c);
-          Copy(output.aux_data(kIdx).FlatTo1D<xpu, CType>(),
-               input.aux_data(kIdx).FlatTo1D<xpu, CType>());
-          Copy(output.aux_data(kIndPtr).FlatTo1D<xpu, RType>(),
-               input.aux_data(kIndPtr).FlatTo1D<xpu, RType>());
-        });
+    MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIdx), IType, {
+      MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
+        Kernel<quadratic_forward<req_type>, xpu>::Launch(
+            s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),
+            param.a, param.b, param.c);
+        Copy(output.aux_data(kIdx).FlatTo1D<xpu, IType>(),
+             input.aux_data(kIdx).FlatTo1D<xpu, IType>());
+        Copy(output.aux_data(kIndPtr).FlatTo1D<xpu, IType>(),
+             input.aux_data(kIndPtr).FlatTo1D<xpu, IType>());
       });
     });
   });
