@@ -1,5 +1,3 @@
-# TODO param c == 0.0, const, test case.. 
-
 # A Guide to Implementing Sparse Operators in MXNet Backend
 
 ## Prerequisites
@@ -257,8 +255,8 @@ void QuadraticOpForwardCsrImpl(const QuadraticParam& param,                     
   const nnvm::dim_t num_rows = output.shape()[0];                               // 37
   output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});                    // 38
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {                                  // 39
-    MSHADOW_TYPE_SWITCH(output.aux_type(kIdx), CType, {                         // 40
-      MSHADOW_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {                    // 41
+    MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIdx), CType, {                     // 40
+      MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {                // 41
         MXNET_ASSIGN_REQ_SWITCH(req, req_type, {                                // 42
           Kernel<quadratic_forward<req_type>, xpu>::Launch(                     // 43
               s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),  // 44

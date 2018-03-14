@@ -158,12 +158,12 @@ void QuadraticOpForwardCsrImpl(const QuadraticParam& param,
     FillZerosCsrImpl(s, output);
     return;
   }
-  nnvm::dim_t nnz = input.storage_shape()[0];
-  nnvm::dim_t num_rows = output.shape()[0];
+  const nnvm::dim_t nnz = input.storage_shape()[0];
+  const nnvm::dim_t num_rows = output.shape()[0];
   output.CheckAndAlloc({Shape1(num_rows + 1), Shape1(nnz)});
   MSHADOW_TYPE_SWITCH(output.dtype(), DType, {
-    MSHADOW_TYPE_SWITCH(output.aux_type(kIdx), CType, {
-      MSHADOW_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {
+    MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIdx), CType, {
+      MSHADOW_IDX_TYPE_SWITCH(output.aux_type(kIndPtr), RType, {
         MXNET_ASSIGN_REQ_SWITCH(req, req_type, {
           Kernel<quadratic_forward<req_type>, xpu>::Launch(
               s, nnz, output.data().dptr<DType>(), input.data().dptr<DType>(),
@@ -190,7 +190,7 @@ void QuadraticOpForwardEx(const nnvm::NodeAttrs& attrs,
   const QuadraticParam& param = nnvm::get<QuadraticParam>(attrs.parsed);
   const auto in_stype = inputs[0].storage_type();
   const auto out_stype = outputs[0].storage_type();
-  if (in_stype == kCSRStorage && out_stype == kCSRStorage) {
+  if (in_stype == kCSRStorage && out_stype == kCSRStorage && param.c == 0.0) {
     QuadraticOpForwardCsrImpl<xpu>(param, ctx, inputs[0], req[0], outputs[0]);
   } else {
     LogUnimplementedOp(attrs, ctx, inputs, req, outputs);
