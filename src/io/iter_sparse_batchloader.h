@@ -163,7 +163,6 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
     out_.data.resize(total_size);
     // estimate the memory required for a batch
     for (size_t i = 0; i < total_size; ++i) {
-      size_t size = 0;
       // shape for indptr
       if (IsIndPtr(i)) {
         buff_sizes[i] = param_.batch_size + 1;
