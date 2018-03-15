@@ -1,11 +1,11 @@
 # A Guide to Implementing Sparse Operators in MXNet Backend
 
 ## Prerequisites
-- Basic knowledge of [how to implement a dense operator in MXNet backend](https://mxnet.incubator.apache.org/versions/master/how_to/add_op_in_backend.html)
+- Basic knowledge of [how to implement a dense operator in MXNet backend](https://mxnet.incubator.apache.org/faq/add_op_in_backend.html)
 - Basic knowledge of [CSRNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/csr.html) and [RowSparseNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/row_sparse.html) in MXNet
 
 ## Introduction
-In the [previous tutorial](https://mxnet.incubator.apache.org/versions/master/how_to/add_op_in_backend.html),
+In the [previous tutorial](https://mxnet.incubator.apache.org/faq/add_op_in_backend.html),
 we went through the steps to implementing an operator using C++ in the MXNet backend.
 In this tutorial, we will cover how sparse operators are implemented
 in the backend. Specifically, we will practice adding CSRNDArray support to the forward function of the `quadratic` operator.
