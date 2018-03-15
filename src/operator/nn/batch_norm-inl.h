@@ -79,7 +79,7 @@ struct BatchNormParam : public dmlc::Parameter<BatchNormParam> {
     .describe("Whether use global moving statistics instead of local batch-norm. "
               "This will force change batch-norm into a scale shift operator.");
     DMLC_DECLARE_FIELD(output_mean_var).set_default(false)
-    .describe("Output All,normal mean and var");
+    .describe("Output the mean and inverse std ");
     DMLC_DECLARE_FIELD(axis).set_default(mxnet::op::batchnorm::DEFAULT_AXIS)
       .describe("Specify which shape axis the channel is specified");
     DMLC_DECLARE_FIELD(cudnn_off).set_default(false)
@@ -295,6 +295,7 @@ class BNTensor3 {
       , indexOfChannel_(static_cast<size_t>(indexOfChannel < 0
                                ? (static_cast<int>(blob.shape_.ndim()) + indexOfChannel)
                                : indexOfChannel)) {
+    CHECK_EQ(blob.type_flag_, mshadow::DataType<DType>::kFlag);
     shape_[OUTER] = 1;
     for (size_t i = 0; i < indexOfChannel_; ++i) {
       shape_[OUTER] *= blob.shape_[i];

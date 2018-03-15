@@ -34,6 +34,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <algorithm>
 #include <memory>
 #include <algorithm>
 #if MXNET_USE_MKLDNN == 1
@@ -73,7 +74,6 @@ enum NDArrayFormatErr {
   kRSPIdxErr,     // indices error for row sparse
 };
 
-class MKLDNNMemory;
 
 /*!
  * \brief ndarray interface
@@ -324,6 +324,10 @@ class NDArray {
   /*! \return the associated variable of the ndarray.*/
   inline Engine::VarHandle var() const {
     return ptr_->var;
+  }
+  /*! \return byte offset in chunk of the ndarray*/
+  inline size_t byte_offset() const {
+    return byte_offset_;
   }
   /*!
    * \brief save the content into binary stream
@@ -622,11 +626,28 @@ class NDArray {
   /*
    * Reorder the memory to the specified layout.
    */
-  void MKLDNNDataReorder(const mkldnn::memory::primitive_desc &desc);
+  void MKLDNNDataReorder(const mkldnn::memory::primitive_desc &desc) {
+    CHECK_EQ(storage_type(), kDefaultStorage);
+    ptr_->MKLDNNDataReorder(desc);
+  }
   void Reorder2Default() {
     CHECK_EQ(storage_type(), kDefaultStorage);
     ptr_->Reorder2Default();
   }
+
+  /*
+   * These are the async version of the methods above.
+   * It changes the layout of this NDArray, but it happens after all accesses to
+   * the array are complete.
+   */
+  void Reorder2DefaultAsync();
+  void MKLDNNDataReorderAsync(const mkldnn::memory::primitive_desc &desc);
+
+  /*
+   * This creates a new NDArray with the reordered data.
+   * It doesn't affect the data of the original NDArray.
+   */
+  NDArray Reorder2Default() const;
 
   void InvalidateMKLDNNData() {
     // Removing mkl_mem_ means the NDArray will store data in the default format.
@@ -834,7 +855,7 @@ class NDArray {
     void CheckAndAlloc(uint64_t dbytes) {
       CHECK_EQ(kDefaultStorage, storage_type)
           << "CheckAndAlloc(dbytes) is only intended for kDefaultStorage";
-      dbytes = std::max(dbytes, shandle.size);
+      dbytes = std::max(dbytes, static_cast<uint64_t>(shandle.size));
       if (delay_alloc) {
         shandle = Storage::Get()->Alloc(dbytes, shandle.ctx);
 #if MXNET_USE_MKLDNN == 1
@@ -880,9 +901,11 @@ class NDArray {
     // Have MKL memory reference to the data in the default storage
     // or create memory for MKLDNN.
     void SetMKLMem(const TShape &shape, int dtype);
-    // In the data is stored in MKLDNN layout, we reorder data in mkl_mem_ and
+    // If the data is stored in MKLDNN layout, we reorder data in mkl_mem_ and
     // save the result in shandle.
     void Reorder2Default();
+    // Reroder data to a specified layout.
+    void MKLDNNDataReorder(const mkldnn::memory::primitive_desc &desc);
     bool IsMKLDNN() const;
     bool IsDefault() const;
 #endif

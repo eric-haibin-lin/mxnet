@@ -106,6 +106,23 @@ The storage type of ``sigmoid`` output is always dense
 
 MXNET_OPERATOR_REGISTER_BINARY_WITH_SPARSE_CPU(_backward_sigmoid,
                                                unary_bwd<mshadow_op::sigmoid_grad>);
+// softsign
+MXNET_OPERATOR_REGISTER_UNARY(softsign)
+MXNET_ADD_SPARSE_OP_ALIAS(softsign)
+.describe(R"code(Computes softsign of x element-wise.
+
+.. math::
+   y = x / (1 + abs(x))
+
+The storage type of ``softsign`` output is always dense
+
+)code" ADD_FILELINE)
+  .set_attr<FCompute>("FCompute<cpu>", UnaryOp::Compute<cpu, mshadow_op::softsign>)
+  .set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_softsign"});
+
+MXNET_OPERATOR_REGISTER_BINARY(_backward_softsign)
+.set_attr<FCompute>("FCompute<cpu>", ElemwiseBinaryOp::Compute<cpu,
+  unary_bwd<mshadow_op::softsign_grad> >);
 
 // copy
 static void CopyEx(const nnvm::NodeAttrs& attrs,
@@ -115,9 +132,9 @@ static void CopyEx(const nnvm::NodeAttrs& attrs,
                    const std::vector<NDArray>& outputs) {
   CHECK_EQ(inputs.size(), 1U);
   CHECK_EQ(outputs.size(), 1U);
+#if MXNET_USE_MKLDNN == 1
   const auto in_stype = inputs[0].storage_type();
   const auto out_stype = outputs[0].storage_type();
-#if MXNET_USE_MKLDNN == 1
   if (inputs[0].IsMKLDNNData()) {
     MKLDNNCopy(attrs, ctx, inputs[0], req[0], outputs[0]);
     return;
