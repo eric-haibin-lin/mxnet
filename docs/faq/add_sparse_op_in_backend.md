@@ -1,7 +1,7 @@
 # A Guide to Implementing Sparse Operators in MXNet Backend
 
 ## Prerequisites
-- Basic knowledge of [how to implement a dense operator in MXNet backend](https://mxnet.incubator.apache.org/faq/add_op_in_backend.html)
+- Basic knowledge of [how to implement a (dense) operator in MXNet backend](https://mxnet.incubator.apache.org/faq/add_op_in_backend.html)
 - Basic knowledge of [CSRNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/csr.html) and [RowSparseNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/row_sparse.html) in MXNet
 
 ## Introduction
@@ -18,23 +18,30 @@ Notice that if the input x is sparse and c is 0.0, the output is also sparse.
 If c is non-zero, the output is dense. In MXNet frontend, the operator works like this:
 
 ```python
->>> x = mx.nd.array([[0,1],[2,0]).tostype('csr')
+>>> x = mx.nd.array([[0,1],[2,0]]).tostype('csr')
 >>> x
 <CSRNDArray 2x2 @cpu(0)>
 >>> y = mx.nd.sparse.quadratic(x, a=1, b=2, c=0)
 >>> y
 <CSRNDArray 2x2 @cpu(0)>
 >>> z = mx.nd.quadratic(x, a=1, b=2, c=3)
+Storage type fallback detected:
+operator = quadratic
+input storage types = [csr, ]
+output storage types = [default, ]
+params = {"c" : 3, "b" : 2, "a" : 1, }
+context.dev_mask = cpu
+The operator with default storage type will be dispatched for execution. You're seeing this warning message because the operator above is unable to process the given ndarrays with specified storage types, context and parameter. Temporary dense ndarrays are generated in order to execute the operator. You can set environment variable MXNET_STORAGE_FALLBACK_LOG_VERBOSE to 0 to suppress this warning.
 >>> z
 [[  3.   6.]
  [ 11.   3.]]
 <NDArray 2x2 @cpu(0)>
 ```
 
-The statement `z = mx.nd.quadratic(x, a=1, b=2, c=3)` generates a warning message which says
-the sparse input is converted to dense storage, and the dense operator is used to compute the dense output.
-This is the "storage fallback" mechanism in MXNet, where a dense operator is automatically used for
-inputs that a sparse operator doesn't have special kernels for.
+Note that the statement `z = mx.nd.quadratic(x, a=1, b=2, c=3)` generates a warning message, saying that
+a dense operator is used when the sparse operator doesn't support the above case. If you are not
+familiar with the storag fallback mechanism, please revisit the tutorials for
+[CSRNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/csr.html) and [RowSparseNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/row_sparse.html).
 
 In this tutorial, we will implement the forward function of the sparse quadratic operator.
 The storage type of the output depends on the inputs:
@@ -45,12 +52,13 @@ To implement this, we first register the storage type inference property of the 
 infers the output storage type based on operator arguments and inputs types. Then we implement the forward
 function for the case where c is 0.0 and x is a CSRNDArray.
 
-Next, we are going to
+The next steps will go into detail on how to create a sparse operator in C++:
 
 - Understand the FComputeEx and relevant NDArray interfaces in backend.
 - Define storage type inference functions in quadratic_op-inl.h.
 - Define the forward function in quadratic_op-inl.h.
 - Register the sparse operator using nnvm in quadratic_op.cc and quadratic_op.cu for CPU and GPU computing, respectively.
+- Write a unit test for the sparse operator implemeneted.
 
 Now let's walk through the process step by step.
 
@@ -63,7 +71,8 @@ storage types.
 - Memories of inputs and outputs are pre-allocated based their shapes for dense operators. However, with sparse representations, memories for sparse inputs and outputs depend on the number of non-zero elements they have,
 which is only known at runtime.
 
-With these differences in mind, let's review the `FCompute` interface introduced in the previous operator tutorial:
+With these differences in mind, let's review the `FCompute` interface introduced in the previous
+[dense operator](https://mxnet.incubator.apache.org/faq/add_op_in_backend.html) tutorial:
 ```cpp
 void (const nnvm::NodeAttrs& attrs,
       const OpContext& ctx,
@@ -71,7 +80,7 @@ void (const nnvm::NodeAttrs& attrs,
       const std::vector<OpReqType>& req,
       const std::vector<TBlob>& outputs);
 ```
-Notice the `FCompute` interface doesn't include data structures that could be used to query storage
+Notice the `FCompute` interface includes TBlobs, which don't include data structures that could be used to query storage
 types of inputs, nor manipulate auxiliary arrays like `indices` and `indptr`. 
 Therefore, instead of the `FCompute` interface, sparse operators are registered with the following `FComputeEx` interface:
 ```cpp
@@ -81,7 +90,8 @@ void (const nnvm::NodeAttrs& attrs,
       const std::vector<OpReqType>& req,
       const std::vector<NDArray>& outputs);
 ```
-where the vectors of TBlobs are replaced with vectors of NDArrays. Now, let's go through a few important methods in the NDArray class.
+Note that the vectors of TBlobs are replaced with vectors of NDArrays.
+Now, let's go through a few important methods in the NDArray class.
 
 In the python frontend, there are three types of NDArrays, namely `mx.nd.NDArray`, `mx.nd.sparse.RowSparseNDArray` and `mx.nd.sparse.CSRNDArray`. In the C++ backend, however, all of them are represented by the `mxnet::NDArray` class.
 The `storage_type()` method indicates the storage type of the NDArray:
@@ -129,7 +139,7 @@ inline void CheckAndAlloc(const std::vector<TShape> &aux_shapes)
 ```
 
 ### Storage Type Inference
-Storage type inference is the process of deducing storage types of `NDArray`s
+Storage type inference is the process of deducing storage types of NDArrays
 in neural networks from operator arguments, and deciding whether to dispatch to
 the `FCompute` or `FComputeEx` interface.
 Let's take a look at the following example.
@@ -369,9 +379,9 @@ This line adds an alias for the quadratic function in
 python frontend so that `quadratic` is accessible from both `mx.symbol.sparse`
 and `mx.ndarray.sparse`.
 - .set_attr<FInferStorageType>("FInferStorageType", QuadraticOpStorageType)
-This line register the storage type inference attribute of the operator.
+This line registers the storage type inference attribute of the operator.
 - .set_attr<FComputeEx>("FComputeEx<cpu>", QuadraticOpForwardEx<cpu>)
-This line register the `FComputeEx` attribute of the operator.
+This line registers the `FComputeEx` attribute of the operator.
 
 To register this sparse operator on GPU, `quadratic_op.cu` is extended
 as below:
@@ -417,7 +427,7 @@ on two cases:
 So far, only the forward operator supports sparse inputs. To add sparse support to the
 backward operator, you also need to register these two attributes to `_backward_quadratic`:
 - `FComputeEx` for sparse operator implementation
-- `FInferStorage` for storage tyep inference in backward
+- `FInferStorage` for storage type inference in the backward computation.
 Due to length constraint, this is left as an exercise for readers.
 
 ## Summary
