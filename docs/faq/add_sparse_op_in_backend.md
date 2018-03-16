@@ -328,7 +328,7 @@ are computed.
 The macros `MSHADOW_TYPE_SWITCH` and `MXNET_ASSIGN_REQ_SWITCH` enable
 the code block to work for all the supported data types and `req` types in MXNet.
 For this operator, since the transformation only happens on the data array,
-we simply invoke the quadratic operator kernel via `Kernel::Launch`.
+we simply invoke the quadratic operator kernel [quadratic_forward](https://mxnet.incubator.apache.org/faq/add_op_in_backend.html#forward-function) via `Kernel::Launch`.
 For the `indices` and `indptr` arrays, we just copy the values from the inputs.
 This way, a complete output CSRNDArray is computed. 
 
