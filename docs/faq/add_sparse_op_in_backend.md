@@ -40,7 +40,7 @@ The operator with default storage type will be dispatched for execution. You're 
 
 Note that the statement `z = mx.nd.quadratic(x, a=1, b=2, c=3)` generates a warning message, saying that
 a dense operator is used when the sparse operator doesn't support the above case. If you are not
-familiar with the storag fallback mechanism, please revisit the tutorials for
+familiar with the storage fallback mechanism, please revisit the tutorials for
 [CSRNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/csr.html) and [RowSparseNDArray](http://mxnet.incubator.apache.org/tutorials/sparse/row_sparse.html).
 
 In this tutorial, we will implement the forward function of the sparse quadratic operator.
