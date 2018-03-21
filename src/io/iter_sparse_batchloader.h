@@ -148,13 +148,13 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
   }
 
   // initialize the data holder by using from the batch
-  inline void InitData(const DataInst& first_batch) {
+  inline void InitData(const DataInst& first_inst) {
     CHECK(data_stype_ == kCSRStorage || label_stype_ == kCSRStorage);
     out_.data.clear();
     data_.clear();
     offsets_.clear();
 
-    size_t total_size = first_batch.data.size();
+    size_t total_size = first_inst.data.size();
     data_.resize(total_size);
     offsets_.resize(total_size, 0);
     // tensor buffer sizes
@@ -168,9 +168,9 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
         buff_sizes[i] = param_.batch_size + 1;
       } else {
         // estimated the size for the whole batch based on the first instance
-        buff_sizes[i] = first_batch.data[i].Size() * param_.batch_size;
+        buff_sizes[i] = first_inst.data[i].Size() * param_.batch_size;
       }
-      dtypes_[i] = first_batch.data[i].type_flag_;
+      dtypes_[i] = first_inst.data[i].type_flag_;
     }
 
     CHECK_EQ(buff_sizes[0], buff_sizes[1]);
@@ -199,7 +199,7 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
       mshadow::Copy(temp.get<cpu, 1, DType>(), data_[i].get<cpu, 1, DType>().Slice(0, src_size));
       // increase the size of space exponentially
       size_t capacity = data_[i].Size();
-      capacity *= 2;
+      capacity = capacity * 2 + 1;
       data_[i] = TBlobContainer();
       data_[i].resize(mshadow::Shape1(capacity), dtypes_[i]);
       // copy back
@@ -208,21 +208,24 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
   }
 
   /* \brief copy the data instance to data buffer */
-  void CopyData(const DataInst& d, const size_t top) {
+  void CopyData(const DataInst& inst, const size_t top) {
     int64_t unit_size = 0;
-    out_.inst_index[top] = d.index;
-    for (size_t i = 0; i < d.data.size(); ++i) {
+    out_.inst_index[top] = inst.index;
+    for (size_t i = 0; i < inst.data.size(); ++i) {
       if (!IsIndPtr(i)) {
         // indices and values tensor
-        unit_size = d.data[i].shape_.Size();
+        unit_size = inst.data[i].shape_.Size();
         MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
           const size_t begin = offsets_[i];
           const size_t end = offsets_[i] + unit_size;
-          const size_t capacity = data_[i].Size();
+          size_t capacity = data_[i].Size();
           // resize the data buffer if estimated space is not sufficient
-          if (capacity < end) ResizeBuffer(begin, i);
+          while (capacity < end) {
+            ResizeBuffer(begin, i);
+            capacity = data_[i].Size();
+          }
           mshadow::Copy(data_[i].get<cpu, 1, DType>().Slice(begin, end),
-                        d.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size)));
+                        inst.data[i].get_with_shape<cpu, 1, DType>(mshadow::Shape1(unit_size)));
         });
         offsets_[i] += unit_size;
       } else {
