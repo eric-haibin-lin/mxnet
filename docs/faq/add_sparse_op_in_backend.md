@@ -336,52 +336,49 @@ This way, a complete output CSRNDArray is computed.
 Finally let's extend the operator registration logic to expose `sparse.quadratic`
 to frontend. Below is the extended registration code in `quadratic_op.cc`:
 ```cpp
-NNVM_REGISTER_OP(quadratic)
-MXNET_ADD_SPARSE_OP_ALIAS(quadratic)
-.describe(R"code(This operators implements the quadratic function:
-.. math::
-    f(x) = ax^2+bx+c
-where :math:`x` is an input tensor and all operations
-in the function are element-wise.
-The storage type of ``quadratic`` output depends on storage types of inputs
-  - quadratic(csr, a, b, 0) = csr
-  - quadratic(default, a, b, c) = default
-Example::
-  x = [[1, 2], [3, 4]]
-  y = quadratic(data=x, a=1, b=2, c=3)
-  y = [[6, 11], [18, 27]]
-)code" ADD_FILELINE)
-.set_attr_parser(ParamParser<QuadraticParam>)
-.set_num_inputs(1)
-.set_num_outputs(1)
-.set_attr<nnvm::FListInputNames>("FListInputNames",
-  [](const NodeAttrs& attrs) {
-    return std::vector<std::string>{"data"};
-  })
-.set_attr<nnvm::FInferShape>("FInferShape", QuadraticOpShape)
-.set_attr<nnvm::FInferType>("FInferType", QuadraticOpType)
-.set_attr<FInferStorageType>("FInferStorageType", QuadraticOpStorageType)
-.set_attr<FCompute>("FCompute<cpu>", QuadraticOpForward<cpu>)
-.set_attr<FComputeEx>("FComputeEx<cpu>", QuadraticOpForwardEx<cpu>)
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_quadratic"})
-.set_attr<nnvm::FInplaceOption>("FInplaceOption",
-  [](const NodeAttrs& attrs) {
-    return std::vector<std::pair<int, int> >{{0, 0}};
-  })
-.add_argument("data", "NDArray-or-Symbol", "Input ndarray")
-.add_arguments(QuadraticParam::__FIELDS__());
+NNVM_REGISTER_OP(quadratic)                                                       // 1
+MXNET_ADD_SPARSE_OP_ALIAS(quadratic)                                              // 2
+.describe(R"code(This operators implements the quadratic function:                // 3
+.. math::                                                                         // 4
+    f(x) = ax^2+bx+c                                                              // 5
+where :math:`x` is an input tensor and all operations                             // 6
+in the function are element-wise.                                                 // 7
+The storage type of ``quadratic`` output depends on storage types of inputs       // 8 
+  - quadratic(csr, a, b, 0) = csr                                                 // 9
+  - quadratic(default, a, b, c) = default                                         // 10 
+Example::                                                                         // 11
+  x = [[1, 2], [3, 4]]                                                            // 12 
+  y = quadratic(data=x, a=1, b=2, c=3)                                            // 13 
+  y = [[6, 11], [18, 27]]                                                         // 14
+)code" ADD_FILELINE)                                                              // 15
+.set_attr_parser(ParamParser<QuadraticParam>)                                     // 16 
+.set_num_inputs(1)                                                                // 17  
+.set_num_outputs(1)                                                               // 18 
+.set_attr<nnvm::FListInputNames>("FListInputNames",                               // 19
+  [](const NodeAttrs& attrs) {                                                    // 20
+    return std::vector<std::string>{"data"};                                      // 21
+  })                                                                              // 22
+.set_attr<nnvm::FInferShape>("FInferShape", QuadraticOpShape)                     // 23
+.set_attr<nnvm::FInferType>("FInferType", QuadraticOpType)                        // 24
+.set_attr<FInferStorageType>("FInferStorageType", QuadraticOpStorageType)         // 25  
+.set_attr<FCompute>("FCompute<cpu>", QuadraticOpForward<cpu>)                     // 26
+.set_attr<FComputeEx>("FComputeEx<cpu>", QuadraticOpForwardEx<cpu>)               // 27  
+.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseIn{"_backward_quadratic"}) // 28
+.set_attr<nnvm::FInplaceOption>("FInplaceOption",                                 // 29
+  [](const NodeAttrs& attrs) {                                                    // 30
+    return std::vector<std::pair<int, int> >{{0, 0}};                             // 31
+  })                                                                              // 32
+.add_argument("data", "NDArray-or-Symbol", "Input ndarray")                       // 33
+.add_arguments(QuadraticParam::__FIELDS__());                                     // 34
 ```
 
 If you compare it with the original registration code,
 only three lines of code are added to the above code block:
-- MXNET_ADD_SPARSE_OP_ALIAS(quadratic)
-This line adds an alias for the quadratic function in
+- Line 2: Add an alias for the quadratic function in
 python frontend so that `quadratic` is accessible from both `mx.symbol.sparse`
 and `mx.ndarray.sparse`.
-- .set_attr<FInferStorageType>("FInferStorageType", QuadraticOpStorageType)
-This line registers the storage type inference attribute of the operator.
-- .set_attr<FComputeEx>("FComputeEx<cpu>", QuadraticOpForwardEx<cpu>)
-This line registers the `FComputeEx` attribute of the operator.
+- Line 25: Register the storage type inference attribute of the operator.
+- Line 27: Register the `FComputeEx` attribute of the operator.
 
 To register this sparse operator on GPU, `quadratic_op.cu` is extended
 as below:
