@@ -54,7 +54,7 @@ and full working examples, visit the [tutorials section](../tutorials/index.md).
 
 * [How do I implement operators in MXNet backend?](http://mxnet.io/faq/add_op_in_backend.html)
 
-* [How do I implement sparse operators in MXNet backend?](http://mxnet.io/how_to/add_sparse_op_in_backend.html)
+* [How do I implement sparse operators in MXNet backend?](https://cwiki.apache.org/confluence/display/MXNET/A+Guide+to+Implementing+Sparse+Operators+in+MXNet+Backend)
 
 * [How do I create new operators in MXNet?](http://mxnet.io/faq/new_op.html)
 
