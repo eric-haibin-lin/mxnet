@@ -129,6 +129,8 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
   std::vector<size_t> offsets_;
   /*! \brief tensor dtypes */
   std::vector<int> dtypes_;
+  /*! \brief whether the offset correspond to an indptr array */
+  std::vector<bool> indptr_;
 
   // check whether ith position is the indptr tensor for a CSR tensor
   inline bool IsIndPtr(size_t i) {
@@ -153,29 +155,36 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
     out_.data.clear();
     data_.clear();
     offsets_.clear();
+    indptr_.clear();
 
-    size_t total_size = first_inst.data.size();
-    data_.resize(total_size);
-    offsets_.resize(total_size, 0);
+    // num_arrays is the number of arrays in inputs
+    // if both data and label are in the csr format,
+    // num_arrays will be 3 + 3 = 6.
+    size_t num_arrays = first_inst.data.size();
+    data_.resize(num_arrays);
+    offsets_.resize(num_arrays, 0);
+    indptr_.resize(num_arrays, false);
     // tensor buffer sizes
-    std::vector<size_t> buff_sizes(total_size, 0);
-    dtypes_.resize(total_size);
-    out_.data.resize(total_size);
+    std::vector<size_t> buff_sizes(num_arrays, 0);
+    dtypes_.resize(num_arrays);
+    out_.data.resize(num_arrays);
     // estimate the memory required for a batch
-    for (size_t i = 0; i < total_size; ++i) {
+    for (size_t i = 0; i < num_arrays; ++i) {
       // shape for indptr
       if (IsIndPtr(i)) {
         buff_sizes[i] = param_.batch_size + 1;
+        indptr_[i] = true;
       } else {
         // estimated the size for the whole batch based on the first instance
         buff_sizes[i] = first_inst.data[i].Size() * param_.batch_size;
+        indptr_[i] = false;
       }
       dtypes_[i] = first_inst.data[i].type_flag_;
     }
 
     CHECK_EQ(buff_sizes[0], buff_sizes[1]);
     // allocate buffer
-    for (size_t i = 0; i < total_size; ++i) {
+    for (size_t i = 0; i < num_arrays; ++i) {
       // init object attributes
       TShape dst_shape(mshadow::Shape1(buff_sizes[i]));
       data_[i].resize(mshadow::Shape1(buff_sizes[i]), dtypes_[i]);
@@ -212,7 +221,7 @@ class SparseBatchLoader : public BatchLoader, public SparseIIterator<TBlobBatch>
     int64_t unit_size = 0;
     out_.inst_index[top] = inst.index;
     for (size_t i = 0; i < inst.data.size(); ++i) {
-      if (!IsIndPtr(i)) {
+      if (!indptr_[i]) {
         // indices and values tensor
         unit_size = inst.data[i].shape_.Size();
         MSHADOW_TYPE_SWITCH(data_[i].type_flag_, DType, {
