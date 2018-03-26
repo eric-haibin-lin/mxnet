@@ -1923,7 +1923,7 @@ def test_sparse_quadratic_function():
     def f(x, a, b, c):
         return a * x**2 + b * x + c
 
-    def check_sparse_quadratic_function(c, expected_stype):
+    def check_sparse_quadratic_function(a, b, c, expected_stype):
       # check forward and compare the result with dense op
       ndim = 2
       shape = rand_shape_nd(ndim, 5)
@@ -1936,8 +1936,8 @@ def test_sparse_quadratic_function():
 
     a = np.random.random_sample()
     b = np.random.random_sample()
-    check_sparse_quadratic_function(0.0, 'csr')
-    check_sparse_quadratic_function(1.0, 'default')
+    check_sparse_quadratic_function(a, b, 0.0, 'csr')
+    check_sparse_quadratic_function(a, b, 1.0, 'default')
 
 if __name__ == '__main__':
     import nose
