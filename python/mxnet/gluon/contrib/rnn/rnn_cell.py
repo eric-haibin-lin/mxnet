@@ -396,7 +396,7 @@ def unroll(cell, inputs, begin_state, drop_inputs=0, drop_outputs=0,
         for s in states:
             zeros.append(F.zeros_like(s))
         states = list(_as_list(states))
-        states.append(F.zeros((1)))
+        states.append(F.zeros((1), ctx=zeros[0].context))
         def loop_body(inputs, states):
             cell_states = states[:-1]
             iter_no = states[-1]
