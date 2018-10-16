@@ -39,6 +39,19 @@ from ...ndarray import NDArray
 
 _OpRecord = namedtuple('OpRecord', ['op_name', 'future', 'inputs', 'attrs'])
 
+def _flatten(args):
+    if isinstance(args, (list, tuple)):
+        flat = []
+        fmts = []
+        for i in args:
+            arg, fmt = _flatten(i)
+            flat.extend(arg)
+            fmts.append(fmt)
+        return tuple(flat), tuple(fmts)
+    else:
+        return (args,), int(0)
+
+
 
 class NDArrayFutureManager(object):
     def __init__(self):
@@ -56,6 +69,16 @@ _CurrentFutureManager = NDArrayFutureManager()
 
 def get_future_manager():
     return _CurrentFutureManager
+
+def get_output_futures(op_name):
+    num_outputs = 1
+    if op_name == 'split':
+        num_outputs = 2
+    if num_outputs > 1:
+        futures = tuple([create_ndarray_future() for i in range(num_outputs)])
+    else:
+        futures = create_ndarray_future()
+    return futures
 
 
 class NDArrayFuture(NDArray):
@@ -106,9 +129,14 @@ def create_ndarray_future(arr=None):
         future.instantiate(arr)
     return future
 
+import collections
+OpSig = collections.namedtuple('OpSig', ['op', 'fmt', 'batch_axis'])
 
 def calculate_signature(op_name, args, kwargs):
-    return 960504 # MAGIC!
+    batch_axis = 0
+    flat_args, fmt = _flatten((args, kwargs))
+    op_sig = OpSig(op_name, fmt, batch_axis)
+    return hash(op_sig) # MAGIC!
 
 
 # algorithm part for dynamic batching
@@ -132,6 +160,7 @@ class Fold(object):
         step = max([self.depths[arg] for arg in inputs]) + 1
         self.max_step = max(step, self.max_step)
         self.depths[future] = step
+
         op_sig = calculate_signature(op_name, inputs, attrs)
         self.steps[step][op_sig].append(_OpRecord(op_name, future, inputs, attrs))
 
@@ -162,7 +191,8 @@ class Fold(object):
                 self.exec_list.append(concat_op)
 
                 new_op_in = (concat_out, ) + params
-                new_op_out = create_ndarray_future()
+                # possibly multiple outputs
+                new_op_out = get_output_futures(op_name)
                 new_op = _OpRecord(op_name, new_op_out, new_op_in, attrs)
                 self.exec_list.append(new_op)
 
@@ -171,9 +201,17 @@ class Fold(object):
 
     def execute(self):
         def execute_record(record):
+            print('executing %s'%record.op_name)
             op = getattr(ndarray, record.op_name)
             out = op(*record.inputs, **record.attrs)
-            record.future.instantiate(out)
+            if isinstance(out, (list, tuple)):
+                num_outs = len(out)
+                assert len(out) == len(record.future)
+                for i in range(num_outs):
+                    record.future[i].instantiate(out[i])
+            else:
+                record.future.instantiate(out)
+            print('done %s'%record.op_name)
 
         for record in self.exec_list:
             # handle deferred_split
@@ -190,8 +228,16 @@ class Fold(object):
                 split_ops = []
                 for i in range(1, len(indices)):
                     split_attrs = {'axis': 0, 'begin': indices[i - 1], 'end': indices[i]}
-                    split_op = _OpRecord('slice_axis', futures[i - 1], inputs, split_attrs)
-                    execute_record(split_op)
+                    num_outputs = len(futures[i - 1]) if isinstance(futures[i - 1], (tuple, list)) else 1
+                    if num_outputs == 1:
+                        # futures[i - 1] stores the output future for (i-1)th sample
+                        split_op = _OpRecord('slice_axis', futures[i - 1], inputs, split_attrs)
+                        execute_record(split_op)
+                    else:
+                        assert len(futures[i - 1]) == len(inputs[0])
+                        for j in range(num_outputs):
+                            split_op = _OpRecord('slice_axis', futures[i - 1][j], (inputs[0][j],), split_attrs)
+                            execute_record(split_op)
                 break
 
             execute_record(record)
@@ -237,16 +283,15 @@ class _BatchingScope(object):
     def record(self, op, out, args, kwargs):
         self._fold.record(op, out, args, kwargs)
 
-
 def _make_op_func(name, func_name):
     """Create a NDArray function from the FunctionHandle."""
     code = """
 def {0}(*args, **kwargs):
     batching = _current_batching_scope()
     op_name = sys._getframe().f_code.co_name
-    future = create_ndarray_future()
-    batching.record(op_name, future, args, kwargs)
-    return future
+    futures = get_output_futures(op_name)
+    batching.record(op_name, futures, args, kwargs)
+    return futures
     """.format(func_name)
     doc_str = ""
 

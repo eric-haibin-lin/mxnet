@@ -33,7 +33,6 @@ from ..utils import _indent
 from .. import tensor_types
 from ..nn import LeakyReLU
 
-
 def _cells_state_info(cells, batch_size):
     return sum([c.state_info(batch_size) for c in cells], [])
 
