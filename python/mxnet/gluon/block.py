@@ -922,7 +922,7 @@ class HybridBlock(Block):
                         return self.hybrid_forward(ndarray, x, *args, **params)
                     # defer execution
                     return self.hybrid_forward(fold, x, *args, **params)
-            raise ValueError, 'wrong flow'
+            raise ValueError
 
 
         if isinstance(x, NDArray):

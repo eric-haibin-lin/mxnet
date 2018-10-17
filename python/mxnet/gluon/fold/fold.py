@@ -115,8 +115,8 @@ class NDArrayFuture(NDArray):
             try:
                 arr = self.manager.look(self)
             except KeyError:
-                raise ValueError, "attribute '{0}' is not allowed for " \
-                    "uninstantiated ndarray future.".format(attr)
+                raise ValueError("attribute '{0}' is not allowed for " \
+                    "uninstantiated ndarray future.".format(attr))
             NDArray.__init__(self, arr.handle, True)
             self.instantiated = True
             return NDArray.__getattribute__(self, attr)
@@ -269,7 +269,7 @@ class _BatchingScope(object):
 
     def __enter__(self):
         if _current_batching_scope() is not None:
-            raise ValueError, "nested batching scope is not allowed"
+            raise ValueError("nested batching scope is not allowed")
         _set_current_batching_scope(self)
 
     def __exit__(self, ptype, value, trace):
