@@ -17,15 +17,16 @@
 
 """Register backend ops in mxnet.ndarray namespace"""
 from ..base import _init_op_module
+from .fold import _current_batching_scope, get_num_outputs, create_ndarray_future
 
 def _make_op_func(hdl, name, func_name):
     """Create a NDArray function from the FunctionHandle."""
     code = """
 def {0}(*args, **kwargs):
     batching = _current_batching_scope()
-    num_outputs = get_num_outputs({1}, args, kwargs)
+    num_outputs = get_num_outputs("{1}", args, kwargs)
     futures = tuple([create_ndarray_future() for _ in range(num_outputs)])
-    batching.record({1}, futures, args, kwargs)
+    batching.record("{1}", futures, args, kwargs)
     if num_outputs == 1:
         return futures[0]
     return futures
