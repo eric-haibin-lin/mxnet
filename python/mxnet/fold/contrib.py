@@ -23,11 +23,17 @@ from .fold import _current_batching_scope, get_num_outputs, create_ndarray_futur
 
 __all__ = ["foreach"]
 
-def foreach(*args, **kwargs):
+#def foreach(*args, **kwargs):
+def foreach(body, data, init_states, **kwargs):
     batching = _current_batching_scope()
-    num_outputs = get_num_outputs('_contrib_foreach', args, kwargs)
-    futures = tuple([create_ndarray_future() for _ in range(num_outputs)])
-    batching.record('_contrib_foreach', futures, args, kwargs)
-    if num_outputs == 1:
-        return futures[0]
+    if isinstance(data, (list, tuple)):
+        data_out = tuple([create_ndarray_future() for _ in range(len(data))])
+    else:
+        data_out = create_ndarray_future()
+    if isinstance(init_states, (list, tuple)):
+        state_out = tuple([create_ndarray_future() for _ in range(len(init_states))])
+    else:
+        state_out = create_ndarray_future()
+    futures = tuple([data_out, state_out])
+    batching.record('_contrib_foreach', futures, (body, data, init_states), kwargs)
     return futures
