@@ -1,0 +1,38 @@
+#!/bin/bash
+
+SEQLEN=$1
+echo "Using sequence length=$SEQLEN"
+PARAMS=$2
+echo "Using pretrained parameters from $PARAMS"
+DTYPE=$3
+echo "Using dtype=$DTYPE"
+
+banner() {
+    msg="# $* #"
+    edge=$(echo "$msg" | sed 's/./#/g')
+    mid=$(echo "$msg" | sed 's/[^#]/ /g')
+    echo "$edge"
+    echo "$mid"
+    echo "$msg"
+    echo "$mid"
+    echo "$edge"
+}
+
+export MXNET_SAFE_ACCUMULATION=1
+export MXNET_EXPERIMENTAL_ENABLE_CUDA_GRAPH=1
+
+banner "Compiling send/receive plugin"
+nvcc send_data.cc -o libsend_data.so -shared
+echo "Done"
+
+banner "Exporting symbolic model"
+python export_symbolic_model.py --max_seq_length $SEQLEN --model_parameters $PARAMS --dtype $DTYPE
+echo "Done"
+
+banner "Evaluating inference performance"
+for b in 1 4 32 128
+do
+    banner "Batch size $b"
+    numactl --physcpubind=0-5 python test_mxnet_inference.py --test_batch_size $b --dtype $DTYPE --max_seq_length $SEQLEN
+done
+echo "Done"

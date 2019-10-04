@@ -1,0 +1,21 @@
+diff --git a/gluoncv/utils/viz/keypoints.py b/gluoncv/utils/viz/keypoints.py
+index ddd3150..27393eb 100644
+--- a/gluoncv/utils/viz/keypoints.py
++++ b/gluoncv/utils/viz/keypoints.py
+@@ -3,7 +3,6 @@ from __future__ import absolute_import, division
+ 
+ import mxnet as mx
+ import numpy as np
+-import matplotlib.pyplot as plt
+ 
+ from . import plot_bbox
+ 
+@@ -37,6 +36,8 @@ def plot_keypoints(img, coords, confidence, class_ids, bboxes, scores,
+         The ploted axes.
+ 
+     """
++    import matplotlib.pyplot as plt
++
+     if isinstance(coords, mx.nd.NDArray):
+         coords = coords.asnumpy()
+     if isinstance(class_ids, mx.nd.NDArray):

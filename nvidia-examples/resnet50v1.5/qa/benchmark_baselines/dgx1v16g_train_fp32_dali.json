@@ -1,0 +1,326 @@
+{
+    "model": "",
+    "ngpus": [
+        1,
+        2,
+        4,
+        8
+    ],
+    "bs": [
+        1,
+        2,
+        4,
+        8,
+        16,
+        32,
+        64,
+        96
+    ],
+    "metric_keys": [
+        "train.total_ips",
+        "train.latency_avg",
+        "train.latency_50",
+        "train.latency_90",
+        "train.latency_95",
+        "train.latency_99",
+        "train.latency_100"
+    ],
+    "metrics": {
+        "1": {
+            "1": {
+                "train.total_ips": 65.63867218532278,
+                "train.latency_avg": 0.015234921224131745,
+                "train.latency_50": 0.015182435512542725,
+                "train.latency_90": 0.015883755683898926,
+                "train.latency_95": 0.016248786449432374,
+                "train.latency_99": 0.016991093158721923,
+                "train.latency_100": 0.021009087562561035
+            },
+            "2": {
+                "train.total_ips": 112.8355285514038,
+                "train.latency_avg": 0.01772491364799937,
+                "train.latency_50": 0.017680644989013672,
+                "train.latency_90": 0.018389892578125,
+                "train.latency_95": 0.018640828132629392,
+                "train.latency_99": 0.0192802095413208,
+                "train.latency_100": 0.022132396697998047
+            },
+            "4": {
+                "train.total_ips": 177.99958951650578,
+                "train.latency_avg": 0.02247196193465987,
+                "train.latency_50": 0.022419333457946777,
+                "train.latency_90": 0.023017656803131104,
+                "train.latency_95": 0.023242706060409547,
+                "train.latency_99": 0.02385345220565796,
+                "train.latency_100": 0.026337146759033203
+            },
+            "8": {
+                "train.total_ips": 250.83050074402587,
+                "train.latency_avg": 0.0318940478780292,
+                "train.latency_50": 0.03183126449584961,
+                "train.latency_90": 0.03237906694412232,
+                "train.latency_95": 0.03262763023376465,
+                "train.latency_99": 0.03348544478416443,
+                "train.latency_100": 0.03513979911804199
+            },
+            "16": {
+                "train.total_ips": 317.0137246208993,
+                "train.latency_avg": 0.050471000961026496,
+                "train.latency_50": 0.050403475761413574,
+                "train.latency_90": 0.05143063068389892,
+                "train.latency_95": 0.051754075288772586,
+                "train.latency_99": 0.052658334970474244,
+                "train.latency_100": 0.05500078201293945
+            },
+            "32": {
+                "train.total_ips": 355.79150216988717,
+                "train.latency_avg": 0.08994031561979324,
+                "train.latency_50": 0.08986347913742065,
+                "train.latency_90": 0.09091312885284425,
+                "train.latency_95": 0.09129668474197387,
+                "train.latency_99": 0.09265190720558167,
+                "train.latency_100": 0.09534645080566406
+            },
+            "64": {
+                "train.total_ips": 378.2156966315426,
+                "train.latency_avg": 0.1692156104836356,
+                "train.latency_50": 0.1691492795944214,
+                "train.latency_90": 0.17066594362258913,
+                "train.latency_95": 0.17109997868537902,
+                "train.latency_99": 0.1721545886993408,
+                "train.latency_100": 0.1732316017150879
+            },
+            "96": {
+                "train.total_ips": 384.7747345624452,
+                "train.latency_avg": 0.2494966310851165,
+                "train.latency_50": 0.24950367212295532,
+                "train.latency_90": 0.25143119096755984,
+                "train.latency_95": 0.25195856690406804,
+                "train.latency_99": 0.25331584334373475,
+                "train.latency_100": 0.2547757625579834
+            }
+        },
+        "2": {
+            "1": {
+                "train.total_ips": 113.88776605475695,
+                "train.latency_avg": 0.017561148745673043,
+                "train.latency_50": 0.01746755838394165,
+                "train.latency_90": 0.01879838705062866,
+                "train.latency_95": 0.019254004955291747,
+                "train.latency_99": 0.020260577201843266,
+                "train.latency_100": 0.023258686065673828
+            },
+            "2": {
+                "train.total_ips": 200.2606980061954,
+                "train.latency_avg": 0.0199739641368685,
+                "train.latency_50": 0.019898414611816406,
+                "train.latency_90": 0.020912480354309083,
+                "train.latency_95": 0.021341437101364137,
+                "train.latency_99": 0.022370718717575074,
+                "train.latency_100": 0.024814128875732422
+            },
+            "4": {
+                "train.total_ips": 326.6749912813903,
+                "train.latency_avg": 0.024489171848202436,
+                "train.latency_50": 0.02441573143005371,
+                "train.latency_90": 0.025145554542541505,
+                "train.latency_95": 0.02545143961906433,
+                "train.latency_99": 0.026610424518585207,
+                "train.latency_100": 0.028726816177368164
+            },
+            "8": {
+                "train.total_ips": 475.93054758113715,
+                "train.latency_avg": 0.03361835057934016,
+                "train.latency_50": 0.033534467220306396,
+                "train.latency_90": 0.034427642822265625,
+                "train.latency_95": 0.034749174118041994,
+                "train.latency_99": 0.03544490456581116,
+                "train.latency_100": 0.03801107406616211
+            },
+            "16": {
+                "train.total_ips": 617.5650349625141,
+                "train.latency_avg": 0.05181640505593453,
+                "train.latency_50": 0.051706910133361816,
+                "train.latency_90": 0.05274143218994141,
+                "train.latency_95": 0.05306876301765442,
+                "train.latency_99": 0.05425888061523438,
+                "train.latency_100": 0.05749309062957764
+            },
+            "32": {
+                "train.total_ips": 701.811681963786,
+                "train.latency_avg": 0.09119255441989416,
+                "train.latency_50": 0.09112328290939331,
+                "train.latency_90": 0.09227362871170045,
+                "train.latency_95": 0.09271515607833862,
+                "train.latency_99": 0.09438828945159912,
+                "train.latency_100": 0.09784972667694092
+            },
+            "64": {
+                "train.total_ips": 749.7101506621399,
+                "train.latency_avg": 0.17073264899368257,
+                "train.latency_50": 0.17066359519958496,
+                "train.latency_90": 0.1723815441131592,
+                "train.latency_95": 0.1730000019073486,
+                "train.latency_99": 0.17446651697158816,
+                "train.latency_100": 0.17917335033416748
+            },
+            "96": {
+                "train.total_ips": 767.9462581044237,
+                "train.latency_avg": 0.2500174953308937,
+                "train.latency_50": 0.24973511695861816,
+                "train.latency_90": 0.25339957475662234,
+                "train.latency_95": 0.254457026720047,
+                "train.latency_99": 0.25668679594993593,
+                "train.latency_100": 0.25899839401245117
+            }
+        },
+        "4": {
+            "1": {
+                "train.total_ips": 242.29049122337977,
+                "train.latency_avg": 0.016509108466465566,
+                "train.latency_50": 0.016401171684265137,
+                "train.latency_90": 0.017564594745635986,
+                "train.latency_95": 0.0180608332157135,
+                "train.latency_99": 0.019138467311859135,
+                "train.latency_100": 0.022325992584228516
+            },
+            "2": {
+                "train.total_ips": 415.75091670936996,
+                "train.latency_avg": 0.019242290704538333,
+                "train.latency_50": 0.0191381573677063,
+                "train.latency_90": 0.020128440856933594,
+                "train.latency_95": 0.020573353767395018,
+                "train.latency_99": 0.021606720685958865,
+                "train.latency_100": 0.023123979568481445
+            },
+            "4": {
+                "train.total_ips": 662.9486195245457,
+                "train.latency_avg": 0.024134600372914115,
+                "train.latency_50": 0.024041295051574707,
+                "train.latency_90": 0.025185394287109374,
+                "train.latency_95": 0.02553884983062744,
+                "train.latency_99": 0.026919848918914798,
+                "train.latency_100": 0.02869272232055664
+            },
+            "8": {
+                "train.total_ips": 948.3183217460322,
+                "train.latency_avg": 0.033743943638125634,
+                "train.latency_50": 0.03363579511642456,
+                "train.latency_90": 0.03484545946121216,
+                "train.latency_95": 0.03539543151855469,
+                "train.latency_99": 0.03716715335845948,
+                "train.latency_100": 0.04033613204956055
+            },
+            "16": {
+                "train.total_ips": 1227.5807913498606,
+                "train.latency_avg": 0.05213506145662717,
+                "train.latency_50": 0.051996469497680664,
+                "train.latency_90": 0.05350359678268433,
+                "train.latency_95": 0.0543759286403656,
+                "train.latency_99": 0.056531461477279665,
+                "train.latency_100": 0.06077146530151367
+            },
+            "32": {
+                "train.total_ips": 1386.7981439698115,
+                "train.latency_avg": 0.09229894095011593,
+                "train.latency_50": 0.09217572212219238,
+                "train.latency_90": 0.09364619255065917,
+                "train.latency_95": 0.09429237842559815,
+                "train.latency_99": 0.09522953152656555,
+                "train.latency_100": 0.0987088680267334
+            },
+            "64": {
+                "train.total_ips": 1480.2789014254236,
+                "train.latency_avg": 0.17294038289236352,
+                "train.latency_50": 0.1728750467300415,
+                "train.latency_90": 0.1752940893173218,
+                "train.latency_95": 0.17610344886779786,
+                "train.latency_99": 0.17815473675727844,
+                "train.latency_100": 0.18467044830322266
+            },
+            "96": {
+                "train.total_ips": 1512.57784870599,
+                "train.latency_avg": 0.2538712307128601,
+                "train.latency_50": 0.25376421213150024,
+                "train.latency_90": 0.25784016847610475,
+                "train.latency_95": 0.25908252596855164,
+                "train.latency_99": 0.26125969052314757,
+                "train.latency_100": 0.27791619300842285
+            }
+        },
+        "8": {
+            "1": {
+                "train.total_ips": 451.79331754593517,
+                "train.latency_avg": 0.017707211880544506,
+                "train.latency_50": 0.01743096113204956,
+                "train.latency_90": 0.019574129581451417,
+                "train.latency_95": 0.020859318971633907,
+                "train.latency_99": 0.024205883741378793,
+                "train.latency_100": 0.03068828582763672
+            },
+            "2": {
+                "train.total_ips": 797.8159313217346,
+                "train.latency_avg": 0.02005475119241219,
+                "train.latency_50": 0.019882619380950928,
+                "train.latency_90": 0.021958565711975096,
+                "train.latency_95": 0.022806656360626218,
+                "train.latency_99": 0.025109069347381597,
+                "train.latency_100": 0.03305506706237793
+            },
+            "4": {
+                "train.total_ips": 1276.3359568149674,
+                "train.latency_avg": 0.025071768784023292,
+                "train.latency_50": 0.024864494800567627,
+                "train.latency_90": 0.026905405521392825,
+                "train.latency_95": 0.027899825572967527,
+                "train.latency_99": 0.029738777875900277,
+                "train.latency_100": 0.03795576095581055
+            },
+            "8": {
+                "train.total_ips": 1866.320046640077,
+                "train.latency_avg": 0.03429208195840727,
+                "train.latency_50": 0.03400003910064697,
+                "train.latency_90": 0.03752722740173339,
+                "train.latency_95": 0.03851406574249268,
+                "train.latency_99": 0.04105075836181641,
+                "train.latency_100": 0.049123525619506836
+            },
+            "16": {
+                "train.total_ips": 2405.3723904441613,
+                "train.latency_avg": 0.05321421352822808,
+                "train.latency_50": 0.05289584398269653,
+                "train.latency_90": 0.0568293571472168,
+                "train.latency_95": 0.058023971319198606,
+                "train.latency_99": 0.061722940206527716,
+                "train.latency_100": 0.06655800342559814
+            },
+            "32": {
+                "train.total_ips": 2728.9071837764423,
+                "train.latency_avg": 0.09381044599902084,
+                "train.latency_50": 0.09343677759170532,
+                "train.latency_90": 0.09731239080429077,
+                "train.latency_95": 0.09865834712982177,
+                "train.latency_99": 0.10646883845329286,
+                "train.latency_100": 0.11412310600280762
+            },
+            "64": {
+                "train.total_ips": 2941.9209149847684,
+                "train.latency_avg": 0.17403594957026602,
+                "train.latency_50": 0.17389750480651855,
+                "train.latency_90": 0.17732478380203248,
+                "train.latency_95": 0.17891117334365847,
+                "train.latency_99": 0.18323422074317933,
+                "train.latency_100": 0.20223021507263184
+            },
+            "96": {
+                "train.total_ips": 3022.515680955361,
+                "train.latency_avg": 0.25409297455067276,
+                "train.latency_50": 0.25387734174728394,
+                "train.latency_90": 0.25866514444351196,
+                "train.latency_95": 0.26052188873291016,
+                "train.latency_99": 0.2641960370540619,
+                "train.latency_100": 0.2831745147705078
+            }
+        }
+    }
+}

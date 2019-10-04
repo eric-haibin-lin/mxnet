@@ -1,0 +1,110 @@
+#!/usr/bin/env python
+
+import os, socket
+from subprocess import Popen
+from argparse import ArgumentParser
+import warnings
+from mxnet.cuda_utils import get_sm_arch
+
+
+optparser = ArgumentParser(description="train ResNet50 with MXNet")
+optparser.add_argument("-n", "--n-GPUs", type=int, default=8, help="number of GPUs to use; " +\
+                       "default = 8")
+optparser.add_argument("-b", "--batch-size", type=int, default=256, help="batch size per GPU; " +\
+                       "default = 256")
+optparser.add_argument("-e", "--num-epochs", type=int, default=90, help="number of epochs; " +\
+                       "default = 90")
+optparser.add_argument("--accuracy-threshold", type=float, default=1.0, help="stop training after top1 reaches this value; " +\
+                       "default = 1.0")
+optparser.add_argument("-s", "--num-examples", type=int,
+                       help="number of examples; if not passed full dataset will be used")
+optparser.add_argument("-l", "--lr", type=float, default=0.1, help="learning rate; default = 0.1; " +\
+                       "IMPORTANT: true learning rate will be calculated as `lr * batch_size/256`")
+optparser.add_argument("--no-val", action="store_true",
+                       help="if set no validation will be performed")
+optparser.add_argument("-o", "--output", type=str, help="copy (not redirect!) " +\
+                       "stdout and stderr to *.out.log i *.err.log files")
+optparser.add_argument("--profile", type=str, help="run `nvprof` and save profile " +\
+                       "in given destination")
+optparser.add_argument("--synthetic", action="store_true", help="use no pipeline (benchmark 1)")
+optparser.add_argument("--kvstore", type=str, help="set kv-store type", default="device")
+optparser.add_argument("--network", type=str, help="Network to train, available networks: resnet50_v1b", default="resnet50_v1b")
+optparser.add_argument("--data-dir", type=str, help="Directory with RecordIO data files", default="/data/imagenet/train-480-val-256-recordio")
+optparser.add_argument("--dali-threads", type=int, help="number of threads for DALI; default = 3", default=3)
+optparser.add_argument("--dtype", type=str, help="Precision, float16 or float32", default="float16")
+optparser.add_argument("--amp", action="store_true",help="Enable automatic mixed precision (AMP)")
+
+opts, args = optparser.parse_known_args()
+
+
+if opts.synthetic:
+    opts.no_val = True
+
+if opts.dtype == "float16":
+    n_ch = str(4) # number of input channls (4 supported only by DALI and synthetic)
+else:
+    n_ch = str(3)
+
+opts.no_dali = opts.synthetic
+
+horovod = "horovod" in opts.kvstore
+
+command = ""
+if opts.profile and horovod:
+    command += "nvprof -fo {}.{}_{}.profile ".format(opts.profile,
+                                                     socket.gethostname(),
+                                                     os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+elif opts.profile:
+    command += "nvprof -fo {}.{}.profile ".format(opts.profile, socket.gethostname())
+
+command += "python "+os.path.dirname(__file__)+"/train_imagenet.py"
+command += " --network " + opts.network
+command += " --data-dir " + opts.data_dir
+command += " --dali-threads " + str(opts.dali_threads)
+command += " --dtype " + opts.dtype
+command += " --lr-steps 30,60,80,90"
+
+# Set default layout to NHWC for float16 models if gpu has Tensor Cores
+if opts.dtype == "float16" and get_sm_arch(0) >= 70:
+    command += " --input-layout NHWC --conv-layout NHWC"
+    command += " --bn-layout NHWC --pooling-layout NHWC"
+else:
+    command += " --input-layout NCHW --conv-layout NCHW"
+    command += " --bn-layout NCHW --pooling-layout NCHW"
+
+
+command += " --image-shape "+n_ch+",224,224"
+
+if opts.kvstore:
+    command += " --kvstore "+opts.kvstore
+if opts.synthetic:
+    command += " --synthetic"
+if opts.amp:
+    command += " --amp"
+if opts.no_val:
+    command += " --no-val"
+if opts.num_examples:
+    command += " --num-examples " + str(opts.num_examples)
+command += " --lr " + str(opts.lr)
+command += " -n " + str(opts.n_GPUs)
+command += " --batch-size " + str(opts.batch_size)
+command += " -e " + str(opts.num_epochs)
+command += " --accuracy-threshold " + str(opts.accuracy_threshold)
+
+if opts.output and horovod:
+    command += " > >(tee -a {}.{}_{}.out.log)".format(opts.profile,
+                                                      socket.gethostname(),
+                                                      os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+    command +=" 2> >(tee -a {}.{}_{}.err.log >&2)".format(opts.profile,
+                                                          socket.gethostname(),
+                                                          os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+elif opts.output:
+    command += " > >(tee -a {}.{}.out.log)".format(opts.profile, socket.gethostname())
+    command +=" 2> >(tee -a {}.{}.err.log >&2)".format(opts.profile, socket.gethostname())
+
+for arg in args:
+    command += " " + arg
+
+os.environ["MXNET_UPDATE_ON_KVSTORE"] = "0"
+os.system('/bin/bash -c "'+command+'"')
+
