@@ -30,6 +30,8 @@ from multiprocessing.pool import ThreadPool
 import threading
 import numpy as np
 
+from .io_recorder import IORecorder
+
 try:
     import multiprocessing.resource_sharer
 except ImportError:
@@ -224,6 +226,8 @@ class _MultiWorkerIterV1(object):
         self._fetcher.daemon = True
         self._fetcher.start()
 
+        self.recorder = IORecorder()
+
         # pre-fetch
         for _ in range(2 * self._num_workers):
             self._push_next()
@@ -243,6 +247,10 @@ class _MultiWorkerIterV1(object):
         self._sent_idx += 1
 
     def __next__(self):
+        self.recorder.io_start()
+        if os.environ.get("BYTEPS_TRACE_ON", "") == "1":
+            t1 = time.time()
+
         assert not self._shutdown, "call __next__ after shutdown is forbidden"
         if self._rcvd_idx == self._sent_idx:
             assert not self._data_buffer, "Data buffer should be empty at this moment"
@@ -255,6 +263,7 @@ class _MultiWorkerIterV1(object):
                     batch = self._data_buffer.pop(self._rcvd_idx)
                 self._rcvd_idx += 1
                 self._push_next()
+                self.recorder.io_end()         
                 return batch
 
     def next(self):
@@ -422,6 +431,8 @@ class _MultiWorkerIter(object):
         self._pin_device_id = pin_device_id
         self._dataset = dataset
         self._data_loader = data_loader
+
+        self.recorder = IORecorder()
         # pre-fetch
         for _ in range(prefetch):
             self._push_next()
@@ -440,6 +451,7 @@ class _MultiWorkerIter(object):
         self._sent_idx += 1
 
     def __next__(self):
+        self.recorder.io_start()
         self._push_next()
         if self._rcvd_idx == self._sent_idx:
             assert not self._data_buffer, "Data buffer should be empty at this moment"
@@ -453,6 +465,7 @@ class _MultiWorkerIter(object):
             batch = _as_in_context(batch, context.cpu_pinned(self._pin_device_id))
         batch = batch[0] if len(batch) == 1 else batch
         self._rcvd_idx += 1
+        self.recorder.io_end()
         return batch
 
     def next(self):
