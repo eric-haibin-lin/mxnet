@@ -309,11 +309,11 @@ inline void multiLAMB(const nnvm::NodeAttrs& attrs,
     Tensor<xpu, 1, int> block_to_chunk(reinterpret_cast<int*>(&workspace[pos_wspace]),
       Shape1(kernel_params.nchunks), s);
 
-    MultiSumSqRun<xpu>(weights, kernel_params.ntensors, r1.dptr_, s);
+    MultiSumSqRun<xpu>(weights, kernel_params.ntensors, r1.dptr_, ctx);
     call_kernel1<MPDType, DType>(s, kernel_params, param, temp_g.dptr_,
                                  block_to_tensor.dptr_,
                                  block_to_chunk.dptr_);
-    MultiSumSqRun<xpu>(temp_g_tblobs, kernel_params.ntensors, r2.dptr_, s);
+    MultiSumSqRun<xpu>(temp_g_tblobs, kernel_params.ntensors, r2.dptr_, ctx);
     call_kernel2<MPDType, DType>(s, kernel_params, param, r1.dptr_, r2.dptr_,
                                  temp_g.dptr_,
                                  block_to_tensor.dptr_, block_to_chunk.dptr_,
