@@ -345,7 +345,7 @@ void ForwardEx(const OpStatePtr& state, const OpContext& ctx,
             static_cast<int>(ctx.is_train),
             params.info->contexts[kCustomOpForward]));
       },
-      ctx, false, ctx.is_train, cpys, tags, output_tags, outputs);
+      ctx, false, ctx.is_train, cpys, tags, output_tags, outputs, params.op_type);
 }
 
 void BackwardEx(const OpStatePtr& state, const OpContext& ctx,
@@ -415,7 +415,7 @@ void BackwardEx(const OpStatePtr& state, const OpContext& ctx,
         ptrs.size(), const_cast<void**>(ptrs.data()), const_cast<int*>(tags.data()),
         reinterpret_cast<const int*>(req.data()), static_cast<int>(ctx.is_train),
         params.info->contexts[kCustomOpBackward]));
-    }, ctx, false, ctx.is_train, cpys, tags, output_tags, outputs);
+    }, ctx, false, ctx.is_train, cpys, tags, output_tags, outputs, "_backward_" + params.op_type);
 }
 
 // infer storage backward function for custom op which assigns kDefaultStorage for
@@ -537,11 +537,12 @@ inline bool InferStorageType(const nnvm::NodeAttrs& attrs, const int dev_mask,
 }
 
 NNVM_REGISTER_OP(Custom)
+.add_alias("_npi_Custom")
 .describe(R"code(Apply a custom operator implemented in a frontend language (like Python).
 
 Custom operators should override required methods like `forward` and `backward`.
 The custom operator must be registered before it can be used.
-Please check the tutorial here: http://mxnet.io/faq/new_op.html.
+Please check the tutorial here: https://mxnet.incubator.apache.org/api/faq/new_op
 
 )code" ADD_FILELINE)
 .set_num_inputs([](const NodeAttrs& attrs){

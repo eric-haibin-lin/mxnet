@@ -16,9 +16,9 @@
 # under the License.
 
 import mxnet as mx
-from mxnet import nd
 from benchmark.opperf.utils.benchmark_utils import run_performance_test
 from benchmark.opperf.utils.common_utils import merge_map_list
+from benchmark.opperf.rules.default_params import MX_OP_MODULE
 
 """Performance benchmark tests for MXNet NDArray basic NN Operators.
 
@@ -29,12 +29,13 @@ from benchmark.opperf.utils.common_utils import merge_map_list
 """
 
 
-def run_nn_basic_operators_benchmarks(ctx=mx.cpu(), dtype='float32', warmup=10, runs=50):
+def run_nn_basic_operators_benchmarks(ctx=mx.cpu(), dtype='float32', profiler='native', warmup=25, runs=100):
     # FullyConnnected operator benchmarks
-    fc_benchmark_res = run_performance_test([nd.FullyConnected],
+    fc_benchmark_res = run_performance_test([getattr(MX_OP_MODULE, "FullyConnected")],
                                             run_backward=True,
                                             dtype=dtype,
                                             ctx=ctx,
+                                            profiler=profiler,
                                             inputs=[{"data": (32, 3, 256, 256),
                                                      "num_hidden": 64,
                                                      "weight": (64, 3 * 256 * 256),
@@ -49,10 +50,11 @@ def run_nn_basic_operators_benchmarks(ctx=mx.cpu(), dtype='float32', warmup=10, 
                                             runs=runs)
 
     # Dropout benchmarks
-    dropout_benchmark_res = run_performance_test([nd.Dropout],
+    dropout_benchmark_res = run_performance_test([getattr(MX_OP_MODULE, "Dropout")],
                                                  run_backward=True,
                                                  dtype=dtype,
                                                  ctx=ctx,
+                                                 profiler=profiler,
                                                  inputs=[{"data": (32, 3, 256, 256),
                                                           "p": 0.5,
                                                           "mode": "always"},
@@ -62,10 +64,11 @@ def run_nn_basic_operators_benchmarks(ctx=mx.cpu(), dtype='float32', warmup=10, 
                                                  warmup=warmup,
                                                  runs=runs)
     # BatchNorm benchmarks
-    batchnorm_benchmark_res = run_performance_test([nd.BatchNorm],
+    batchnorm_benchmark_res = run_performance_test([getattr(MX_OP_MODULE, "BatchNorm")],
                                                    run_backward=True,
                                                    dtype=dtype,
                                                    ctx=ctx,
+                                                   profiler=profiler,
                                                    inputs=[{"data": (32, 3, 256, 256),
                                                             "gamma": (3,),
                                                             "beta": (3,),

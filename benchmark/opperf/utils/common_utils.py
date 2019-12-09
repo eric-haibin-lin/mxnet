@@ -44,7 +44,7 @@ def merge_map_list(map_list):
     return dict(ChainMap(*map_list))
 
 
-def save_to_file(inp_dict, out_filepath, out_format='json'):
+def save_to_file(inp_dict, out_filepath, out_format='json', runtime_features=None, profiler='native'):
     """Saves the given input dictionary to the given output file.
 
     By default, saves the input dictionary as JSON file. Other supported formats include:
@@ -58,6 +58,8 @@ def save_to_file(inp_dict, out_filepath, out_format='json'):
         Output file path
     out_format: str, default 'json'
         Format of the output file. Supported options - 'json', 'md'. Default - json.
+    runtime_features: map
+        Dictionary of runtime_features.
 
     """
     if out_format == 'json':
@@ -67,7 +69,7 @@ def save_to_file(inp_dict, out_filepath, out_format='json'):
     elif out_format == 'md':
         # Save as md
         with open(out_filepath, "w") as result_file:
-            result_file.write(_prepare_markdown(inp_dict))
+            result_file.write(_prepare_markdown(inp_dict, runtime_features, profiler))
     else:
         raise ValueError("Invalid output file format provided - '{}'. Supported - json, md".format(format))
 
@@ -88,12 +90,17 @@ def get_json(inp_dict):
     return json.dumps(inp_dict, indent=4)
 
 
-def _prepare_op_benchmark_result(op, op_bench_result):
+def _prepare_op_benchmark_result(op, op_bench_result, profiler):
     operator_name = op
     avg_forward_time = "---"
     avg_backward_time = "---"
     max_mem_usage = "---"
     inputs = "---"
+    avg_time = "---"
+    p50_time = "---"
+    p90_time = "---"
+    p99_time = "---"
+
     for key, value in op_bench_result.items():
         if "avg_time_forward" in key:
             avg_forward_time = value
@@ -103,18 +110,44 @@ def _prepare_op_benchmark_result(op, op_bench_result):
             max_mem_usage = value
         elif "inputs" in key:
             inputs = value
-    return "| {} | {} | {} | {} | {} |".format(operator_name, avg_forward_time, avg_backward_time,
-                                               max_mem_usage, inputs)
+        elif "avg_time" in key:
+            avg_time = value
+        elif "p50_time" in key:
+            p50_time = value
+        elif "p90_time" in key:
+            p90_time = value
+        elif "p99_time" in key:
+            p99_time = value
+
+    result = ""
+    if profiler == "native":
+        result = "| {} | {} | {} | {} | {} |".format(operator_name,
+                 avg_forward_time, avg_backward_time, max_mem_usage, inputs)
+    elif profiler == "python":
+        result = "| {} | {} | {} | {} | {} | {} |".format(operator_name, avg_time, p50_time, p90_time, p99_time, inputs)
+    return result
 
 
-def _prepare_markdown(results):
-    results_markdown = [
-        "| Operator | Avg Forward Time (ms) | Avg. Backward Time (ms) | Max Mem Usage (Storage) (Bytes)"
-        " | Inputs |",
-        "| :---: | :---: | :---: | :---:| :--- |"]
+def _prepare_markdown(results, runtime_features=None, profiler='native'):
+    results_markdown = []
+    if runtime_features and 'runtime_features' in runtime_features:
+        results_markdown.append("# Runtime Features")
+        idx = 0
+        for key, value in runtime_features['runtime_features'].items():
+            results_markdown.append('{}. {} : {}'.format(idx, key, value))
+
+    results_markdown.append("# Benchmark Results")
+    if profiler == 'native':
+        results_markdown.append(
+            "| Operator | Avg Forward Time (ms) | Avg. Backward Time (ms) | Max Mem Usage (Storage) (Bytes)"
+            " | Inputs |")
+    elif profiler == 'python':
+        results_markdown.append(
+            "| Operator | Avg Time (ms) | P50 Time (ms) | P90 Time (ms) | P99 Time (ms) | Inputs |")
+    results_markdown.append("| :---: | :---: | :---: | :---: | :---: | :---: |")
 
     for op, op_bench_results in sorted(results.items(), key=itemgetter(0)):
         for op_bench_result in op_bench_results:
-            results_markdown.append(_prepare_op_benchmark_result(op, op_bench_result))
+            results_markdown.append(_prepare_op_benchmark_result(op, op_bench_result, profiler))
 
     return os.linesep.join(results_markdown)

@@ -29,12 +29,10 @@ mxnet_option(USE_SSE              "Build with x86 SSE instruction support" ON IF
 mxnet_option(USE_F16C             "Build with x86 F16C instruction support" ON) # autodetects support if ON
 mxnet_option(USE_LAPACK           "Build with lapack support" ON)
 mxnet_option(USE_MKL_IF_AVAILABLE "Use MKL if found" ON)
-mxnet_option(USE_MKLML_MKL        "Use MKLDNN variant of MKL (if MKL found)" ON IF USE_MKL_IF_AVAILABLE AND (NOT APPLE) AND (NOT MSVC) )
-mxnet_option(USE_MKLDNN           "Use MKLDNN variant of MKL (if MKL found)" ON IF USE_MKL_IF_AVAILABLE AND (NOT APPLE) AND (NOT MSVC) AND (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64") AND (NOT CMAKE_CROSSCOMPILING))
+mxnet_option(USE_MKLDNN           "Build with MKL-DNN support" ON IF USE_MKL_IF_AVAILABLE AND (NOT APPLE) AND (NOT MSVC) AND (CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64") AND (NOT CMAKE_CROSSCOMPILING))
 mxnet_option(USE_OPERATOR_TUNING  "Enable auto-tuning of operators" ON IF NOT MSVC)
 mxnet_option(USE_GPERFTOOLS       "Build with GPerfTools support" OFF)
 mxnet_option(USE_JEMALLOC         "Build with Jemalloc support"   ON)
-mxnet_option(USE_PROFILER         "Build with Profiler support"   ON)
 mxnet_option(USE_DIST_KVSTORE     "Build with DIST_KVSTORE support" OFF)
 mxnet_option(USE_PLUGINS_WARPCTC  "Use WARPCTC Plugins" OFF)
 mxnet_option(USE_PLUGIN_CAFFE     "Use Caffe Plugin" OFF)
@@ -43,11 +41,12 @@ mxnet_option(USE_MXNET_LIB_NAMING "Use MXNet library naming conventions." ON)
 mxnet_option(USE_GPROF            "Compile with gprof (profiling) flag" OFF)
 mxnet_option(USE_CXX14_IF_AVAILABLE "Build with C++14 if the compiler supports it" OFF)
 mxnet_option(USE_VTUNE            "Enable use of Intel Amplifier XE (VTune)" OFF) # one could set VTUNE_ROOT for search path
+mxnet_option(USE_TVM_OP           "Enable use of TVM operator build system." OFF)
 mxnet_option(ENABLE_CUDA_RTC      "Build with CUDA runtime compilation support" ON)
 mxnet_option(BUILD_CPP_EXAMPLES   "Build cpp examples" ON)
 mxnet_option(INSTALL_EXAMPLES     "Install the example source files." OFF)
 mxnet_option(USE_SIGNAL_HANDLER   "Print stack traces on segfaults." ON)
-mxnet_option(USE_TENSORRT         "Enable infeference optimization with TensorRT." OFF)
+mxnet_option(USE_TENSORRT         "Enable inference optimization with TensorRT." OFF)
 mxnet_option(USE_ASAN             "Enable Clang/GCC ASAN sanitizers." OFF)
 mxnet_option(ENABLE_TESTCOVERAGE  "Enable compilation with test coverage metric output" OFF)
 mxnet_option(USE_INT64_TENSOR_SIZE "Use int64_t to represent the total number of elements in a tensor" OFF)
@@ -58,6 +57,11 @@ message(STATUS "CMAKE_HOST_SYSTEM_PROCESSOR ${CMAKE_HOST_SYSTEM_PROCESSOR}")
 message(STATUS "CMAKE_SYSTEM_PROCESSOR ${CMAKE_SYSTEM_PROCESSOR}")
 
 message(STATUS "CMAKE_SYSTEM_NAME ${CMAKE_SYSTEM_NAME}")
+
+if(USE_TVM_OP)
+  add_definitions(-DMXNET_USE_TVM_OP=1)
+endif()
+
 if(USE_CUDA AND NOT USE_OLDCMAKECUDA)
   message(STATUS "CMake version '${CMAKE_VERSION}' using generator '${CMAKE_GENERATOR}'")
   if(
@@ -95,6 +99,9 @@ if("$ENV{VERBOSE}" STREQUAL "1")
   message(STATUS " Verbose Makefile ACTIVATED")
   set(CMAKE_VERBOSE_MAKEFILE ON)
 endif()
+
+#Switch off modern thread local for dmlc-core, please see: https://github.com/dmlc/dmlc-core/issues/571#issuecomment-543467484
+add_definitions(-DDMLC_MODERN_THREAD_LOCAL=0)
 
 
 if(MSVC)
@@ -232,6 +239,8 @@ if(USE_TENSORRT)
           ${ONNX_PROTO_LIBRARY} ${ONNX_LIBRARY} ${PROTOBUF_LIBRARY})
 endif()
 
+# please note that when you enable this, you might run into an linker not being able to work properly due to large code injection.
+# you can find more information here https://github.com/apache/incubator-mxnet/issues/15971 
 if(ENABLE_TESTCOVERAGE)
   message(STATUS "Compiling with test coverage support enabled. This will result in additional files being written to your source directory!")
   find_program( GCOV_PATH gcov )
@@ -247,27 +256,24 @@ if(ENABLE_TESTCOVERAGE)
 endif()
 
 if(USE_MKLDNN)
-  include(cmake/DownloadMKLML.cmake)
   # CPU architecture (e.g., C5) can't run on another architecture (e.g., g3).
-  if(NOT MSVC)
-    set(ARCH_OPT_FLAGS "-mtune=generic")
-  else()
-    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /EHsc")
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /EHsc /Gy")
+  if(MSVC)
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /EHsc /MT")
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /EHsc /Gy /MT")
   endif()
 
-  set(WITH_TEST OFF CACHE INTERNAL "" FORCE)
-  set(WITH_EXAMPLE OFF CACHE INTERNAL "" FORCE)
-  set(ARCH_OPT_FLAGS "" CACHE INTERNAL "" FORCE)
+  set(MKLDNN_BUILD_TESTS OFF CACHE INTERNAL "" FORCE)
+  set(MKLDNN_BUILD_EXAMPLES OFF CACHE INTERNAL "" FORCE)
+  set(MKLDNN_ARCH_OPT_FLAGS "" CACHE INTERNAL "" FORCE)
+  set(MKLDNN_ENABLE_JIT_PROFILING OFF CACHE INTERNAL "" FORCE)
+  set(MKLDNN_LIBRARY_TYPE STATIC CACHE INTERNAL "" FORCE)
 
   add_subdirectory(3rdparty/mkldnn)
 
   include_directories(3rdparty/mkldnn/include)
   include_directories(${PROJECT_BINARY_DIR}/3rdparty/mkldnn/include)
-  add_definitions(-DUSE_MKL=1)
-  add_definitions(-DCUB_MKL=1)
   add_definitions(-DMXNET_USE_MKLDNN=1)
-  list(APPEND mxnet_LINKER_LIBS mkldnn)
+  list(APPEND mxnet_LINKER_LIBS dnnl)
 endif()
 
 # Allow Cuda compiles outside of src tree to find things in 'src' and 'include'
@@ -627,6 +633,10 @@ if(USE_CUDA)
   else()
     list(APPEND CUDA_INCLUDE_DIRS ${INCLUDE_DIRECTORIES})
     # define preprocessor macro so that we will not include the generated forcelink header
+    if(ENABLE_CUDA_RTC)
+      add_definitions(-DMXNET_ENABLE_CUDA_RTC=1)
+    endif()
+    # Create '.cmake' files for cuda compiles given definitions added thus far
     mshadow_cuda_compile(cuda_objs ${CUDA})
     if(MSVC)
         if(ENABLE_CUDA_RTC)
@@ -634,7 +644,6 @@ if(USE_CUDA)
             list(APPEND mxnet_LINKER_LIBS ${CUDA_nvrtc_LIBRARY})
             set(CUDA_cuda_LIBRARY "${CUDA_nvrtc_LIBRARY}/../cuda.lib")
             list(APPEND mxnet_LINKER_LIBS ${CUDA_cuda_LIBRARY})
-            add_definitions(-DMXNET_ENABLE_CUDA_RTC=1)
         endif()
         FIND_LIBRARY(CUDA_cufft_LIBRARY nvrtc "${CUDA_TOOLKIT_ROOT_DIR}/lib/x64"  "${CUDA_TOOLKIT_ROOT_DIR}/lib/win32")
         list(APPEND mxnet_LINKER_LIBS "${CUDA_cufft_LIBRARY}/../cufft.lib") # For fft operator
@@ -646,7 +655,6 @@ if(USE_CUDA)
         list(APPEND mxnet_LINKER_LIBS cufft cusolver)
         if(ENABLE_CUDA_RTC)
             list(APPEND mxnet_LINKER_LIBS nvrtc cuda)
-            add_definitions(-DMXNET_ENABLE_CUDA_RTC=1)
         endif()
         link_directories("${CUDA_TOOLKIT_ROOT_DIR}/lib64")
     endif()
@@ -691,6 +699,8 @@ else()
 
 endif()
 
+add_library(sample_lib SHARED ${CMAKE_CURRENT_SOURCE_DIR}/example/extensions/lib_custom_op/gemm_lib.cc)
+target_include_directories(sample_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include/mxnet)
 set(MXNET_INSTALL_TARGETS mxnet)
 if(UNIX)
   # Create dummy file since we want an empty shared library before linking
@@ -701,9 +711,13 @@ if(UNIX)
   add_library(mxnet SHARED ${DUMMY_SOURCE})
   target_link_libraries(mxnet PRIVATE ${BEGIN_WHOLE_ARCHIVE} $<TARGET_FILE:mxnet_static> ${END_WHOLE_ARCHIVE})
   target_link_libraries(mxnet PRIVATE mxnet_static)
+  target_link_libraries(mxnet_static PUBLIC ${CMAKE_DL_LIBS})
+  target_compile_options(sample_lib PUBLIC -shared)
   set_target_properties(mxnet_static PROPERTIES OUTPUT_NAME mxnet)
 else()
   add_library(mxnet SHARED ${SOURCE})
+  target_compile_options(sample_lib PUBLIC /LD)
+  set_target_properties(sample_lib PROPERTIES PREFIX "lib")
 endif()
 
 if(USE_CUDA)
@@ -732,6 +746,31 @@ if(USE_DIST_KVSTORE)
   add_definitions(-DMXNET_USE_DIST_KVSTORE)
   include_directories(SYSTEM ${pslite_INCLUDE_DIR})
   list(APPEND mxnet_LINKER_LIBS ${pslite_LINKER_LIBS})
+endif()
+
+if(USE_TVM_OP)
+  list(APPEND mxnet_LINKER_LIBS ${CMAKE_CURRENT_BINARY_DIR}/3rdparty/tvm/libtvm_runtime.so)
+  include(cmake/BuildTVM.cmake)
+  add_subdirectory("3rdparty/tvm")
+
+  if(NOT Python3_EXECUTABLE)
+    find_package(PythonInterp 3 REQUIRED)
+    set(Python3_EXECUTABLE ${PYTHON_EXECUTABLE} CACHE FILEPATH "Path to the python3 executable")
+    if(NOT Python3_EXECUTABLE)
+      message(FATAL_ERROR "No python3 interpreter found to build TVM operators")
+    endif()
+  endif()
+
+  set(TVM_OP_COMPILE_OPTIONS "-o${CMAKE_CURRENT_BINARY_DIR}/libtvmop.so" "--config" "${CMAKE_CURRENT_BINARY_DIR}/tvmop.conf")
+  if(CUDA_ARCH_BIN)
+    set(TVM_OP_COMPILE_OPTIONS "${TVM_OP_COMPILE_OPTIONS}" "--cuda-arch" "${CUDA_ARCH_BIN}")
+  endif()
+  add_custom_command(TARGET mxnet POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E env
+          PYTHONPATH="${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tvm/python:${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tvm/topi/python:${CMAKE_CURRENT_SOURCE_DIR}/contrib"
+          LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_BINARY_DIR}/3rdparty/tvm:$ENV{LD_LIBRARY_PATH}
+          ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/contrib/tvmop/compile.py ${TVM_OP_COMPILE_OPTIONS}
+    )
 endif()
 
 target_link_libraries(mxnet PUBLIC ${mxnet_LINKER_LIBS})

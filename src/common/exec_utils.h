@@ -286,7 +286,6 @@ inline void LogMemoryPlan(const nnvm::Graph& g) {
   const auto &idx = g.indexed_graph();
   const auto& vshape = g.GetAttr<mxnet::ShapeVector>("shape");
   const auto& vtype = g.GetAttr<nnvm::DTypeVector>("dtype");
-  const auto& vstorage = g.GetAttr<nnvm::StorageVector>("storage_id");
   // find node range
   uint32_t node_start = 0, node_end = idx.num_nodes();
   if (g.attrs.count("node_range")) {
@@ -304,13 +303,13 @@ inline void LogMemoryPlan(const nnvm::Graph& g) {
         auto eid = idx.entry_id(e);
         size_t kilo_bytes = vshape[eid].Size() * mshadow::mshadow_sizeof(vtype[eid]) / 1024;
         LOG(INFO) << "\t\tinput " << eid << ": " << vshape[eid] << " ("
-                  << kilo_bytes << " KB) -> " << storage_str(vstorage[eid]);
+                  << kilo_bytes << " KB)";
       }
       for (uint32_t index = 0; index < inode.source->num_outputs(); ++index) {
         uint32_t eid = idx.entry_id(nid, index);
         size_t kilo_bytes = vshape[eid].Size() * mshadow::mshadow_sizeof(vtype[eid]) / 1024;
         LOG(INFO) << "\t\toutput " << eid << ": " << vshape[eid] << " ("
-                  << kilo_bytes << " KB) -> " << storage_str(vstorage[eid]);
+                  << kilo_bytes << " KB)";
       }
     }
   }
@@ -621,6 +620,25 @@ inline nnvm::Graph AssignContext(nnvm::Graph g,
   g.attrs["context"] = std::make_shared<nnvm::any>(std::move(vcontext));
   return g;
 }
+
+/*!
+ * \brief Copy the graph, optionally leaving original Variable nodes.
+ *
+ * \param dst destination graph
+ * \param src source graph being copied
+ * \param copy_variable whether to copy or reuse Variable nodes from the
+ *                      source graph
+ */
+void CopyGraph(nnvm::Graph *dst, const nnvm::Graph &src, bool copy_variables);
+
+/*!
+ * \brief Check whether graph contains any duplicated names in its inputs.
+ *
+ * \param idx Indexed graph being checked
+ *
+ * \return true if there are no duplicates, false otherwise
+ */
+bool CheckForInputNameDuplicates(const nnvm::IndexedGraph &idx);
 
 }  // namespace common
 }  // namespace mxnet
