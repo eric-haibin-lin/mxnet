@@ -56,6 +56,9 @@ inline std::priority_queue<pi>
     const AggregateStats::StatData& data = iter.second;
     double value = 0;
     switch (static_cast<AggregateStats::SortBy>(sort_by)) {
+      case AggregateStats::SortBy::Total:
+        value = data.total_aggregate_;
+        break;
       case AggregateStats::SortBy::Avg:
         if (data.type_ == AggregateStats::StatData::kCounter)
           value = (data.max_aggregate_ - data.min_aggregate_) / 2;
@@ -85,7 +88,9 @@ inline std::priority_queue<pi>
 
 void AggregateStats::OnProfileStat(const ProfileStat& stat) {
   std::unique_lock<std::mutex> lk(m_);
-  stat.SaveAggregate(&stats_[stat.categories_.c_str()][stat.name_.c_str()]);
+  if (stat.enable_aggregate_) {
+    stat.SaveAggregate(&stats_[stat.categories_.c_str()][stat.name_.c_str()]);
+  }
 }
 
 void AggregateStats::DumpTable(std::ostream& os, int sort_by, int ascending) {

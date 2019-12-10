@@ -16,13 +16,15 @@
 # under the License.
 
 # coding: utf-8
-# pylint: disable=unnecessary-pass
+# pylint: disable=unnecessary-pass, too-many-lines
 """Neural network parameter."""
+from __future__ import absolute_import
+
 __all__ = ['DeferredInitializationError', 'Parameter', 'Constant',
            'ParameterDict', 'tensor_types']
 
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import warnings
 import numpy as np
 
@@ -31,7 +33,8 @@ from .. import symbol, ndarray, initializer, context
 from ..context import Context, cpu
 from .. import autograd
 from .utils import _indent, _brief_print_list, shape_is_known
-from .. import is_np_shape
+from ..util import is_np_shape, is_np_array
+from .. import numpy as _mx_np  # pylint: disable=reimported
 
 # pylint: disable= invalid-name
 tensor_types = (symbol.Symbol, ndarray.NDArray)
@@ -131,7 +134,6 @@ class Parameter(object):
         self._grad_stype = grad_stype
         self._stype = stype
 
-
     def __repr__(self):
         s = 'Parameter {name} (shape={shape}, dtype={dtype})'
         return s.format(name=self.name, shape=self.shape, dtype=self.dtype)
@@ -191,9 +193,9 @@ class Parameter(object):
             return
 
         assert len(self._shape) == len(new_shape) and \
-            all(j in (0, i) for i, j in zip(new_shape, self._shape)), \
+            all(j in (-1, 0, i) for i, j in zip(new_shape, self._shape)), \
             "Expected shape %s is incompatible with given shape %s."%(
-                str(new_shape), str(self._shape))
+                str(new_shape), str(self._shape))  # -1 means unknown dim size in np_shape mode
 
         self._shape = new_shape
 
@@ -272,12 +274,14 @@ class Parameter(object):
         if cast_dtype:
             assert dtype_source in ['current', 'saved']
         if self.shape:
+            unknown_dim_size = -1 if is_np_shape() else 0
             for self_dim, data_dim in zip(self.shape, data.shape):
-                assert self_dim in (0, data_dim), \
+                assert self_dim in (unknown_dim_size, data_dim), \
                     "Failed loading Parameter '%s' from saved params: " \
                     "shape incompatible expected %s vs saved %s"%(
                         self.name, str(self.shape), str(data.shape))
-            self.shape = tuple(i if i != 0 else j for i, j in zip(self.shape, data.shape))
+            self.shape = tuple(i if i != unknown_dim_size else j
+                               for i, j in zip(self.shape, data.shape))
         if self.dtype:
             if cast_dtype and np.dtype(self.dtype).type != data.dtype:
                 if dtype_source == 'current':
@@ -318,6 +322,7 @@ class Parameter(object):
             return
         init, ctx, default_init, data = self._deferred_init
         self._deferred_init = ()
+
         assert shape_is_known(self.shape), \
             "Cannot initialize Parameter '%s' because it has " \
             "invalid shape: %s. Please specify in_units, " \
@@ -326,8 +331,16 @@ class Parameter(object):
 
         with autograd.pause():
             if data is None:
-                data = ndarray.zeros(shape=self.shape, dtype=self.dtype,
-                                     ctx=context.cpu(), stype=self._stype)
+                kwargs = {'shape': self.shape, 'dtype': self.dtype, 'ctx': context.cpu()}
+                if is_np_array():
+                    if self._stype != 'default':
+                        raise ValueError("mxnet.numpy.zeros does not support stype = {}"
+                                         .format(self._stype))
+                    zeros_fn = _mx_np.zeros
+                else:
+                    kwargs['stype'] = self._stype
+                    zeros_fn = ndarray.zeros
+                data = zeros_fn(**kwargs)
                 initializer.create(default_init)(
                     initializer.InitDesc(self.name, {'__init__': init}), data)
 
@@ -352,8 +365,15 @@ class Parameter(object):
             self._grad = None
             return
 
-        self._grad = [ndarray.zeros(shape=i.shape, dtype=i.dtype, ctx=i.context,
-                                    stype=self._grad_stype) for i in self._data]
+        if is_np_array():
+            if self._grad_stype != 'default':
+                raise ValueError("mxnet.numpy.zeros does not support stype = {}"
+                                 .format(self._grad_stype))
+            self._grad = [_mx_np.zeros(shape=i.shape, dtype=i.dtype, ctx=i.ctx)
+                          for i in self._data]
+        else:
+            self._grad = [ndarray.zeros(shape=i.shape, dtype=i.dtype, ctx=i.ctx,
+                                        stype=self._grad_stype) for i in self._data]
 
         autograd.mark_variables(self._check_and_get(self._data, list),
                                 self._grad, self.grad_req)
@@ -363,7 +383,10 @@ class Parameter(object):
         ctx = context.cpu()
         if self._stype == 'default':
             block = self.list_data()
-            data = ndarray.add_n(*(w.copyto(ctx) for w in block)) / len(block)
+            if is_np_array():
+                data = sum([w.copyto(ctx) for w in block]) / len(block)
+            else:
+                data = ndarray.add_n(*(w.copyto(ctx) for w in block)) / len(block)
         else:
             # fetch all rows for 'row_sparse' param
             all_row_ids = ndarray.arange(0, self.shape[0], dtype='int64', ctx=ctx)
@@ -463,7 +486,6 @@ class Parameter(object):
             raise ValueError("Cannot reset context for Parameter '%s' because it "
                              "has not been initialized."%self.name)
 
-
     def set_data(self, data):
         """Sets this parameter's value on all contexts."""
         self.shape = data.shape
@@ -500,7 +522,7 @@ class Parameter(object):
             raise RuntimeError("Cannot return a copy of Parameter %s via row_sparse_data() " \
                                "because its storage type is %s. Please use data() instead." \
                                %(self.name, self._stype))
-        return self._get_row_sparse(self._data, row_id.context, row_id)
+        return self._get_row_sparse(self._data, row_id.ctx, row_id)
 
     def list_row_sparse_data(self, row_id):
         """Returns copies of the 'row_sparse' parameter on all contexts, in the same order
@@ -602,6 +624,8 @@ class Parameter(object):
             self._var = symbol.var(self.name, shape=self.shape, dtype=self.dtype,
                                    lr_mult=self.lr_mult, wd_mult=self.wd_mult,
                                    init=self.init, stype=self._stype)
+            if is_np_array():
+                self._var = self._var.as_np_ndarray()
         return self._var
 
     def cast(self, dtype):
@@ -649,7 +673,8 @@ class Constant(Parameter):
     """
     def __init__(self, name, value):
         if not isinstance(value, ndarray.NDArray):
-            value = ndarray.array(value)
+            array_fn = _mx_np.array if is_np_array() else ndarray.array
+            value = array_fn(value)
         self.value = value
 
         class Init(initializer.Initializer):
@@ -763,12 +788,12 @@ class ParameterDict(object):
                         inferred_shape = []
                         matched = True
                         for dim1, dim2 in zip(v, existing):
-                            if dim1 != dim2 and dim1 * dim2 != 0:
+                            if dim1 != dim2 and dim1 > 0 and dim2 > 0:
                                 matched = False
                                 break
                             elif dim1 == dim2:
                                 inferred_shape.append(dim1)
-                            elif dim1 == 0:
+                            elif dim1 in (0, -1):  # -1 means unknown dim size in np_shape mode
                                 inferred_shape.append(dim2)
                             else:
                                 inferred_shape.append(dim1)
@@ -863,8 +888,27 @@ class ParameterDict(object):
 
     def zero_grad(self):
         """Sets all Parameters' gradient buffer to 0."""
-        for i in self.values():
-            i.zero_grad()
+        # collect gradient arrays for each ctx
+        arrays = defaultdict(list)
+        for p in self.values():
+            if p.grad_req == 'null' or p._grad is None:
+                continue
+            for g in p.list_grad():
+                if g.stype == 'row_sparse':
+                    ndarray.zeros_like(g, out=g)
+                else:
+                    arrays[g.ctx].append(g)
+
+        if len(arrays) == 0:
+            return
+
+        if is_np_array():
+            for arr in arrays.values():
+                for ele in arr:
+                    ele[()] = 0
+        else:
+            for arr in arrays.values():
+                ndarray.reset_arrays(*arr, num_arrays=len(arr))
 
     def reset_ctx(self, ctx):
         """Re-assign all Parameters to other contexts.
@@ -877,6 +921,14 @@ class ParameterDict(object):
         """
         for i in self.values():
             i.reset_ctx(ctx)
+
+    def list_ctx(self):
+        """Returns a list of all the contexts on which the underlying Parameters
+        are initialized."""
+        s = set()
+        for i in self.values():
+            s.update(i.list_ctx())
+        return list(s)
 
     def setattr(self, name, value):
         """Set an attribute to a new value for all Parameters.
@@ -920,7 +972,7 @@ class ParameterDict(object):
                     "this may be due to your Block shares parameters from other "
                     "Blocks or you forgot to use 'with name_scope()' when creating "
                     "child blocks. For more info on naming, please see "
-                    "http://mxnet.incubator.apache.org/tutorials/basic/naming.html"%(
+                    "https://mxnet.apache.org/api/python/docs/tutorials/packages/gluon/naming.html"%(
                         strip_prefix, param.name, strip_prefix))
             arg_dict[param.name[len(strip_prefix):]] = weight
         ndarray.save(filename, arg_dict)
@@ -955,23 +1007,51 @@ class ParameterDict(object):
                 assert name.startswith(restore_prefix), \
                     "restore_prefix is '%s' but Parameters name '%s' does not start " \
                     "with '%s'"%(restore_prefix, name, restore_prefix)
-        lprefix = len(restore_prefix)
         ndarray_load = ndarray.load(filename)
+        self.load_dict(ndarray_load, ctx, allow_missing,
+                       ignore_extra, restore_prefix, filename, cast_dtype, dtype_source)
+
+    def load_dict(self, param_dict, ctx=None, allow_missing=False,
+                  ignore_extra=False, restore_prefix='', filename=None, cast_dtype=False,
+                  dtype_source="current"):
+        """Load parameters from dict
+
+        Parameters
+        ----------
+        param_dict : dict
+            Dictionary containing model parameters, preprended with arg: and aux: names
+        ctx : Context or list of Context
+            Context(s) initialize loaded parameters on.
+        allow_missing : bool, default False
+            Whether to silently skip loading parameters not represented in the file.
+        ignore_extra : bool, default False
+            Whether to silently ignore parameters from the file that are not
+            present in this ParameterDict.
+        restore_prefix : str, default ''
+            prepend prefix to names of stored parameters before loading
+        filename : str, default None
+        cast_dtype : bool, default False
+            Cast the data type of the NDArray loaded from the checkpoint to the dtype
+            provided by the Parameter if any
+        """
+        lprefix = len(restore_prefix)
         loaded = [(k[4:] if k.startswith('arg:') or k.startswith('aux:') else k, v) \
-                  for k, v in ndarray_load.items()] if isinstance(ndarray_load, dict) else ndarray_load
+                  for k, v in param_dict.items()] if isinstance(param_dict, dict) else param_dict
         arg_dict = {restore_prefix+k: v for k, v in loaded}
+        error_str = "file: %s" % (filename) if filename else "param_dict"
         if not allow_missing:
             for name in self.keys():
                 assert name in arg_dict, \
-                    "Parameter '%s' is missing in file '%s', which contains parameters: %s. " \
+                    "Parameter '%s' is missing in %s, which contains parameters: %s. " \
                     "Please make sure source and target networks have the same prefix."%(
-                        name[lprefix:], filename, _brief_print_list(arg_dict.keys()))
+                        name[lprefix:], error_str, _brief_print_list(arg_dict.keys()))
         for name in arg_dict:
             if name not in self._params:
                 assert ignore_extra, \
-                    "Parameter '%s' loaded from file '%s' is not present in ParameterDict, " \
+                    "Parameter '%s' loaded from %s is not present in ParameterDict, " \
                     "choices are: %s. Set ignore_extra to True to ignore. " \
                     "Please make sure source and target networks have the same prefix."%(
-                        name[lprefix:], filename, _brief_print_list(self._params.keys()))
+                        name[lprefix:], error_str, _brief_print_list(self._params.keys()))
                 continue
-            self[name]._load_init(arg_dict[name], ctx, cast_dtype=cast_dtype, dtype_source=dtype_source)
+            self[name]._load_init(arg_dict[name], ctx, cast_dtype=cast_dtype,
+                                  dtype_source=dtype_source)
