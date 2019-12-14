@@ -21,7 +21,7 @@
  *  Copyright (c) 2019 by Contributors
  * \file multi_sum_sq.cc
  * \brief vectorized sum or squared over multiple arrays operators
- * \author Clement Fuji Tsang, Andrei Ivanov, Moises Hernandez
+ * \author Clement Fuji Tsang, Andrei Ivanov
  */
 
 #include "./multi_sum_sq-inl.h"
@@ -52,24 +52,20 @@ NNVM_REGISTER_OP(multi_sum_sq)
     return ret;
   })
 .set_attr<FCompute>("FCompute<cpu>", MultiSumSq<cpu>)
-.set_attr<FResourceRequest>("FResourceRequest",
-  [](const NodeAttrs& attrs) {
-    return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
-  })
 .add_argument("data", "NDArray-or-Symbol[]", "Arrays")
 .add_arguments(MultiSumSqParam::__FIELDS__());
 
 template<typename DType>
-inline void CalcSumSq(const std::vector<TBlob> &inputs, int n_inputs,
+inline void CalcSumSq(const std::vector<TBlob> &inputs, int nInputs,
                       float *out_ptr, mshadow::Stream<cpu> *s) {
   int i;
   size_t j;
 #pragma omp parallel for private(i, j)
-  for (i = 0; i < n_inputs; ++i) {  // array index in inputs
+  for (i = 0; i < nInputs; ++i) {  // array index in inputs
     float sum = 0;
     const auto address = inputs[i].FlatTo2D<cpu, DType>(s).dptr_;
-    const auto j_max = inputs[i].shape_.Size();
-    for (j = 0; j < j_max; ++j)
+    const auto jMax = inputs[i].shape_.Size();
+    for (j = 0; j < jMax; ++j)
       sum += address[j] * address[j];
 
     out_ptr[i] = sum;
@@ -77,10 +73,10 @@ inline void CalcSumSq(const std::vector<TBlob> &inputs, int n_inputs,
 }
 
 template<>
-void MultiSumSqRun<cpu>(const std::vector<TBlob> &inputs, int n_inputs,
-                        float *out_ptr, const OpContext &ctx) {
+void MultiSumSqRun<cpu>(const std::vector<TBlob> &inputs, int nInputs,
+                        float *out_ptr, mshadow::Stream<cpu> *s) {
   MSHADOW_REAL_TYPE_SWITCH(inputs[0].type_flag_, DType,
-    CalcSumSq<DType>(inputs, n_inputs, out_ptr, ctx.get_stream<cpu>());
+    CalcSumSq<DType>(inputs, nInputs, out_ptr, s);
   )
 }
 
