@@ -274,18 +274,23 @@ inline void multiLAMB(const nnvm::NodeAttrs& attrs,
         weights.emplace_back(inputs[index*input_stride]);
     }
 
-    // Calculate amount of temporary storage
+    // Calculate amount of temporary storage (temp_g, r1, r2, block_to_tensor, block_to_chunk)
     size_t workspace_size = kernel_params.total_size * sizeof(float) +
         2 * kernel_params.ntensors * sizeof(float) +
         2 * kernel_params.nchunks * sizeof(int);
+    // take into account the required storage required within MultiSumSqRun
+    size_t required_storage_multi_sum_sq = 0;
+    if (ctx.run_ctx.ctx.dev_mask()==kGPU)
+      required_storage_multi_sum_sq = GetRequiredStorageMultiSumSq(inputs);
+    workspace_size += required_storage_multi_sum_sq;
 
-      // Request temporary storage
+    // Request temporary storage
     Tensor<xpu, 1, char> workspace =
     ctx.requested[multilamb::kTempSpace].get_space_typed<xpu, 1, char>(
       Shape1(workspace_size), s);
 
     // Create tensors
-    size_t pos_wspace = 0;
+    size_t pos_wspace = required_storage_multi_sum_sq;
     Tensor<xpu, 1, float> temp_g(reinterpret_cast<float*>(&workspace[pos_wspace]),
       Shape1(kernel_params.total_size), s);
     // create vector of TBlob with all the temp_g contiguous
