@@ -50,7 +50,7 @@ def test_mkldnn_model():
     grads = get_tensors(args, shapes[0], ctx)
 
     try:
-        exe = sym.bind(ctx, inputs, args_grad=grads)
+        exe = bind(sym, ctx, inputs, args_grad=grads)
         for _ in range(2):
             exe.forward(is_train=True)
             for y in exe.outputs:
@@ -58,7 +58,8 @@ def test_mkldnn_model():
             exe.backward()
             for y in exe.grad_arrays:
                 y.wait_to_read()
-    except:  # pylint: disable=bare-except
+    except Exception as e:  # pylint: disable=bare-except
+        print(e)
         assert 0, "test_mkldnn_model exception in bind and execution"
 
 @with_seed(1234)

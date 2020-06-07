@@ -1494,7 +1494,6 @@ class CachedOpExecutor:
 
     def backward(self, out_grads=None, is_train=True):
         assert is_train is True
-        assert out_grads is not None
         if isinstance(out_grads, (list, tuple)):
             assert len(out_grads) == 1
             out_grads = out_grads[0]

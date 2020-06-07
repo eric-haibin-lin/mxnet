@@ -23,7 +23,7 @@ from mxnet.gluon import block
 from mxnet.context import Context
 from mxnet.attribute import AttrScope
 from mxnet.name import NameManager
-from mxnet.test_utils import assert_almost_equal, set_default_context
+from mxnet.test_utils import assert_almost_equal, set_default_context, bind
 from mxnet.util import _NumpyArrayScope, set_np_shape
 
 
@@ -160,7 +160,7 @@ def test_symbol():
         b = mx.sym.var("b")
         a_ = mx.nd.ones((2, 2))
         c_ = a_.copy()
-        func1 = (a + b).bind(mx.cpu(), args={'a': a_, 'b': c_})
+        func1 = bind(a + b, mx.cpu(), args={'a': a_, 'b': c_})
         func1.forward()[0].wait_to_read()
         status[0] = True
     thread = threading.Thread(target=f)
